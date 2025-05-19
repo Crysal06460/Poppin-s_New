@@ -491,8 +491,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   void _showActivityDetailsPopup(Map<String, dynamic> activityData) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
 
     showDialog(
       context: context,
@@ -500,18 +500,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(
-            horizontal: screenWidth * 0.02,
-            vertical: screenHeight * 0.02,
+            horizontal:
+                isTabletDevice ? MediaQuery.of(context).size.width * 0.25 : 20,
+            vertical: 20,
           ),
           child: Container(
-            width: screenWidth * 0.96,
+            width: double.infinity,
             constraints: BoxConstraints(
               maxWidth: 500,
               minWidth: 250,
             ),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(screenWidth * 0.04),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -529,34 +530,33 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [primaryColor.withOpacity(0.8), primaryColor],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          primaryColor,
+                          primaryColor.withOpacity(0.85),
+                        ],
                       ),
                       borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(screenWidth * 0.04),
+                        top: Radius.circular(24),
                       ),
                     ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                      vertical: screenWidth * 0.03,
-                    ),
+                    padding: EdgeInsets.all(16),
                     child: Row(
                       children: [
                         Container(
-                          padding: EdgeInsets.all(screenWidth * 0.02),
+                          padding: EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
-                            borderRadius:
-                                BorderRadius.circular(screenWidth * 0.02),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            Icons.directions_run,
+                            _getActivityTypeIcon(activityData['type']),
                             color: Colors.white,
-                            size: screenWidth * 0.06,
+                            size: isTabletDevice ? 30 : 24,
                           ),
                         ),
-                        SizedBox(width: screenWidth * 0.03),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,18 +564,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               Text(
                                 "Activité de ${activityData['heure']}",
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.05,
+                                  fontSize: isTabletDevice ? 22 : 18,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                               ),
-                              SizedBox(height: screenWidth * 0.01),
+                              SizedBox(height: 4),
                               Text(
                                 DateFormat('dd MMMM yyyy', 'fr_FR')
                                     .format(activityData['date'].toDate())
                                     .toLowerCase(),
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.035,
+                                  fontSize: isTabletDevice ? 16 : 14,
                                   color: Colors.white.withOpacity(0.9),
                                 ),
                               ),
@@ -588,43 +588,39 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                   // Contenu
                   Padding(
-                    padding: EdgeInsets.all(screenWidth * 0.04),
+                    padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Type d'activité
                         Container(
                           width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: screenWidth * 0.04,
-                            vertical: screenWidth * 0.03,
-                          ),
+                          padding: EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: primaryColor.withOpacity(0.1),
-                            borderRadius:
-                                BorderRadius.circular(screenWidth * 0.03),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 _getActivityTypeIcon(activityData['type']),
                                 color: primaryColor,
-                                size: screenWidth * 0.06,
+                                size: isTabletDevice ? 24 : 20,
                               ),
-                              SizedBox(width: screenWidth * 0.03),
+                              SizedBox(width: 12),
                               Text(
                                 activityData['type'],
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.04,
+                                  fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w500,
-                                  color: primaryColor.withOpacity(0.9),
+                                  color: primaryColor,
                                 ),
                               ),
                               Spacer(),
                               Text(
                                 "Durée: ${activityData['duration']}",
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.04,
+                                  fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w600,
                                   color: primaryColor,
                                 ),
@@ -633,19 +629,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           ),
                         ),
 
-                        SizedBox(height: screenWidth * 0.04),
+                        SizedBox(height: 16),
 
-                        // Participation
+                        // Participation - CHANGÉ DE JAUNE À BLEU CLAIR
                         Container(
                           width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: screenWidth * 0.04,
-                            vertical: screenWidth * 0.03,
-                          ),
+                          padding: EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.amber.shade50,
-                            borderRadius:
-                                BorderRadius.circular(screenWidth * 0.03),
+                            color: lightBlue, // Fond bleu à la place du jaune
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             children: [
@@ -659,24 +651,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                                           'participationLevel'] ??
                                                       0) -
                                                   1
-                                          ? screenWidth * 0.01
+                                          ? 4
                                           : 0,
                                     ),
                                     child: Icon(
                                       Icons.star,
-                                      color: Colors.amber,
-                                      size: screenWidth * 0.05,
+                                      color:
+                                          primaryYellow, // Étoiles restent jaunes
+                                      size: isTabletDevice ? 22 : 20,
                                     ),
                                   ),
                                 ),
                               ),
-                              SizedBox(width: screenWidth * 0.03),
+                              SizedBox(width: 12),
                               Text(
                                 "${activityData['participation']}",
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.04,
+                                  fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w500,
-                                  color: Colors.amber.shade900,
+                                  color:
+                                      primaryColor, // Texte en bleu comme le fond
                                 ),
                               ),
                             ],
@@ -686,14 +680,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         // Observations
                         if (activityData['observations']?.isNotEmpty ??
                             false) ...[
-                          SizedBox(height: screenWidth * 0.04),
+                          SizedBox(height: 16),
                           Container(
                             width: double.infinity,
-                            padding: EdgeInsets.all(screenWidth * 0.04),
+                            padding: EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade50,
-                              borderRadius:
-                                  BorderRadius.circular(screenWidth * 0.03),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: Colors.grey.shade200),
                             ),
                             child: Column(
@@ -702,16 +695,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 Text(
                                   "Observations",
                                   style: TextStyle(
-                                    fontSize: screenWidth * 0.04,
+                                    fontSize: isTabletDevice ? 18 : 16,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.grey.shade700,
                                   ),
                                 ),
-                                SizedBox(height: screenWidth * 0.02),
+                                SizedBox(height: 8),
                                 Text(
                                   activityData['observations'],
                                   style: TextStyle(
-                                    fontSize: screenWidth * 0.035,
+                                    fontSize: isTabletDevice ? 16 : 14,
                                     color: Colors.black87,
                                     height: 1.3,
                                   ),
@@ -722,27 +715,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         ],
 
                         // Bouton Fermer
-                        SizedBox(height: screenWidth * 0.04),
+                        SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: TextButton.styleFrom(
                               backgroundColor: Colors.grey.shade100,
-                              padding: EdgeInsets.symmetric(
-                                vertical: screenWidth * 0.03,
-                              ),
+                              padding: EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(screenWidth * 0.03),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                             child: Text(
-                              "Fermer",
+                              "FERMER", // Texte en majuscule comme sur la page Repas
                               style: TextStyle(
-                                fontSize: screenWidth * 0.04,
+                                fontSize: isTabletDevice ? 16 : 14,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade800,
+                                color: primaryColor,
                               ),
                             ),
                           ),
@@ -906,6 +896,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ...standardActivityTypes,
     ];
 
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -914,395 +907,749 @@ class _ActivityScreenState extends State<ActivityScreen> {
           builder: (BuildContext context, StateSetter setState) {
             return Dialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(24),
               ),
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
               child: Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(
+                    0), // Padding 0 pour permettre au header d'aller jusqu'au bord
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
+                      color: primaryColor.withOpacity(0.15),
+                      blurRadius: 15,
+                      offset: Offset(0, 8),
                     ),
                   ],
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Ajouter une activité pour ${enfant['prenom']}",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // En-tête avec dégradé
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            primaryColor,
+                            primaryColor.withOpacity(0.85),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
                         ),
                       ),
-                      SizedBox(height: 20),
-                      Center(
-                        child: Text(
-                          "Heure de l'activité",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
+                      padding: EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.directions_run,
+                              color: Colors.white,
+                              size: isTabletDevice ? 30 : 24,
+                            ),
                           ),
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          DatePicker.showTimePicker(
-                            context,
-                            showSecondsColumn: false,
-                            showTitleActions: true,
-                            onConfirm: (date) {
-                              setState(() {
-                                localActivityTime =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                errorMessage = null;
-                              });
-                            },
-                            currentTime: DateTime.now(),
-                            locale: LocaleType.fr,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor.withOpacity(0.2),
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: Size(double.infinity, 50),
-                        ),
-                        child: Text(
-                          localActivityTime.isEmpty
-                              ? 'Choisir l\'heure'
-                              : localActivityTime,
-                          style: TextStyle(fontSize: 18, color: primaryColor),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        "Quelle était l'activité :",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: (organizedActivityTypes
-                                      .contains(localActivityType) &&
-                                  localActivityType != "_separator_")
-                              ? localActivityType
-                              : standardActivityTypes.first,
-                          isExpanded: true,
-                          underline: Container(),
-                          items: organizedActivityTypes.map((String value) {
-                            if (value == "_separator_") {
-                              // Séparateur entre activités personnalisées et standards
-                              return DropdownMenuItem<String>(
-                                enabled: false,
-                                child: Container(
-                                  height: 1,
-                                  color: Colors.grey.shade300,
-                                  margin: EdgeInsets.symmetric(vertical: 4),
-                                ),
-                              );
-                            } else if (customActivityTypes.contains(value)) {
-                              // Style spécial pour les activités personnalisées
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: primaryColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Ajouter une activité pour ${enfant['prenom']}",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 22 : 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.star,
-                                        color: primaryColor,
-                                        size: 16,
+                                ),
+                                if (isTabletDevice) SizedBox(height: 4),
+                                if (isTabletDevice)
+                                  Text(
+                                    "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.85),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Contenu du formulaire avec padding
+                    Padding(
+                      padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Section Heure de l'activité
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Heure de l'activité",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () {
+                                      DatePicker.showTimePicker(
+                                        context,
+                                        showSecondsColumn: false,
+                                        showTitleActions: true,
+                                        onConfirm: (date) {
+                                          setState(() {
+                                            localActivityTime =
+                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                            errorMessage = null;
+                                          });
+                                        },
+                                        currentTime: DateTime.now(),
+                                        locale: LocaleType.fr,
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localActivityTime.isEmpty
+                                              ? Colors.transparent
+                                              : primaryColor.withOpacity(0.5),
+                                          width: 1.5,
+                                        ),
                                       ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        value,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            localActivityTime.isEmpty
+                                                ? 'Choisir l\'heure'
+                                                : localActivityTime,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localActivityTime.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : primaryColor,
+                                              fontWeight:
+                                                  localActivityTime.isEmpty
+                                                      ? FontWeight.normal
+                                                      : FontWeight.w600,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            color:
+                                                primaryColor.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Type d'activité
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Quelle était l'activité",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: lightBlue.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: (organizedActivityTypes.contains(
+                                                  localActivityType) &&
+                                              localActivityType !=
+                                                  "_separator_")
+                                          ? localActivityType
+                                          : standardActivityTypes.first,
+                                      isExpanded: true,
+                                      underline: Container(),
+                                      iconSize: isTabletDevice ? 28 : 24,
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: primaryColor,
+                                      ),
+                                      items: organizedActivityTypes
+                                          .map((String value) {
+                                        if (value == "_separator_") {
+                                          // Séparateur entre activités personnalisées et standards
+                                          return DropdownMenuItem<String>(
+                                            enabled: false,
+                                            child: Container(
+                                              height: 1,
+                                              color: Colors.grey.shade300,
+                                              margin: EdgeInsets.symmetric(
+                                                  vertical: 4),
+                                            ),
+                                          );
+                                        } else if (customActivityTypes
+                                            .contains(value)) {
+                                          // Style spécial pour les activités personnalisées
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: primaryColor
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.star,
+                                                    color: primaryColor,
+                                                    size: isTabletDevice
+                                                        ? 20
+                                                        : 16,
+                                                  ),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    value,
+                                                    style: TextStyle(
+                                                      fontSize: isTabletDevice
+                                                          ? 16
+                                                          : 14,
+                                                      color: primaryColor,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        } else {
+                                          // Style standard pour les activités standards
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical: 8),
+                                              child: Text(
+                                                value,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
+                                                  color: Colors.grey.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        if (newValue != null &&
+                                            newValue != "_separator_") {
+                                          setState(() {
+                                            localActivityType = newValue;
+                                          });
+                                        }
+                                      },
+                                      dropdownColor: Colors.white,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Bouton pour ajouter une activité personnalisée
+                                  Padding(
+                                    padding: EdgeInsets.only(top: 8, left: 8),
+                                    child: TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(
+                                            context); // Ferme le popup actuel
+                                        _showAddCustomActivityDialogFromActivityPopup(
+                                            childId);
+                                      },
+                                      icon: Icon(Icons.add_circle,
+                                          color: primaryColor),
+                                      label: Text(
+                                        "Ajouter une activité personnalisée",
                                         style: TextStyle(
                                           color: primaryColor,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: isTabletDevice ? 15 : 14,
                                         ),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 8),
+                                        alignment: Alignment.centerLeft,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Durée de l'activité
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Combien de temps a duré l'activité",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: lightBlue.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: localActivityDuration,
+                                      isExpanded: true,
+                                      underline: Container(),
+                                      iconSize: isTabletDevice ? 28 : 24,
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: primaryColor,
+                                      ),
+                                      items: durations.map((String value) {
+                                        return DropdownMenuItem<String>(
+                                          value: value,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Text(
+                                              value,
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isTabletDevice ? 16 : 14,
+                                                color: Colors.grey.shade800,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        setState(() {
+                                          localActivityDuration = newValue!;
+                                        });
+                                      },
+                                      dropdownColor: Colors.white,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Participation
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Comment était la participation de ${enfant['prenom']} ?",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 16),
+                                  GridView.count(
+                                    crossAxisCount: 2,
+                                    shrinkWrap: true,
+                                    physics: NeverScrollableScrollPhysics(),
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: 2.5,
+                                    children: [
+                                      _buildParticipationButtonModern(
+                                        'Pas participé',
+                                        localParticipationLevel,
+                                        (value) {
+                                          setState(() {
+                                            localParticipationLevel = value;
+                                          });
+                                        },
+                                        isTabletDevice,
+                                        Icons.sentiment_very_dissatisfied,
+                                        primaryRed,
+                                      ),
+                                      _buildParticipationButtonModern(
+                                        'Peu participé',
+                                        localParticipationLevel,
+                                        (value) {
+                                          setState(() {
+                                            localParticipationLevel = value;
+                                          });
+                                        },
+                                        isTabletDevice,
+                                        Icons.sentiment_dissatisfied,
+                                        Colors.amber,
+                                      ),
+                                      _buildParticipationButtonModern(
+                                        'Bien participé',
+                                        localParticipationLevel,
+                                        (value) {
+                                          setState(() {
+                                            localParticipationLevel = value;
+                                          });
+                                        },
+                                        isTabletDevice,
+                                        Icons.sentiment_satisfied,
+                                        Colors.lime,
+                                      ),
+                                      _buildParticipationButtonModern(
+                                        'Très bien participé',
+                                        localParticipationLevel,
+                                        (value) {
+                                          setState(() {
+                                            localParticipationLevel = value;
+                                          });
+                                        },
+                                        isTabletDevice,
+                                        Icons.sentiment_very_satisfied,
+                                        Colors.green,
                                       ),
                                     ],
                                   ),
-                                ),
-                              );
-                            } else {
-                              // Style standard pour les activités standards
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }
-                          }).toList(),
-                          onChanged: (newValue) {
-                            if (newValue != null && newValue != "_separator_") {
-                              setState(() {
-                                localActivityType = newValue;
-                              });
-                            }
-                          },
-                        ),
-                      ),
-
-                      // Bouton pour ajouter une activité personnalisée
-                      Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: TextButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context); // Ferme le popup actuel
-                            _showAddCustomActivityDialogFromActivityPopup(
-                                childId);
-                          },
-                          icon: Icon(Icons.add_circle, color: primaryColor),
-                          label: Text(
-                            "Ajouter une activité personnalisée",
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.w500,
+                                ],
+                              ),
                             ),
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            alignment: Alignment.centerLeft,
-                          ),
-                        ),
-                      ),
 
-                      SizedBox(height: 20),
-                      Text(
-                        "Combien de temps a duré l'activité :",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: localActivityDuration,
-                          isExpanded: true,
-                          underline: Container(),
-                          items: durations.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setState(() {
-                              localActivityDuration = newValue!;
-                            });
-                          },
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        "Comment était la participation de ${enfant['prenom']} ?",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: _buildParticipationButton(
-                                  'Pas participé',
-                                  localParticipationLevel,
-                                  (value) {
-                                    setState(() {
-                                      localParticipationLevel = value;
-                                    });
+                            // Section Observations
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Observations",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _observationsController,
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            "Précisions sur l'activité...",
+                                        hintStyle: TextStyle(
+                                            color: Colors.grey.shade400),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade200,
+                                              width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: primaryColor, width: 2),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 16),
+                                      ),
+                                      maxLines: 3,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Message d'erreur si présent
+                            if (errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: isTabletDevice ? 15 : 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+
+                            // Boutons d'action
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
                                   },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: _buildParticipationButton(
-                                  'Peu participé',
-                                  localParticipationLevel,
-                                  (value) {
+
+                                // Bouton Ajouter
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    if (localActivityTime.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez sélectionner une heure';
+                                      });
+                                      return;
+                                    }
+
+                                    // Réinitialiser le message d'erreur si tout est OK
                                     setState(() {
-                                      localParticipationLevel = value;
+                                      errorMessage = null;
                                     });
+
+                                    // Si tout est validé, ajouter l'activité
+                                    _activityTime = localActivityTime;
+                                    _activityType = localActivityType;
+                                    _activityDuration = localActivityDuration;
+                                    _participationLevel =
+                                        localParticipationLevel;
+
+                                    // Ajouter l'activité dans Firebase
+                                    _addActivityToFirebase(childId);
+
+                                    // Fermer le popup une fois l'activité ajoutée
+                                    Navigator.of(context).pop();
                                   },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    elevation: 2,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 32 : 24,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "AJOUTER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: _buildParticipationButton(
-                                  'Bien participé',
-                                  localParticipationLevel,
-                                  (value) {
-                                    setState(() {
-                                      localParticipationLevel = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: _buildParticipationButton(
-                                  'Très bien participé',
-                                  localParticipationLevel,
-                                  (value) {
-                                    setState(() {
-                                      localParticipationLevel = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _observationsController,
-                        decoration: InputDecoration(
-                          labelText: "Observations",
-                          labelStyle:
-                              TextStyle(fontSize: 16, color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
+                              ],
+                            ),
+                          ],
                         ),
-                        maxLines: 3,
                       ),
-                      SizedBox(height: 20),
-
-                      // Message d'erreur
-                      if (errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Text(
-                              errorMessage!,
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: Text(
-                              "Annuler",
-                              style:
-                                  TextStyle(fontSize: 18, color: primaryColor),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              if (localActivityTime.isEmpty) {
-                                setState(() {
-                                  errorMessage =
-                                      'Veuillez sélectionner une heure';
-                                });
-                                return;
-                              }
-
-                              // Réinitialiser le message d'erreur si tout est OK
-                              setState(() {
-                                errorMessage = null;
-                              });
-
-                              // Si tout est validé, ajouter l'activité
-                              _activityTime = localActivityTime;
-                              _activityType = localActivityType;
-                              _activityDuration = localActivityDuration;
-                              _participationLevel = localParticipationLevel;
-
-                              // Ajouter l'activité dans Firebase
-                              _addActivityToFirebase(childId);
-
-                              // Fermer le popup une fois l'activité ajoutée
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              "Ajouter",
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+// Nouveau bouton de participation moderne
+  Widget _buildParticipationButtonModern(
+    String level,
+    String selectedLevel,
+    Function(String) onSelect,
+    bool isTablet,
+    IconData icon,
+    Color color,
+  ) {
+    bool isSelected = selectedLevel == level;
+
+    // Utilisation des couleurs officielles de l'application avec opacité adaptée
+    Color backgroundColor;
+    Color textColor;
+    Color iconColor;
+
+    if (isSelected) {
+      // Si le bouton est sélectionné
+      if (level == "Bien participé") {
+        // Pour "Bien participé", utiliser primaryBlue avec opacité
+        backgroundColor = primaryColor.withOpacity(0.15);
+        textColor = primaryColor;
+        iconColor = primaryColor;
+      } else if (level == "Très bien participé") {
+        // Pour "Très bien participé", utiliser primaryYellow avec opacité
+        backgroundColor = primaryYellow.withOpacity(0.15);
+        textColor = Colors.brown.shade700;
+        iconColor = primaryYellow;
+      } else if (level == "Pas participé") {
+        // Pour "Pas participé", utiliser primaryRed avec opacité
+        backgroundColor = primaryRed.withOpacity(0.15);
+        textColor = primaryRed;
+        iconColor = primaryRed;
+      } else {
+        // Pour "Peu participé", utiliser orange avec opacité
+        backgroundColor = Colors.orange.withOpacity(0.15);
+        textColor = Colors.orange.shade800;
+        iconColor = Colors.orange;
+      }
+    } else {
+      // Si le bouton n'est pas sélectionné
+      backgroundColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade700;
+      iconColor = Colors.grey.shade400;
+    }
+
+    return GestureDetector(
+      onTap: () => onSelect(level),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? iconColor : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: iconColor.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: iconColor,
+              size: isTablet ? 20 : 18,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                level,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isTablet ? 15 : 13,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: textColor,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1640,6 +1987,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   @override
+  // À ajouter à la méthode build
   Widget build(BuildContext context) {
     // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
@@ -1668,7 +2016,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ],
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
-      // Ajout du bouton flottant pour gérer les activités personnalisées
       floatingActionButton: FloatingActionButton(
         onPressed: _showManageCustomActivitiesDialog,
         backgroundColor: primaryColor,
@@ -1695,10 +2042,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
 // Carte enfant adaptée pour iPad
+  // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     String genre = enfant['genre']?.toString() ?? 'Garçon';
-    Color cardColor = Colors.white;
     Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
 
     return Container(
@@ -1715,53 +2062,49 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ),
       child: Column(
         children: [
-          Padding(
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [avatarColor, avatarColor.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar plus grand pour iPad
+                // Avatar avec photo de l'enfant
                 Container(
-                  width: 70, // Plus grand pour iPad
-                  height: 70, // Plus grand pour iPad
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [avatarColor.withOpacity(0.7), avatarColor],
-                    ),
+                    color: avatarColor.withOpacity(0.8),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: avatarColor.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: Center(
+                  child: ClipOval(
                     child: enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
-                        ? ClipOval(
-                            child: Image.network(
-                              enfant['photoUrl'],
-                              width: 65,
-                              height: 65,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 28, // Plus grand pour iPad
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            width: 65,
+                            height: 65,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Text(
+                              enfant['prenom'][0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
                             ),
                           )
                         : Text(
                             enfant['prenom'][0].toUpperCase(),
                             style: TextStyle(
-                              fontSize: 28, // Plus grand pour iPad
+                              fontSize: 28,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -1770,36 +2113,48 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ),
                 SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        enfant['prenom'],
-                        style: TextStyle(
-                          fontSize: 22, // Plus grand pour iPad
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    enfant['prenom'],
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                IconButton(
-                  icon: Container(
-                    padding: EdgeInsets.all(10), // Plus grand pour iPad
-                    decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.add,
-                        color: primaryColor, size: 28), // Plus grand pour iPad
+                // Bouton d'ajout d'activité
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  onPressed: () => _showAddActivityPopup(enfant['id']),
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: avatarColor, size: 24),
+                      onPressed: () => _showAddActivityPopup(enfant['id']),
+                      tooltip: "Ajouter une activité",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          // Liste des activités - adaptée pour iPad
+
+          // Liste des activités
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -1829,44 +2184,45 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 if (snapshot.data!.docs.isEmpty) {
                   return Padding(
                     padding: EdgeInsets.all(16),
-                    child: Container(
-                      padding: EdgeInsets.all(14), // Plus grand pour iPad
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "Aucune activité aujourd'hui",
-                          style: TextStyle(
-                            fontSize: 16, // Plus grand pour iPad
-                            color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.directions_run,
+                            size: 40,
+                            color: Colors.grey.shade400,
                           ),
-                        ),
+                          SizedBox(height: 12),
+                          Text(
+                            "Aucune activité aujourd'hui",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   );
                 }
 
                 return ListView.separated(
-                  physics:
-                      BouncingScrollPhysics(), // Meilleur défilement pour iPad
+                  physics: BouncingScrollPhysics(),
                   shrinkWrap: true,
-                  padding: EdgeInsets.fromLTRB(
-                      16, 8, 16, 16), // Plus d'espace pour iPad
+                  padding: EdgeInsets.all(16),
                   itemCount: snapshot.data!.docs.length,
-                  separatorBuilder: (context, index) =>
-                      SizedBox(height: 10), // Plus d'espace pour iPad
+                  separatorBuilder: (context, index) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final activityData = snapshot.data!.docs[index].data()
                         as Map<String, dynamic>;
                     return GestureDetector(
                       onTap: () => _showActivityDetailsPopup(activityData),
                       child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14), // Plus grand pour iPad
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
                           color: primaryColor.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
@@ -1876,8 +2232,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         child: Row(
                           children: [
                             Container(
-                              padding:
-                                  EdgeInsets.all(10), // Plus grand pour iPad
+                              padding: EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: primaryColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(10),
@@ -1885,10 +2240,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               child: Icon(
                                 _getActivityTypeIcon(activityData['type']),
                                 color: primaryColor,
-                                size: 22, // Plus grand pour iPad
+                                size: 22,
                               ),
                             ),
-                            SizedBox(width: 14), // Plus d'espace pour iPad
+                            SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1898,7 +2253,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       Text(
                                         activityData['heure'],
                                         style: TextStyle(
-                                          fontSize: 18, // Plus grand pour iPad
+                                          fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.black87,
                                         ),
@@ -1907,7 +2262,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       Text(
                                         activityData['type'],
                                         style: TextStyle(
-                                          fontSize: 16, // Plus grand pour iPad
+                                          fontSize: 16,
                                           color: Colors.black54,
                                         ),
                                       ),
@@ -1917,7 +2272,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   Text(
                                     "Durée: ${activityData['duration']}",
                                     style: TextStyle(
-                                      fontSize: 16, // Plus grand pour iPad
+                                      fontSize: 16,
                                       color: Colors.grey.shade600,
                                     ),
                                   ),
@@ -1930,7 +2285,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 (index) => Icon(
                                   Icons.star,
                                   color: primaryYellow,
-                                  size: 18, // Plus grand pour iPad
+                                  size: 18,
                                 ),
                               ),
                             ),
@@ -1949,6 +2304,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   // AppBar personnalisé avec gradient comme dans les autres écrans
+  // AppBar personnalisé avec gradient adapté pour iPad
   Widget _buildAppBar(BuildContext context) {
     // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);

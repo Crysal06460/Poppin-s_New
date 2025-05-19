@@ -171,13 +171,58 @@ class _RepasScreenState extends State<RepasScreen> {
         if (child['schedule'] != null &&
             child['schedule'][capitalizedWeekday] != null) {
           String? photoUrl = child['photoUrl'];
+          // Récupérer la date de naissance pour calculer l'âge
+          String ageText = "Âge inconnu";
+          if (child['birthdate'] != null) {
+            try {
+              // Convertir le timestamp en DateTime
+              DateTime birthDate;
+              if (child['birthdate'] is Timestamp) {
+                birthDate = (child['birthdate'] as Timestamp).toDate();
+              } else if (child['birthdate'] is String) {
+                birthDate = DateTime.parse(child['birthdate']);
+              } else {
+                throw FormatException("Format de date inconnu");
+              }
+
+              // Calculer l'âge
+              DateTime now = DateTime.now();
+              int years = now.year - birthDate.year;
+              int months = now.month - birthDate.month;
+
+              if (now.day < birthDate.day) {
+                months--;
+              }
+
+              if (months < 0) {
+                years--;
+                months += 12;
+              }
+
+              // Formater l'âge
+              if (years > 0) {
+                ageText = "$years an${years > 1 ? 's' : ''}";
+                if (months > 0) {
+                  ageText += " et $months mois";
+                }
+              } else {
+                ageText = "$months mois";
+              }
+            } catch (e) {
+              print("Erreur lors du calcul de l'âge: $e");
+              ageText = "Âge inconnu";
+            }
+          }
+
           tempEnfants.add({
             'id': child['id'],
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'age': ageText,
             'structureId':
                 structureId, // Ajouter l'ID de structure pour les requêtes futures
+            'birthdate': child['birthdate'],
           });
         }
       }
@@ -510,6 +555,9 @@ class _RepasScreenState extends State<RepasScreen> {
     String localMealQuality = _mealQuality;
     _mlController.clear();
 
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -520,278 +568,746 @@ class _RepasScreenState extends State<RepasScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
               child: Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(
+                    0), // Padding 0 pour permettre au header d'aller jusqu'au bord
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryBlue.withOpacity(0.15),
+                      blurRadius: 15,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Ajouter un repas pour ${enfant['prenom']}",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // En-tête avec dégradé
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            primaryBlue,
+                            primaryBlue.withOpacity(0.85),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
                         ),
                       ),
-                      SizedBox(height: 20),
-                      Center(
-                        child: Text(
-                          "Heure du repas",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          DatePicker.showTimePicker(
-                            context,
-                            showSecondsColumn: false,
-                            showTitleActions: true,
-                            onConfirm: (date) {
-                              setState(() {
-                                localMealTime =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                              });
-                            },
-                            currentTime: DateTime.now(),
-                            locale: LocaleType.fr,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: lightBlue,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: Size(double.infinity, 50),
-                        ),
-                        child: Text(
-                          localMealTime.isEmpty
-                              ? 'Choisir l\'heure'
-                              : localMealTime,
-                          style: TextStyle(fontSize: 16, color: primaryBlue),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-
-                      // Biberon ?
-                      CheckboxListTile(
-                        title: Text("Biberon ?"),
-                        value: localIsBiberon,
-                        onChanged: (bool? value) {
-                          setState(() {
-                            localIsBiberon = value!;
-                            if (value) {
-                              localIsAllaitement = false;
-                            }
-                          });
-                        },
-                        activeColor: primaryBlue,
-                      ),
-
-                      if (localIsBiberon) ...[
-                        SizedBox(height: 10),
-                        TextField(
-                          controller: _mlController,
-                          decoration: InputDecoration(
-                            labelText: "Combien de ml ?",
-                            border: OutlineInputBorder(
+                      padding: EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  BorderSide(color: primaryBlue, width: 2),
+                            child: Icon(
+                              Icons.restaurant,
+                              color: Colors.white,
+                              size: isTabletDevice ? 30 : 24,
                             ),
                           ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ],
-
-                      if (!localIsBiberon) ...[
-                        SizedBox(height: 10),
-                        // Allaitement ?
-                        CheckboxListTile(
-                          title: Text("Allaitement ?"),
-                          value: localIsAllaitement,
-                          onChanged: (bool? value) {
-                            setState(() {
-                              localIsAllaitement = value!;
-                              if (value) {
-                                localIsBiberon = false;
-                              }
-                            });
-                          },
-                          activeColor: primaryBlue,
-                        ),
-                      ],
-
-                      if (!localIsBiberon && !localIsAllaitement) ...[
-                        SizedBox(height: 20),
-                        Text(
-                          "Comment était le repas de ${enfant['prenom']} ?",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: 10),
-                        Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: _buildMealQualityButton(
-                                    'Pas mangé',
-                                    localMealQuality,
-                                    (value) {
-                                      setState(() {
-                                        localMealQuality = value;
-                                      });
-                                    },
+                                Text(
+                                  "Ajouter un repas pour ${enfant['prenom']}",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 22 : 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: _buildMealQualityButton(
-                                    'Peu mangé',
-                                    localMealQuality,
-                                    (value) {
-                                      setState(() {
-                                        localMealQuality = value;
-                                      });
-                                    },
+                                if (isTabletDevice) SizedBox(height: 4),
+                                if (isTabletDevice)
+                                  Text(
+                                    "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.85),
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
-                            SizedBox(height: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Contenu du formulaire avec padding
+                    Padding(
+                      padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Section Heure du repas
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Heure du repas",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () {
+                                      DatePicker.showTimePicker(
+                                        context,
+                                        showSecondsColumn: false,
+                                        showTitleActions: true,
+                                        onConfirm: (date) {
+                                          setState(() {
+                                            localMealTime =
+                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                          });
+                                        },
+                                        currentTime: DateTime.now(),
+                                        locale: LocaleType.fr,
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localMealTime.isEmpty
+                                              ? Colors.transparent
+                                              : primaryBlue.withOpacity(0.5),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            localMealTime.isEmpty
+                                                ? 'Choisir l\'heure'
+                                                : localMealTime,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localMealTime.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : primaryBlue,
+                                              fontWeight: localMealTime.isEmpty
+                                                  ? FontWeight.normal
+                                                  : FontWeight.w600,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            color: primaryBlue.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Type de repas
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Type de repas",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+
+                                  // Option Biberon
+                                  Container(
+                                    margin: EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: localIsBiberon
+                                          ? primaryBlue.withOpacity(0.1)
+                                          : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: localIsBiberon
+                                            ? primaryBlue
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: CheckboxListTile(
+                                      title: Row(
+                                        children: [
+                                          Container(
+                                            padding: EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: localIsBiberon
+                                                  ? primaryBlue.withOpacity(0.2)
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Icon(
+                                              Icons.local_drink_outlined,
+                                              color: localIsBiberon
+                                                  ? primaryBlue
+                                                  : Colors.grey.shade500,
+                                              size: isTabletDevice ? 24 : 20,
+                                            ),
+                                          ),
+                                          SizedBox(width: 12),
+                                          Text(
+                                            "Biberon",
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: localIsBiberon
+                                                  ? primaryBlue
+                                                  : Colors.grey.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      value: localIsBiberon,
+                                      onChanged: (bool? value) {
+                                        setState(() {
+                                          localIsBiberon = value!;
+                                          if (value) {
+                                            localIsAllaitement = false;
+                                          }
+                                        });
+                                      },
+                                      activeColor: primaryBlue,
+                                      checkColor: Colors.white,
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      controlAffinity:
+                                          ListTileControlAffinity.trailing,
+                                    ),
+                                  ),
+
+                                  // Champ ML pour biberon
+                                  if (localIsBiberon) ...[
+                                    Container(
+                                      margin: EdgeInsets.only(
+                                          bottom: 16, left: 16, right: 16),
+                                      padding: EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Quantité (ml)",
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 16 : 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: primaryBlue,
+                                            ),
+                                          ),
+                                          SizedBox(height: 10),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  offset: Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: TextField(
+                                              controller: _mlController,
+                                              decoration: InputDecoration(
+                                                hintText: "Exemple: 150",
+                                                hintStyle: TextStyle(
+                                                    color:
+                                                        Colors.grey.shade400),
+                                                suffixText: "ml",
+                                                suffixStyle: TextStyle(
+                                                  color: primaryBlue,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 16),
+                                              ),
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isTabletDevice ? 18 : 16,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+
+                                  // Option Allaitement (seulement si pas biberon)
+                                  if (!localIsBiberon)
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: localIsAllaitement
+                                            ? primaryBlue.withOpacity(0.1)
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localIsAllaitement
+                                              ? primaryBlue
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: CheckboxListTile(
+                                        title: Row(
+                                          children: [
+                                            Container(
+                                              padding: EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: localIsAllaitement
+                                                    ? primaryBlue
+                                                        .withOpacity(0.2)
+                                                    : Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Icon(
+                                                Icons.child_care_outlined,
+                                                color: localIsAllaitement
+                                                    ? primaryBlue
+                                                    : Colors.grey.shade500,
+                                                size: isTabletDevice ? 24 : 20,
+                                              ),
+                                            ),
+                                            SizedBox(width: 12),
+                                            Text(
+                                              "Allaitement",
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isTabletDevice ? 18 : 16,
+                                                fontWeight: FontWeight.w500,
+                                                color: localIsAllaitement
+                                                    ? primaryBlue
+                                                    : Colors.grey.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        value: localIsAllaitement,
+                                        onChanged: (bool? value) {
+                                          setState(() {
+                                            localIsAllaitement = value!;
+                                            if (value) {
+                                              localIsBiberon = false;
+                                            }
+                                          });
+                                        },
+                                        activeColor: primaryBlue,
+                                        checkColor: Colors.white,
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        controlAffinity:
+                                            ListTileControlAffinity.trailing,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Qualité du repas (ni biberon ni allaitement)
+                            if (!localIsBiberon && !localIsAllaitement) ...[
+                              Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Comment était le repas de ${enfant['prenom']} ?",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 16),
+                                    GridView.count(
+                                      crossAxisCount: 2,
+                                      shrinkWrap: true,
+                                      physics: NeverScrollableScrollPhysics(),
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 2.5,
+                                      children: [
+                                        _buildMealQualityButtonModern(
+                                          'Pas mangé',
+                                          localMealQuality,
+                                          (value) {
+                                            setState(() {
+                                              localMealQuality = value;
+                                            });
+                                          },
+                                          isTabletDevice,
+                                          Icons.sentiment_very_dissatisfied,
+                                          primaryRed,
+                                        ),
+                                        _buildMealQualityButtonModern(
+                                          'Peu mangé',
+                                          localMealQuality,
+                                          (value) {
+                                            setState(() {
+                                              localMealQuality = value;
+                                            });
+                                          },
+                                          isTabletDevice,
+                                          Icons.sentiment_dissatisfied,
+                                          Colors.amber,
+                                        ),
+                                        _buildMealQualityButtonModern(
+                                          'Bien mangé',
+                                          localMealQuality,
+                                          (value) {
+                                            setState(() {
+                                              localMealQuality = value;
+                                            });
+                                          },
+                                          isTabletDevice,
+                                          Icons.sentiment_satisfied,
+                                          Colors.lime,
+                                        ),
+                                        _buildMealQualityButtonModern(
+                                          'Très bien mangé',
+                                          localMealQuality,
+                                          (value) {
+                                            setState(() {
+                                              localMealQuality = value;
+                                            });
+                                          },
+                                          isTabletDevice,
+                                          Icons.sentiment_very_satisfied,
+                                          Colors.green,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Section Observations
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Observations",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _observationsController,
+                                      decoration: InputDecoration(
+                                        hintText: "Précisions sur le repas...",
+                                        hintStyle: TextStyle(
+                                            color: Colors.grey.shade400),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade200,
+                                              width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: primaryBlue, width: 2),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 16),
+                                      ),
+                                      maxLines: 3,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Boutons d'action
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
-                                  child: _buildMealQualityButton(
-                                    'Bien mangé',
-                                    localMealQuality,
-                                    (value) {
-                                      setState(() {
-                                        localMealQuality = value;
-                                      });
-                                    },
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
                                   ),
                                 ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: _buildMealQualityButton(
-                                    'Très bien mangé',
-                                    localMealQuality,
-                                    (value) {
-                                      setState(() {
-                                        localMealQuality = value;
-                                      });
-                                    },
+
+                                // Bouton Ajouter
+                                ElevatedButton(
+                                  onPressed: () {
+                                    if (localIsBiberon &&
+                                        _mlController.text.isEmpty) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Veuillez indiquer la quantité en ml'),
+                                          backgroundColor: primaryRed,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    if (localMealTime.isEmpty) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Veuillez sélectionner l\'heure du repas'),
+                                          backgroundColor: primaryRed,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    _mealQuality = localMealQuality;
+                                    _isBiberon = localIsBiberon;
+                                    _isAllaitement = localIsAllaitement;
+                                    _mealTime = localMealTime;
+                                    _addMealToFirebase(childId);
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryBlue,
+                                    elevation: 2,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 32 : 24,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "AJOUTER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                      ],
-
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _observationsController,
-                        decoration: InputDecoration(
-                          labelText: "Observations",
-                          labelStyle:
-                              TextStyle(fontSize: 16, color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: primaryBlue, width: 2),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
-                        ),
-                        maxLines: 3,
                       ),
-                      SizedBox(height: 20),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: Text(
-                              "ANNULER",
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              if (localIsBiberon &&
-                                  _mlController.text.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(
-                                          'Veuillez indiquer la quantité en ml')),
-                                );
-                                return;
-                              }
-                              _mealQuality = localMealQuality;
-                              _isBiberon = localIsBiberon;
-                              _isAllaitement = localIsAllaitement;
-                              _mealTime = localMealTime;
-                              _addMealToFirebase(childId);
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryBlue,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              "AJOUTER",
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+// Nouveau bouton de qualité du repas - version moderne
+  Widget _buildMealQualityButtonModern(
+    String quality,
+    String selectedQuality,
+    Function(String) onSelect,
+    bool isTablet,
+    IconData icon,
+    Color color,
+  ) {
+    bool isSelected = selectedQuality == quality;
+
+    // Utilisation des couleurs officielles de l'application avec opacité adaptée
+    Color backgroundColor;
+    Color textColor;
+    Color iconColor;
+
+    if (isSelected) {
+      // Si le bouton est sélectionné
+      if (quality == "Bien mangé") {
+        // Pour "Bien mangé", utiliser primaryBlue avec opacité
+        backgroundColor = primaryBlue.withOpacity(0.15);
+        textColor = primaryBlue;
+        iconColor = primaryBlue;
+      } else if (quality == "Très bien mangé") {
+        // Pour "Très bien mangé", utiliser primaryYellow avec opacité
+        backgroundColor = primaryYellow.withOpacity(0.15);
+        textColor = Colors.brown.shade700;
+        iconColor = primaryYellow;
+      } else if (quality == "Pas mangé") {
+        // Pour "Pas mangé", utiliser primaryRed avec opacité
+        backgroundColor = primaryRed.withOpacity(0.15);
+        textColor = primaryRed;
+        iconColor = primaryRed;
+      } else {
+        // Pour "Peu mangé", utiliser orange avec opacité
+        backgroundColor = Colors.orange.withOpacity(0.15);
+        textColor = Colors.orange.shade800;
+        iconColor = Colors.orange;
+      }
+    } else {
+      // Si le bouton n'est pas sélectionné
+      backgroundColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade700;
+      iconColor = Colors.grey.shade400;
+    }
+
+    return GestureDetector(
+      onTap: () => onSelect(quality),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? iconColor : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: iconColor.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: iconColor,
+              size: isTablet ? 20 : 18,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                quality,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isTablet ? 15 : 13,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: textColor,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -970,13 +1486,19 @@ class _RepasScreenState extends State<RepasScreen> {
                 SizedBox(width: 16),
                 // Nom de l'enfant
                 Expanded(
-                  child: Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isBoy ? primaryBlue : primaryRed,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                    ],
                   ),
                 ),
                 // Bouton d'ajout
@@ -994,7 +1516,67 @@ class _RepasScreenState extends State<RepasScreen> {
               ],
             ),
           ),
-
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.restaurant, size: 16, color: primaryBlue),
+                      SizedBox(width: 4),
+                      Text(
+                        "Repas: ",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: primaryBlue,
+                        ),
+                      ),
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('structures')
+                            .doc(enfant['structureId'] ??
+                                FirebaseAuth.instance.currentUser?.uid)
+                            .collection('children')
+                            .doc(enfant['id'])
+                            .collection('repas')
+                            .where('date',
+                                isGreaterThanOrEqualTo: DateTime(
+                                    DateTime.now().year,
+                                    DateTime.now().month,
+                                    DateTime.now().day))
+                            .where('date',
+                                isLessThan: DateTime(
+                                        DateTime.now().year,
+                                        DateTime.now().month,
+                                        DateTime.now().day)
+                                    .add(Duration(days: 1)))
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          int repasCount =
+                              snapshot.hasData ? snapshot.data!.docs.length : 0;
+                          return Text(
+                            "$repasCount",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: primaryBlue,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           // Liste des repas
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -1197,6 +1779,7 @@ class _RepasScreenState extends State<RepasScreen> {
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     bool isBoy = enfant['genre'] == 'Garçon';
+    Color cardColor = isBoy ? primaryBlue : primaryRed;
 
     return Container(
       decoration: BoxDecoration(
@@ -1212,228 +1795,318 @@ class _RepasScreenState extends State<RepasScreen> {
       ),
       child: Column(
         children: [
-          // En-tête de la carte
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cardColor, cardColor.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar de l'enfant - plus grand pour iPad
-                Container(
-                  width: 70, // Plus grand pour iPad
-                  height: 70, // Plus grand pour iPad
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                // Avatar avec badge
+                Stack(
+                  children: [
+                    // Photo de l'enfant
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: cardColor.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: enfant['photoUrl'] != null &&
-                            enfant['photoUrl'].isNotEmpty
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            width: 66,
-                            height: 66,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Center(
-                              child: Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 28, // Plus grand pour iPad
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                      child: ClipOval(
+                        child: enfant['photoUrl'] != null &&
+                                enfant['photoUrl'].isNotEmpty
+                            ? Image.network(
+                                enfant['photoUrl'],
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Center(
+                                  child: Text(
+                                    enfant['prenom'][0].toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: Text(
+                                  enfant['prenom'][0].toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              enfant['prenom'][0].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 28, // Plus grand pour iPad
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 16),
-                // Nom de l'enfant
+
+                // Informations de l'enfant
                 Expanded(
-                  child: Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 22, // Plus grand pour iPad
-                      fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          enfant['prenom'],
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+
                 // Bouton d'ajout
                 Container(
                   decoration: BoxDecoration(
-                    color: primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: IconButton(
-                    icon: Icon(Icons.add,
-                        color: primaryBlue, size: 28), // Plus grand pour iPad
-                    onPressed: () => _showAddMealPopup(enfant['id']),
-                    tooltip: "Ajouter un repas",
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: cardColor, size: 24),
+                      onPressed: () => _showAddMealPopup(enfant['id']),
+                      tooltip: "Ajouter un repas",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Liste des repas
+          // Contenu de la carte
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('structures')
-                  .doc(enfant['structureId'] ??
-                      FirebaseAuth.instance.currentUser?.uid)
-                  .collection('children')
-                  .doc(enfant['id'])
-                  .collection('repas')
-                  .where('date',
-                      isGreaterThanOrEqualTo: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ))
-                  .where('date',
-                      isLessThan: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ).add(Duration(days: 1)))
-                  .orderBy('date', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(
-                      child: Text(
-                        "Chargement des repas...",
-                        style: TextStyle(
-                          fontSize: 16, // Plus grand pour iPad
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  );
-                }
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // La section "Stats du jour" a été supprimée
 
-                if (snapshot.data!.docs.isEmpty) {
-                  return Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(
-                      child: Text(
-                        "Aucun repas aujourd'hui",
-                        style: TextStyle(
-                          fontSize: 16, // Plus grand pour iPad
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: ListView.builder(
-                    itemCount: snapshot.data!.docs.length,
-                    itemBuilder: (context, idx) {
-                      final doc = snapshot.data!.docs[idx];
-                      final mealData = doc.data() as Map<String, dynamic>;
-                      return GestureDetector(
-                        onTap: () => _showMealDetailsPopup(mealData),
-                        child: Container(
-                          margin: EdgeInsets.only(bottom: 8),
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: lightBlue,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  mealData['heure'],
-                                  style: TextStyle(
-                                    fontSize: 15, // Plus grand pour iPad
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryBlue,
-                                  ),
-                                ),
+                  // Liste des repas (directement, sans SizedBox)
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('structures')
+                          .doc(enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid)
+                          .collection('children')
+                          .doc(enfant['id'])
+                          .collection('repas')
+                          .where('date',
+                              isGreaterThanOrEqualTo: DateTime(
+                                DateTime.now().year,
+                                DateTime.now().month,
+                                DateTime.now().day,
+                              ))
+                          .where('date',
+                              isLessThan: DateTime(
+                                DateTime.now().year,
+                                DateTime.now().month,
+                                DateTime.now().day,
+                              ).add(Duration(days: 1)))
+                          .orderBy('date', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return Center(
+                            child: Text(
+                              "Chargement des repas...",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
                               ),
-                              SizedBox(width: 16),
-                              if (mealData['biberon'])
-                                _buildBiberonIcon(
-                                    mealData['ml']?.toDouble() ?? 0)
-                              else if (mealData['allaitement'])
-                                _buildAllaitementIcon()
-                              else
-                                Row(
-                                  children: List.generate(
-                                    mealData['starCount'] ?? 0,
-                                    (index) => Padding(
-                                      padding: EdgeInsets.only(right: 2),
-                                      child: Icon(
-                                        Icons.star,
-                                        color: primaryYellow,
-                                        size: 18, // Plus grand pour iPad
-                                      ),
-                                    ),
-                                  ),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.restaurant,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
                                 ),
-                              SizedBox(width: 8),
-                              if (mealData['qualite'] != null)
+                                SizedBox(height: 12),
                                 Text(
-                                  mealData['qualite'],
+                                  "Aucun repas aujourd'hui",
                                   style: TextStyle(
-                                    fontSize: 15, // Plus grand pour iPad
-                                    color: Colors.black87,
+                                    fontSize: 16,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
                                   ),
                                 ),
-                              Spacer(),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: Colors.grey.shade600,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          itemCount: snapshot.data!.docs.length,
+                          itemBuilder: (context, idx) {
+                            final doc = snapshot.data!.docs[idx];
+                            final mealData = doc.data() as Map<String, dynamic>;
+
+                            // Repas avec biberon
+                            if (mealData['biberon'] == true) {
+                              return GestureDetector(
+                                onTap: () => _showMealDetailsPopup(mealData),
+                                child: Container(
+                                  margin: EdgeInsets.only(bottom: 10),
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: primaryBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          mealData['heure'] ?? "08:30",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 16),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.local_drink_outlined,
+                                              color: primaryBlue, size: 20),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            "${mealData['ml']?.toInt() ?? 0} ML",
+                                            style: TextStyle(
+                                              color: Colors.grey.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Spacer(),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.grey.shade400,
+                                        size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            // Repas normal (avec qualité)
+                            else {
+                              return GestureDetector(
+                                onTap: () => _showMealDetailsPopup(mealData),
+                                child: Container(
+                                  margin: EdgeInsets.only(bottom: 10),
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: primaryBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          mealData['heure'] ?? "12:15",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 16),
+                                      Row(
+                                        children: [
+                                          Row(
+                                            children: List.generate(
+                                              mealData['starCount'] ?? 3,
+                                              (index) => Icon(
+                                                Icons.star,
+                                                color: primaryYellow,
+                                                size: 18,
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            mealData['qualite'] ?? "Bien mangé",
+                                            style: TextStyle(
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Spacer(),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.grey.shade400,
+                                        size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
+                ],
+              ),
             ),
           ),
         ],

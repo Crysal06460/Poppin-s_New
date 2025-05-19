@@ -801,174 +801,195 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-// Nouveau layout pour iPad
-  // Version complète améliorée de la méthode _buildTabletContent
-  // Correction du problème d'espacement et de débordement dans la grille des fonctionnalités
-// Version améliorée de _buildTabletContent avec répartition verticale des icônes
-
-  // Mise à jour de _buildTabletContent pour utiliser un design similaire à iPhone mais avec espacement adapté
-// Code optimisé pour fonctionner avec des proportions fixes basées sur des pourcentages
-
-  // Version optimisée avec espacement vertical uniforme (7 sections égales)
   Widget _buildTabletContent(List<Map<String, dynamic>> features) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Panneau latéral gauche (enfants présents + anniversaires) - 40% de l'écran
-          Expanded(
-            flex: 4,
-            child: Container(
-              margin: const EdgeInsets.only(right: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, 3),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Titre avec icône
-                    Row(
-                      children: [
-                        Image.asset(
-                          'assets/images/Icone_Enfant_Present.png',
-                          width: 80,
-                          height: 80,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.people_alt_rounded,
-                            color: primaryColor,
-                            size: 80,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            "Enfants présents aujourd'hui",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+    return LayoutBuilder(builder: (context, constraints) {
+      // Récupérer la taille disponible de l'écran
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+
+      // Calculer des dimensions en pourcentages
+      final double sideMargin = maxWidth * 0.03; // 3% de marge sur les côtés
+      final double columnGap = maxWidth * 0.025; // Augmenté de 0.02 à 0.025
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau latéral gauche (enfants présents + anniversaires) - légèrement augmenté
+            Expanded(
+              flex: 4, // Augmenté de 3 à 4 pour donner plus d'espace
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(
+                      maxWidth * 0.025), // Augmenté de 0.02 à 0.025
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre avec icône
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/Icone_Enfant_Present.png',
+                            width: maxWidth * 0.07, // Augmenté de 0.06 à 0.07
+                            height: maxWidth * 0.07,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.people_alt_rounded,
+                              color: primaryColor,
+                              size: maxWidth * 0.07,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Liste des enfants présents
-                    Expanded(
-                      child: children.isEmpty
-                          ? Center(
-                              child: Text(
-                                "Aucun enfant prévu aujourd'hui",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey.shade600,
-                                  fontStyle: FontStyle.italic,
-                                ),
+                          SizedBox(
+                              width:
+                                  maxWidth * 0.015), // Augmenté de 0.01 à 0.015
+                          Expanded(
+                            child: Text(
+                              "Enfants présents",
+                              style: TextStyle(
+                                fontSize: maxWidth *
+                                    0.022, // Augmenté de 0.02 à 0.022
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
                               ),
-                            )
-                          : GridView.builder(
-                              shrinkWrap: true,
-                              physics: const BouncingScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                mainAxisSpacing: 16,
-                                crossAxisSpacing: 16,
-                                childAspectRatio: 0.85,
-                              ),
-                              itemCount: children.length,
-                              itemBuilder: (context, index) =>
-                                  _buildChildAvatar(children[index], true),
                             ),
-                    ),
+                          ),
+                        ],
+                      ),
 
-                    // Section des anniversaires
-                    if (upcomingBirthdays.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: Colors.orange.shade200, width: 1),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.cake_rounded,
-                                  size: 24,
-                                  color: const Color(0xFFD94350),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    "Anniversaires à venir",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFFD94350),
-                                    ),
+                      SizedBox(
+                          height:
+                              maxHeight * 0.025), // Augmenté de 0.02 à 0.025
+
+                      // Liste des enfants présents - FORMAT VERTICAL
+                      Expanded(
+                        child: children.isEmpty
+                            ? Center(
+                                child: Text(
+                                  "Aucun enfant prévu aujourd'hui",
+                                  style: TextStyle(
+                                    fontSize: maxWidth *
+                                        0.018, // Augmenté de 0.016 à 0.018
+                                    color: Colors.grey.shade600,
+                                    fontStyle: FontStyle.italic,
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            // Limiter la hauteur avec un container à défilement
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxHeight: 150),
-                              child: ListView(
+                              )
+                            // Liste verticale avec plus d'espacement
+                            : ListView.separated(
                                 shrinkWrap: true,
                                 physics: const BouncingScrollPhysics(),
-                                children: upcomingBirthdays.map((b) {
-                                  String message;
-                                  if (b['daysUntilBirthday'] == 0) {
-                                    message = "Aujourd'hui";
-                                  } else if (b['daysUntilBirthday'] == 1) {
-                                    message = "Demain";
-                                  } else if (b['daysUntilBirthday'] == 2) {
-                                    message = "Après-demain";
-                                  } else {
-                                    message =
-                                        "Dans ${b['daysUntilBirthday']} jours";
-                                  }
+                                itemCount: children.length,
+                                // Utiliser separatorBuilder au lieu de padding
+                                separatorBuilder: (context, index) =>
+                                    SizedBox(height: maxHeight * 0.02),
+                                itemBuilder: (context, index) =>
+                                    _buildChildAvatarVertical(
+                                        children[index], maxWidth, maxHeight),
+                              ),
+                      ),
 
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Row(
+                      // Section des anniversaires
+                      if (upcomingBirthdays.isNotEmpty) ...[
+                        SizedBox(
+                            height:
+                                maxHeight * 0.025), // Augmenté de 0.02 à 0.025
+                        Container(
+                          padding: EdgeInsets.all(
+                              maxWidth * 0.02), // Augmenté de 0.015 à 0.02
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: Colors.orange.shade200, width: 1),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.cake_rounded,
+                                    size: maxWidth *
+                                        0.022, // Augmenté de 0.02 à 0.022
+                                    color: const Color(0xFFD94350),
+                                  ),
+                                  SizedBox(
+                                      width: maxWidth *
+                                          0.015), // Augmenté de 0.01 à 0.015
+                                  Expanded(
+                                    child: Text(
+                                      "Anniversaires",
+                                      style: TextStyle(
+                                        fontSize: maxWidth *
+                                            0.018, // Augmenté de 0.016 à 0.018
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFFD94350),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.015), // Augmenté de 0.01 à 0.015
+                              // Limiter la hauteur avec un container à défilement
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight: maxHeight *
+                                      0.14, // Augmenté de 0.12 à 0.14
+                                ),
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: upcomingBirthdays.length,
+                                  separatorBuilder: (context, index) =>
+                                      SizedBox(height: maxHeight * 0.01),
+                                  itemBuilder: (context, index) {
+                                    final b = upcomingBirthdays[index];
+                                    String message;
+                                    if (b['daysUntilBirthday'] == 0) {
+                                      message = "Aujourd'hui";
+                                    } else if (b['daysUntilBirthday'] == 1) {
+                                      message = "Demain";
+                                    } else if (b['daysUntilBirthday'] == 2) {
+                                      message = "Après-demain";
+                                    } else {
+                                      message = "${b['daysUntilBirthday']}j";
+                                    }
+
+                                    return Row(
                                       children: [
                                         Flexible(
                                           child: Text(
                                             "• ${b['firstName']}",
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontSize: 16,
+                                              fontSize: maxWidth * 0.016,
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                            width: maxWidth *
+                                                0.01), // Augmenté de 0.005 à 0.01
                                         Text(
                                           message,
                                           style: TextStyle(
-                                            fontSize: 16,
+                                            fontSize: maxWidth * 0.016,
                                             color: b['daysUntilBirthday'] == 0
                                                 ? Colors.orange.shade700
                                                 : Colors.grey.shade700,
@@ -976,182 +997,283 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         ),
                                       ],
-                                    ),
-                                  );
-                                }).toList(),
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Panneau de droite (fonctionnalités) - 60% de l'écran
-          Expanded(
-            flex: 6,
-            child: Container(
+            // Panneau de droite (fonctionnalités) - légèrement réduit pour compenser
+            Expanded(
+              flex: 6, // Réduit de 7 à 6 car le panel gauche a été augmenté
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.02),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre de la section fonctionnalités
+                      Text(
+                        "Fonctionnalités",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.022,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.01),
+
+                      // Grille de fonctionnalités réactive
+                      Expanded(
+                        child: _buildResponsiveFeaturesGrid(
+                            features, maxWidth, maxHeight),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildChildAvatarVertical(
+      Map<String, dynamic> child, double maxWidth, double maxHeight) {
+    final isBoy = child['gender'] == 'Garçon';
+    final displayName = child['firstName'] ?? 'Enfant';
+    final photoUrl = child['photoUrl'];
+
+    // Tailles proportionnelles pour l'affichage vertical - AUGMENTÉES
+    final double avatarSize =
+        maxWidth * 0.08; // Augmenté de 5% à 8% de la largeur
+    final double fontSize = maxWidth * 0.018; // Augmenté de 0.014 à 0.018
+
+    return GestureDetector(
+      onTap: () async {
+        // Navigation vers l'écran de profil détaillé de l'enfant
+        String structId = await _getStructureId();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChildProfileDetailsScreen(
+              childId: child['id'],
+              structureId: structId,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+            vertical:
+                maxHeight * 0.01), // Augmentation de l'espacement vertical
+        child: Row(
+          children: [
+            // Avatar de l'enfant
+            Container(
+              width: avatarSize,
+              height: avatarSize,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isBoy
+                      ? [primaryColor.withOpacity(0.7), primaryColor]
+                      : [Colors.pink.withOpacity(0.7), Colors.pink],
+                ),
+                shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, 3),
-                    blurRadius: 10,
+                    color:
+                        (isBoy ? primaryColor : Colors.pink).withOpacity(0.3),
+                    blurRadius: 6, // Augmenté de 4 à 6
+                    offset: const Offset(0, 3), // Augmenté de 2 à 3
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Titre de la section fonctionnalités
-                    Text(
-                      "Fonctionnalités",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
+              child: Center(
+                child: photoUrl != null && photoUrl.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          photoUrl,
+                          width: avatarSize * 0.9,
+                          height: avatarSize * 0.9,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _buildFallbackAvatarSimple(
+                            displayName,
+                            avatarSize * 0.9,
+                            avatarSize * 0.4,
+                          ),
+                        ),
+                      )
+                    : _buildFallbackAvatarSimple(
+                        displayName,
+                        avatarSize * 0.9,
+                        avatarSize * 0.4,
                       ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // Nouvelle approche avec répartition exacte en 7 sections
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Calculer la taille de l'écran disponible
-                          final double totalHeight = constraints.maxHeight;
-
-                          // On veut 7 sections égales:
-                          // 1. Espace (1/7 de la hauteur)
-                          // 2. Première rangée (1/7 de la hauteur)
-                          // 3. Espace (1/7 de la hauteur)
-                          // 4. Deuxième rangée (1/7 de la hauteur)
-                          // 5. Espace (1/7 de la hauteur)
-                          // 6. Troisième rangée (1/7 de la hauteur)
-                          // 7. Espace (1/7 de la hauteur)
-
-                          final double sectionHeight = totalHeight / 7;
-                          final double itemHeight = sectionHeight;
-
-                          // Diviser les fonctionnalités en 3 rangées
-                          final List<List<Map<String, dynamic>>> rows = [
-                            features.sublist(0, 4), // Première rangée: 0-3
-                            features.sublist(4, 8), // Deuxième rangée: 4-7
-                            features.sublist(8, 12), // Troisième rangée: 8-11
-                          ];
-
-                          return Column(
-                            children: [
-                              // Section 1: Espace (1/7 de la hauteur)
-                              SizedBox(height: sectionHeight),
-
-                              // Section 2: Première rangée (1/7 de la hauteur)
-                              Container(
-                                height: itemHeight,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: rows[0]
-                                      .map((feature) => Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 10),
-                                              child: _buildTabletGridItem(
-                                                context,
-                                                feature['route'] as String,
-                                                feature['name'] as String,
-                                                feature['imagePath'] as String,
-                                              ),
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                              ),
-
-                              // Section 3: Espace (1/7 de la hauteur)
-                              SizedBox(height: sectionHeight),
-
-                              // Section 4: Deuxième rangée (1/7 de la hauteur)
-                              Container(
-                                height: itemHeight,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: rows[1]
-                                      .map((feature) => Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 10),
-                                              child: _buildTabletGridItem(
-                                                context,
-                                                feature['route'] as String,
-                                                feature['name'] as String,
-                                                feature['imagePath'] as String,
-                                              ),
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                              ),
-
-                              // Section 5: Espace (1/7 de la hauteur)
-                              SizedBox(height: sectionHeight),
-
-                              // Section 6: Troisième rangée (1/7 de la hauteur)
-                              Container(
-                                height: itemHeight,
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: rows[2]
-                                      .map((feature) => Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 10),
-                                              child: _buildTabletGridItem(
-                                                context,
-                                                feature['route'] as String,
-                                                feature['name'] as String,
-                                                feature['imagePath'] as String,
-                                              ),
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                              ),
-
-                              // Section 7: Espace (1/7 de la hauteur)
-                              SizedBox(height: sectionHeight),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
-          ),
-        ],
+            SizedBox(width: maxWidth * 0.03), // Augmenté de 0.02 à 0.03
+            // Nom de l'enfant
+            Expanded(
+              child: Text(
+                displayName,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-// Nouvelle méthode pour construire des vignettes qui ressemblent exactement au design iPhone
-  Widget _buildTabletGridItem(
-      BuildContext context, String route, String name, String imagePath) {
+// Version simplifiée pour le layout vertical
+  Widget _buildFallbackAvatarSimple(String name, double size, double fontSize) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : "?",
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.bold,
+            color: primaryColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+// Version adaptée pour afficher 3x4 fonctionnalités avec des icônes plus grandes
+  Widget _buildResponsiveFeaturesGrid(
+      List<Map<String, dynamic>> features, double maxWidth, double maxHeight) {
+    // Diviser les fonctionnalités en 3 rangées
+    final List<List<Map<String, dynamic>>> rows = [
+      features.sublist(0, 4), // Première rangée: 0-3
+      features.sublist(4, 8), // Deuxième rangée: 4-7
+      features.sublist(8, 12), // Troisième rangée: 8-11
+    ];
+
+    return Column(
+      children: [
+        // Distribution verticale uniforme
+        Expanded(child: SizedBox()), // Espace flexible 1
+
+        // Première rangée
+        Container(
+          height: maxHeight * 0.16, // Augmenté de 14% à 16%
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: rows[0]
+                .map((feature) => Expanded(
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: maxWidth * 0.01),
+                        child: _buildTabletGridItem(
+                          context,
+                          feature['route'] as String,
+                          feature['name'] as String,
+                          feature['imagePath'] as String,
+                          maxWidth,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ),
+
+        Expanded(child: SizedBox()), // Espace flexible 2
+
+        // Deuxième rangée
+        Container(
+          height: maxHeight * 0.16, // Augmenté de 14% à 16%
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: rows[1]
+                .map((feature) => Expanded(
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: maxWidth * 0.01),
+                        child: _buildTabletGridItem(
+                          context,
+                          feature['route'] as String,
+                          feature['name'] as String,
+                          feature['imagePath'] as String,
+                          maxWidth,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ),
+
+        Expanded(child: SizedBox()), // Espace flexible 3
+
+        // Troisième rangée
+        Container(
+          height: maxHeight * 0.16, // Augmenté de 14% à 16%
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: rows[2]
+                .map((feature) => Expanded(
+                      child: Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: maxWidth * 0.01),
+                        child: _buildTabletGridItem(
+                          context,
+                          feature['route'] as String,
+                          feature['name'] as String,
+                          feature['imagePath'] as String,
+                          maxWidth,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ),
+
+        Expanded(child: SizedBox()), // Espace flexible 4
+      ],
+    );
+  }
+
+// Méthode améliorée pour les éléments de grille sur iPad avec dimensions relatives
+  Widget _buildTabletGridItem(BuildContext context, String route, String name,
+      String imagePath, double maxWidth) {
+    // Augmentation de la taille des icônes
+    final double imageSize = maxWidth * 0.08; // Augmenté de 6% à 8%
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -1168,12 +1290,12 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Center(
                 child: Image.asset(
                   imagePath,
-                  width: 60,
-                  height: 60,
+                  width: imageSize,
+                  height: imageSize,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.image_not_supported,
-                    size: 60,
+                    size: imageSize,
                     color: primaryColor,
                   ),
                 ),
@@ -1187,7 +1309,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text(
                   name,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: maxWidth * 0.016, // Augmenté légèrement
                     fontWeight: FontWeight.w500,
                     color: Colors.grey.shade800,
                   ),
@@ -1294,8 +1416,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // Définir les couleurs avant de construire l'interface
     _setThemeColors();
 
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+
     // Déterminer si on est sur iPad
-    final bool isTablet = MediaQuery.of(context).size.shortestSide >= 600;
+    final bool isTablet = screenSize.shortestSide >= 600;
 
     // Liste des fonctionnalités avec leur route, nom et image
     final features = [
@@ -1365,7 +1490,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // En-tête avec fond de couleur
+          // En-tête avec fond de couleur - hauteur et marges relatives
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -1377,9 +1502,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   primaryColor.withOpacity(0.85),
                 ],
               ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(screenSize.width * 0.06),
+                bottomRight: Radius.circular(screenSize.width * 0.06),
               ),
               boxShadow: [
                 BoxShadow(
@@ -1392,12 +1517,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  isTablet
-                      ? 24
-                      : 10, // Plus grand padding horizontal sur tablette
-                  16,
-                  isTablet ? 24 : 10,
-                  isTablet ? 16 : 5, // Plus grand padding bas sur tablette
+                  screenSize.width *
+                      (isTablet ? 0.03 : 0.025), // 3% ou 2.5% de la largeur
+                  screenSize.height * 0.02, // 2% de la hauteur
+                  screenSize.width * (isTablet ? 0.03 : 0.025),
+                  screenSize.height *
+                      (isTablet
+                          ? 0.02
+                          : 0.01), // Plus grand padding bas sur tablette
                 ),
                 child: Column(
                   children: [
@@ -1409,9 +1536,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             structureName,
                             style: TextStyle(
-                              fontSize: isTablet
-                                  ? 32
-                                  : 24, // Plus grande police sur tablette
+                              fontSize: screenSize.width *
+                                  (isTablet ? 0.032 : 0.06), // Taille relative
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -1423,25 +1549,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             // Conteneur de la date
                             Container(
                               padding: EdgeInsets.symmetric(
-                                horizontal: isTablet
-                                    ? 18
-                                    : 12, // Plus grand padding sur tablette
-                                vertical: isTablet
-                                    ? 10
-                                    : 6, // Plus grand padding sur tablette
+                                horizontal: screenSize.width *
+                                    (isTablet ? 0.018 : 0.03),
+                                vertical: screenSize.height *
+                                    (isTablet ? 0.01 : 0.006),
                               ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.2),
-                                borderRadius:
-                                    BorderRadius.circular(isTablet ? 25 : 20),
+                                borderRadius: BorderRadius.circular(
+                                    screenSize.width *
+                                        (isTablet ? 0.025 : 0.05)),
                               ),
                               child: Text(
                                 DateFormat('EEEE d MMMM', 'fr_FR')
                                     .format(DateTime.now()),
                                 style: TextStyle(
-                                  fontSize: isTablet
-                                      ? 18
-                                      : 14, // Plus grande police sur tablette
+                                  fontSize: screenSize.width *
+                                      (isTablet ? 0.018 : 0.035),
                                   color: Colors.white.withOpacity(0.95),
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -1452,15 +1576,15 @@ class _HomeScreenState extends State<HomeScreen> {
                               icon: Icon(
                                 Icons.logout,
                                 color: Colors.white,
-                                size: isTablet
-                                    ? 28
-                                    : 20, // Plus grande icône sur tablette
+                                size: screenSize.width *
+                                    (isTablet ? 0.028 : 0.05),
                               ),
                               tooltip: 'Se déconnecter',
                               onPressed: _logout,
                               padding: EdgeInsets.zero,
                               constraints: BoxConstraints(),
-                              splashRadius: isTablet ? 28 : 20,
+                              splashRadius:
+                                  screenSize.width * (isTablet ? 0.028 : 0.05),
                             ),
                           ],
                         ),
@@ -1494,8 +1618,9 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/Icone_Dashboard.png',
-              width: isTablet ? 72 : 60, // Taille ajustée pour iPad
-              height: isTablet ? 72 : 60,
+              width: screenSize.width *
+                  (isTablet ? 0.07 : 0.14), // Taille relative
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Dashboard",
           ),
@@ -1504,8 +1629,8 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/maison_icon.png',
-              width: isTablet ? 72 : 60,
-              height: isTablet ? 72 : 60,
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Home",
           ),
@@ -1514,8 +1639,8 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/Icone_Ajout_Enfant.png',
-              width: isTablet ? 72 : 60,
-              height: isTablet ? 72 : 60,
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Ajouter",
           ),
@@ -1524,18 +1649,52 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFallbackAvatarResponsive(
+      String name, bool isTablet, double innerAvatarSize, double initialsSize) {
+    return Container(
+      width: innerAvatarSize,
+      height: innerAvatarSize,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : "?",
+          style: TextStyle(
+            fontSize: initialsSize,
+            fontWeight: FontWeight.bold,
+            color: primaryColor,
+          ),
+        ),
+      ),
+    );
+  }
+
   // Widget pour l'avatar d'un enfant
   // Modifiez le Widget _buildChildAvatar pour gérer l'appel async correctement
+  // Version améliorée de _buildChildAvatar avec dimensions proportionnelles
   Widget _buildChildAvatar(Map<String, dynamic> child, bool isTablet) {
     final isBoy = child['gender'] == 'Garçon';
     final displayName = child['firstName'] ?? 'Enfant';
     final photoUrl = child['photoUrl'];
 
-    // Tailles adaptées pour tablette
-    final double avatarSize = isTablet ? 70.0 : 50.0;
-    final double innerAvatarSize = isTablet ? 66.0 : 46.0;
-    final double fontSize = isTablet ? 16.0 : 11.0;
-    final double initialsSize = isTablet ? 28.0 : 20.0;
+    // Utilisez MediaQuery pour obtenir la taille de l'écran
+    final screenSize = MediaQuery.of(context).size;
+
+    // Calculer les tailles en fonction de la largeur de l'écran
+    final double avatarSize = isTablet
+        ? screenSize.width * 0.07 // 7% de la largeur de l'écran pour iPad
+        : screenSize.width * 0.12; // 12% de la largeur de l'écran pour iPhone
+
+    final double innerAvatarSize =
+        avatarSize * 0.95; // 95% de la taille de l'avatar
+    final double fontSize = isTablet
+        ? screenSize.width * 0.016 // 1.6% de la largeur pour iPad
+        : screenSize.width * 0.026; // 2.6% de la largeur pour iPhone
+
+    final double initialsSize =
+        avatarSize * 0.4; // 40% de la taille de l'avatar
 
     return Column(
       children: [
@@ -1582,14 +1741,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: innerAvatarSize,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
-                            _buildFallbackAvatar(displayName, isTablet),
+                            _buildFallbackAvatarResponsive(displayName,
+                                isTablet, innerAvatarSize, initialsSize),
                       ),
                     )
-                  : _buildFallbackAvatar(displayName, isTablet),
+                  : _buildFallbackAvatarResponsive(
+                      displayName, isTablet, innerAvatarSize, initialsSize),
             ),
           ),
         ),
-        SizedBox(height: isTablet ? 8 : 4),
+        SizedBox(
+            height: isTablet
+                ? avatarSize * 0.12
+                : avatarSize * 0.08), // Espace proportionnel
         Text(
           displayName,
           style: TextStyle(
