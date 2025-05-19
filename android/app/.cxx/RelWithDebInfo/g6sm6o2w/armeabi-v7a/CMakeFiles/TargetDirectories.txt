@@ -1,0 +1,2 @@
+/Users/chrismac/poppins/android/app/.cxx/RelWithDebInfo/g6sm6o2w/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/chrismac/poppins/android/app/.cxx/RelWithDebInfo/g6sm6o2w/armeabi-v7a/CMakeFiles/rebuild_cache.dir

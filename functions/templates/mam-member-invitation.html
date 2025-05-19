@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Invitation à rejoindre une MAM sur Poppins</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            max-width: 150px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #05C7F2;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .app-links {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .app-link {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 20px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+        }
+        .email-section {
+            background-color: #f8f8ff;
+            border: 3px solid #05C7F2;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 30px 10px;
+            text-align: center;
+        }
+        .email-title {
+            color: #05C7F2;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .email-display {
+            background-color: #05C7F2;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            padding: 15px 20px;
+            border-radius: 10px;
+            display: inline-block;
+            margin: 15px auto;
+            word-break: break-all;
+        }
+        .expiry {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .highlight {
+            color: #05C7F2;
+            font-weight: bold;
+        }
+        .warning-box {
+            background-color: #FFF3CD;
+            border-left: 4px solid #FFC107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .steps {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .mam-color {
+            color: #05C7F2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="mam-color">Rejoignez votre MAM sur Poppins!</h1>
+    </div>
+    
+    <p>Bonjour {{firstName}} {{lastName}},</p>
+    
+    <p>Vous avez été invité(e) par <strong>{{inviterName}}</strong> à rejoindre la MAM <strong>{{structureName}}</strong> sur l'application Poppins.</p>
+    
+    <!-- SECTION EMAIL - TRÈS VISIBLE -->
+    <div class="email-section">
+        <div class="email-title">Votre email d'invitation</div>
+        <div class="email-display">{{to}}</div>
+        <div class="expiry">Cette invitation est valable pendant 30 jours</div>
+    </div>
+    
+    <p>L'application Poppins vous permettra de gérer efficacement votre MAM au quotidien.</p>
+    
+    <div class="steps">
+        <p><strong>Pour rejoindre votre MAM sur Poppins :</strong></p>
+        
+        <ol>
+            <li>Téléchargez l'application Poppins sur votre smartphone</li>
+            <li>Ouvrez l'application et appuyez sur <strong>"Invitation"</strong></li>
+            <li>Entrez votre adresse email <span class="highlight">{{to}}</span> affichée ci-dessus</li>
+            <li>Créez votre mot de passe pour finaliser votre compte</li>
+            <li>Vous aurez alors accès à toutes les fonctionnalités de la MAM</li>
+        </ol>
+    </div>
+    
+    <div class="app-links">
+        <p>Téléchargez l'application :</p>
+        <div>
+            <a href="{{iosLink}}" class="app-link">App Store</a>
+            <a href="{{androidLink}}" class="app-link">Google Play</a>
+        </div>
+    </div>
+    
+    <p>Si vous avez des questions, n'hésitez pas à contacter <strong>{{inviterName}}</strong> ou l'équipe Poppins.</p>
+    
+    <p>Cordialement,<br>
+    L'équipe Poppins</p>
+</body>
+</html>

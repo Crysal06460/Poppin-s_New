@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="google-signin-client_id" content="402812477660-dkvmg7bkficu62lua0lcrod9v67su89e.apps.googleusercontent.com">
+
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Poppins App - Suivi des enfants">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="poppins_app">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Poppins App</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Ajouts pour image_picker web -->
+  <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@latest/dist/browser-image-compression.js"></script>
+  
+  <!-- Permissions média pour Chrome et autres navigateurs -->
+  <script>
+    if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(function(stream) {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(function(err) {
+          console.log("Permission caméra refusée : " + err);
+        });
+    }
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('flutter_service_worker.js');
+      });
+    }
+  </script>
+  <script src="//unpkg.com/@zxing/library@latest"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('flutter-first-frame', function () {
+        navigator.serviceWorker.register('flutter_service_worker.js');
+      });
+    }
+</script>
+<meta name="google-signin-client_id" content="YOUR_GOOGLE_SIGN_IN_CLIENT_ID.apps.googleusercontent.com">
+<meta name="url_launcher_web">
+</head>
+<body>
+  <!-- Préchargement des polices et ressources -->
+  <link rel="preload" href="assets/fonts/..." as="font" type="font/...">
+  
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

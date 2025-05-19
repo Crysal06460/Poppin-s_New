@@ -1,0 +1,13 @@
+# Fichiers à ignorer
+/android/app/build/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+android/*.hprof
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub/
+

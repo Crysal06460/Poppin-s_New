@@ -1,0 +1,58 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "poppin-s-app",
+          "appId": "1:402812477660:android:56f42037b1299fadfdd419",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "poppin-s-app",
+          "appId": "1:402812477660:ios:1215769eece54217fdd419",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "poppin-s-app",
+          "appId": "1:402812477660:ios:1215769eece54217fdd419",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "poppin-s-app",
+          "configurations": {
+            "android": "1:402812477660:android:56f42037b1299fadfdd419",
+            "ios": "1:402812477660:ios:1215769eece54217fdd419",
+            "macos": "1:402812477660:ios:1215769eece54217fdd419",
+            "web": "1:402812477660:web:5ad53f71cbe86f3afdd419",
+            "windows": "1:402812477660:web:28c80646cb292f87fdd419"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ],
+      "runtime": "nodejs20"
+    }
+  ]
+}
