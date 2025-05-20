@@ -180,6 +180,8 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     });
   }
 
+  // Dans le fichier parent_messages_screen.dart, modifiez la méthode _sendMessage() :
+
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty || _selectedChild == null) {
       return;
@@ -200,7 +202,10 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'text',
         'senderType': 'parent',
-        'nonLu': true,
+        'nonLu':
+            true, // On garde cette valeur à true pour l'assistante maternelle
+        'readByParent':
+            true // Ajouter cette nouvelle propriété pour indiquer que le parent a déjà lu ce message
       });
 
       _messageController.clear();
@@ -565,6 +570,8 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     );
   }
 
+  // Dans le fichier parent_messages_screen.dart, modifiez la méthode _buildMessagesStream :
+
   Widget _buildMessagesStream(String childId, String structureId) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -586,7 +593,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         // Liste pour stocker les mises à jour de messages
         List<Future<void>> messageUpdates = [];
 
-        // Marquer les messages comme lus
+        // Marquer les messages comme lus UNIQUEMENT pour les messages de l'assistante maternelle
         for (final doc in messages) {
           final message = doc.data() as Map<String, dynamic>;
           if (message['senderType'] == 'staff' && message['nonLu'] == true) {

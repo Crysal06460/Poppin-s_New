@@ -914,94 +914,109 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ? EdgeInsets.symmetric(
                       horizontal: MediaQuery.of(context).size.width * 0.25)
                   : EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: EdgeInsets.all(
-                    0), // Padding 0 pour permettre au header d'aller jusqu'au bord
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withOpacity(0.15),
-                      blurRadius: 15,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // En-tête avec dégradé
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            primaryColor,
-                            primaryColor.withOpacity(0.85),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(24),
-                        ),
+              child: SingleChildScrollView(
+                // Ajout d'un SingleChildScrollView englobant pour éviter le débordement
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
                       ),
-                      padding: EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.directions_run,
-                              color: Colors.white,
-                              size: isTabletDevice ? 30 : 24,
-                            ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize:
+                        MainAxisSize.min, // Assure une taille minimale
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // En-tête avec dégradé
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
+                            ],
                           ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Ajouter une activité pour ${enfant['prenom']}",
-                                  style: TextStyle(
-                                    fontSize: isTabletDevice ? 22 : 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                if (isTabletDevice) SizedBox(height: 4),
-                                if (isTabletDevice)
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isTabletDevice
+                              ? 20
+                              : 16, // Moins d'espace vertical sur les petits écrans
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(isTabletDevice
+                                  ? 12
+                                  : 10), // Plus petit sur les petits écrans
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.directions_run,
+                                color: Colors.white,
+                                size: isTabletDevice ? 30 : 24,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                    "Ajouter une activité pour ${enfant['prenom']}",
                                     style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white.withOpacity(0.85),
+                                      fontSize: isTabletDevice ? 22 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
                                     ),
                                   ),
-                              ],
+                                  if (isTabletDevice) SizedBox(height: 4),
+                                  if (isTabletDevice)
+                                    Text(
+                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withOpacity(0.85),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
 
-                    // Contenu du formulaire avec padding
-                    Padding(
-                      padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
-                      child: SingleChildScrollView(
+                      // Contenu du formulaire avec padding
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice
+                            ? 24
+                            : 16), // Réduit sur les petits écrans
                         child: Column(
+                          mainAxisSize:
+                              MainAxisSize.min, // Assure une taille minimale
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Section Heure de l'activité
                             Container(
-                              margin: EdgeInsets.only(bottom: 24),
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice
+                                      ? 24
+                                      : 16), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1016,20 +1031,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   SizedBox(height: 12),
                                   InkWell(
                                     onTap: () {
-                                      DatePicker.showTimePicker(
-                                        context,
-                                        showSecondsColumn: false,
-                                        showTitleActions: true,
-                                        onConfirm: (date) {
-                                          setState(() {
-                                            localActivityTime =
-                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                            errorMessage = null;
-                                          });
-                                        },
-                                        currentTime: DateTime.now(),
-                                        locale: LocaleType.fr,
-                                      );
+                                      DatePicker.showTimePicker(context,
+                                          showSecondsColumn: false,
+                                          showTitleActions: true,
+                                          onConfirm: (date) {
+                                        setState(() {
+                                          localActivityTime =
+                                              '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                          errorMessage = null;
+                                        });
+                                      },
+                                          currentTime: DateTime.now(),
+                                          locale: LocaleType.fr);
                                     },
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
@@ -1080,7 +1093,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                             // Section Type d'activité
                             Container(
-                              margin: EdgeInsets.only(bottom: 24),
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice
+                                      ? 24
+                                      : 16), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1238,7 +1254,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                             // Section Durée de l'activité
                             Container(
-                              margin: EdgeInsets.only(bottom: 24),
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice
+                                      ? 24
+                                      : 16), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1306,7 +1325,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                             // Section Participation
                             Container(
-                              margin: EdgeInsets.only(bottom: 24),
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice
+                                      ? 24
+                                      : 16), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1325,7 +1347,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     physics: NeverScrollableScrollPhysics(),
                                     crossAxisSpacing: 12,
                                     mainAxisSpacing: 12,
-                                    childAspectRatio: 2.5,
+                                    childAspectRatio: isTabletDevice
+                                        ? 2.5
+                                        : 2.3, // Ajustement pour les petits écrans
                                     children: [
                                       _buildParticipationButtonModern(
                                         'Pas participé',
@@ -1383,7 +1407,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                             // Section Observations
                             Container(
-                              margin: EdgeInsets.only(bottom: 24),
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice
+                                      ? 24
+                                      : 16), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1548,8 +1575,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

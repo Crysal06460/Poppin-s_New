@@ -557,7 +557,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
       final dateActuelle = DateFormat('yyyy-MM-dd').format(today);
       final horairesSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user?.uid)
+          .doc(
+              structureId) // CORRECTION: Utiliser structureId au lieu de user?.uid
           .collection('horaires')
           .doc(dateActuelle)
           .get();
@@ -671,16 +672,39 @@ class _HorairesScreenState extends State<HorairesScreen> {
       String childId, Map<String, dynamic> horaires) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
+      final currentUserEmail = user?.email?.toLowerCase() ?? '';
       final now = DateTime.now();
       final dateActuelle = DateFormat('yyyy-MM-dd').format(now);
+
+      // CORRECTION: Récupérer le bon ID de structure comme dans _loadStructureData
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
+      String structureId = user?.uid ?? '';
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
+          structureId = userData['structureId'];
+          print(
+              "🔄 Horaires: Enregistrement pour la structure MAM: $structureId");
+        }
+      }
 
       horaires['timestamp'] = now;
       horaires['childId'] = childId;
       horaires['date'] = dateActuelle;
+      horaires['userEmail'] = currentUserEmail; // Ajouté pour traçabilité
 
+      // CORRECTION: Utiliser structureId au lieu de user?.uid
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user?.uid)
+          .doc(structureId) // IMPORTANT: Utiliser structureId!
           .collection('horaires')
           .doc(dateActuelle)
           .set({childId: horaires}, SetOptions(merge: true));
@@ -689,28 +713,32 @@ class _HorairesScreenState extends State<HorairesScreen> {
       if (horaires.containsKey('km') && horaires['km'] != null) {
         await FirebaseFirestore.instance
             .collection('structures')
-            .doc(user?.uid)
+            .doc(structureId) // IMPORTANT: Utiliser structureId!
             .collection('km_history')
             .add({
           'childId': childId,
           'date': dateActuelle,
           'km': horaires['km'],
           'timestamp': now,
+          'userEmail': currentUserEmail, // Ajouté pour traçabilité
         });
       }
 
+      // CORRECTION: Utiliser structureId au lieu de user?.uid
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user?.uid)
+          .doc(structureId) // IMPORTANT: Utiliser structureId!
           .collection('horaires_history')
           .add({
         'childId': childId,
         'date': dateActuelle,
         'timestamp': now,
+        'userEmail': currentUserEmail, // Ajouté pour traçabilité
         ...horaires,
       });
 
-      print("Horaires enregistrés avec succès !");
+      print(
+          "Horaires enregistrés avec succès dans la structure ID: $structureId !");
     } catch (e) {
       print("Erreur mise à jour horaires: $e");
       throw e;

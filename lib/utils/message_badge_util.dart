@@ -4,114 +4,296 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class MessageBadgeUtil {
   static const String _unreadMessagesKey = 'has_unread_messages';
-  
-  // Vérifier si le badge devrait être affiché
-  // Dans message_badge_util.dart, modifiez la méthode shouldShowBadge :
 
-static Future<bool> shouldShowBadge() async {
-  final prefs = await SharedPreferences.getInstance();
-  
-  // D'abord vérifier Firestore
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      // Vérifier si l'utilisateur a un compteur de messages non lus
+  // Vérifier si le badge devrait être affiché
+  static Future<bool> shouldShowBadge() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return prefs.getBool(_unreadMessagesKey) ?? false;
+
+      final currentUserEmail = user.email?.toLowerCase();
+      if (currentUserEmail == null)
+        return prefs.getBool(_unreadMessagesKey) ?? false;
+
+      // Vérifier d'abord le compteur de messages non lus dans le document utilisateur
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.email?.toLowerCase())
+          .doc(currentUserEmail)
           .get();
-          
+
       if (userDoc.exists) {
         final userData = userDoc.data()!;
-        
-        // Si l'utilisateur a un compteur de messages non lus, l'utiliser
-        if (userData['unreadMessages'] != null && userData['unreadMessages'] > 0) {
-          // Mettre aussi à jour les SharedPreferences
+
+        // Vérifier si l'utilisateur est un parent
+        final bool isParent = userData['role'] == 'parent';
+
+        // Si le compteur est supérieur à 0, on affiche le badge
+        if (userData['unreadMessages'] != null &&
+            userData['unreadMessages'] > 0) {
           await prefs.setBool(_unreadMessagesKey, true);
-          print("⭐ Badge message activé depuis compteur Firestore: ${userData['unreadMessages']}");
+          print(
+              "✅ Badge actif: compteur unreadMessages = ${userData['unreadMessages']}");
           return true;
         }
-        
-        // Sinon, vérifier les messages non lus pour chaque enfant
-        final childIds = List<String>.from(userData['children'] ?? []);
-        
-        if (childIds.isNotEmpty) {
-          // Utiliser une seule requête pour tous les enfants
+
+        // Traitement spécifique selon le rôle
+        if (isParent) {
+          // Cas d'un parent
+          print(
+              "👪 Vérification des messages pour le parent: $currentUserEmail");
+
+          // Récupérer les IDs des enfants du parent
+          List<String> childIds = List<String>.from(userData['children'] ?? []);
+
+          if (childIds.isEmpty) {
+            print("🚫 Aucun enfant associé au parent");
+            await prefs.setBool(_unreadMessagesKey, false);
+            return false;
+          }
+
+          // Vérifier les messages non lus ENVOYÉS PAR L'ASSISTANTE MATERNELLE uniquement
           final messagesQuery = await FirebaseFirestore.instance
               .collection('exchanges')
               .where('childId', whereIn: childIds)
-              .where('senderType', isEqualTo: 'staff')
+              .where('senderType',
+                  isEqualTo: 'staff') // Uniquement messages de l'assistante
               .where('nonLu', isEqualTo: true)
               .limit(1)
               .get();
 
-          if (messagesQuery.docs.isNotEmpty) {
-            // Mettre aussi à jour les SharedPreferences SEULEMENT si on a trouvé des messages
+          final hasUnreadMessages = messagesQuery.docs.isNotEmpty;
+
+          if (hasUnreadMessages) {
+            print(
+                "📬 Messages non lus de l'assistante pour le parent $currentUserEmail");
             await prefs.setBool(_unreadMessagesKey, true);
-            print("⭐ Badge message activé depuis Firestore pour au moins un enfant");
             return true;
+          } else {
+            print(
+                "📭 Aucun message non lu de l'assistante pour le parent $currentUserEmail");
+            await prefs.setBool(_unreadMessagesKey, false);
+            return false;
+          }
+        } else {
+          // Cas d'une assistante maternelle ou membre MAM
+          final bool isMamMember = userData['role'] == 'mamMember';
+          final String structureId = userData['structureId'] ?? user.uid;
+
+          if (isMamMember) {
+            print(
+                "👥 Vérification des messages pour le membre MAM: $currentUserEmail");
+
+            // Récupérer les enfants assignés à ce membre
+            final childrenSnapshot = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .collection('children')
+                .where('assignedMemberEmail', isEqualTo: currentUserEmail)
+                .get();
+
+            if (childrenSnapshot.docs.isEmpty) {
+              print("🚫 Aucun enfant assigné au membre MAM");
+              await prefs.setBool(_unreadMessagesKey, false);
+              return false;
+            }
+
+            final childIds =
+                childrenSnapshot.docs.map((doc) => doc.id).toList();
+            print(
+                "👶 Enfants assignés à $currentUserEmail: ${childIds.length}");
+
+            // Vérifier s'il y a des messages non lus ENVOYÉS PAR LES PARENTS
+            final messagesQuery = await FirebaseFirestore.instance
+                .collection('exchanges')
+                .where('childId', whereIn: childIds)
+                .where('senderType', isEqualTo: 'parent')
+                .where('nonLu', isEqualTo: true)
+                .limit(1)
+                .get();
+
+            final hasUnreadMessages = messagesQuery.docs.isNotEmpty;
+
+            if (hasUnreadMessages) {
+              print(
+                  "📬 Messages non lus trouvés pour des enfants assignés à $currentUserEmail");
+              await prefs.setBool(_unreadMessagesKey, true);
+              return true;
+            } else {
+              print(
+                  "📭 Aucun message non lu pour les enfants assignés à $currentUserEmail");
+              await prefs.setBool(_unreadMessagesKey, false);
+              return false;
+            }
+          } else {
+            // Pour une assistante maternelle individuelle
+            print("👩‍⚕️ Vérification pour assistante maternelle individuelle");
+
+            // Récupérer tous les enfants
+            final childrenSnapshot = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .collection('children')
+                .get();
+
+            final childIds =
+                childrenSnapshot.docs.map((doc) => doc.id).toList();
+
+            if (childIds.isEmpty) {
+              print("🚫 Aucun enfant trouvé pour l'assistante");
+              await prefs.setBool(_unreadMessagesKey, false);
+              return false;
+            }
+
+            // Vérifier s'il y a des messages non lus ENVOYÉS PAR LES PARENTS
+            final messagesQuery = await FirebaseFirestore.instance
+                .collection('exchanges')
+                .where('childId', whereIn: childIds)
+                .where('senderType', isEqualTo: 'parent')
+                .where('nonLu', isEqualTo: true)
+                .limit(1)
+                .get();
+
+            final hasUnreadMessages = messagesQuery.docs.isNotEmpty;
+
+            if (hasUnreadMessages) {
+              print("📬 Messages non lus trouvés pour l'assistante");
+              await prefs.setBool(_unreadMessagesKey, true);
+              return true;
+            } else {
+              print("📭 Aucun message non lu pour l'assistante");
+              await prefs.setBool(_unreadMessagesKey, false);
+              return false;
+            }
           }
         }
       }
-    }
-  } catch (e) {
-    print('Erreur lors de la vérification des messages: $e');
-  }
-  
-  // Si rien trouvé dans Firestore, utiliser les SharedPreferences
-  // Ne pas réinitialiser automatiquement ici
-  final result = prefs.getBool(_unreadMessagesKey) ?? false;
-  print("📱 Badge message status depuis SharedPreferences: $result");
-  return result;
-}
-  
-  // Définir l'état du badge
-  static Future<void> setHasUnreadMessages(bool hasUnread) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_unreadMessagesKey, hasUnread);
-    print("💬 Badge message modifié dans SharedPreferences: $hasUnread");
-    
-    if (!hasUnread) {
-      // Si on désactive le badge, mettre aussi à jour le compteur Firestore
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.email?.toLowerCase())
-              .update({
-                'unreadMessages': 0
-              });
-          print("💬 Compteur de messages non lus réinitialisé dans Firestore");
-        }
-      } catch (e) {
-        print('Erreur lors de la réinitialisation du compteur Firestore: $e');
-      }
-    }
-  }
-  // Ajouter cette méthode pour forcer l'affichage du badge
-static Future<void> forceShowBadge() async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(_unreadMessagesKey, true);
-  
-  // Mettre à jour le compteur dans Firestore
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.email?.toLowerCase())
-          .set({
-            'unreadMessages': 1 // Force à 1 pour être sûr
-          }, SetOptions(merge: true));
-      print("📱 Badge message forcé à true");
     } catch (e) {
-      print('Erreur lors du forçage du badge dans Firestore: $e');
+      print("❌ Erreur lors de la vérification du badge: $e");
+    }
+
+    // En cas d'erreur ou si aucune condition n'est remplie, utiliser la valeur en cache
+    return prefs.getBool(_unreadMessagesKey) ?? false;
+  }
+
+  // Forcer l'affichage du badge pour un enfant spécifique
+  static Future<void> forceShowBadge(String childId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final currentUserEmail = user.email?.toLowerCase();
+      if (currentUserEmail == null) return;
+
+      print("🔍 Recherche de l'enfant $childId pour notifier le bon membre");
+
+      // Récupérer les informations de l'utilisateur connecté
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (!userDoc.exists) {
+        print("⚠️ Utilisateur non trouvé");
+        return;
+      }
+
+      final userData = userDoc.data()!;
+
+      // Vérifier si c'est un parent
+      final bool isParent = userData['role'] == 'parent';
+
+      if (isParent) {
+        // IMPORTANT: Ne pas forcer le badge pour un parent qui envoie un message
+        print(
+            "👪 L'utilisateur est un parent, pas besoin de forcer le badge pour ses propres messages");
+        return;
+      }
+
+      final bool isMamMember = userData['role'] == 'mamMember';
+      final String structureId = userData['structureId'] ?? user.uid;
+
+      // Récupérer l'enfant concerné
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) {
+        print("⚠️ Enfant $childId non trouvé");
+        return;
+      }
+
+      final childData = childDoc.data()!;
+
+      if (isMamMember) {
+        // Vérifier si l'enfant est assigné à un membre spécifique
+        final String? assignedMemberEmail =
+            childData['assignedMemberEmail']?.toString().toLowerCase();
+
+        if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+          print("👶 Enfant $childId assigné à $assignedMemberEmail");
+
+          // Ne mettre à jour que si l'utilisateur actuel est celui assigné
+          if (assignedMemberEmail == currentUserEmail) {
+            // Mettre à jour les préférences locales
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(_unreadMessagesKey, true);
+
+            // Mettre à jour le compteur dans Firestore
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUserEmail)
+                .update({'unreadMessages': FieldValue.increment(1)});
+
+            print("✅ Badge forcé pour le membre assigné: $currentUserEmail");
+          } else {
+            print(
+                "⚠️ Badge non forcé: message destiné à $assignedMemberEmail, utilisateur actuel: $currentUserEmail");
+          }
+        } else {
+          print("⚠️ L'enfant $childId n'a pas de membre assigné");
+        }
+      } else {
+        // Pour une assistante maternelle individuelle
+        // Mettre à jour les préférences locales
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_unreadMessagesKey, true);
+
+        // Mettre à jour le compteur dans Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .update({'unreadMessages': FieldValue.increment(1)});
+
+        print(
+            "✅ Badge forcé pour l'assistante individuelle: $currentUserEmail");
+      }
+    } catch (e) {
+      print("❌ Erreur lors du forçage du badge: $e");
     }
   }
-}
+
   // Réinitialiser le badge
   static Future<void> resetBadge() async {
-    await setHasUnreadMessages(false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_unreadMessagesKey, false);
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null && user.email != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.email?.toLowerCase())
+            .update({'unreadMessages': 0});
+
+        print("✅ Badge réinitialisé pour: ${user.email}");
+      }
+    } catch (e) {
+      print("❌ Erreur lors de la réinitialisation du badge: $e");
+    }
   }
 }

@@ -32,7 +32,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
   // Utiliser les couleurs officielles
-  Color primaryColor = Color(0xFF3D9DF2); // primaryBlue par défaut
+  Color primaryColor = primaryBlue;
 
   String _changeType = "Couche";
   TextEditingController _observationsController = TextEditingController();
@@ -185,8 +185,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
   }
 
   void _showChangeDetailsPopup(Map<String, dynamic> changeData) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
 
     showDialog(
       context: context,
@@ -194,18 +194,19 @@ class _ChangeScreenState extends State<ChangeScreen> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(
-            horizontal: screenWidth * 0.03,
-            vertical: screenHeight * 0.02,
+            horizontal:
+                isTabletDevice ? MediaQuery.of(context).size.width * 0.25 : 20,
+            vertical: 20,
           ),
           child: Container(
             width: double.infinity,
             constraints: BoxConstraints(
-              maxWidth: screenWidth * 0.94,
-              maxHeight: screenHeight * 0.9,
+              maxWidth: 500,
+              minWidth: 250,
             ),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -218,34 +219,38 @@ class _ChangeScreenState extends State<ChangeScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // En-tête
+                  // En-tête avec dégradé
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [primaryBlue.withOpacity(0.85), primaryBlue],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          primaryColor,
+                          primaryColor.withOpacity(0.85),
+                        ],
                       ),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(20)),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
                     ),
-                    padding: EdgeInsets.all(screenWidth * 0.05),
+                    padding: EdgeInsets.all(16),
                     child: Row(
                       children: [
                         Container(
-                          padding: EdgeInsets.all(12),
+                          padding: EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
                             _getChangeTypeIcon(changeData['type']),
                             color: Colors.white,
-                            size: screenWidth * 0.08,
+                            size: isTabletDevice ? 30 : 24,
                           ),
                         ),
-                        SizedBox(width: screenWidth * 0.04),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,18 +258,18 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               Text(
                                 "Change de ${changeData['heure']}",
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.06,
+                                  fontSize: isTabletDevice ? 22 : 18,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                               ),
-                              SizedBox(height: 8),
+                              SizedBox(height: 4),
                               Text(
                                 DateFormat('dd MMMM yyyy', 'fr_FR')
                                     .format(changeData['date'].toDate())
                                     .toLowerCase(),
                                 style: TextStyle(
-                                  fontSize: screenWidth * 0.045,
+                                  fontSize: isTabletDevice ? 16 : 14,
                                   color: Colors.white.withOpacity(0.9),
                                 ),
                               ),
@@ -277,125 +282,154 @@ class _ChangeScreenState extends State<ChangeScreen> {
 
                   // Contenu
                   Padding(
-                    padding: EdgeInsets.all(screenWidth * 0.05),
+                    padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Type de change
-                        Row(
-                          children: [
-                            Icon(_getChangeTypeIcon(changeData['type']),
-                                color: primaryBlue, size: screenWidth * 0.06),
-                            SizedBox(width: screenWidth * 0.02),
-                            Text(
-                              changeData['type'],
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.045,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _getChangeTypeIcon(changeData['type']),
+                                color: primaryColor,
+                                size: isTabletDevice ? 24 : 20,
                               ),
-                            ),
-                          ],
+                              SizedBox(width: 12),
+                              Text(
+                                changeData['type'],
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 18 : 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
 
-                        SizedBox(height: screenWidth * 0.04),
+                        SizedBox(height: 16),
 
                         // Pipi/Selles
-                        Row(
-                          children: [
-                            if (changeData['pipi'])
-                              Container(
-                                margin:
-                                    EdgeInsets.only(right: screenWidth * 0.03),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: screenWidth * 0.04,
-                                  vertical: screenWidth * 0.02,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: primaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  "Pipi",
-                                  style: TextStyle(
-                                    fontSize: screenWidth * 0.04,
-                                    color: primaryBlue,
+                        if (changeData['pipi'] || changeData['selles']) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                if (changeData['pipi']) ...[
+                                  Icon(
+                                    Icons.water_drop,
+                                    color: primaryColor,
+                                    size: isTabletDevice ? 22 : 20,
                                   ),
-                                ),
-                              ),
-                            if (changeData['selles'])
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: screenWidth * 0.04,
-                                  vertical: screenWidth * 0.02,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: primaryYellow.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  "Selles",
-                                  style: TextStyle(
-                                    fontSize: screenWidth * 0.04,
-                                    color: primaryYellow.withOpacity(0.8),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Pipi",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: primaryColor,
+                                    ),
                                   ),
-                                ),
-                              ),
-                          ],
-                        ),
-
-                        // Soins
-                        if (changeData['soins']?.isNotEmpty ?? false) ...[
-                          SizedBox(height: screenWidth * 0.05),
-                          Text(
-                            "Soins",
-                            style: TextStyle(
-                              fontSize: screenWidth * 0.045,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
+                                ],
+                                if (changeData['pipi'] && changeData['selles'])
+                                  SizedBox(width: 24),
+                                if (changeData['selles']) ...[
+                                  Icon(
+                                    Icons.eco,
+                                    color: primaryYellow,
+                                    size: isTabletDevice ? 22 : 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Selles",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: primaryYellow.withOpacity(0.8),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          SizedBox(height: screenWidth * 0.02),
-                          Wrap(
-                            spacing: screenWidth * 0.02,
-                            runSpacing: screenWidth * 0.02,
-                            children: changeData['soins']
-                                .map<Widget>(
-                                  (soin) => Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: screenWidth * 0.03,
-                                      vertical: screenWidth * 0.02,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryBlue.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: primaryBlue.withOpacity(0.2)),
-                                    ),
-                                    child: Text(
-                                      soin,
-                                      style: TextStyle(
-                                        fontSize: screenWidth * 0.035,
-                                        color: primaryBlue,
-                                      ),
-                                    ),
+                          SizedBox(height: 16),
+                        ],
+
+                        // Soins
+                        if ((changeData['soins'] as List?)?.isNotEmpty ??
+                            false) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Soins complémentaires",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
                                   ),
-                                )
-                                .toList(),
+                                ),
+                                SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: (changeData['soins'] as List)
+                                      .map<Widget>((soin) {
+                                    return Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: primaryColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        soin.toString(),
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 15 : 14,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
                           ),
+                          SizedBox(height: 16),
                         ],
 
                         // Observations
                         if (changeData['observations']?.isNotEmpty ??
                             false) ...[
-                          SizedBox(height: screenWidth * 0.05),
                           Container(
                             width: double.infinity,
-                            padding: EdgeInsets.all(screenWidth * 0.04),
+                            padding: EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: lightBlue.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: lightBlue),
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,16 +437,16 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 Text(
                                   "Observations",
                                   style: TextStyle(
-                                    fontSize: screenWidth * 0.045,
+                                    fontSize: isTabletDevice ? 18 : 16,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.grey.shade700,
                                   ),
                                 ),
-                                SizedBox(height: screenWidth * 0.02),
+                                SizedBox(height: 8),
                                 Text(
                                   changeData['observations'],
                                   style: TextStyle(
-                                    fontSize: screenWidth * 0.04,
+                                    fontSize: isTabletDevice ? 16 : 14,
                                     color: Colors.black87,
                                     height: 1.3,
                                   ),
@@ -420,27 +454,27 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               ],
                             ),
                           ),
+                          SizedBox(height: 16),
                         ],
 
                         // Bouton Fermer
-                        SizedBox(height: screenWidth * 0.05),
-                        Container(
+                        SizedBox(
                           width: double.infinity,
-                          height: 56,
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: TextButton.styleFrom(
                               backgroundColor: Colors.grey.shade100,
+                              padding: EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                             child: Text(
-                              "Fermer",
+                              "FERMER",
                               style: TextStyle(
-                                fontSize: screenWidth * 0.045,
+                                fontSize: isTabletDevice ? 16 : 14,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade800,
+                                color: primaryColor,
                               ),
                             ),
                           ),
@@ -460,280 +494,645 @@ class _ChangeScreenState extends State<ChangeScreen> {
   void _showAddChangePopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String? errorMessage;
+    String localChangeType = _changeType;
+    String localCareTime = _careTime;
 
     _observationsController.clear();
     _pipi = false;
     _selles = false;
     soins = [];
 
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return Dialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
               ),
-              child: Container(
-                padding: EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: SingleChildScrollView(
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        "Ajouter un change pour ${enfant['prenom']}",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Center(
-                        child: Text(
-                          "Heure du change",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          DatePicker.showTimePicker(
-                            context,
-                            showSecondsColumn: false,
-                            showTitleActions: true,
-                            onConfirm: (date) {
-                              setState(() {
-                                _careTime =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                errorMessage = null;
-                              });
-                            },
-                            currentTime: DateTime.now(),
-                            locale: LocaleType.fr,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: lightBlue,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: Size(double.infinity, 50),
-                        ),
-                        child: Text(
-                          _careTime.isEmpty ? 'Choisir l\'heure' : _careTime,
-                          style: TextStyle(fontSize: 18, color: primaryBlue),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        "Type de change",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
+                      // En-tête avec dégradé
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        width: double.infinity,
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: _changeType,
-                          isExpanded: true,
-                          underline: Container(),
-                          items: changeTypes.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setState(() {
-                              _changeType = newValue!;
-                            });
-                          },
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _pipi,
-                            activeColor: primaryBlue,
-                            onChanged: (value) {
-                              setState(() {
-                                _pipi = value!;
-                              });
-                            },
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
+                            ],
                           ),
-                          Text(
-                            "Pipi",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          SizedBox(width: 20),
-                          Checkbox(
-                            value: _selles,
-                            activeColor: primaryBlue,
-                            onChanged: (value) {
-                              setState(() {
-                                _selles = value!;
-                              });
-                            },
-                          ),
-                          Text(
-                            "Selles",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        "Soins complémentaires",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: ['Nez', 'Yeux', 'Oreilles', 'Crème']
-                            .map(
-                              (soin) => FilterChip(
-                                label: Text(soin),
-                                selected: soins.contains(soin),
-                                selectedColor: primaryBlue.withOpacity(0.15),
-                                checkmarkColor: primaryBlue,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      soins.add(soin);
-                                    } else {
-                                      soins.remove(soin);
-                                    }
-                                  });
-                                },
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _observationsController,
-                        decoration: InputDecoration(
-                          labelText: "Observations",
-                          labelStyle:
-                              TextStyle(fontSize: 16, color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: primaryBlue),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
-                        ),
-                        maxLines: 3,
-                      ),
-                      SizedBox(height: 20),
-                      if (errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: primaryRed.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: primaryRed.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              errorMessage!,
-                              style: TextStyle(
-                                color: primaryRed,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
                           ),
                         ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: Text(
-                              "Annuler",
-                              style: TextStyle(
-                                  fontSize: 18, color: Colors.grey.shade700),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              if (_careTime.isEmpty) {
-                                setState(() {
-                                  errorMessage =
-                                      'Veuillez sélectionner une heure';
-                                });
-                                return;
-                              }
-                              setState(() => errorMessage = null);
-                              _addChangeToFirebase(childId);
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryBlue,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isTabletDevice ? 20 : 16,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(isTabletDevice ? 12 : 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                            ),
-                            child: Text(
-                              "Ajouter",
-                              style: TextStyle(
-                                fontSize: 18,
+                              child: Icon(
+                                Icons.baby_changing_station,
                                 color: Colors.white,
+                                size: isTabletDevice ? 30 : 24,
                               ),
                             ),
-                          ),
-                        ],
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Ajouter un change pour ${enfant['prenom']}",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 22 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  if (isTabletDevice) SizedBox(height: 4),
+                                  if (isTabletDevice)
+                                    Text(
+                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withOpacity(0.85),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Contenu du formulaire avec padding
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Heure du change
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Heure du change",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () {
+                                      DatePicker.showTimePicker(context,
+                                          showSecondsColumn: false,
+                                          showTitleActions: true,
+                                          onConfirm: (date) {
+                                        setState(() {
+                                          localCareTime =
+                                              '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                          errorMessage = null;
+                                        });
+                                      },
+                                          currentTime: DateTime.now(),
+                                          locale: LocaleType.fr);
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localCareTime.isEmpty
+                                              ? Colors.transparent
+                                              : primaryColor.withOpacity(0.5),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            localCareTime.isEmpty
+                                                ? 'Choisir l\'heure'
+                                                : localCareTime,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localCareTime.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : primaryColor,
+                                              fontWeight: localCareTime.isEmpty
+                                                  ? FontWeight.normal
+                                                  : FontWeight.w600,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            color:
+                                                primaryColor.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Type de change
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Type de change",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: lightBlue.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: localChangeType,
+                                      isExpanded: true,
+                                      underline: Container(),
+                                      iconSize: isTabletDevice ? 28 : 24,
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: primaryColor,
+                                      ),
+                                      items: changeTypes.map((String value) {
+                                        return DropdownMenuItem<String>(
+                                          value: value,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Text(
+                                              value,
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isTabletDevice ? 16 : 14,
+                                                color: Colors.grey.shade800,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        setState(() {
+                                          localChangeType = newValue!;
+                                        });
+                                      },
+                                      dropdownColor: Colors.white,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Pipi/Selles
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "État du change",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _pipi = !_pipi;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 12,
+                                              horizontal: 16,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _pipi
+                                                  ? primaryColor
+                                                      .withOpacity(0.15)
+                                                  : Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: _pipi
+                                                    ? primaryColor
+                                                    : Colors.grey.shade300,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  _pipi
+                                                      ? Icons.check_circle
+                                                      : Icons.circle_outlined,
+                                                  color: _pipi
+                                                      ? primaryColor
+                                                      : Colors.grey.shade400,
+                                                  size:
+                                                      isTabletDevice ? 22 : 18,
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  "Pipi",
+                                                  style: TextStyle(
+                                                    fontSize: isTabletDevice
+                                                        ? 16
+                                                        : 14,
+                                                    fontWeight: _pipi
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal,
+                                                    color: _pipi
+                                                        ? primaryColor
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _selles = !_selles;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 12,
+                                              horizontal: 16,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _selles
+                                                  ? primaryYellow
+                                                      .withOpacity(0.15)
+                                                  : Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: _selles
+                                                    ? primaryYellow
+                                                    : Colors.grey.shade300,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  _selles
+                                                      ? Icons.check_circle
+                                                      : Icons.circle_outlined,
+                                                  color: _selles
+                                                      ? primaryYellow
+                                                      : Colors.grey.shade400,
+                                                  size:
+                                                      isTabletDevice ? 22 : 18,
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  "Selles",
+                                                  style: TextStyle(
+                                                    fontSize: isTabletDevice
+                                                        ? 16
+                                                        : 14,
+                                                    fontWeight: _selles
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal,
+                                                    color: _selles
+                                                        ? primaryYellow
+                                                            .withOpacity(0.8)
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Soins complémentaires
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Soins complémentaires",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      'Nez',
+                                      'Yeux',
+                                      'Oreilles',
+                                      'Crème'
+                                    ]
+                                        .map(
+                                          (soin) => InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                if (soins.contains(soin)) {
+                                                  soins.remove(soin);
+                                                } else {
+                                                  soins.add(soin);
+                                                }
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 10,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: soins.contains(soin)
+                                                    ? primaryColor
+                                                        .withOpacity(0.15)
+                                                    : Colors.grey.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: soins.contains(soin)
+                                                      ? primaryColor
+                                                      : Colors.grey.shade300,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                soin,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 15 : 14,
+                                                  fontWeight:
+                                                      soins.contains(soin)
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
+                                                  color: soins.contains(soin)
+                                                      ? primaryColor
+                                                      : Colors.grey.shade700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Observations
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Observations",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _observationsController,
+                                      decoration: InputDecoration(
+                                        hintText: "Précisions sur le change...",
+                                        hintStyle: TextStyle(
+                                            color: Colors.grey.shade400),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade200,
+                                              width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: primaryColor, width: 2),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 16),
+                                      ),
+                                      maxLines: 3,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Message d'erreur si présent
+                            if (errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: isTabletDevice ? 15 : 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+
+                            // Boutons d'action
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+
+                                // Bouton Ajouter
+                                ElevatedButton(
+                                  onPressed: () {
+                                    if (localCareTime.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez sélectionner une heure';
+                                      });
+                                      return;
+                                    }
+                                    setState(() => errorMessage = null);
+
+                                    // Mise à jour des variables
+                                    _careTime = localCareTime;
+                                    _changeType = localChangeType;
+                                    _addChangeToFirebase(childId);
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    elevation: 2,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 32 : 24,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "AJOUTER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -789,81 +1188,107 @@ class _ChangeScreenState extends State<ChangeScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    final genre = enfant['genre'] ?? 'Garçon';
-    final isBoy = genre == 'Garçon';
-    final cardColor = Colors.white;
-    final accentColor = isBoy ? primaryBlue : primaryRed;
+    String genre = enfant['genre']?.toString() ?? 'Garçon';
+    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: Offset(0, 3),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          // En-tête avec photo et nom
-          Row(
-            children: [
-              // Photo de l'enfant
-              Container(
-                margin: EdgeInsets.all(12),
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: accentColor.withOpacity(0.2),
-                  backgroundImage: enfant['photoUrl'] != null
-                      ? NetworkImage(enfant['photoUrl'])
-                      : null,
-                  child: enfant['photoUrl'] == null
-                      ? Text(
-                          enfant['prenom'][0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: accentColor,
-                          ),
-                        )
-                      : null,
-                ),
-              ),
-              // Nom de l'enfant
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      enfant['prenom'],
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+          Padding(
+            padding: EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Utilisation de l'avatar avec dégradé comme dans HomeScreen
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [avatarColor.withOpacity(0.7), avatarColor],
                     ),
-                  ],
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: avatarColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: enfant['photoUrl'] != null &&
+                            enfant['photoUrl'].isNotEmpty
+                        ? ClipOval(
+                            child: Image.network(
+                              enfant['photoUrl'],
+                              width: 55,
+                              height: 55,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(
+                                enfant['prenom'][0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Text(
+                            enfant['prenom'][0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
                 ),
-              ),
-              // Bouton d'ajout
-              Container(
-                margin: EdgeInsets.only(right: 8),
-                child: IconButton(
-                  icon: Icon(
-                    Icons.add_circle,
-                    color: primaryBlue,
-                    size: 36,
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.add, color: primaryColor, size: 24),
                   ),
                   onPressed: () => _showAddChangePopup(enfant['id']),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-
           // Liste des changes
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -906,44 +1331,49 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 );
               }
 
-              return Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Column(
-                  children: changes.map((doc) {
-                    final changeData = doc.data() as Map<String, dynamic>;
-                    return GestureDetector(
-                      onTap: () => _showChangeDetailsPopup(changeData),
-                      child: Container(
-                        margin: EdgeInsets.only(bottom: 8),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: lightBlue.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: lightBlue),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: primaryBlue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                _getChangeTypeIcon(changeData['type']),
-                                color: primaryBlue,
-                                size: 22,
-                              ),
+              return ListView.separated(
+                physics: NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                itemCount: changes.length,
+                separatorBuilder: (context, index) => SizedBox(height: 8),
+                itemBuilder: (context, idx) {
+                  final changeData =
+                      changes[idx].data() as Map<String, dynamic>;
+                  return GestureDetector(
+                    onTap: () => _showChangeDetailsPopup(changeData),
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: primaryColor.withOpacity(0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            SizedBox(width: 12),
-                            Column(
+                            child: Icon(
+                              _getChangeTypeIcon(changeData['type']),
+                              color: primaryColor,
+                              size: 20,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   changeData['heure'],
                                   style: TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.black87,
                                   ),
@@ -957,58 +1387,57 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 ),
                               ],
                             ),
-                            Spacer(),
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                if (changeData['pipi'])
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryBlue.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      "Pipi",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: primaryBlue,
-                                      ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              if (changeData['pipi'])
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "Pipi",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: primaryColor,
                                     ),
                                   ),
-                                if (changeData['selles'])
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryYellow.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      "Selles",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: primaryYellow.withOpacity(0.8),
-                                      ),
+                                ),
+                              if (changeData['selles'])
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: primaryYellow.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "Selles",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: primaryYellow.withOpacity(0.8),
                                     ),
                                   ),
-                              ],
-                            ),
-                            Icon(
-                              Icons.chevron_right,
-                              color: Colors.grey.shade400,
-                            ),
-                          ],
-                        ),
+                                ),
+                            ],
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey.shade400,
+                          ),
+                        ],
                       ),
-                    );
-                  }).toList(),
-                ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -1082,81 +1511,116 @@ class _ChangeScreenState extends State<ChangeScreen> {
 // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    final genre = enfant['genre'] ?? 'Garçon';
-    final isBoy = genre == 'Garçon';
-    final cardColor = Colors.white;
-    final accentColor = isBoy ? primaryBlue : primaryRed;
+    String genre = enfant['genre']?.toString() ?? 'Garçon';
+    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
 
     return Container(
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: Offset(0, 3),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          // En-tête avec photo et nom
-          Row(
-            children: [
-              // Photo de l'enfant - plus grande pour iPad
-              Container(
-                margin: EdgeInsets.all(16), // Plus grand pour iPad
-                child: CircleAvatar(
-                  radius: 45, // Plus grand pour iPad
-                  backgroundColor: accentColor.withOpacity(0.2),
-                  backgroundImage: enfant['photoUrl'] != null
-                      ? NetworkImage(enfant['photoUrl'])
-                      : null,
-                  child: enfant['photoUrl'] == null
-                      ? Text(
-                          enfant['prenom'][0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 36, // Plus grand pour iPad
-                            fontWeight: FontWeight.bold,
-                            color: accentColor,
-                          ),
-                        )
-                      : null,
-                ),
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [avatarColor, avatarColor.withOpacity(0.85)],
               ),
-              // Nom de l'enfant
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      enfant['prenom'],
-                      style: TextStyle(
-                        fontSize: 24, // Plus grand pour iPad
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Bouton d'ajout
-              Container(
-                margin: EdgeInsets.only(right: 16), // Plus grand pour iPad
-                child: IconButton(
-                  icon: Icon(
-                    Icons.add_circle,
-                    color: primaryBlue,
-                    size: 42, // Plus grand pour iPad
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar avec photo de l'enfant
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: avatarColor.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  onPressed: () => _showAddChangePopup(enfant['id']),
+                  child: ClipOval(
+                    child: enfant['photoUrl'] != null &&
+                            enfant['photoUrl'].isNotEmpty
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            width: 65,
+                            height: 65,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Text(
+                              enfant['prenom'][0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            enfant['prenom'][0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    enfant['prenom'],
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                // Bouton d'ajout d'activité
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: avatarColor, size: 24),
+                      onPressed: () => _showAddChangePopup(enfant['id']),
+                      tooltip: "Ajouter un change",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          // Liste des changes - adaptée pour iPad
+          // Liste des changes
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -1186,67 +1650,75 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 final changes = snapshot.data!.docs;
 
                 if (changes.isEmpty) {
-                  return Container(
-                    padding: EdgeInsets.all(20), // Plus grand pour iPad
-                    child: Text(
-                      "Aucun change enregistré aujourd'hui",
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
-                        fontSize: 16, // Plus grand pour iPad
+                  return Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.baby_changing_station,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            "Aucun change enregistré aujourd'hui",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   );
                 }
 
-                return Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListView.builder(
-                    padding:
-                        EdgeInsets.only(bottom: 16), // Plus d'espace pour iPad
-                    itemCount: changes.length,
-                    itemBuilder: (context, idx) {
-                      final doc = changes[idx];
-                      final changeData = doc.data() as Map<String, dynamic>;
-                      return GestureDetector(
-                        onTap: () => _showChangeDetailsPopup(changeData),
-                        child: Container(
-                          margin: EdgeInsets.only(
-                              bottom: 12), // Plus d'espace pour iPad
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14), // Plus grand pour iPad
-                          decoration: BoxDecoration(
-                            color: lightBlue.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(
-                                16), // Plus arrondi pour iPad
-                            border: Border.all(color: lightBlue),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding:
-                                    EdgeInsets.all(10), // Plus grand pour iPad
-                                decoration: BoxDecoration(
-                                  color: primaryBlue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(
-                                      10), // Plus arrondi pour iPad
-                                ),
-                                child: Icon(
-                                  _getChangeTypeIcon(changeData['type']),
-                                  color: primaryBlue,
-                                  size: 24, // Plus grand pour iPad
-                                ),
+                return ListView.separated(
+                  physics: BouncingScrollPhysics(),
+                  shrinkWrap: true,
+                  padding: EdgeInsets.all(16),
+                  itemCount: changes.length,
+                  separatorBuilder: (context, index) => SizedBox(height: 10),
+                  itemBuilder: (context, idx) {
+                    final doc = changes[idx];
+                    final changeData = doc.data() as Map<String, dynamic>;
+                    return GestureDetector(
+                      onTap: () => _showChangeDetailsPopup(changeData),
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: lightBlue),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              SizedBox(width: 16), // Plus d'espace pour iPad
-                              Column(
+                              child: Icon(
+                                _getChangeTypeIcon(changeData['type']),
+                                color: primaryColor,
+                                size: 22,
+                              ),
+                            ),
+                            SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     changeData['heure'],
                                     style: TextStyle(
-                                      fontSize: 20, // Plus grand pour iPad
+                                      fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.black87,
                                     ),
@@ -1254,66 +1726,64 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                   Text(
                                     changeData['type'],
                                     style: TextStyle(
-                                      fontSize: 16, // Plus grand pour iPad
+                                      fontSize: 16,
                                       color: Colors.grey.shade600,
                                     ),
                                   ),
                                 ],
                               ),
-                              Spacer(),
-                              Wrap(
-                                spacing: 10, // Plus d'espace pour iPad
-                                children: [
-                                  if (changeData['pipi'])
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 10, // Plus grand pour iPad
-                                        vertical: 6, // Plus grand pour iPad
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: primaryBlue.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        "Pipi",
-                                        style: TextStyle(
-                                          fontSize: 14, // Plus grand pour iPad
-                                          color: primaryBlue,
-                                        ),
+                            ),
+                            Wrap(
+                              spacing: 10,
+                              children: [
+                                if (changeData['pipi'])
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      "Pipi",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: primaryColor,
                                       ),
                                     ),
-                                  if (changeData['selles'])
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 10, // Plus grand pour iPad
-                                        vertical: 6, // Plus grand pour iPad
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: primaryYellow.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        "Selles",
-                                        style: TextStyle(
-                                          fontSize: 14, // Plus grand pour iPad
-                                          color: primaryYellow.withOpacity(0.8),
-                                        ),
+                                  ),
+                                if (changeData['selles'])
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: primaryYellow.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      "Selles",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: primaryYellow.withOpacity(0.8),
                                       ),
                                     ),
-                                ],
-                              ),
-                              SizedBox(width: 10), // Espace avant l'icône
-                              Icon(
-                                Icons.chevron_right,
-                                color: Colors.grey.shade400,
-                                size: 24, // Plus grand pour iPad
-                              ),
-                            ],
-                          ),
+                                  ),
+                              ],
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey.shade400,
+                              size: 24,
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -1355,11 +1825,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
         child: Padding(
           // Plus de padding vertical pour iPad
           padding: EdgeInsets.fromLTRB(
-              16,
-              isTabletDevice ? 24 : 16, // Augmenté pour iPad
-              16,
-              isTabletDevice ? 28 : 20 // Augmenté pour iPad
-              ),
+              16, isTabletDevice ? 24 : 16, 16, isTabletDevice ? 28 : 20),
           child: Column(
             children: [
               // Première ligne: nom structure et date
@@ -1370,8 +1836,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                     child: Text(
                       structureName,
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
+                        fontSize: isTabletDevice ? 28 : 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -1380,9 +1845,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                   ),
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal:
-                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
-                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
+                      horizontal: isTabletDevice ? 16 : 12,
+                      vertical: isTabletDevice ? 8 : 6,
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
@@ -1391,8 +1855,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                     child: Text(
                       DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
+                        fontSize: isTabletDevice ? 16 : 14,
                         color: Colors.white.withOpacity(0.95),
                         fontWeight: FontWeight.w500,
                       ),
@@ -1400,19 +1863,16 @@ class _ChangeScreenState extends State<ChangeScreen> {
                   ),
                 ],
               ),
-              SizedBox(
-                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
+              SizedBox(height: isTabletDevice ? 22 : 15),
               // Icône et titre de la page
               Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
-                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
+                  horizontal: isTabletDevice ? 22 : 16,
+                  vertical: isTabletDevice ? 12 : 8,
                 ),
                 decoration: BoxDecoration(
                   border: Border.all(
-                      color: Colors.white,
-                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                      ),
+                      color: Colors.white, width: isTabletDevice ? 2.5 : 2),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -1420,22 +1880,19 @@ class _ChangeScreenState extends State<ChangeScreen> {
                   children: [
                     Image.asset(
                       'assets/images/Icone_Changes.png',
-                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
+                      width: isTabletDevice ? 36 : 30,
+                      height: isTabletDevice ? 36 : 30,
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.baby_changing_station,
-                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
+                        size: isTabletDevice ? 32 : 26,
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(
-                        width:
-                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
+                    SizedBox(width: isTabletDevice ? 12 : 8),
                     Text(
                       'Change',
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
+                        fontSize: isTabletDevice ? 24 : 20,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
@@ -1463,7 +1920,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
             errorBuilder: (context, error, stackTrace) => Icon(
               Icons.baby_changing_station,
               size: 80,
-              color: primaryBlue.withOpacity(0.4),
+              color: primaryColor.withOpacity(0.4),
             ),
           ),
           SizedBox(height: 16),
@@ -1471,7 +1928,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
             'Aucun enfant prévu aujourd\'hui',
             style: TextStyle(
               fontSize: 18,
-              color: primaryBlue,
+              color: primaryColor,
               fontWeight: FontWeight.w500,
             ),
           ),

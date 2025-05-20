@@ -438,6 +438,9 @@ class _SanteScreenState extends State<SanteScreen> {
     _weightController.clear();
     _observationsController.clear();
 
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -448,369 +451,725 @@ class _SanteScreenState extends State<SanteScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
               child: Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(
+                    0), // Padding 0 pour permettre au header d'aller jusqu'au bord
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.15),
+                      blurRadius: 15,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Ajouter un soin pour ${enfant['prenom']}",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Center(
-                        child: Text(
-                          "Heure du soin",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          DatePicker.showTimePicker(
-                            context,
-                            showSecondsColumn: false,
-                            showTitleActions: true,
-                            onConfirm: (date) {
-                              setState(() {
-                                localCareTime =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                errorMessage = null;
-                              });
-                            },
-                            currentTime: DateTime.now(),
-                            locale: LocaleType.fr,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: secondaryColor,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: Size(double.infinity, 50),
-                        ),
-                        child: Text(
-                          localCareTime.isEmpty
-                              ? 'Choisir l\'heure'
-                              : localCareTime,
-                          style: TextStyle(fontSize: 18, color: primaryColor),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Text(
-                        "Quel était le soin ?",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: DropdownButton<String>(
-                          value: localCareType,
-                          isExpanded: true,
-                          underline: Container(),
-                          items: careTypes.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setState(() {
-                              localCareType = newValue!;
-                            });
-                          },
-                        ),
-                      ),
-                      if (localCareType == 'Température') ...[
-                        SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _temperatureController,
-                                keyboardType: TextInputType.numberWithOptions(
-                                    decimal: true),
-                                decoration: InputDecoration(
-                                  labelText: 'Température',
-                                  labelStyle: TextStyle(color: primaryColor),
-                                  suffixText: '°',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(color: primaryColor),
-                                  ),
-                                ),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(
-                                      RegExp(r'^\d*[,.]?\d*')),
-                                ],
-                                onChanged: (value) {
-                                  if (value.contains(',')) {
-                                    _temperatureController.text =
-                                        value.replaceAll(',', '.');
-                                    _temperatureController.selection =
-                                        TextSelection.fromPosition(
-                                      TextPosition(
-                                          offset: _temperatureController
-                                              .text.length),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // En-tête avec dégradé
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            primaryColor,
+                            primaryColor.withOpacity(0.85),
                           ],
                         ),
-                        SizedBox(height: 20),
-                        Text(
-                          "Voie :",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
                         ),
-                        SizedBox(height: 10),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButton<String>(
-                            value: localRoute,
-                            isExpanded: true,
-                            underline: Container(),
-                            items: routes.map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
-                            onChanged: (newValue) {
-                              setState(() {
-                                localRoute = newValue!;
-                              });
-                            },
-                          ),
-                        ),
-                      ] else if (localCareType == 'Poids') ...[
-                        SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _weightController,
-                                keyboardType: TextInputType.numberWithOptions(
-                                    decimal: true),
-                                decoration: InputDecoration(
-                                  labelText: 'Poids',
-                                  labelStyle: TextStyle(color: primaryColor),
-                                  suffixText: 'Kg',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(color: primaryColor),
-                                  ),
-                                ),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(
-                                      RegExp(r'^\d*[,.]?\d*')),
-                                ],
-                                onChanged: (value) {
-                                  if (value.contains(',')) {
-                                    _weightController.text =
-                                        value.replaceAll(',', '.');
-                                    _weightController.selection =
-                                        TextSelection.fromPosition(
-                                      TextPosition(
-                                          offset:
-                                              _weightController.text.length),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else if (localCareType == 'Médicaments') ...[
-                        SizedBox(height: 20),
-                        Text(
-                          "Type :",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: 10),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButton<String>(
-                            value: localMedicationType,
-                            isExpanded: true,
-                            underline: Container(),
-                            items: medicationTypes.map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
-                            onChanged: (newValue) {
-                              setState(() {
-                                localMedicationType = newValue!;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _observationsController,
-                        decoration: InputDecoration(
-                          labelText: "Observations",
-                          labelStyle:
-                              TextStyle(fontSize: 16, color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: primaryColor),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
-                        ),
-                        maxLines: 3,
                       ),
-                      SizedBox(height: 20),
-                      if (errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Text(
-                              errorMessage!,
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      padding: EdgeInsets.all(20),
+                      child: Row(
                         children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: Text(
-                              "ANNULER",
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey.shade700,
-                                  fontWeight: FontWeight.w500),
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.healing,
+                              color: Colors.white,
+                              size: isTabletDevice ? 30 : 24,
                             ),
                           ),
-                          ElevatedButton(
-                            onPressed: () {
-                              if (localCareTime.isEmpty) {
-                                setState(() {
-                                  errorMessage =
-                                      'Veuillez sélectionner une heure';
-                                });
-                                return;
-                              }
-
-                              if (localCareType == 'Température' &&
-                                  _temperatureController.text.isEmpty) {
-                                setState(() {
-                                  errorMessage =
-                                      'Veuillez indiquer la température';
-                                });
-                                return;
-                              }
-
-                              if (localCareType == 'Poids' &&
-                                  _weightController.text.isEmpty) {
-                                setState(() {
-                                  errorMessage = 'Veuillez indiquer le poids';
-                                });
-                                return;
-                              }
-
-                              setState(() {
-                                errorMessage = null;
-                              });
-
-                              _careTime = localCareTime;
-                              _careType = localCareType;
-                              _medicationType = localMedicationType;
-                              _route = localRoute;
-
-                              _addCareToFirebase(childId);
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              "AJOUTER",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Ajouter un soin pour ${enfant['prenom']}",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 22 : 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                if (isTabletDevice) SizedBox(height: 4),
+                                if (isTabletDevice)
+                                  Text(
+                                    "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.85),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // Contenu du formulaire avec padding
+                    Padding(
+                      padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Section Heure du soin
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Heure du soin",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () {
+                                      DatePicker.showTimePicker(
+                                        context,
+                                        showSecondsColumn: false,
+                                        showTitleActions: true,
+                                        onConfirm: (date) {
+                                          setState(() {
+                                            localCareTime =
+                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                            errorMessage = null;
+                                          });
+                                        },
+                                        currentTime: DateTime.now(),
+                                        locale: LocaleType.fr,
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localCareTime.isEmpty
+                                              ? Colors.transparent
+                                              : primaryColor.withOpacity(0.5),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            localCareTime.isEmpty
+                                                ? 'Choisir l\'heure'
+                                                : localCareTime,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localCareTime.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : primaryColor,
+                                              fontWeight: localCareTime.isEmpty
+                                                  ? FontWeight.normal
+                                                  : FontWeight.w600,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            color:
+                                                primaryColor.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Section Type de soin
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Quel était le soin ?",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: lightBlue.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: localCareType,
+                                      isExpanded: true,
+                                      underline: Container(),
+                                      iconSize: isTabletDevice ? 28 : 24,
+                                      icon: Icon(
+                                        Icons.arrow_drop_down,
+                                        color: primaryColor,
+                                      ),
+                                      items: careTypes.map((String value) {
+                                        return DropdownMenuItem<String>(
+                                          value: value,
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Text(
+                                              value,
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isTabletDevice ? 16 : 14,
+                                                color: Colors.grey.shade800,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (newValue) {
+                                        setState(() {
+                                          localCareType = newValue!;
+                                        });
+                                      },
+                                      dropdownColor: Colors.white,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Champs spécifiques selon le type de soin
+                            if (localCareType == 'Température') ...[
+                              Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Température",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.04),
+                                            blurRadius: 4,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextField(
+                                        controller: _temperatureController,
+                                        keyboardType:
+                                            TextInputType.numberWithOptions(
+                                                decimal: true),
+                                        decoration: InputDecoration(
+                                          hintText: "Ex: 37.2",
+                                          hintStyle: TextStyle(
+                                              color: Colors.grey.shade400),
+                                          suffixText: "°",
+                                          suffixStyle: TextStyle(
+                                            color: primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            borderSide: BorderSide(
+                                                color: Colors.grey.shade200,
+                                                width: 1),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            borderSide: BorderSide(
+                                                color: primaryColor, width: 2),
+                                          ),
+                                          contentPadding: EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 16),
+                                        ),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                              RegExp(r'^\d*[,.]?\d*')),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value.contains(',')) {
+                                            _temperatureController.text =
+                                                value.replaceAll(',', '.');
+                                            _temperatureController.selection =
+                                                TextSelection.fromPosition(
+                                              TextPosition(
+                                                  offset: _temperatureController
+                                                      .text.length),
+                                            );
+                                          }
+                                        },
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 16 : 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Voie :",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: DropdownButton<String>(
+                                        value: localRoute,
+                                        isExpanded: true,
+                                        underline: Container(),
+                                        iconSize: isTabletDevice ? 28 : 24,
+                                        icon: Icon(
+                                          Icons.arrow_drop_down,
+                                          color: primaryColor,
+                                        ),
+                                        items: routes.map((String value) {
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical: 8),
+                                              child: Text(
+                                                value,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
+                                                  color: Colors.grey.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (newValue) {
+                                          setState(() {
+                                            localRoute = newValue!;
+                                          });
+                                        },
+                                        dropdownColor: Colors.white,
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 16 : 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (localCareType == 'Poids') ...[
+                              Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Poids",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.04),
+                                            blurRadius: 4,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextField(
+                                        controller: _weightController,
+                                        keyboardType:
+                                            TextInputType.numberWithOptions(
+                                                decimal: true),
+                                        decoration: InputDecoration(
+                                          hintText: "Ex: 12.5",
+                                          hintStyle: TextStyle(
+                                              color: Colors.grey.shade400),
+                                          suffixText: "Kg",
+                                          suffixStyle: TextStyle(
+                                            color: primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            borderSide: BorderSide(
+                                                color: Colors.grey.shade200,
+                                                width: 1),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            borderSide: BorderSide(
+                                                color: primaryColor, width: 2),
+                                          ),
+                                          contentPadding: EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 16),
+                                        ),
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.allow(
+                                              RegExp(r'^\d*[,.]?\d*')),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value.contains(',')) {
+                                            _weightController.text =
+                                                value.replaceAll(',', '.');
+                                            _weightController.selection =
+                                                TextSelection.fromPosition(
+                                              TextPosition(
+                                                  offset: _weightController
+                                                      .text.length),
+                                            );
+                                          }
+                                        },
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 16 : 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (localCareType == 'Médicaments') ...[
+                              Container(
+                                margin: EdgeInsets.only(bottom: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Type de médicament",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: DropdownButton<String>(
+                                        value: localMedicationType,
+                                        isExpanded: true,
+                                        underline: Container(),
+                                        iconSize: isTabletDevice ? 28 : 24,
+                                        icon: Icon(
+                                          Icons.arrow_drop_down,
+                                          color: primaryColor,
+                                        ),
+                                        items:
+                                            medicationTypes.map((String value) {
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical: 8),
+                                              child: Text(
+                                                value,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
+                                                  color: Colors.grey.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (newValue) {
+                                          setState(() {
+                                            localMedicationType = newValue!;
+                                          });
+                                        },
+                                        dropdownColor: Colors.white,
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 16 : 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Section Observations
+                            Container(
+                              margin: EdgeInsets.only(bottom: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Observations",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _observationsController,
+                                      decoration: InputDecoration(
+                                        hintText: "Précisions sur le soin...",
+                                        hintStyle: TextStyle(
+                                            color: Colors.grey.shade400),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade200,
+                                              width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          borderSide: BorderSide(
+                                              color: primaryColor, width: 2),
+                                        ),
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 16),
+                                      ),
+                                      maxLines: 3,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Message d'erreur si présent
+                            if (errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: isTabletDevice ? 15 : 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+
+                            // Boutons d'action
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+
+                                // Bouton Ajouter
+                                ElevatedButton(
+                                  onPressed: () {
+                                    if (localCareTime.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez sélectionner une heure';
+                                      });
+                                      return;
+                                    }
+
+                                    if (localCareType == 'Température' &&
+                                        _temperatureController.text.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez indiquer la température';
+                                      });
+                                      return;
+                                    }
+
+                                    if (localCareType == 'Poids' &&
+                                        _weightController.text.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez indiquer le poids';
+                                      });
+                                      return;
+                                    }
+
+                                    setState(() {
+                                      errorMessage = null;
+                                    });
+
+                                    _careTime = localCareTime;
+                                    _careType = localCareType;
+                                    _medicationType = localMedicationType;
+                                    _route = localRoute;
+
+                                    _addCareToFirebase(childId);
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    elevation: 2,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 32 : 24,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "AJOUTER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -1226,6 +1585,7 @@ class _SanteScreenState extends State<SanteScreen> {
   }
 
 // Carte enfant adaptée pour iPad
+  // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     final isBoy = enfant['genre'] == 'Garçon';
@@ -1245,7 +1605,11 @@ class _SanteScreenState extends State<SanteScreen> {
       child: Column(
         children: [
           // En-tête avec photo et nom
-          Padding(
+          Container(
+            decoration: BoxDecoration(
+              color: isBoy ? primaryBlue : primaryRed,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
@@ -1294,13 +1658,13 @@ class _SanteScreenState extends State<SanteScreen> {
                     style: TextStyle(
                       fontSize: 22, // Plus grand pour iPad
                       fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                      color: Colors.white,
                     ),
                   ),
                 ),
                 IconButton(
                   icon: Icon(Icons.add_circle,
-                      color: primaryColor, size: 36), // Plus grand pour iPad
+                      color: Colors.white, size: 36), // Plus grand pour iPad
                   onPressed: () => _showAddCarePopup(enfant['id']),
                   tooltip: 'Ajouter un soin',
                 ),
@@ -1487,7 +1851,7 @@ class _SanteScreenState extends State<SanteScreen> {
     );
   }
 
-// Avatar par défaut avec l'initiale du prénom - adapté pour iPad
+  // Avatar par défaut avec l'initiale du prénom - adapté pour iPad
   Widget _buildFallbackAvatarForTablet(String name) {
     return Container(
       width: 66, // Plus grand pour iPad
@@ -1509,6 +1873,7 @@ class _SanteScreenState extends State<SanteScreen> {
     );
   }
 
+  // AppBar personnalisé avec gradient
   // AppBar personnalisé avec gradient
   Widget _buildAppBar(BuildContext context) {
     // Détection de l'iPad

@@ -13,6 +13,11 @@ import 'package:poppins_app/screens/mam_member_add_screen.dart';
 import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
+// En haut du fichier
+import 'package:poppins_app/screens/admin_screen.dart';
+
+// Dans la classe _DashboardScreenState
+int _abacusClickCount = 0;
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -32,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int currentMemberCount = 0; // Nombre actuel de membres
   bool needFridgeTemperatureCheck =
       false; // Indique si la température n'a pas été relevée aujourd'hui
-
+  int _abacusClickCount = 0;
   // Définition des couleurs de la palette
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -1350,18 +1355,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Remplacez ce bloc de code dans le fichier dashboard_screen.dart
                           Row(
                             children: [
                               // Image de la section
-                              Image.asset(
-                                'assets/images/Icone_Enfant_Present.png',
-                                width: 60,
-                                height: 60,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(
-                                  Icons.child_care,
-                                  color: primaryColor,
-                                  size: 60,
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _abacusClickCount++;
+                                    print(
+                                        "🧮 Image enfant cliquée: $_abacusClickCount fois");
+
+                                    // Si l'utilisateur a cliqué 5 fois, accéder à l'écran admin
+                                    if (_abacusClickCount >= 5) {
+                                      _abacusClickCount =
+                                          0; // Réinitialiser le compteur
+
+                                      // Afficher un message discret pour confirmer l'accès
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              "Accès administrateur déverrouillé"),
+                                          duration: Duration(seconds: 1),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+
+                                      // Naviguer vers l'écran admin
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => AdminScreen(),
+                                        ),
+                                      );
+                                    }
+                                  });
+                                },
+                                child: Image.asset(
+                                  'assets/images/Icone_Enfant_Present.png',
+                                  width: 60,
+                                  height: 60,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(
+                                    Icons.child_care,
+                                    color: primaryColor,
+                                    size: 60,
+                                  ),
                                 ),
                               ),
                               SizedBox(width: 10),

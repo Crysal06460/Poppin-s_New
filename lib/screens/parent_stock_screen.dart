@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
+import '../utils/message_badge_util.dart';
 
 class ParentStockScreen extends StatefulWidget {
   const ParentStockScreen({Key? key}) : super(key: key);
@@ -134,12 +135,14 @@ class _ParentStockScreenState extends State<ParentStockScreen>
 
   Future<void> _checkMessageBadge() async {
     try {
-      // Simule la vérification des messages
-      setState(() {
-        _showMessageBadge = false; // À modifier selon la logique réelle
-      });
+      final shouldShow = await MessageBadgeUtil.shouldShowBadge();
+      if (mounted) {
+        setState(() {
+          _showMessageBadge = shouldShow;
+        });
+      }
     } catch (e) {
-      print('Erreur lors de la vérification des messages: $e');
+      print('❌ Erreur lors de la vérification des messages non lus: $e');
     }
   }
 

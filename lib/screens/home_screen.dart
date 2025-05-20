@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _hasShownBirthdayAlert = false;
   static const String _birthdayAlertShownKey = 'birthday_alert_shown_date';
+  static const Color primaryRed = Color(0xFFD94350); // #D94350
 
   // Méthode pour définir les couleurs en fonction du type de structure
   void _setThemeColors() {
@@ -1064,6 +1066,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isBoy = child['gender'] == 'Garçon';
     final displayName = child['firstName'] ?? 'Enfant';
     final photoUrl = child['photoUrl'];
+    final childId = child['id'];
 
     // Tailles proportionnelles pour l'affichage vertical - AUGMENTÉES
     final double avatarSize =
@@ -1090,50 +1093,56 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxHeight * 0.01), // Augmentation de l'espacement vertical
         child: Row(
           children: [
-            // Avatar de l'enfant
-            Container(
-              width: avatarSize,
-              height: avatarSize,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isBoy
-                      ? [primaryColor.withOpacity(0.7), primaryColor]
-                      : [Colors.pink.withOpacity(0.7), Colors.pink],
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (isBoy ? primaryColor : Colors.pink).withOpacity(0.3),
-                    blurRadius: 6, // Augmenté de 4 à 6
-                    offset: const Offset(0, 3), // Augmenté de 2 à 3
+            // Avatar de l'enfant avec badge
+            Stack(
+              children: [
+                Container(
+                  width: avatarSize,
+                  height: avatarSize,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isBoy
+                          ? [primaryColor.withOpacity(0.7), primaryColor]
+                          : [Colors.pink.withOpacity(0.7), Colors.pink],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isBoy ? primaryColor : Colors.pink)
+                            .withOpacity(0.3),
+                        blurRadius: 6, // Augmenté de 4 à 6
+                        offset: const Offset(0, 3), // Augmenté de 2 à 3
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Center(
-                child: photoUrl != null && photoUrl.isNotEmpty
-                    ? ClipOval(
-                        child: Image.network(
-                          photoUrl,
-                          width: avatarSize * 0.9,
-                          height: avatarSize * 0.9,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildFallbackAvatarSimple(
+                  child: Center(
+                    child: photoUrl != null && photoUrl.isNotEmpty
+                        ? ClipOval(
+                            child: Image.network(
+                              photoUrl,
+                              width: avatarSize * 0.9,
+                              height: avatarSize * 0.9,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildFallbackAvatarSimple(
+                                displayName,
+                                avatarSize * 0.9,
+                                avatarSize * 0.4,
+                              ),
+                            ),
+                          )
+                        : _buildFallbackAvatarSimple(
                             displayName,
                             avatarSize * 0.9,
                             avatarSize * 0.4,
                           ),
-                        ),
-                      )
-                    : _buildFallbackAvatarSimple(
-                        displayName,
-                        avatarSize * 0.9,
-                        avatarSize * 0.4,
-                      ),
-              ),
+                  ),
+                ),
+
+                // Badge de notification pour messages non lus
+              ],
             ),
             SizedBox(width: maxWidth * 0.03), // Augmenté de 0.02 à 0.03
             // Nom de l'enfant
@@ -1274,6 +1283,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Augmentation de la taille des icônes
     final double imageSize = maxWidth * 0.08; // Augmenté de 6% à 8%
 
+    // Vérifier si c'est l'icône des échanges pour ajouter le badge de notification
+    final bool isExchangeIcon = route == '/exchanges';
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -1287,18 +1299,75 @@ class _HomeScreenState extends State<HomeScreen> {
             // Image centrée
             Expanded(
               flex: 3, // Proportions pour l'image
-              child: Center(
-                child: Image.asset(
-                  imagePath,
-                  width: imageSize,
-                  height: imageSize,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.image_not_supported,
-                    size: imageSize,
-                    color: primaryColor,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Image de l'icône
+                  Image.asset(
+                    imagePath,
+                    width: imageSize,
+                    height: imageSize,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.image_not_supported,
+                      size: imageSize,
+                      color: primaryColor,
+                    ),
                   ),
-                ),
+
+                  // Badge de notification pour les échanges
+                  if (isExchangeIcon)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: FutureBuilder<List<String>>(
+                        future: _getAssignedChildrenIds(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return SizedBox.shrink();
+
+                          final List<String> assignedChildIds =
+                              snapshot.data ?? [];
+
+                          if (assignedChildIds.isEmpty)
+                            return SizedBox.shrink();
+
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('exchanges')
+                                .where('childId', whereIn: assignedChildIds)
+                                .where('nonLu', isEqualTo: true)
+                                .where('senderType', isEqualTo: 'parent')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final int nonLuCount =
+                                  snapshot.data?.docs.length ?? 0;
+                              if (nonLuCount > 0) {
+                                return Container(
+                                  padding: EdgeInsets.all(maxWidth * 0.01),
+                                  decoration: BoxDecoration(
+                                    color: primaryRed,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                  child: Text(
+                                    nonLuCount.toString(),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: maxWidth * 0.016,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                return SizedBox.shrink();
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
 
@@ -1671,13 +1740,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widget pour l'avatar d'un enfant
-  // Modifiez le Widget _buildChildAvatar pour gérer l'appel async correctement
-  // Version améliorée de _buildChildAvatar avec dimensions proportionnelles
+  // Pour la version iPhone
   Widget _buildChildAvatar(Map<String, dynamic> child, bool isTablet) {
     final isBoy = child['gender'] == 'Garçon';
     final displayName = child['firstName'] ?? 'Enfant';
     final photoUrl = child['photoUrl'];
+    final childId = child['id'];
 
     // Utilisez MediaQuery pour obtenir la taille de l'écran
     final screenSize = MediaQuery.of(context).size;
@@ -1698,57 +1766,64 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Column(
       children: [
-        GestureDetector(
-          onTap: () async {
-            // Navigation vers l'écran de profil détaillé de l'enfant
-            String structId = await _getStructureId();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChildProfileDetailsScreen(
-                  childId: child['id'],
-                  structureId: structId,
+        Stack(
+          children: [
+            GestureDetector(
+              onTap: () async {
+                // Navigation vers l'écran de profil détaillé de l'enfant
+                String structId = await _getStructureId();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChildProfileDetailsScreen(
+                      childId: child['id'],
+                      structureId: structId,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: avatarSize,
+                height: avatarSize,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isBoy
+                        ? [primaryColor.withOpacity(0.7), primaryColor]
+                        : [Colors.pink.withOpacity(0.7), Colors.pink],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (isBoy ? primaryColor : Colors.pink).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: photoUrl != null && photoUrl.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            photoUrl,
+                            width: innerAvatarSize,
+                            height: innerAvatarSize,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildFallbackAvatarResponsive(displayName,
+                                    isTablet, innerAvatarSize, initialsSize),
+                          ),
+                        )
+                      : _buildFallbackAvatarResponsive(
+                          displayName, isTablet, innerAvatarSize, initialsSize),
                 ),
               ),
-            );
-          },
-          child: Container(
-            width: avatarSize,
-            height: avatarSize,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isBoy
-                    ? [primaryColor.withOpacity(0.7), primaryColor]
-                    : [Colors.pink.withOpacity(0.7), Colors.pink],
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: (isBoy ? primaryColor : Colors.pink).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
             ),
-            child: Center(
-              child: photoUrl != null && photoUrl.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        photoUrl,
-                        width: innerAvatarSize,
-                        height: innerAvatarSize,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildFallbackAvatarResponsive(displayName,
-                                isTablet, innerAvatarSize, initialsSize),
-                      ),
-                    )
-                  : _buildFallbackAvatarResponsive(
-                      displayName, isTablet, innerAvatarSize, initialsSize),
-            ),
-          ),
+
+            // Badge de notification pour messages non lus
+          ],
         ),
         SizedBox(
             height: isTablet
@@ -1790,13 +1865,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Élément de la grille de fonctionnalités avec image
-  // Version améliorée de _buildGridItem pour une meilleure apparence sur iPad
   Widget _buildGridItem(BuildContext context, String route, String name,
       String imagePath, bool isTablet) {
     // Tailles adaptées pour tablette avec proportions améliorées
     final double imageSize = isTablet ? 80.0 : 60.0;
     final double fontSize = isTablet ? 16.0 : 10.0;
+
+    // Vérifier si c'est l'icône des échanges pour ajouter le badge de notification
+    final bool isExchangeIcon = route == '/exchanges';
 
     return Material(
       color: Colors.white,
@@ -1816,18 +1892,75 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Expanded(
-                child: Center(
-                  child: Image.asset(
-                    imagePath,
-                    width: imageSize,
-                    height: imageSize,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.image_not_supported,
-                      size: imageSize,
-                      color: primaryColor,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Image de l'icône
+                    Image.asset(
+                      imagePath,
+                      width: imageSize,
+                      height: imageSize,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.image_not_supported,
+                        size: imageSize,
+                        color: primaryColor,
+                      ),
                     ),
-                  ),
+
+                    // Badge de notification pour les échanges
+                    if (isExchangeIcon)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: FutureBuilder<List<String>>(
+                          future: _getAssignedChildrenIds(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) return SizedBox.shrink();
+
+                            final List<String> assignedChildIds =
+                                snapshot.data ?? [];
+
+                            if (assignedChildIds.isEmpty)
+                              return SizedBox.shrink();
+
+                            return StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('exchanges')
+                                  .where('childId', whereIn: assignedChildIds)
+                                  .where('nonLu', isEqualTo: true)
+                                  .where('senderType', isEqualTo: 'parent')
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                final int nonLuCount =
+                                    snapshot.data?.docs.length ?? 0;
+                                if (nonLuCount > 0) {
+                                  return Container(
+                                    padding: EdgeInsets.all(isTablet ? 6 : 4),
+                                    decoration: BoxDecoration(
+                                      color: primaryRed,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: Colors.white, width: 2),
+                                    ),
+                                    child: Text(
+                                      nonLuCount.toString(),
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: isTablet ? 14 : 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  return SizedBox.shrink();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
               ),
               SizedBox(height: isTablet ? 10 : 1),
@@ -1847,5 +1980,58 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+// Ajoutez également cette méthode dans la classe _HomeScreenState
+  Future<List<String>> _getAssignedChildrenIds() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
+
+      final currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (!userDoc.exists) return [];
+
+      final userData = userDoc.data()!;
+      final bool isMamMember = userData['role'] == 'mamMember';
+      final String structureId = userData['structureId'] ?? user.uid;
+
+      // Récupérer les enfants
+      QuerySnapshot childrenSnapshot;
+
+      if (isMamMember) {
+        // Pour un membre MAM, récupérer uniquement les enfants assignés à ce membre
+        childrenSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .where('assignedMemberEmail', isEqualTo: currentUserEmail)
+            .get();
+      } else {
+        // Pour une assistante maternelle individuelle, récupérer tous les enfants
+        childrenSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .get();
+      }
+
+      // Extraire les IDs des enfants
+      final List<String> childIds =
+          childrenSnapshot.docs.map((doc) => doc.id).toList();
+
+      print(
+          "👶 Enfants assignés à $currentUserEmail pour notifications: $childIds");
+      return childIds;
+    } catch (e) {
+      print("❌ Erreur lors de la récupération des enfants assignés: $e");
+      return [];
+    }
   }
 }

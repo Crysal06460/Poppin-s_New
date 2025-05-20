@@ -11,6 +11,8 @@ import 'package:mime/mime.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../utils/message_badge_util.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -185,6 +187,75 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
     );
   }
 
+  Future<void> _debugChildAndParentInfo(String childId) async {
+    try {
+      print("\n===== DÉBOGAGE RELATION PARENT-ENFANT =====");
+
+      // 1. Obtenir la structure
+      final enfant = enfants.firstWhere((e) => e['id'] == childId);
+      final String structureId =
+          enfant['structureId'] ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+
+      print("🔍 Enfant: $childId, Structure: $structureId");
+
+      // 2. Récupérer le document de l'enfant
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      print("🧒 Document enfant existe: ${childDoc.exists}");
+
+      if (childDoc.exists) {
+        final data = childDoc.data()!;
+        print("🧒 Données de l'enfant:");
+        data.forEach((key, value) {
+          print("   - $key: $value");
+        });
+
+        // Vérifier si parentId existe
+        final parentId = data['parentId'];
+        print("👨‍👩‍👧 parentId dans le document enfant: $parentId");
+
+        // Tenter de trouver les parents dans users
+        print("\n🔍 Recherche dans la collection users par childId...");
+        final parentQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('children', arrayContains: childId)
+            .get();
+
+        print("👪 Parents trouvés: ${parentQuery.docs.length}");
+
+        for (var doc in parentQuery.docs) {
+          print("📝 Document parent ID: ${doc.id}");
+          final parentData = doc.data();
+          print("   - uid: ${parentData['uid']}");
+          print("   - email: ${parentData['email']}");
+          print(
+              "   - name: ${parentData['firstName']} ${parentData['lastName']}");
+          print("   - children: ${parentData['children']}");
+        }
+      }
+
+      print("===== FIN DÉBOGAGE =====\n");
+    } catch (e) {
+      print("❌ Erreur débogage: $e");
+    }
+  }
+
+// Méthode pour afficher un message d'avertissement
+  void _showMessageSentWithWarning(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Message envoyé (notification parent non confirmée)'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _showSuccessSnackBar(String message, BuildContext context) {
     if (!mounted) return;
 
@@ -197,6 +268,86 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
         margin: const EdgeInsets.all(8),
       ),
     );
+  }
+
+  Future<void> _forceShowBadgeForChild(String childId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final currentUserEmail = user.email?.toLowerCase();
+      if (currentUserEmail == null) return;
+
+      // Récupérer l'enfant dans la liste locale
+      final enfant = enfants.firstWhere(
+        (e) => e['id'] == childId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (enfant.isEmpty) return;
+
+      final String structureId = enfant['structureId'] ?? user.uid;
+
+      // Récupérer le document de l'enfant pour vérifier assignedMemberEmail
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) return;
+
+      final childData = childDoc.data()!;
+      final String? assignedMemberEmail =
+          childData['assignedMemberEmail']?.toString().toLowerCase();
+
+      // Vérifier si c'est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (!userDoc.exists) return;
+
+      final userData = userDoc.data()!;
+      final bool isMamMember = userData['role'] == 'mamMember';
+
+      if (isMamMember) {
+        // Si c'est un membre MAM, vérifier si l'enfant lui est assigné
+        if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+          if (assignedMemberEmail == currentUserEmail) {
+            // Mise à jour pour le membre assigné
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('has_unread_messages', true);
+
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUserEmail)
+                .update({'unreadMessages': FieldValue.increment(1)});
+
+            print(
+                "✅ Badge forcé pour le membre MAM assigné: $currentUserEmail");
+          } else {
+            print(
+                "⚠️ Badge non forcé: enfant assigné à $assignedMemberEmail, utilisateur actuel: $currentUserEmail");
+          }
+        }
+      } else {
+        // Pour une assistante maternelle individuelle
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_unread_messages', true);
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .update({'unreadMessages': FieldValue.increment(1)});
+
+        print(
+            "✅ Badge forcé pour l'assistante individuelle: $currentUserEmail");
+      }
+    } catch (e) {
+      print("❌ Erreur lors du forçage du badge: $e");
+    }
   }
 
   Future<void> _pickAndSendFile(
@@ -329,28 +480,34 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
 
   Future<void> _sendMessage(String childId, BuildContext dialogContext) async {
     final messageText = _messageController.text.trim();
-    if (messageText.isEmpty) return;
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      _showErrorSnackBar('Vous devez être connecté',
-          dialogContext: dialogContext);
+    if (messageText.isEmpty) {
       return;
     }
 
-    // Vérification d'une éventuelle réponse à un message
-    final replyToId = messageText.split(': ')[0].startsWith('@')
-        ? messageText.split(': ')[0].substring(1)
-        : null;
-    final messageContent =
-        replyToId != null ? messageText.split(': ')[1] : messageText;
+    // Déboguer avant d'envoyer
+    await _debugChildAndParentInfo(childId);
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showErrorSnackBar('Vous devez être connecté',
+            dialogContext: dialogContext);
+        return;
+      }
+
       // Trouver l'enfant pour récupérer l'ID de structure
       final enfant = enfants.firstWhere((e) => e['id'] == childId);
-      final String structureId = enfant['structureId'] ?? currentUser.uid;
+      final String structureId = enfant['structureId'] ?? user.uid;
 
-      // Récupérer l'ID parent de l'enfant pour s'assurer que les notifications fonctionnent
+      // Vérification d'une éventuelle réponse à un message
+      final replyToId = messageText.split(': ')[0].startsWith('@')
+          ? messageText.split(': ')[0].substring(1)
+          : null;
+      final messageContent =
+          replyToId != null ? messageText.split(': ')[1] : messageText;
+
+      // MÉTHODE 1: Récupérer le parentId à partir du document enfant
+      var parentId;
       final childDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -358,67 +515,247 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
           .doc(childId)
           .get();
 
-      final childData = childDoc.data();
-      final parentId = childData?['parentId'];
+      if (childDoc.exists) {
+        final childData = childDoc.data();
+        parentId = childData?['parentId'];
 
-      if (parentId != null) {
-        // Ajouter le message
-        await FirebaseFirestore.instance.collection('exchanges').add({
-          'childId': childId,
-          'senderId': currentUser.uid,
-          'content': messageContent,
-          'timestamp': FieldValue.serverTimestamp(),
-          'type': 'text',
-          'senderType': 'assistante',
-          'nonLu': true,
-          'replyTo': replyToId,
-          'parentId': parentId,
-        });
+        // MÉTHODE 2: Si parentId est manquant, chercher dans la collection users
+        if (parentId == null || parentId.isEmpty) {
+          print(
+              "🔍 parentId manquant dans le document enfant, recherche alternative...");
 
-        _messageController.clear();
+          final parentUsers = await FirebaseFirestore.instance
+              .collection('users')
+              .where('children', arrayContains: childId)
+              .limit(1)
+              .get();
 
-        // Notification explicite des nouveaux messages
+          if (parentUsers.docs.isNotEmpty) {
+            final parentUser = parentUsers.docs.first;
+            parentId = parentUser.data()['uid'];
+            print("✅ parentId trouvé via la collection users: $parentId");
+
+            // Mettre à jour l'enfant avec le parentId pour la prochaine fois
+            try {
+              await FirebaseFirestore.instance
+                  .collection('structures')
+                  .doc(structureId)
+                  .collection('children')
+                  .doc(childId)
+                  .update({'parentId': parentId});
+
+              print("✅ Document enfant mis à jour avec parentId: $parentId");
+            } catch (e) {
+              print("❌ Erreur lors de la mise à jour du document enfant: $e");
+            }
+          }
+
+          // MÉTHODE 3: Chercher par l'ID de l'enfant s'il correspond à un email
+          if ((parentId == null || parentId.isEmpty) && childId.contains('@')) {
+            try {
+              final parentUserDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(childId.toLowerCase())
+                  .get();
+
+              if (parentUserDoc.exists) {
+                parentId = parentUserDoc.data()?['uid'];
+                print(
+                    "✅ parentId trouvé via l'ID de l'enfant (email): $parentId");
+              }
+            } catch (e) {
+              print("❌ Erreur lors de la recherche par email: $e");
+            }
+          }
+        }
+      }
+
+      // Trouver l'email du membre assigné à l'enfant
+      try {
+        if (childDoc.exists) {
+          final childData = childDoc.data();
+          final String? assignedMemberEmail =
+              childData?['assignedMemberEmail']?.toString().toLowerCase();
+
+          if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+            // Si l'enfant est assigné à un membre, forcer le badge uniquement pour ce membre
+            print(
+                "✉️ Nouveau message pour enfant assigné à: $assignedMemberEmail");
+
+            // Mettre à jour le compteur unreadMessages du membre assigné
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(assignedMemberEmail)
+                .update({'unreadMessages': FieldValue.increment(1)});
+
+            // Si ce message n'est pas envoyé par vous, alors forcer le badge
+            if (user.email?.toLowerCase() != assignedMemberEmail) {
+              print(
+                  "🔔 Notification sera envoyée uniquement à: $assignedMemberEmail");
+            } else {
+              // Pour vous-même, mettre à jour les préférences locales
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('has_unread_messages', true);
+            }
+          } else {
+            // Si l'enfant n'est assigné à aucun membre spécifique (cas d'une assistante maternelle individuelle)
+            print(
+                "🔔 Enfant non assigné à un membre spécifique, notification standard");
+            await _forceShowBadgeForChild(childId);
+          }
+        } else {
+          // Document de l'enfant non trouvé, utiliser méthode standard
+          print("⚠️ Document enfant non trouvé, notification standard");
+          await MessageBadgeUtil.forceShowBadge(childId);
+        }
+      } catch (e) {
+        print(
+            "❌ Erreur lors de la notification: $e - Notification standard utilisée");
+        await MessageBadgeUtil.forceShowBadge(childId);
+      }
+
+      // Créer les données du message
+      final messageData = {
+        'childId': childId,
+        'senderId': user.uid,
+        'content': messageContent,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'text',
+        'senderType': 'assistante',
+        'nonLu': true,
+        'replyTo': replyToId,
+      };
+
+      // Ajouter le parentId si trouvé
+      if (parentId != null && parentId.isNotEmpty) {
+        messageData['parentId'] = parentId;
+      }
+
+      // ÉTAPE CRITIQUE: Ajouter le message à Firestore
+      final messageRef = await FirebaseFirestore.instance
+          .collection('exchanges')
+          .add(messageData);
+
+      _messageController.clear();
+      print("✅ Message envoyé avec ID: ${messageRef.id}");
+
+      // NOTIFICATION: Si nous avons trouvé un parentId, mettre à jour le compteur de messages non lus
+      if (parentId != null && parentId.isNotEmpty) {
         try {
-          // Récupérer le document de l'utilisateur parent
-          final userDoc = await FirebaseFirestore.instance
+          // Trouver l'email du parent via son ID
+          final parentUserQuery = await FirebaseFirestore.instance
               .collection('users')
               .where('uid', isEqualTo: parentId)
               .limit(1)
               .get();
 
-          if (userDoc.docs.isNotEmpty) {
-            final parentEmail = userDoc.docs.first.id;
-            // Mettre à jour un compteur de messages non lus
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(parentEmail)
-                .update({'unreadMessages': FieldValue.increment(1)});
+          String? parentEmail;
+          if (parentUserQuery.docs.isNotEmpty) {
+            parentEmail = parentUserQuery.docs.first.id;
+            print("📧 Email du parent trouvé: $parentEmail");
+          } else {
+            // Deuxième tentative: chercher par l'ID directement (si c'est un email)
+            if (parentId.contains('@')) {
+              parentEmail = parentId.toLowerCase();
+              print("📧 Email du parent utilisé directement: $parentEmail");
+            }
+          }
+
+          // Si nous avons un email, mettre à jour le compteur
+          if (parentEmail != null && parentEmail.isNotEmpty) {
+            final parentDocRef =
+                FirebaseFirestore.instance.collection('users').doc(parentEmail);
+
+            final parentDoc = await parentDocRef.get();
+
+            if (parentDoc.exists) {
+              // Mise à jour du compteur de messages non lus
+              await parentDocRef
+                  .update({'unreadMessages': FieldValue.increment(1)});
+              print(
+                  "✅ Compteur de messages non lus mis à jour pour: $parentEmail");
+            } else {
+              // Créer le document avec un compteur initial
+              await parentDocRef.set({'unreadMessages': 1, 'uid': parentId},
+                  SetOptions(merge: true));
+              print("✅ Document créé avec compteur initial pour: $parentEmail");
+            }
+
+            // Message de succès avec confirmation
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              SnackBar(
+                content: Text('Message envoyé avec succès'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            print("⚠️ Email du parent non trouvé pour l'UID: $parentId");
+            _showMessageSentWithWarning(dialogContext);
           }
         } catch (e) {
-          print("Erreur lors de la notification du parent: $e");
+          print("❌ Erreur lors de l'envoi de la notification: $e");
+          _showMessageSentWithWarning(dialogContext);
         }
       } else {
-        // Si pas de parentId, envoyer quand même le message, mais sans la notification
-        await FirebaseFirestore.instance.collection('exchanges').add({
-          'childId': childId,
-          'senderId': currentUser.uid,
-          'content': messageContent,
-          'timestamp': FieldValue.serverTimestamp(),
-          'type': 'text',
-          'senderType': 'assistante',
-          'nonLu': true,
-          'replyTo': replyToId,
-        });
+        print("⚠️ parentId manquant, impossible d'envoyer une notification");
 
-        _messageController.clear();
+        // Malgré l'absence de parentId, tentons d'envoyer des notifications
+        try {
+          // Chercher les parents qui ont cet enfant dans leur liste
+          final parentUsers = await FirebaseFirestore.instance
+              .collection('users')
+              .where('children', arrayContains: childId)
+              .get();
+
+          if (parentUsers.docs.isNotEmpty) {
+            for (var doc in parentUsers.docs) {
+              // Mettre à jour le compteur pour chaque parent trouvé
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(doc.id)
+                  .update({'unreadMessages': FieldValue.increment(1)});
+
+              print("✅ Compteur mis à jour pour parent: ${doc.id}");
+            }
+
+            // Le message a été envoyé avec succès
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              SnackBar(
+                content: Text('Message envoyé avec succès'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            // Si aucun parent n'a été trouvé, afficher l'avertissement
+            _showMessageSentWithWarning(dialogContext);
+          }
+        } catch (e) {
+          print("❌ Erreur lors de la tentative d'envoi alternatif: $e");
+          _showMessageSentWithWarning(dialogContext);
+        }
       }
     } catch (error) {
-      print("Erreur lors de l'envoi du message: $error");
+      print("❌ Erreur lors de l'envoi du message: $error");
       if (dialogContext.mounted) {
         _showErrorSnackBar("Erreur lors de l'envoi du message",
             dialogContext: dialogContext);
       }
     }
+  }
+
+// Ajouter cette méthode d'affichage de message
+
+// Ajouter cette méthode auxiliaire
+  void _handleMessageSentWithWarning(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Message envoyé (notification parent non confirmée)'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _replyToMessage(String messageId) async {
@@ -1193,7 +1530,7 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
                           ),
                   ),
                 ),
-                // Indicateur de messages non lus
+                // Indicateur de messages non lus modifié
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('exchanges')
@@ -1206,21 +1543,45 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
                       return Positioned(
                         right: 0,
                         top: 0,
-                        child: Container(
-                          padding: EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: primaryRed,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: Text(
-                            nonLuCount.toString(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: primaryRed,
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: Text(
+                                nonLuCount.toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          ),
+                            // Label "Messages non lus"
+                            Container(
+                              margin: EdgeInsets.only(top: 2, right: 4),
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: primaryRed.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                "Messages non lus",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     } else {
@@ -1325,6 +1686,7 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
   }
 
   // État vide (aucun enfant)
+  // État vide (aucun enfant)
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -1400,7 +1762,7 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
       padding: EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 1.35,
+        childAspectRatio: 1.5,
         crossAxisSpacing: 20,
         mainAxisSpacing: 20,
       ),
@@ -1411,222 +1773,227 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
   }
 
 // Nouvelle carte enfant optimisée pour iPad
+  // Nouvelle carte enfant optimisée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     final isBoy = enfant['genre'] == 'Garçon';
+    final avatarColor = isBoy ? primaryBlue : primaryRed;
 
-    return GestureDetector(
-      onTap: () => _showChatPopup(enfant),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Stack(
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // En-tête avec gradient et infos enfant
+              Container(
+                decoration: BoxDecoration(
+                  color: avatarColor,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Avatar avec photo de l'enfant
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: enfant['photoUrl'] != null &&
-                            enfant['photoUrl'].isNotEmpty
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Center(
-                              child: Text(
+                      child: Center(
+                        child: enfant['photoUrl'] != null &&
+                                enfant['photoUrl'].isNotEmpty
+                            ? ClipOval(
+                                child: Image.network(
+                                  enfant['photoUrl'],
+                                  width: 55,
+                                  height: 55,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Text(
+                                    enfant['prenom'][0].toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: avatarColor,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Text(
                                 enfant['prenom'][0].toUpperCase(),
                                 style: TextStyle(
-                                  fontSize: 36,
+                                  fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: avatarColor,
                                 ),
                               ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              enfant['prenom'][0].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Zone centrale avec "Aucun message" ou dernier message
+              Expanded(
+                child: Center(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('exchanges')
+                        .where('childId', isEqualTo: enfant['id'])
+                        .where('nonLu', isEqualTo: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      final nonLuCount = snapshot.data?.docs.length ?? 0;
+                      if (nonLuCount > 0) {
+                        return Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: primaryRed,
+                                  shape: BoxShape.circle,
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: Text(
+                                  nonLuCount.toString(),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                            ),
+                              Container(
+                                margin: EdgeInsets.only(top: 2),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: primaryRed.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "Messages non lus",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        );
+                      } else {
+                        return SizedBox.shrink();
+                      }
+                    },
                   ),
                 ),
-                // Indicateur de messages non lus
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('exchanges')
-                      .where('childId', isEqualTo: enfant['id'])
-                      .where('nonLu', isEqualTo: true)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    final nonLuCount = snapshot.data?.docs.length ?? 0;
-                    if (nonLuCount > 0) {
-                      return Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: primaryRed,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: Text(
-                            nonLuCount.toString(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
-                    } else {
-                      return SizedBox.shrink();
-                    }
-                  },
+              ),
+            ],
+          ),
+
+          // Bouton + pour ouvrir la discussion
+          Positioned(
+            top: 16,
+            right: 16,
+            child: GestureDetector(
+              onTap: () => _showChatPopup(enfant),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            SizedBox(height: 12),
-            Text(
-              enfant['prenom'],
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: isBoy ? primaryBlue : primaryRed,
+                child: Icon(
+                  Icons.add,
+                  color: avatarColor,
+                  size: 24,
+                ),
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              "Discussion avec le parent",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('exchanges')
-                      .where('childId', isEqualTo: enfant['id'])
-                      .orderBy('timestamp', descending: true)
-                      .limit(1)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          "Aucun message",
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      );
-                    }
+          ),
 
-                    final lastMessage = snapshot.data!.docs.first.data()
-                        as Map<String, dynamic>;
-                    final isFile = lastMessage['type'] == 'file';
-
-                    return Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Text(
-                        isFile
-                            ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
-                            : lastMessage['content'] != null
-                                ? (lastMessage['content'].toString().length > 30
-                                    ? "${lastMessage['content'].toString().substring(0, 30)}..."
-                                    : lastMessage['content'].toString())
-                                : "",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: lastMessage['nonLu'] == true
-                              ? Colors.black87
-                              : Colors.grey.shade500,
-                          fontWeight: lastMessage['nonLu'] == true
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
+          // Indicateur de messages non lus
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('exchanges')
+                .where('childId', isEqualTo: enfant['id'])
+                .where('nonLu', isEqualTo: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final nonLuCount = snapshot.data?.docs.length ?? 0;
+              if (nonLuCount > 0) {
+                return Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryRed,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Text(
+                      nonLuCount.toString(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: primaryBlue,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chat_bubble_outline,
-                      color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text(
-                    "Discuter",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                );
+              } else {
+                return SizedBox.shrink();
+              }
+            },
+          ),
+        ],
       ),
     );
   }
 
   // AppBar personnalisé avec gradient
+  // AppBar personnalisé avec gradient adapté pour iPad
   Widget _buildAppBar(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
@@ -1694,7 +2061,7 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
                 ],
               ),
               SizedBox(height: isTabletDevice ? 22 : 15),
-              // Icône et titre de la page
+              // Icône et titre de la page dans un conteneur bordé comme sur la page Activités
               Container(
                 padding: EdgeInsets.symmetric(
                     horizontal: isTabletDevice ? 22 : 16,

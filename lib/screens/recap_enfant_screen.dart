@@ -24,6 +24,20 @@ class _RecapScreenState extends State<RecapScreen> {
   bool isLoading = true;
   String structureName = "Chargement...";
   int _selectedIndex = 1;
+  int _convertHoursToMinutes(String timeStr) {
+    if (timeStr == '--:--') return 0;
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length == 2) {
+        final hours = int.tryParse(parts[0]) ?? 0;
+        final minutes = int.tryParse(parts[1]) ?? 0;
+        return hours * 60 + minutes;
+      }
+    } catch (e) {
+      print("Erreur lors de la conversion de l'heure: $e");
+    }
+    return 0;
+  }
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -60,16 +74,26 @@ class _RecapScreenState extends State<RecapScreen> {
 
       // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
       String structureId = user.uid;
+      bool isMamMember = false;
+      bool isStructureAdmin = false;
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
+
+        // Vérifier si l'utilisateur est un membre MAM
         if (userData['role'] == 'mamMember' &&
             userData['structureId'] != null) {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
+          isMamMember = true;
           print(
               "🔄 Recap: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
+
+        // Vérifier si l'utilisateur est un administrateur de la structure
+        isStructureAdmin =
+            userData['isAdmin'] == true || userData['role'] == 'structureAdmin';
+        print("👑 Recap: Statut admin: ${isStructureAdmin ? 'OUI' : 'NON'}");
       }
 
       final today = DateTime.now();
@@ -106,7 +130,7 @@ class _RecapScreenState extends State<RecapScreen> {
       List<Map<String, dynamic>> allChildren =
           snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
 
-      // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
+      // Appliquer le filtrage selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == "MAM") {
@@ -126,6 +150,33 @@ class _RecapScreenState extends State<RecapScreen> {
             "👩‍👧‍👦 Recap: Assistante Maternelle - affichage de tous les enfants");
       }
 
+// Diagnostic détaillé pour aider au débogage
+      print(
+          "🔍 DIAGNOSTIC RECAP - Type de structure: $structureType, Utilisateur: $currentUserEmail, EstMAM: $isMamMember");
+      for (var child in allChildren) {
+        String assignedEmail =
+            child['assignedMemberEmail']?.toString().toLowerCase() ??
+                'NON ASSIGNÉ';
+        bool isVisible =
+            structureType != "MAM" || assignedEmail == currentUserEmail;
+        print(
+            "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
+      }
+
+      // Diagnostic détaillé pour aider au débogage
+      print(
+          "🔍 DIAGNOSTIC RECAP - Type de structure: $structureType, Utilisateur: $currentUserEmail, EstMAM: $isMamMember, EstAdmin: $isStructureAdmin");
+      for (var child in allChildren) {
+        String assignedEmail =
+            child['assignedMemberEmail']?.toString().toLowerCase() ??
+                'NON ASSIGNÉ';
+        bool isVisible = isStructureAdmin ||
+            structureType != "MAM" ||
+            assignedEmail == currentUserEmail;
+        print(
+            "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
+      }
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
@@ -139,13 +190,19 @@ class _RecapScreenState extends State<RecapScreen> {
             'photoUrl': child['photoUrl'],
             'birthdate': child['birthdate'],
             'structureId': structureId,
+            'assignedMemberEmail':
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '',
           });
         }
       }
 
+      print("👨‍👧‍👦 Recap: ${enfants.length} enfants prévus aujourd'hui");
+
       // Charger les données pour tous les enfants
       if (enfants.isNotEmpty) {
         for (var enfant in enfants) {
+          print(
+              "📋 Recap: Chargement des données pour l'enfant ${enfant['prenom']} (ID: ${enfant['id']})");
           await _loadChildRecapData(enfant['id'], structureId);
         }
       }
@@ -162,6 +219,7 @@ class _RecapScreenState extends State<RecapScreen> {
       final today = DateTime.now();
       final todayStart = DateTime(today.year, today.month, today.day);
       final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
+      final todayFormatted = DateFormat('yyyy-MM-dd').format(today);
 
       Map<String, List<Map<String, dynamic>>> tempRecapData = {
         'repas': [],
@@ -307,30 +365,179 @@ class _RecapScreenState extends State<RecapScreen> {
         });
       }
 
-      // Récupérer les horaires (arrivée/départ)
-      final horairesSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .collection('horaires_history')
-          .where('childId', isEqualTo: childId)
-          .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(today))
-          .get();
+      // PARTIE CORRIGÉE - Récupérer les horaires (arrivée/départ)
+      try {
+        // Vérifier d'abord si l'enfant est marqué comme absent
+        bool isAbsent = false;
 
-      for (var doc in horairesSnapshot.docs) {
-        final data = doc.data();
-        if (data['actionType'] == 'arrivee') {
-          tempRecapData['horaires']!.add({
-            'heure': data['heure'] ?? _formatTimestamp(data['timestamp']),
-            'type': 'arrivee',
-            'details': 'Arrivée',
-          });
-        } else if (data['actionType'] == 'depart') {
-          tempRecapData['horaires']!.add({
-            'heure': data['heure'] ?? _formatTimestamp(data['timestamp']),
-            'type': 'depart',
-            'details': 'Départ',
-          });
+        // 1. Vérifier l'absence dans la collection horaires
+        final absenceSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('horaires')
+            .doc(todayFormatted)
+            .get();
+
+        if (absenceSnapshot.exists) {
+          final data = absenceSnapshot.data();
+          if (data != null && data.containsKey(childId)) {
+            final childHoraires = data[childId];
+            if (childHoraires['absent'] == true ||
+                childHoraires['actionType'] == 'absent') {
+              isAbsent = true;
+              print(
+                  "DEBUG: L'enfant $childId est marqué comme absent dans horaires");
+              // Pour les enfants absents, on ne met PAS de données dans horaires
+              // tempRecapData['horaires'] reste vide
+            }
+          }
         }
+
+        // 2. Vérifier également l'absence dans horaires_history
+        if (!isAbsent) {
+          final absenceHistorySnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('horaires_history')
+              .where('childId', isEqualTo: childId)
+              .where('date', isEqualTo: todayFormatted)
+              .where('actionType', isEqualTo: 'absent')
+              .limit(1)
+              .get();
+
+          if (absenceHistorySnapshot.docs.isNotEmpty) {
+            isAbsent = true;
+            print(
+                "DEBUG: L'enfant $childId est marqué comme absent dans horaires_history");
+            // Pour les enfants absents, on ne met PAS de données dans horaires
+            // tempRecapData['horaires'] reste vide
+          }
+        }
+
+        // Si l'enfant n'est pas absent, récupérer les horaires normalement
+        if (!isAbsent) {
+          List<Map<String, dynamic>> allHoraires = [];
+
+          // Récupérer les horaires dans la collection horaires_history
+          final horairesSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('horaires_history')
+              .where('childId', isEqualTo: childId)
+              .where('date', isEqualTo: todayFormatted)
+              .get();
+
+          print(
+              "DEBUG: Horaires trouvés pour l'enfant $childId dans horaires_history: ${horairesSnapshot.docs.length}");
+
+          // Ajouter les horaires trouvés
+          for (var doc in horairesSnapshot.docs) {
+            final data = doc.data();
+            if (data['actionType'] == 'arrivee' ||
+                data['actionType'] == 'depart') {
+              allHoraires.add(data);
+            }
+          }
+
+          // Récupérer également les horaires dans la collection horaires (historique journalier)
+          if (absenceSnapshot.exists) {
+            final data = absenceSnapshot.data();
+            if (data != null && data.containsKey(childId)) {
+              final childHoraires = data[childId];
+
+              // Vérifier si des segments existent dans ce document
+              if (childHoraires['segments'] != null) {
+                List<dynamic> segments = childHoraires['segments'];
+                for (var segment in segments) {
+                  if (segment['arrivee'] != null) {
+                    allHoraires.add({
+                      'childId': childId,
+                      'date': todayFormatted,
+                      'actionType': 'arrivee',
+                      'heure': segment['arrivee'],
+                    });
+                  }
+                  if (segment['depart'] != null) {
+                    allHoraires.add({
+                      'childId': childId,
+                      'date': todayFormatted,
+                      'actionType': 'depart',
+                      'heure': segment['depart'],
+                    });
+                  }
+                }
+              }
+              // Format ancien (sans segments)
+              else if (childHoraires['arrivee'] != null ||
+                  childHoraires['depart'] != null) {
+                if (childHoraires['arrivee'] != null) {
+                  allHoraires.add({
+                    'childId': childId,
+                    'date': todayFormatted,
+                    'actionType': 'arrivee',
+                    'heure': childHoraires['arrivee'],
+                  });
+                }
+                if (childHoraires['depart'] != null) {
+                  allHoraires.add({
+                    'childId': childId,
+                    'date': todayFormatted,
+                    'actionType': 'depart',
+                    'heure': childHoraires['depart'],
+                  });
+                }
+              }
+            }
+          }
+
+          print(
+              "DEBUG: Nombre total d'horaires trouvés pour l'enfant $childId: ${allHoraires.length}");
+
+          if (allHoraires.isNotEmpty) {
+            // Supprimer les doublons en se basant sur actionType et heure
+            Map<String, Map<String, dynamic>> uniqueHoraires = {};
+            for (var horaire in allHoraires) {
+              String key = "${horaire['actionType']}_${horaire['heure']}";
+              uniqueHoraires[key] = horaire;
+            }
+
+            for (var horaire in uniqueHoraires.values) {
+              print(
+                  "DEBUG: Ajout horaire: ${horaire['actionType']} à ${horaire['heure']}");
+
+              if (horaire['actionType'] == 'arrivee') {
+                tempRecapData['horaires']!.add({
+                  'heure': horaire['heure'] ??
+                      _formatTimestamp(horaire['timestamp']),
+                  'type': 'arrivee',
+                  'details': 'Arrivée',
+                });
+              } else if (horaire['actionType'] == 'depart') {
+                tempRecapData['horaires']!.add({
+                  'heure': horaire['heure'] ??
+                      _formatTimestamp(horaire['timestamp']),
+                  'type': 'depart',
+                  'details': 'Départ',
+                });
+              }
+            }
+
+            // Tri des horaires par heure
+            tempRecapData['horaires']!.sort((a, b) {
+              // Conversion des heures en minutes depuis minuit pour comparaison
+              int minutesA = _convertHoursToMinutes(a['heure'] ?? '00:00');
+              int minutesB = _convertHoursToMinutes(b['heure'] ?? '00:00');
+              return minutesA.compareTo(minutesB);
+            });
+          } else {
+            print("Aucun horaire trouvé pour l'enfant $childId");
+            // Pour un enfant sans horaires mais non absent, on ne met rien dans horaires
+            // tempRecapData['horaires'] reste vide
+          }
+        }
+      } catch (e) {
+        print("Erreur lors de la récupération des horaires: $e");
+        // En cas d'erreur, on ne met rien dans horaires
       }
 
       // Récupérer les photos
@@ -469,6 +676,15 @@ class _RecapScreenState extends State<RecapScreen> {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     final isBoy = enfant['genre'] == 'Garçon';
     final childData = recapDataByChild[childId]!;
+    final avatarColor = isBoy ? primaryBlue : primaryRed;
+
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
+    // Ajuster la taille en fonction de l'appareil
+    final double maxWidth = isTabletDevice ? 600 : 500;
+    final double maxHeight =
+        MediaQuery.of(context).size.height * (isTabletDevice ? 0.85 : 0.8);
 
     // Liste des catégories à afficher
     final categories = [
@@ -492,69 +708,62 @@ class _RecapScreenState extends State<RecapScreen> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.0),
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal:
+                isTabletDevice ? MediaQuery.of(context).size.width * 0.15 : 20,
+            vertical: isTabletDevice ? 40 : 20,
           ),
           child: Container(
+            width: double.infinity,
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
-              maxWidth: 500,
+              maxHeight: maxHeight,
+              maxWidth: maxWidth,
+              minWidth: isTabletDevice ? 500 : 300,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // En-tête avec dégradé de couleur et nom de l'enfant
+                // En-tête avec dégradé
                 Container(
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: isBoy
-                          ? [primaryBlue, primaryBlue.withOpacity(0.8)]
-                          : [primaryRed, primaryRed.withOpacity(0.8)],
+                      colors: [
+                        avatarColor,
+                        avatarColor.withOpacity(0.85),
+                      ],
                     ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
                     ),
                   ),
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
                   child: Row(
                     children: [
                       Container(
-                        width: 50,
-                        height: 50,
+                        padding: EdgeInsets.all(isTabletDevice ? 12 : 10),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: isBoy
-                                ? [
-                                    primaryBlue.withOpacity(0.2),
-                                    primaryBlue.withOpacity(0.5)
-                                  ]
-                                : [
-                                    primaryRed.withOpacity(0.2),
-                                    primaryRed.withOpacity(0.5)
-                                  ],
-                          ),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Center(
-                          child: enfant['photoUrl'] != null
-                              ? ClipOval(
-                                  child: Image.network(
-                                    enfant['photoUrl'],
-                                    width: 46,
-                                    height: 46,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error,
-                                            stackTrace) =>
-                                        _buildFallbackAvatar(enfant['prenom']),
-                                  ),
-                                )
-                              : _buildFallbackAvatar(enfant['prenom']),
+                        child: Icon(
+                          Icons.summarize_outlined,
+                          color: Colors.white,
+                          size: isTabletDevice ? 32 : 24,
                         ),
                       ),
                       SizedBox(width: 16),
@@ -563,17 +772,19 @@ class _RecapScreenState extends State<RecapScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${enfant['prenom']} ${enfant['nom']}',
+                              "Récapitulatif pour ${enfant['prenom']}",
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: isTabletDevice ? 24 : 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
                             ),
+                            SizedBox(height: 4),
                             Text(
-                              'Récapitulatif du ${DateFormat('dd MMMM yyyy', 'fr_FR').format(DateTime.now())}',
+                              DateFormat('dd MMMM yyyy', 'fr_FR')
+                                  .format(DateTime.now()),
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: isTabletDevice ? 18 : 14,
                                 color: Colors.white.withOpacity(0.9),
                               ),
                             ),
@@ -587,12 +798,13 @@ class _RecapScreenState extends State<RecapScreen> {
                 // Contenu du récapitulatif avec défilement
                 Flexible(
                   child: SingleChildScrollView(
+                    physics: BouncingScrollPhysics(),
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
                       child: Column(
                         children: categoriesToShow.map((category) {
-                          return _buildRecapSection(
-                              category, childData[category] ?? []);
+                          return _buildRecapSection(category,
+                              childData[category] ?? [], isTabletDevice);
                         }).toList(),
                       ),
                     ),
@@ -602,27 +814,25 @@ class _RecapScreenState extends State<RecapScreen> {
                 // Bouton Fermer
                 Container(
                   width: double.infinity,
-                  margin: EdgeInsets.only(top: 8),
                   child: TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
+                    onPressed: () => Navigator.of(context).pop(),
                     style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: Colors.grey.shade200,
+                      padding: EdgeInsets.symmetric(
+                        vertical: isTabletDevice ? 16 : 12,
+                      ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(24),
                         ),
                       ),
-                      backgroundColor: Colors.grey.shade200,
                     ),
                     child: Text(
-                      'FERMER',
+                      "FERMER",
                       style: TextStyle(
-                        color: isBoy ? primaryBlue : primaryRed,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontSize: isTabletDevice ? 18 : 16,
+                        fontWeight: FontWeight.w600,
+                        color: avatarColor,
                       ),
                     ),
                   ),
@@ -635,11 +845,12 @@ class _RecapScreenState extends State<RecapScreen> {
     );
   }
 
-  Widget _buildRecapSection(String category, List<Map<String, dynamic>> items) {
+  Widget _buildRecapSection(
+      String category, List<Map<String, dynamic>> items, bool isTablet) {
     if (items.isEmpty) return Container();
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 8),
+      margin: EdgeInsets.symmetric(vertical: isTablet ? 12 : 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -655,7 +866,7 @@ class _RecapScreenState extends State<RecapScreen> {
         children: [
           // En-tête de section
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.all(isTablet ? 16 : 12),
             decoration: BoxDecoration(
               color: _getCategoryColor[category]!.withOpacity(0.1),
               borderRadius: BorderRadius.only(
@@ -668,21 +879,23 @@ class _RecapScreenState extends State<RecapScreen> {
                 Icon(
                   _getCategoryIcon[category],
                   color: _getCategoryColor[category],
-                  size: 24,
+                  size: isTablet ? 28 : 24,
                 ),
                 SizedBox(width: 12),
                 Text(
                   category.substring(0, 1).toUpperCase() +
                       category.substring(1),
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: isTablet ? 20 : 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
                 ),
                 Spacer(),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 12 : 8,
+                      vertical: isTablet ? 6 : 4),
                   decoration: BoxDecoration(
                     color: _getCategoryColor[category]!.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -690,6 +903,7 @@ class _RecapScreenState extends State<RecapScreen> {
                   child: Text(
                     "${items.length}",
                     style: TextStyle(
+                      fontSize: isTablet ? 16 : 14,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
@@ -708,8 +922,12 @@ class _RecapScreenState extends State<RecapScreen> {
             itemBuilder: (context, index) {
               final item = items[index];
               return ListTile(
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isTablet ? 20 : 16,
+                  vertical: isTablet ? 6 : 4,
+                ),
                 leading: Container(
-                  padding: EdgeInsets.all(8),
+                  padding: EdgeInsets.all(isTablet ? 10 : 8),
                   decoration: BoxDecoration(
                     color: _getCategoryColor[category]!.withOpacity(0.1),
                     shape: BoxShape.circle,
@@ -719,15 +937,16 @@ class _RecapScreenState extends State<RecapScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
-                      fontSize: 12,
+                      fontSize: isTablet ? 14 : 12,
                     ),
                   ),
                 ),
                 title: Text(
                   category == 'photos'
-                      ? '1 photo' // We'll keep this as "1 photo" since each entry represents a single photo
+                      ? '1 photo'
                       : (item['type'] ?? item['details'] ?? ''),
                   style: TextStyle(
+                    fontSize: isTablet ? 16 : 14,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
@@ -739,13 +958,14 @@ class _RecapScreenState extends State<RecapScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                          fontSize: isTablet ? 14 : 12,
                           color: Colors.black,
                         ),
                       )
                     : null,
                 trailing: Icon(Icons.arrow_forward_ios,
-                    size: 14, color: Colors.black),
-                dense: true,
+                    size: isTablet ? 16 : 14, color: Colors.black),
+                dense: !isTablet,
               );
             },
           ),
@@ -960,14 +1180,16 @@ class _RecapScreenState extends State<RecapScreen> {
   }
 
   // Version tablette
+  // Nouveau layout pour iPad - affiche les enfants dans une grille
   Widget _buildTabletLayout() {
     return GridView.builder(
       padding: EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2, // 2 cartes par ligne
-        childAspectRatio: 1.5, // Rapport hauteur/largeur adapté
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+        childAspectRatio:
+            1.2, // Un peu plus large que haut, comme dans activity_screen
+        crossAxisSpacing: 20, // Espace horizontal entre les cartes
+        mainAxisSpacing: 20, // Espace vertical entre les cartes
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -979,6 +1201,7 @@ class _RecapScreenState extends State<RecapScreen> {
     final enfant = enfants[index];
     final childId = enfant['id'];
     final isBoy = enfant['genre'] == 'Garçon';
+    final avatarColor = isBoy ? primaryBlue : primaryRed;
 
     // Vérifier si des activités existent pour cet enfant
     final hasActivites = activitesCountByChild.containsKey(childId) &&
@@ -1002,7 +1225,7 @@ class _RecapScreenState extends State<RecapScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 10,
               offset: Offset(0, 4),
             ),
@@ -1010,93 +1233,87 @@ class _RecapScreenState extends State<RecapScreen> {
         ),
         child: Column(
           children: [
-            // En-tête avec photo et nom
-            Padding(
+            // En-tête avec gradient et infos enfant
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [avatarColor, avatarColor.withOpacity(0.85)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
               padding: EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Photo de l'enfant - plus grande pour iPad
+                  // Avatar avec photo de l'enfant
                   Container(
                     width: 70,
                     height: 70,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isBoy
-                            ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                            : [primaryRed.withOpacity(0.7), primaryRed],
-                      ),
+                      color: avatarColor.withOpacity(0.8),
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isBoy ? primaryBlue : primaryRed)
-                              .withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
-                    child: Center(
-                      child: enfant['photoUrl'] != null
-                          ? ClipOval(
-                              child: Image.network(
-                                enfant['photoUrl'],
-                                width: 66,
-                                height: 66,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _buildFallbackAvatar(enfant['prenom']),
+                    child: ClipOval(
+                      child: enfant['photoUrl'] != null &&
+                              enfant['photoUrl'].isNotEmpty
+                          ? Image.network(
+                              enfant['photoUrl'],
+                              width: 65,
+                              height: 65,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(
+                                enfant['prenom'][0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                             )
-                          : _buildFallbackAvatar(enfant['prenom']),
+                          : Text(
+                              enfant['prenom'][0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                   SizedBox(width: 16),
-                  // Nom de l'enfant
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${enfant['prenom']} ${enfant['nom']}',
-                          style: TextStyle(
-                            fontSize: 22, // Plus grand pour iPad
-                            fontWeight: FontWeight.bold,
-                            color: isBoy ? primaryBlue : primaryRed,
-                          ),
-                        ),
-                        Text(
-                          DateFormat('dd MMMM yyyy', 'fr_FR')
-                              .format(DateTime.now()),
-                          style: TextStyle(
-                            fontSize: 16, // Plus grand pour iPad
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      enfant['prenom'],
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-
-                  // Indicateur d'activités
+                  // Badge indiquant le nombre d'activités
                   if (hasActivites)
                     Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: primaryBlue.withOpacity(0.1),
+                        color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.summarize, color: primaryBlue, size: 22),
+                          Icon(Icons.summarize, color: Colors.white, size: 20),
                           SizedBox(width: 6),
                           Text(
                             '${activitesCountByChild[childId]}',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: primaryBlue,
+                              color: Colors.white,
                             ),
                           ),
                         ],
@@ -1106,75 +1323,211 @@ class _RecapScreenState extends State<RecapScreen> {
               ),
             ),
 
-            // Afficher un résumé des activités s'il y en a
+            // Contenu - Liste des activités du jour
             Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: hasActivites
-                      ? lightBlue.withOpacity(0.3)
-                      : Colors.grey.shade100,
-                  borderRadius:
-                      BorderRadius.vertical(bottom: Radius.circular(16)),
-                ),
-                child: hasActivites
-                    ? Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        alignment: WrapAlignment.center,
-                        children: categoryCounts.entries.map((entry) {
-                          final category = entry.key;
-                          final count = entry.value;
-                          return Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color:
-                                  _getCategoryColor[category]!.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
+              child: hasActivites
+                  ? ListView.separated(
+                      physics: BouncingScrollPhysics(),
+                      shrinkWrap: true,
+                      padding: EdgeInsets.all(16),
+                      itemCount: categoryCounts.length,
+                      separatorBuilder: (context, index) =>
+                          SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final category = categoryCounts.keys.elementAt(index);
+                        final count = categoryCounts[category]!;
+                        return Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color:
+                                _getCategoryColor[category]!.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
                                 color: _getCategoryColor[category]!
-                                    .withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
+                                    .withOpacity(0.1)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: _getCategoryColor[category]!
+                                      .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
                                   _getCategoryIcon[category],
                                   color: _getCategoryColor[category],
-                                  size: 18,
+                                  size: 22,
                                 ),
-                                SizedBox(width: 6),
-                                Text(
+                              ),
+                              SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
                                   "${count} ${category.substring(0, 1).toUpperCase() + category.substring(1)}",
                                   style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getCategoryColor[category],
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      )
-                    : Center(
-                        child: Text(
-                          'Aucune activité enregistrée aujourd\'hui',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontSize: 16,
-                            color: Colors.grey.shade700,
+                              ),
+                            ],
                           ),
-                        ),
+                        );
+                      },
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.directions_run,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            "Aucune activité aujourd'hui",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-              ),
+                    ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBar(BuildContext context) {
+    // Détection de l'iPad
+    final bool isTabletDevice = isTablet(context);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            primaryBlue,
+            primaryBlue.withOpacity(0.85),
+          ],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryBlue.withOpacity(0.3),
+            offset: const Offset(0, 4),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          // Plus de padding vertical pour iPad
+          padding: EdgeInsets.fromLTRB(
+              16,
+              isTabletDevice ? 24 : 16, // Augmenté pour iPad
+              16,
+              isTabletDevice ? 28 : 20 // Augmenté pour iPad
+              ),
+          child: Column(
+            children: [
+              // Première ligne: nom structure et date
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      structureName,
+                      style: TextStyle(
+                        fontSize:
+                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal:
+                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
+                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
+                      style: TextStyle(
+                        fontSize:
+                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
+                        color: Colors.white.withOpacity(0.95),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(
+                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
+              // Icône et titre de la page
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
+                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: Colors.white,
+                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
+                      ),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/images/Icone_Recaptitulatif.png',
+                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
+                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.summarize_outlined,
+                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(
+                        width:
+                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
+                    Text(
+                      'Récapitulatif',
+                      style: TextStyle(
+                        fontSize:
+                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1189,145 +1542,7 @@ class _RecapScreenState extends State<RecapScreen> {
       backgroundColor: Colors.grey[50],
       body: Column(
         children: [
-          // En-tête avec dégradé bleu
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  primaryBlue,
-                  primaryBlue.withOpacity(0.85),
-                ],
-              ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryBlue.withOpacity(0.3),
-                  offset: const Offset(0, 4),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                    16,
-                    isTabletDevice ? 24 : 16, // Augmenté pour iPad
-                    16,
-                    isTabletDevice ? 28 : 20 // Augmenté pour iPad
-                    ),
-                child: Column(
-                  children: [
-                    // Première ligne: nom structure et date
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            structureName,
-                            style: TextStyle(
-                              fontSize: isTabletDevice
-                                  ? 28
-                                  : 24, // Plus grand pour iPad
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isTabletDevice
-                                ? 16
-                                : 12, // Plus grand pour iPad
-                            vertical:
-                                isTabletDevice ? 8 : 6, // Plus grand pour iPad
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            DateFormat('EEEE d MMMM', 'fr_FR')
-                                .format(DateTime.now()),
-                            style: TextStyle(
-                              fontSize: isTabletDevice
-                                  ? 16
-                                  : 14, // Plus grand pour iPad
-                              color: Colors.white.withOpacity(0.95),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(
-                        height: isTabletDevice
-                            ? 22
-                            : 15), // Plus d'espace pour iPad
-                    // Icône et titre de la page
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            isTabletDevice ? 22 : 16, // Plus grand pour iPad
-                        vertical:
-                            isTabletDevice ? 12 : 8, // Plus grand pour iPad
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                            color: Colors.white,
-                            width:
-                                isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                            ),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Image.asset(
-                            'assets/images/Icone_Recaptitulatif.png',
-                            width: isTabletDevice
-                                ? 36
-                                : 30, // Plus grand pour iPad
-                            height: isTabletDevice
-                                ? 36
-                                : 30, // Plus grand pour iPad
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.summarize_outlined,
-                              size: isTabletDevice
-                                  ? 32
-                                  : 26, // Plus grand pour iPad
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(
-                              width: isTabletDevice
-                                  ? 12
-                                  : 8), // Plus d'espace pour iPad
-                          Text(
-                            'Récapitulatif',
-                            style: TextStyle(
-                              fontSize: isTabletDevice
-                                  ? 24
-                                  : 20, // Plus grand pour iPad
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Contenu principal
+          _buildAppBar(context),
           Expanded(
             child: isLoading
                 ? Center(
@@ -1335,33 +1550,7 @@ class _RecapScreenState extends State<RecapScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
                   ))
                 : enfants.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/Icone_Recaptitulatif.png',
-                              width: 80,
-                              height: 80,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Icon(
-                                Icons.summarize_outlined,
-                                size: 80,
-                                color: primaryBlue.withOpacity(0.4),
-                              ),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Aucun enfant prévu aujourd\'hui',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: primaryBlue,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
+                    ? _buildEmptyState()
                     : isTabletDevice
                         ? _buildTabletLayout() // Layout adapté pour iPad
                         : ListView.builder(
@@ -1371,47 +1560,77 @@ class _RecapScreenState extends State<RecapScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        onTap: _onItemTapped,
-        backgroundColor: Colors.white,
-        selectedItemColor: primaryBlue,
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        items: [
-          // Premier item - Dashboard
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Dashboard.png',
-              width: 60,
-              height: 60,
-            ),
-            label: "Dashboard",
-          ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
 
-          // Deuxième item - Home (Maison)
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/maison_icon.png',
-              width: 60,
-              height: 60,
+// État vide (aucun enfant)
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset(
+            'assets/images/Icone_Recaptitulatif.png',
+            width: 80,
+            height: 80,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.summarize_outlined,
+              size: 80,
+              color: primaryBlue.withOpacity(0.4),
             ),
-            label: "Home",
           ),
-
-          // Troisième item - Ajouter enfant
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Ajout_Enfant.png',
-              width: 60,
-              height: 60,
+          SizedBox(height: 16),
+          Text(
+            'Aucun enfant prévu aujourd\'hui',
+            style: TextStyle(
+              fontSize: 18,
+              color: primaryBlue,
+              fontWeight: FontWeight.w500,
             ),
-            label: "Ajouter",
           ),
         ],
       ),
+    );
+  }
+
+// Navigation du bas
+  Widget _buildBottomNavigationBar() {
+    return BottomNavigationBar(
+      onTap: _onItemTapped,
+      backgroundColor: Colors.white,
+      selectedItemColor: primaryBlue,
+      unselectedItemColor: Colors.grey,
+      showSelectedLabels: false,
+      showUnselectedLabels: false,
+      type: BottomNavigationBarType.fixed,
+      currentIndex: _selectedIndex,
+      items: [
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/Icone_Dashboard.png',
+            width: 60,
+            height: 60,
+          ),
+          label: "Dashboard",
+        ),
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/maison_icon.png',
+            width: 60,
+            height: 60,
+          ),
+          label: "Home",
+        ),
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/Icone_Ajout_Enfant.png',
+            width: 60,
+            height: 60,
+          ),
+          label: "Ajouter",
+        ),
+      ],
     );
   }
 }

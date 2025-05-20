@@ -40,9 +40,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
   Color primaryColor =
-      Color(0xFF3D9DF2); // Utiliser la couleur bleue par défaut
-  Color secondaryColor =
-      Color(0xFFDFE9F2); // Utiliser la couleur bleu clair par défaut
+      primaryBlue; // Utiliser directement la variable déjà définie
+  Color secondaryColor = lightBlue;
 
   @override
   void initState() {
@@ -164,25 +163,26 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
   }
 
-  Future<void> _pickImage(String childId) async {
+  Future<void> _pickImage(String childId, StateSetter setStateDialog) async {
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(
-          source: ImageSource.gallery,
-          maxWidth: 1024,
-          maxHeight: 1024,
-          imageQuality: 85);
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
 
       if (image != null) {
-        setState(() {
+        setStateDialog(() {
           _pickedFile = image;
           if (kIsWeb) {
             image.readAsBytes().then((value) {
-              setState(() => _webImage = value);
+              setStateDialog(() => _webImage = value);
+              print("Image web chargée: ${value.length} bytes");
             });
           }
         });
-        await _uploadAndSaveImage(childId);
       }
     } catch (e) {
       print("Erreur lors de la sélection: $e");
@@ -191,25 +191,27 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
   }
 
-  Future<void> _pickCameraImage(String childId) async {
+  Future<void> _pickCameraImage(
+      String childId, StateSetter setStateDialog) async {
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(
-          source: ImageSource.camera,
-          maxWidth: 1024,
-          maxHeight: 1024,
-          imageQuality: 85);
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
 
       if (image != null) {
-        setState(() {
+        setStateDialog(() {
           _pickedFile = image;
           if (kIsWeb) {
             image.readAsBytes().then((value) {
-              setState(() => _webImage = value);
+              setStateDialog(() => _webImage = value);
+              print("Image web chargée: ${value.length} bytes");
             });
           }
         });
-        await _uploadAndSaveImage(childId);
       }
     } catch (e) {
       print("Erreur lors de la prise de photo: $e");
@@ -234,26 +236,44 @@ class _PhotosScreenState extends State<PhotosScreen> {
           .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       String? downloadUrl;
+
       try {
-        // Pour web
+        print("Début upload image...");
+
         if (kIsWeb && _webImage != null) {
-          await ref.putData(
-              _webImage!, SettableMetadata(contentType: 'image/jpeg'));
-        }
-        // Pour mobile
-        else {
-          await ref.putFile(File(_pickedFile!.path));
+          await ref
+              .putData(
+                _webImage!,
+                SettableMetadata(contentType: 'image/jpeg'),
+              )
+              .timeout(Duration(minutes: 2));
+        } else {
+          final file = File(_pickedFile!.path);
+          final bytes = await file.readAsBytes();
+          await ref
+              .putData(
+                bytes,
+                SettableMetadata(contentType: 'image/jpeg'),
+              )
+              .timeout(Duration(minutes: 2));
         }
 
+        print("Image uploadée avec succès");
         downloadUrl = await ref.getDownloadURL();
-      } catch (e) {
-        print("Erreur upload: $e");
-        throw e;
-      }
 
-      // Mise à jour Firestore
-      if (downloadUrl != null) {
-        await _addMediaToFirebase(childId, downloadUrl);
+        // Mise à jour Firestore
+        if (downloadUrl != null) {
+          await _addMediaToFirebase(childId, downloadUrl);
+        }
+      } catch (e) {
+        print("Erreur détaillée: $e");
+
+        if (e is FirebaseException) {
+          print("Code d'erreur Firebase: ${e.code}");
+          print("Message Firebase: ${e.message}");
+        }
+
+        rethrow;
       }
     } catch (e) {
       print("Erreur globale: $e");
@@ -275,6 +295,16 @@ class _PhotosScreenState extends State<PhotosScreen> {
     String? errorMessage;
     String localMediaTime = _mediaTime;
     bool showPhotoWarning = enfant['photosAllowed'] == false;
+    bool showPreview = false;
+    Uint8List? localWebImage;
+    XFile? localPickedFile;
+
+    // Reset des valeurs globales
+    _pickedFile = null;
+    _webImage = null;
+
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
 
     showDialog(
       context: context,
@@ -286,220 +316,475 @@ class _PhotosScreenState extends State<PhotosScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Container(
-                padding: EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: SingleChildScrollView(
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        "Ajouter une photo pour ${enfant['prenom']}",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      // Avertissement si autorisation refusée
-                      if (showPhotoWarning)
-                        Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.all(12),
-                          margin: EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orange.shade300),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.warning_amber_rounded,
-                                    color: Colors.orange.shade800,
-                                    size: 24,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Attention",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Colors.orange.shade800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                "Lors de l'inscription de ${enfant['prenom']}, l'autorisation pour les photos n'a pas été donnée.",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.orange.shade900,
-                                ),
-                              ),
+                      // En-tête avec dégradé
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
                             ],
                           ),
-                        ),
-                      Center(
-                        child: Text(
-                          "Heure de la photo",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
                           ),
                         ),
-                      ),
-                      SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          DatePicker.showTimePicker(
-                            context,
-                            showSecondsColumn: false,
-                            showTitleActions: true,
-                            onConfirm: (date) {
-                              setState(() {
-                                localMediaTime =
-                                    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                errorMessage = null;
-                              });
-                            },
-                            currentTime: DateTime.now(),
-                            locale: LocaleType.fr,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: secondaryColor,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: Size(double.infinity, 50),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isTabletDevice ? 20 : 16,
                         ),
-                        child: Text(
-                          localMediaTime.isEmpty
-                              ? 'Choisir l\'heure'
-                              : localMediaTime,
-                          style: TextStyle(fontSize: 18, color: primaryBlue),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Row(
                           children: [
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                if (localMediaTime.isEmpty) {
-                                  setState(() {
-                                    errorMessage =
-                                        'Veuillez sélectionner une heure';
-                                  });
-                                  return;
-                                }
-                                _mediaTime = localMediaTime;
-                                Navigator.of(context).pop();
-                                _pickCameraImage(childId);
-                              },
-                              icon: Icon(Icons.camera_alt),
-                              label: Text('Prendre une photo'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryBlue,
-                                foregroundColor: Colors.white,
-                                minimumSize: Size(250, 50),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                            Container(
+                              padding: EdgeInsets.all(isTabletDevice ? 12 : 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.photo_camera,
+                                color: Colors.white,
+                                size: isTabletDevice ? 30 : 24,
                               ),
                             ),
-                            SizedBox(height: 10),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                if (localMediaTime.isEmpty) {
-                                  setState(() {
-                                    errorMessage =
-                                        'Veuillez sélectionner une heure';
-                                  });
-                                  return;
-                                }
-                                _mediaTime = localMediaTime;
-                                Navigator.of(context).pop();
-                                _pickImage(childId);
-                              },
-                              icon: Icon(Icons.photo_library),
-                              label: Text('Galerie'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryBlue,
-                                foregroundColor: Colors.white,
-                                minimumSize: Size(250, 50),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Ajouter une photo pour ${enfant['prenom']}",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 22 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  if (isTabletDevice) SizedBox(height: 4),
+                                  if (isTabletDevice)
+                                    Text(
+                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withOpacity(0.85),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                      if (errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Text(
-                              errorMessage!,
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      SizedBox(height: 20),
-                      Container(
-                        width: double.infinity,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.of(context).pop();
-                            },
-                            borderRadius: BorderRadius.only(
-                              bottomLeft: Radius.circular(24),
-                              bottomRight: Radius.circular(24),
-                            ),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "ANNULER",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade600,
+
+                      // Contenu du formulaire avec padding
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Avertissement si autorisation refusée
+                            if (showPhotoWarning)
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.all(12),
+                                margin: EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.orange.shade300),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Colors.orange.shade800,
+                                          size: 24,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          "Attention",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: Colors.orange.shade800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      "Lors de l'inscription de ${enfant['prenom']}, l'autorisation pour les photos n'a pas été donnée.",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.orange.shade900,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+
+                            // Affichage de l'aperçu de la photo si disponible
+                            if (_pickedFile != null) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.all(16),
+                                margin: EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Aperçu de la photo",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      height: 200,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: kIsWeb
+                                          ? _webImage != null
+                                              ? ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  child: Image.memory(
+                                                    _webImage!,
+                                                    fit: BoxFit.contain,
+                                                  ),
+                                                )
+                                              : Center(
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                                Color>(
+                                                            primaryColor),
+                                                  ),
+                                                )
+                                          : ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: Image.file(
+                                                File(_pickedFile!.path),
+                                                fit: BoxFit.contain,
+                                              ),
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Heure de la photo
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Heure de la photo",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () {
+                                      DatePicker.showTimePicker(context,
+                                          showSecondsColumn: false,
+                                          showTitleActions: true,
+                                          onConfirm: (date) {
+                                        setState(() {
+                                          localMediaTime =
+                                              '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                          errorMessage = null;
+                                        });
+                                      },
+                                          currentTime: DateTime.now(),
+                                          locale: LocaleType.fr);
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: localMediaTime.isEmpty
+                                              ? Colors.transparent
+                                              : primaryColor.withOpacity(0.5),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            localMediaTime.isEmpty
+                                                ? 'Choisir l\'heure'
+                                                : localMediaTime,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localMediaTime.isEmpty
+                                                  ? Colors.grey.shade600
+                                                  : primaryColor,
+                                              fontWeight: localMediaTime.isEmpty
+                                                  ? FontWeight.normal
+                                                  : FontWeight.w600,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            color:
+                                                primaryColor.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+
+                            // Options de choix (Appareil photo ou Galerie) - seulement si pas d'aperçu
+                            if (_pickedFile == null)
+                              Container(
+                                margin: EdgeInsets.only(
+                                    bottom: isTabletDevice ? 24 : 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Source de la photo",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              if (localMediaTime.isEmpty) {
+                                                setState(() {
+                                                  errorMessage =
+                                                      'Veuillez sélectionner une heure';
+                                                });
+                                                return;
+                                              }
+                                              _pickCameraImage(
+                                                  enfant['id'], setState);
+                                            },
+                                            icon: Icon(Icons.camera_alt),
+                                            label: Text('Appareil photo'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: primaryColor,
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical:
+                                                    isTabletDevice ? 16 : 12,
+                                                horizontal: 16,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              if (localMediaTime.isEmpty) {
+                                                setState(() {
+                                                  errorMessage =
+                                                      'Veuillez sélectionner une heure';
+                                                });
+                                                return;
+                                              }
+                                              _pickImage(
+                                                  enfant['id'], setState);
+                                            },
+                                            icon: Icon(Icons.photo_library),
+                                            label: Text('Galerie'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  primaryColor.withOpacity(0.8),
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical:
+                                                    isTabletDevice ? 16 : 12,
+                                                horizontal: 16,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            // Message d'erreur si présent
+                            if (errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border:
+                                        Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: isTabletDevice ? 15 : 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+
+                            // Boutons d'action
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () {
+                                    _pickedFile = null;
+                                    _webImage = null;
+                                    Navigator.of(context).pop();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+
+                                // Bouton Confirmer - visible seulement quand une photo est sélectionnée
+                                if (_pickedFile != null)
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      if (localMediaTime.isEmpty) {
+                                        setState(() {
+                                          errorMessage =
+                                              'Veuillez sélectionner une heure';
+                                        });
+                                        return;
+                                      }
+
+                                      _mediaTime = localMediaTime;
+                                      Navigator.of(context).pop();
+
+                                      try {
+                                        print(
+                                            "Début de l'upload après confirmation");
+                                        // Faire l'upload seulement après confirmation
+                                        await _uploadAndSaveImage(childId);
+                                        print("Upload terminé avec succès");
+                                      } catch (e) {
+                                        print(
+                                            "Erreur capturée lors de l'upload: $e");
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                      elevation: 2,
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: isTabletDevice ? 32 : 24,
+                                          vertical: isTabletDevice ? 16 : 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "CONFIRMER",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -546,135 +831,182 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   void _showMediaDetailsPopup(Map<String, dynamic> mediaData) {
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal:
+                isTabletDevice ? MediaQuery.of(context).size.width * 0.25 : 20,
+            vertical: 20,
           ),
           child: Container(
             width: double.infinity,
+            constraints: BoxConstraints(
+              maxWidth: 500,
+              minWidth: 250,
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // En-tête avec dégradé
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        primaryBlue,
-                        primaryBlue.withOpacity(0.85),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
-                  padding: EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.photo,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                      SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Photo de ${mediaData['heure']}",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            DateFormat('dd MMMM yyyy', 'fr_FR')
-                                .format(mediaData['date'].toDate()),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.all(24),
-                  child: Image.network(
-                    mediaData['url'],
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(primaryBlue),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.broken_image, size: 64, color: primaryRed),
-                          SizedBox(height: 8),
-                          Text('Erreur de chargement de l\'image'),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(24),
-                        bottomRight: Radius.circular(24),
-                      ),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(24),
-                            bottomRight: Radius.circular(24),
-                          ),
-                        ),
-                        child: Text(
-                          "FERMER",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: primaryBlue,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
                 ),
               ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // En-tête avec dégradé
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          primaryColor,
+                          primaryColor.withOpacity(0.85),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.photo,
+                            color: Colors.white,
+                            size: isTabletDevice ? 30 : 24,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Photo de ${mediaData['heure']}",
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 22 : 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                DateFormat('dd MMMM yyyy', 'fr_FR')
+                                    .format(mediaData['date'].toDate())
+                                    .toLowerCase(),
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 16 : 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Contenu - Image
+                  Padding(
+                    padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              mediaData['url'],
+                              fit: BoxFit.contain,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        primaryColor),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.broken_image,
+                                        size: 64, color: primaryRed),
+                                    SizedBox(height: 8),
+                                    Text('Erreur de chargement de l\'image'),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+
+                        // Bouton Fermer
+                        SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.grey.shade100,
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              "FERMER",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 16 : 14,
+                                fontWeight: FontWeight.w600,
+                                color: primaryColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -706,7 +1038,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    String genre = enfant['genre']?.toString() ?? 'Garçon';
+    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -715,7 +1048,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: Offset(0, 4),
           ),
@@ -723,12 +1056,11 @@ class _PhotosScreenState extends State<PhotosScreen> {
       ),
       child: Column(
         children: [
-          // En-tête avec photo et nom
           Padding(
             padding: EdgeInsets.all(12),
             child: Row(
               children: [
-                // Photo de l'enfant avec dégradé selon le genre
+                // Utilisation de l'avatar avec dégradé comme dans HomeScreen
                 Container(
                   width: 60,
                   height: 60,
@@ -736,50 +1068,73 @@ class _PhotosScreenState extends State<PhotosScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [avatarColor.withOpacity(0.7), avatarColor],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        offset: Offset(0, 3),
                       ),
                     ],
                   ),
                   child: Center(
-                    child: enfant['photoUrl'] != null
+                    child: enfant['photoUrl'] != null &&
+                            enfant['photoUrl'].isNotEmpty
                         ? ClipOval(
                             child: Image.network(
                               enfant['photoUrl'],
-                              width: 56,
-                              height: 56,
+                              width: 55,
+                              height: 55,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
-                                  _buildFallbackAvatar(enfant['prenom']),
+                                  Text(
+                                enfant['prenom'][0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           )
-                        : _buildFallbackAvatar(enfant['prenom']),
+                        : Text(
+                            enfant['prenom'][0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
                 SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.add_circle, color: primaryBlue, size: 30),
+                  icon: Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.add, color: primaryColor, size: 24),
+                  ),
                   onPressed: () => _showAddMediaPopup(enfant['id']),
-                  tooltip: 'Ajouter une photo',
                 ),
               ],
             ),
@@ -810,108 +1165,87 @@ class _PhotosScreenState extends State<PhotosScreen> {
             builder: (context, snapshot) {
               if (!snapshot.hasData) return Container();
 
-              if (snapshot.data!.docs.isEmpty) {
+              final medias = snapshot.data!.docs;
+
+              if (medias.isEmpty) {
                 return Container(
-                  padding: EdgeInsets.all(12),
-                  alignment: Alignment.center,
+                  padding: EdgeInsets.all(16),
                   child: Text(
                     "Aucune photo enregistrée aujourd'hui",
                     style: TextStyle(
-                      fontSize: 14,
-                      fontStyle: FontStyle.italic,
                       color: Colors.grey.shade600,
+                      fontStyle: FontStyle.italic,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 );
               }
 
-              return Container(
-                decoration: BoxDecoration(
-                  color: lightBlue.withOpacity(0.3),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
-                  ),
-                ),
-                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.only(left: 8, top: 4, bottom: 8),
-                      child: Text(
-                        "Photos d'aujourd'hui",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: primaryBlue,
-                        ),
+              return ListView.separated(
+                physics: NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                itemCount: medias.length,
+                separatorBuilder: (context, index) => SizedBox(height: 8),
+                itemBuilder: (context, idx) {
+                  final mediaData = medias[idx].data() as Map<String, dynamic>;
+                  return GestureDetector(
+                    onTap: () => _showMediaDetailsPopup(mediaData),
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: primaryColor.withOpacity(0.1)),
                       ),
-                    ),
-                    Column(
-                      children: snapshot.data!.docs.map((doc) {
-                        final mediaData = doc.data() as Map<String, dynamic>;
-                        return GestureDetector(
-                          onTap: () => _showMediaDetailsPopup(mediaData),
-                          child: Container(
-                            margin: EdgeInsets.only(bottom: 8),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                              color: primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Row(
+                            child: Icon(
+                              Icons.photo,
+                              color: primaryColor,
+                              size: 20,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: primaryBlue.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.photo,
-                                    color: primaryBlue,
-                                    size: 18,
+                                Text(
+                                  mediaData['heure'],
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "${mediaData['heure']} - Photo",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ],
+                                Text(
+                                  mediaData['type'] ?? "Photo",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
                                   ),
-                                ),
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.grey.shade400,
-                                  size: 20,
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }).toList(),
+                          Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey.shade400,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -933,7 +1267,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
             errorBuilder: (context, error, stackTrace) => Icon(
               Icons.photo_camera,
               size: 80,
-              color: primaryBlue.withOpacity(0.4),
+              color: primaryColor.withOpacity(0.4),
             ),
           ),
           SizedBox(height: 16),
@@ -941,7 +1275,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
             'Aucun enfant prévu aujourd\'hui',
             style: TextStyle(
               fontSize: 18,
-              color: primaryBlue,
+              color: primaryColor,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1040,85 +1374,115 @@ class _PhotosScreenState extends State<PhotosScreen> {
 // Nouvelle carte enfant optimisée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? 'Garçon';
+    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
             offset: Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          // En-tête avec photo et nom
-          Padding(
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [avatarColor, avatarColor.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                // Photo de l'enfant avec dégradé selon le genre
+                // Avatar avec photo de l'enfant
                 Container(
                   width: 70,
                   height: 70,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
-                    ),
+                    color: avatarColor.withOpacity(0.8),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: Center(
-                    child: enfant['photoUrl'] != null
-                        ? ClipOval(
-                            child: Image.network(
-                              enfant['photoUrl'],
-                              width: 66,
-                              height: 66,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildFallbackAvatarForTablet(
-                                      enfant['prenom']),
+                  child: ClipOval(
+                    child: enfant['photoUrl'] != null &&
+                            enfant['photoUrl'].isNotEmpty
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            width: 65,
+                            height: 65,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Text(
+                              enfant['prenom'][0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           )
-                        : _buildFallbackAvatarForTablet(enfant['prenom']),
+                        : Text(
+                            enfant['prenom'][0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
-                SizedBox(width: 20),
+                SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     enfant['prenom'],
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                      color: Colors.white,
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.add_circle, color: primaryBlue, size: 36),
-                  onPressed: () => _showAddMediaPopup(enfant['id']),
-                  tooltip: 'Ajouter une photo',
+                // Bouton d'ajout de photo
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: avatarColor, size: 24),
+                      onPressed: () => _showAddMediaPopup(enfant['id']),
+                      tooltip: "Ajouter une photo",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+
           // Liste des photos
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -1146,112 +1510,102 @@ class _PhotosScreenState extends State<PhotosScreen> {
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return Container();
 
-                if (snapshot.data!.docs.isEmpty) {
-                  return Container(
+                final medias = snapshot.data!.docs;
+
+                if (medias.isEmpty) {
+                  return Padding(
                     padding: EdgeInsets.all(16),
-                    alignment: Alignment.center,
-                    child: Text(
-                      "Aucune photo enregistrée aujourd'hui",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey.shade600,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.photo_camera,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            "Aucune photo enregistrée aujourd'hui",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   );
                 }
 
-                return Container(
-                  decoration: BoxDecoration(
-                    color: lightBlue.withOpacity(0.3),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    ),
-                  ),
-                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(left: 8, top: 4, bottom: 12),
-                        child: Text(
-                          "Photos d'aujourd'hui",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: primaryBlue,
-                          ),
+                return ListView.separated(
+                  physics: BouncingScrollPhysics(),
+                  shrinkWrap: true,
+                  padding: EdgeInsets.all(16),
+                  itemCount: medias.length,
+                  separatorBuilder: (context, index) => SizedBox(height: 10),
+                  itemBuilder: (context, idx) {
+                    final doc = medias[idx];
+                    final mediaData = doc.data() as Map<String, dynamic>;
+                    return GestureDetector(
+                      onTap: () => _showMediaDetailsPopup(mediaData),
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: lightBlue),
                         ),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          physics: BouncingScrollPhysics(),
-                          children: snapshot.data!.docs.map((doc) {
-                            final mediaData =
-                                doc.data() as Map<String, dynamic>;
-                            return GestureDetector(
-                              onTap: () => _showMediaDetailsPopup(mediaData),
-                              child: Container(
-                                margin: EdgeInsets.only(bottom: 10),
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 6,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: primaryBlue.withOpacity(0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.photo,
-                                        color: primaryBlue,
-                                        size: 22,
-                                      ),
-                                    ),
-                                    SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "${mediaData['heure']} - Photo",
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: Colors.grey.shade400,
-                                      size: 24,
-                                    ),
-                                  ],
-                                ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                            );
-                          }).toList(),
+                              child: Icon(
+                                Icons.photo,
+                                color: primaryColor,
+                                size: 22,
+                              ),
+                            ),
+                            SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    mediaData['heure'],
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  Text(
+                                    mediaData['type'] ?? "Photo",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey.shade400,
+                              size: 24,
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),
@@ -1285,6 +1639,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   // AppBar personnalisé avec gradient
   Widget _buildAppBar(BuildContext context) {
+    // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
 
     return Container(
@@ -1312,6 +1667,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       ),
       child: SafeArea(
         child: Padding(
+          // Plus de padding vertical pour iPad
           padding: EdgeInsets.fromLTRB(
               16, isTabletDevice ? 24 : 16, 16, isTabletDevice ? 28 : 20),
           child: Column(
@@ -1333,8 +1689,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
                   ),
                   Container(
                     padding: EdgeInsets.symmetric(
-                        horizontal: isTabletDevice ? 16 : 12,
-                        vertical: isTabletDevice ? 8 : 6),
+                      horizontal: isTabletDevice ? 16 : 12,
+                      vertical: isTabletDevice ? 8 : 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -1354,8 +1711,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
               // Icône et titre de la page
               Container(
                 padding: EdgeInsets.symmetric(
-                    horizontal: isTabletDevice ? 22 : 16,
-                    vertical: isTabletDevice ? 12 : 8),
+                  horizontal: isTabletDevice ? 22 : 16,
+                  vertical: isTabletDevice ? 12 : 8,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(
                       color: Colors.white, width: isTabletDevice ? 2.5 : 2),

@@ -8,6 +8,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
+import '../utils/stock_badge_util.dart';
+import '../utils/message_badge_util.dart';
 
 class ParentHomeScreen extends StatefulWidget {
   const ParentHomeScreen({Key? key}) : super(key: key);
@@ -80,51 +82,121 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _checkMessageBadge();
   }
 
+  // Remplacer la méthode _checkMessageBadge actuelle par celle-ci
   Future<void> _checkMessageBadge() async {
     try {
-      // Simule la vérification des messages
-      setState(() {
-        _showMessageBadge = false; // À modifier selon la logique réelle
-      });
-      _setupMessageListener();
+      final shouldShow = await MessageBadgeUtil.shouldShowBadge();
+      if (mounted) {
+        setState(() {
+          _showMessageBadge = shouldShow;
+        });
+      }
     } catch (e) {
-      print('Erreur lors de la vérification des messages: $e');
+      print('❌ Erreur lors de la vérification des messages non lus: $e');
     }
   }
 
-  void _setupMessageListener() async {
+// Remplacer la méthode _setupMessageListener par celle-ci
+  // Conservez UNIQUEMENT cette version de la méthode et supprimez l'autre
+  // Dans le fichier parent_home_screen.dart, modifiez la méthode _setupMessageListener :
+
+  void _setupMessageListener() {
     try {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      // Écouteur pour les modifications du document utilisateur
-      final userStream = _firestore
-          .collection('users')
-          .doc(user.email?.toLowerCase())
-          .snapshots();
+      // Annuler les écouteurs précédents
+      for (var subscription in _subscriptions) {
+        subscription.cancel();
+      }
+      _subscriptions.clear();
 
-      _subscriptions.add(userStream.listen((snapshot) {
-        if (snapshot.exists) {
-          final userData = snapshot.data()!;
-          final unreadMessages = userData['unreadMessages'] ?? 0;
+      print("🎧 Configuration des écouteurs de messages pour: ${user.email}");
 
-          if (unreadMessages > 0) {
-            setState(() {
-              _showMessageBadge = true;
-            });
+      // 1. Écouter les changements dans le document utilisateur
+      final userEmail = user.email?.toLowerCase();
+      if (userEmail != null) {
+        final userDocStream =
+            _firestore.collection('users').doc(userEmail).snapshots();
+
+        _subscriptions.add(userDocStream.listen((snapshot) {
+          if (snapshot.exists) {
+            final userData = snapshot.data()!;
+            final unreadMessages = userData['unreadMessages'] ?? 0;
+
+            print(
+                "📬 Messages non lus détectés dans le document: $unreadMessages");
+
+            if (unreadMessages > 0 && mounted) {
+              setState(() {
+                _showMessageBadge = true;
+              });
+              print("🔔 Badge activé via document utilisateur!");
+            } else if (unreadMessages == 0 && _showMessageBadge && mounted) {
+              setState(() {
+                _showMessageBadge = false;
+              });
+              print("🔕 Badge de notification désactivé");
+            }
+          } else {
+            print("⚠️ Document utilisateur non trouvé pour: $userEmail");
           }
+        }, onError: (error) {
+          print("❌ Erreur dans l'écouteur de messages: $error");
+        }));
+      }
+
+      // 2. Écouter directement les nouveaux messages dans exchanges
+      if (_children.isNotEmpty) {
+        // Récupérer tous les IDs des enfants
+        final List<String> childIds =
+            _children.map((child) => child['id'] as String).toList();
+
+        if (childIds.isNotEmpty) {
+          print("🎧 Configuration de l'écouteur pour les enfants: $childIds");
+
+          final exchangesStream = _firestore
+              .collection('exchanges')
+              .where('childId', whereIn: childIds)
+              .where('nonLu', isEqualTo: true)
+              .where('senderType',
+                  isEqualTo:
+                      'staff') // Uniquement les messages de l'assistante maternelle
+              .snapshots();
+
+          _subscriptions.add(exchangesStream.listen((snapshot) {
+            final count = snapshot.docs.length;
+            print("📨 Messages non lus détectés dans exchanges: $count");
+
+            if (count > 0 && mounted) {
+              setState(() {
+                _showMessageBadge = true;
+              });
+              print("🔔 Badge activé via exchanges!");
+            }
+          }, onError: (error) {
+            print("❌ Erreur dans l'écouteur d'exchanges: $error");
+          }));
         }
-      }));
+      }
     } catch (e) {
-      print('Erreur lors de la configuration du listener de messages: $e');
+      print('❌ Erreur lors de la configuration des écouteurs: $e');
     }
   }
 
+  // Conservez UNIQUEMENT cette version de la méthode et supprimez l'autre
+
   Future<void> _checkStockBadge() async {
-    // Simule la vérification des besoins de stock
-    setState(() {
-      _showStockBadge = false; // À modifier selon la logique réelle
-    });
+    try {
+      final shouldShow = await StockBadgeUtil.shouldShowBadge();
+      if (mounted) {
+        setState(() {
+          _showStockBadge = shouldShow;
+        });
+      }
+    } catch (e) {
+      print('❌ Erreur lors de la vérification des besoins de stock: $e');
+    }
   }
 
   // Cette méthode est appelée lorsque l'état de l'application change
@@ -316,7 +388,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }
 
       // Récupérer les informations du parent
-
       final userDoc = await _firestore
           .collection('users')
           .doc(user.email?.toLowerCase())
@@ -332,6 +403,9 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         // Récupérer les enfants associés à ce parent
         final childIds = List<String>.from(userData['children'] ?? []);
         final structureId = userData['structureId'];
+
+        print("📱 Parent: $_parentFirstName, Structure: $structureId");
+        print("📱 IDs des enfants trouvés: $childIds");
 
         if (childIds.isNotEmpty && structureId != null) {
           List<Map<String, dynamic>> childrenData = [];
@@ -354,7 +428,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 'structureId': structureId,
                 'gender': data['gender'] ?? 'Non spécifié',
                 'birthdate': data['birthdate'],
+                'parentId': data['parentId'] ?? '',
               });
+              print(
+                  "📱 Enfant chargé: ${data['firstName']} (ID: ${childDoc.id})");
+            } else {
+              print("⚠️ Enfant non trouvé: $childId");
             }
           }
 
@@ -368,12 +447,19 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             }
           });
 
+          print("📱 Nombre total d'enfants chargés: ${_children.length}");
+
           // Chargement des actualités après avoir récupéré la structure
           if (structureId != null) {
             await _loadActualites(structureId);
-            print("Actualités chargées pour structureId: $structureId");
+            print("📱 Actualités chargées pour structureId: $structureId");
           }
+        } else {
+          print(
+              "⚠️ Aucun enfant trouvé pour ce parent ou structureId manquant");
         }
+      } else {
+        print("⚠️ Document utilisateur non trouvé: ${user.email}");
       }
     } catch (e) {
       print('❌ Erreur lors du chargement des données: $e');
@@ -394,6 +480,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   }
 
   Future<void> _loadChildTimeline(String childId, String structureId) async {
+    print(
+        "🔍 Chargement de la timeline pour enfant ID: $childId, structure: $structureId");
     setState(() => _loadingTimeline = true);
 
     try {
@@ -406,8 +494,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           DateTime(now.year, now.month, now.day, 23, 59, 59));
 
       print(
-          "Chargement des événements pour le ${DateFormat('dd/MM/yyyy').format(now)}");
-      print("Plage horaire: ${todayStart.toDate()} - ${todayEnd.toDate()}");
+          "📅 Chargement des événements pour le ${DateFormat('dd/MM/yyyy').format(now)}");
+      print("⏰ Plage horaire: ${todayStart.toDate()} - ${todayEnd.toDate()}");
 
       // Utiliser des StreamSubscriptions pour écouter les changements
       _disposeCurrentSubscriptions(); // Méthode pour annuler les abonnements précédents
@@ -423,9 +511,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Activités reçues: ${snapshot.docs.length}");
+        print("📝 Activités reçues: ${snapshot.docs.length}");
         _processActivitiesSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur d'activités: $error");
       }));
 
       // 2. Écouter les repas
@@ -439,9 +529,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Repas reçus: ${snapshot.docs.length}");
+        print("🍔 Repas reçus: ${snapshot.docs.length}");
         _processMealsSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de repas: $error");
       }));
 
       // 3. Écouter les siestes
@@ -455,9 +547,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Siestes reçues: ${snapshot.docs.length}");
+        print("😴 Siestes reçues: ${snapshot.docs.length}");
         _processSleepsSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de siestes: $error");
       }));
 
       // 4. Écouter les changes
@@ -471,9 +565,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Changes reçus: ${snapshot.docs.length}");
+        print("👶 Changes reçus: ${snapshot.docs.length}");
         _processChangesSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de changes: $error");
       }));
 
       // 5. Écouter les soins de santé
@@ -487,9 +583,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Soins santé reçus: ${snapshot.docs.length}");
+        print("🏥 Soins santé reçus: ${snapshot.docs.length}");
         _processHealthSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de santé: $error");
       }));
 
       // 6. Écouter les photos
@@ -503,9 +601,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Photos reçues: ${snapshot.docs.length}");
+        print("📷 Photos reçues: ${snapshot.docs.length}");
         _processPhotosSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de photos: $error");
       }));
 
       // 7. Écouter les horaires
@@ -517,9 +617,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(now))
           .snapshots()
           .listen((snapshot) {
-        print("Horaires reçus: ${snapshot.docs.length}");
+        print("⏱️ Horaires reçus: ${snapshot.docs.length}");
         _processHoursSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur d'horaires: $error");
       }));
 
       // 8. Écouter les transmissions
@@ -533,9 +635,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .where('date', isLessThanOrEqualTo: todayEnd)
           .snapshots()
           .listen((snapshot) {
-        print("Transmissions reçues: ${snapshot.docs.length}");
+        print("📣 Transmissions reçues: ${snapshot.docs.length}");
         _processTransmissionsSnapshot(snapshot);
         _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur de transmissions: $error");
       }));
 
       setState(() => _loadingTimeline = false);
@@ -816,7 +920,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   void _updateTimelineEvents() {
     // Ajouter des logs pour le débogage
     print(
-        "Mise à jour de la timeline avec ${_eventsMap.values.expand((e) => e).length} événements");
+        "🔄 Mise à jour de la timeline avec ${_eventsMap.values.expand((e) => e).length} événements");
 
     // Combiner tous les événements
     List<Map<String, dynamic>> allEvents = [];
@@ -827,14 +931,41 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
     // Trier tous les événements par heure
     allEvents.sort((a, b) {
-      final aTime = a['time'] is Timestamp
-          ? (a['time'] as Timestamp).toDate()
-          : a['time'];
-      final bTime = b['time'] is Timestamp
-          ? (b['time'] as Timestamp).toDate()
-          : b['time'];
-      return aTime
-          .compareTo(bTime); // Ordre chronologique (plus ancien d'abord)
+      dynamic aTime = a['time'];
+      dynamic bTime = b['time'];
+
+      // Convertir les Timestamp en DateTime si nécessaire
+      if (aTime is Timestamp) {
+        aTime = aTime.toDate();
+      }
+      if (bTime is Timestamp) {
+        bTime = bTime.toDate();
+      }
+
+      // Convertir les chaînes d'heures en DateTime pour comparaison si nécessaire
+      if (aTime is String && aTime.contains(':')) {
+        final parts = aTime.split(':');
+        if (parts.length == 2) {
+          final now = DateTime.now();
+          aTime = DateTime(now.year, now.month, now.day,
+              int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+        }
+      }
+      if (bTime is String && bTime.contains(':')) {
+        final parts = bTime.split(':');
+        if (parts.length == 2) {
+          final now = DateTime.now();
+          bTime = DateTime(now.year, now.month, now.day,
+              int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+        }
+      }
+
+      try {
+        return aTime.compareTo(bTime); // Ordre chronologique
+      } catch (e) {
+        print("❌ Erreur lors du tri: $e pour $aTime et $bTime");
+        return 0; // En cas d'erreur, ne pas modifier l'ordre
+      }
     });
 
     // Créer une nouvelle liste pour forcer le rafraîchissement
@@ -845,10 +976,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       setState(() {
         _timelineEvents = newTimelineEvents;
       });
-      print("Timeline mise à jour avec ${_timelineEvents.length} événements");
+      print("✅ Timeline mise à jour avec ${_timelineEvents.length} événements");
     } else {
       print(
-          "Pas de changement dans la timeline, rafraîchissement non nécessaire");
+          "ℹ️ Pas de changement dans la timeline, rafraîchissement non nécessaire");
     }
   }
 

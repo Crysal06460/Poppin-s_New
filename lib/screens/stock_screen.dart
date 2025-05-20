@@ -13,6 +13,10 @@ class StockScreen extends StatefulWidget {
   _StockScreenState createState() => _StockScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _StockScreenState extends State<StockScreen> {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
@@ -575,8 +579,12 @@ class _StockScreenState extends State<StockScreen> {
     // État de l'expansion des catégories pour ce dialogue
     Map<String, bool> localExpandedCategories = Map.from(expandedCategories);
 
+    // Déterminer si nous sommes sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -584,41 +592,109 @@ class _StockScreenState extends State<StockScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Container(
-                width: double.maxFinite,
-                padding: EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Besoins en stock pour ${enfant['prenom']}",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
+              // Largeur adaptée pour iPad
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      "Cochez ce qui va bientôt manquer :",
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                    SizedBox(height: 10),
-
-                    // Container avec défilement pour les catégories et items
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // En-tête avec dégradé
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isTabletDevice ? 20 : 16,
+                        ),
+                        child: Row(
                           children: [
-                            // Pour chaque catégorie, créer un ExpansionPanel
+                            Container(
+                              padding: EdgeInsets.all(isTabletDevice ? 12 : 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.white,
+                                size: isTabletDevice ? 30 : 24,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Besoins en stock pour ${enfant['prenom']}",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 22 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  if (isTabletDevice) SizedBox(height: 4),
+                                  if (isTabletDevice)
+                                    Text(
+                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withOpacity(0.85),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Contenu avec les catégories
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Cochez ce qui va bientôt manquer :",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 18 : 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            SizedBox(height: 16),
+
+                            // Liste des catégories
                             ...stockCategories.entries.map((entry) {
                               final category = entry.key;
                               final items = entry.value;
@@ -626,37 +702,85 @@ class _StockScreenState extends State<StockScreen> {
                               // Ne pas afficher si la catégorie est vide
                               if (items.isEmpty &&
                                   category == 'Personnalisés') {
-                                return Container(); // Widget vide
+                                return Container();
                               }
 
-                              return Card(
-                                elevation: 1,
-                                margin: EdgeInsets.symmetric(vertical: 4),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: ExpansionTile(
-                                  initiallyExpanded:
-                                      localExpandedCategories[category] ??
-                                          false,
-                                  onExpansionChanged: (expanded) {
-                                    setState(() {
-                                      localExpandedCategories[category] =
-                                          expanded;
-                                    });
-                                  },
-                                  title: Text(
-                                    category,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: primaryColor,
-                                    ),
-                                  ),
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Afficher les éléments de la catégorie
-                                    ...items
-                                        .map((item) => CheckboxListTile(
-                                              title: Text(item),
+                                    // Titre de la catégorie (cliquable pour développer/réduire)
+                                    InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          localExpandedCategories[category] =
+                                              !(localExpandedCategories[
+                                                      category] ??
+                                                  false);
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 16,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: lightBlue.withOpacity(0.5),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color:
+                                                primaryColor.withOpacity(0.2),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                category,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 18 : 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: primaryColor,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              localExpandedCategories[
+                                                          category] ??
+                                                      false
+                                                  ? Icons.keyboard_arrow_up
+                                                  : Icons.keyboard_arrow_down,
+                                              color: primaryColor,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Éléments de la catégorie (si développée)
+                                    if (localExpandedCategories[category] ??
+                                        false)
+                                      Container(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 8),
+                                        child: ListView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              NeverScrollableScrollPhysics(),
+                                          itemCount: items.length,
+                                          itemBuilder: (context, index) {
+                                            final item = items[index];
+                                            return CheckboxListTile(
+                                              title: Text(
+                                                item,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
+                                                ),
+                                              ),
                                               value:
                                                   selectedItems[item] ?? false,
                                               onChanged: (bool? value) {
@@ -666,80 +790,114 @@ class _StockScreenState extends State<StockScreen> {
                                                 });
                                               },
                                               activeColor: primaryColor,
-                                              dense: true,
-                                            ))
-                                        .toList(),
+                                              checkColor: Colors.white,
+                                              controlAffinity:
+                                                  ListTileControlAffinity
+                                                      .trailing,
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                      horizontal: 8),
+                                            );
+                                          },
+                                        ),
+                                      ),
 
-                                    // Bouton pour ajouter un produit personnalisé
-                                    if (category == 'Personnalisés')
-                                      ListTile(
-                                        leading: Icon(Icons.add_circle_outline,
-                                            color: primaryColor),
-                                        title: Text(
-                                          'Ajouter un produit personnalisé',
-                                          style: TextStyle(
-                                            color: primaryColor,
-                                            fontWeight: FontWeight.w500,
+                                    // Bouton pour ajouter un produit personnalisé (uniquement pour la catégorie "Personnalisés")
+                                    if (category == 'Personnalisés' &&
+                                        (localExpandedCategories[category] ??
+                                            false))
+                                      Padding(
+                                        padding:
+                                            EdgeInsets.only(top: 8, left: 8),
+                                        child: TextButton.icon(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            _showAddCustomItemDialog();
+                                          },
+                                          icon: Icon(Icons.add_circle,
+                                              color: primaryColor),
+                                          label: Text(
+                                            "Ajouter un produit personnalisé",
+                                            style: TextStyle(
+                                              color: primaryColor,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize:
+                                                  isTabletDevice ? 15 : 14,
+                                            ),
+                                          ),
+                                          style: TextButton.styleFrom(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            alignment: Alignment.centerLeft,
                                           ),
                                         ),
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                          _showAddCustomItemDialog();
-                                        },
                                       ),
                                   ],
                                 ),
                               );
                             }).toList(),
+
+                            // Boutons d'action
+                            SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Bouton Annuler
+                                OutlinedButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 16,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    side:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text(
+                                    "ANNULER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+
+                                // Bouton Enregistrer
+                                ElevatedButton(
+                                  onPressed: () {
+                                    _updateStockNeeds(
+                                        enfant['id'], selectedItems);
+                                    Navigator.pop(context);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    elevation: 2,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 32 : 24,
+                                        vertical: isTabletDevice ? 16 : 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "ENREGISTRER",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                    ),
-
-                    SizedBox(height: 20),
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 10,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            "ANNULER",
-                            style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            _updateStockNeeds(enfant['id'], selectedItems);
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12), // Padding horizontal réduit
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              "ENREGISTRER",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -1021,8 +1179,248 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
+  Widget _buildTabletLayout() {
+    return GridView.builder(
+      padding: EdgeInsets.all(16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, // 2 cartes par ligne
+        childAspectRatio: 1.2, // Ajustement du ratio pour les cartes
+        crossAxisSpacing: 20, // Espace horizontal entre les cartes
+        mainAxisSpacing: 20, // Espace vertical entre les cartes
+      ),
+      itemCount: enfants.length,
+      itemBuilder: (context, index) =>
+          _buildEnfantCardForTablet(context, index),
+    );
+  }
+
+  Widget _buildEnfantCardForTablet(BuildContext context, int index) {
+    final enfant = enfants[index];
+    final stockNeeds = enfant['stockNeeds'] as Map<String, bool>;
+    final hasNeeds = stockNeeds.values.any((value) => value);
+    final isBoy = enfant['genre'] == 'Garçon';
+    final avatarColor = isBoy ? primaryBlue : primaryRed;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [avatarColor, avatarColor.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar avec photo de l'enfant
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: avatarColor.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: ClipOval(
+                    child: enfant['photoUrl'] != null &&
+                            enfant['photoUrl'].isNotEmpty
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            width: 65,
+                            height: 65,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Text(
+                              enfant['prenom'][0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            enfant['prenom'][0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    enfant['prenom'],
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                // Bouton d'ajout de besoins
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: avatarColor, size: 24),
+                      onPressed: () => _showStockPopup(enfant),
+                      tooltip: "Ajouter un besoin",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Liste des besoins en stock
+          Expanded(
+            child: hasNeeds
+                ? Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: secondaryColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Besoins actuels :",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: primaryColor,
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: stockNeeds.entries
+                                    .where((entry) => entry.value)
+                                    .map((entry) => GestureDetector(
+                                          onTap: () =>
+                                              _showRemoveStockConfirmation(
+                                            enfant['id'],
+                                            entry.key,
+                                            enfant['prenom'],
+                                          ),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: primaryColor
+                                                  .withOpacity(0.15),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color: primaryColor
+                                                    .withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  entry.key,
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: primaryColor,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 6),
+                                                Icon(
+                                                  Icons.close,
+                                                  color: primaryColor,
+                                                  size: 18,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 40,
+                          color: Colors.grey.shade400,
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          "Aucun besoin en stock",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Détection de l'iPad/tablette
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -1037,15 +1435,16 @@ class _StockScreenState extends State<StockScreen> {
                   )
                 : enfants.isEmpty
                     ? _buildEmptyState()
-                    : ListView.builder(
-                        itemCount: enfants.length,
-                        itemBuilder: _buildEnfantCard,
-                      ),
-          )
+                    : isTabletDevice
+                        ? _buildTabletLayout() // Layout adapté pour iPad
+                        : ListView.builder(
+                            itemCount: enfants.length,
+                            itemBuilder: _buildEnfantCard,
+                          ),
+          ),
         ],
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
-      // Bouton pour gérer les produits personnalisés
       floatingActionButton: FloatingActionButton(
         onPressed: _showManageCustomItemsDialog,
         backgroundColor: primaryColor,
@@ -1057,6 +1456,9 @@ class _StockScreenState extends State<StockScreen> {
 
   // AppBar personnalisé avec gradient
   Widget _buildAppBar() {
+    // Détection de la tablette
+    final bool isTabletDevice = isTablet(context);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1082,7 +1484,12 @@ class _StockScreenState extends State<StockScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          padding: EdgeInsets.fromLTRB(
+              16,
+              isTabletDevice ? 24 : 16, // Augmenté pour iPad
+              16,
+              isTabletDevice ? 28 : 20 // Augmenté pour iPad
+              ),
           child: Column(
             children: [
               // Première ligne: nom structure et date
@@ -1092,8 +1499,9 @@ class _StockScreenState extends State<StockScreen> {
                   Expanded(
                     child: Text(
                       structureName,
-                      style: const TextStyle(
-                        fontSize: 24,
+                      style: TextStyle(
+                        fontSize:
+                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -1101,8 +1509,11 @@ class _StockScreenState extends State<StockScreen> {
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal:
+                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
+                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -1110,7 +1521,8 @@ class _StockScreenState extends State<StockScreen> {
                     child: Text(
                       DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize:
+                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
                         color: Colors.white.withOpacity(0.95),
                         fontWeight: FontWeight.w500,
                       ),
@@ -1118,12 +1530,19 @@ class _StockScreenState extends State<StockScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: 15),
+              SizedBox(
+                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
               // Icône et titre de la page
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
+                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
+                ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(
+                      color: Colors.white,
+                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
+                      ),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -1131,19 +1550,22 @@ class _StockScreenState extends State<StockScreen> {
                   children: [
                     Image.asset(
                       'assets/images/Icone_Stock.png',
-                      width: 30,
-                      height: 30,
+                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
+                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.inventory_2_outlined,
-                        size: 26,
+                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(
+                        width:
+                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
                     Text(
                       'Stock',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize:
+                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),

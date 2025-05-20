@@ -50,6 +50,7 @@ import 'package:poppins_app/screens/parent_stock_screen.dart';
 import 'package:poppins_app/screens/add-mam-members.dart';
 import 'package:poppins_app/screens/register_screen.dart';
 import 'package:poppins_app/screens/pricing_screen.dart';
+import 'package:poppins_app/screens/admin_screen.dart';
 
 // Nouveaux imports pour le système d'authentification
 import 'package:poppins_app/screens/welcome_screen.dart';
@@ -151,6 +152,10 @@ final GoRouter router = GoRouter(
         final structureInfo = state.extra as Map<String, dynamic>? ?? {};
         return SubscriptionConfirmedScreen(structureInfo: structureInfo);
       },
+    ),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) => const AdminScreen(),
     ),
     // Ajout de la route pour l'écran de tarification
     GoRoute(
