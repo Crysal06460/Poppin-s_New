@@ -58,7 +58,8 @@ class MessageBadgeUtil {
               .collection('exchanges')
               .where('childId', whereIn: childIds)
               .where('senderType',
-                  isEqualTo: 'staff') // Uniquement messages de l'assistante
+                  isEqualTo:
+                      'assistante') // CORRIGÉ: 'assistante' au lieu de 'staff'
               .where('nonLu', isEqualTo: true)
               .limit(1)
               .get();

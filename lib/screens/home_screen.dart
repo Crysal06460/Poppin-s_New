@@ -1278,6 +1278,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 // Méthode améliorée pour les éléments de grille sur iPad avec dimensions relatives
+  // Méthode améliorée pour les éléments de grille sur iPad avec dimensions relatives
+  // Dans home_screen.dart, remplacez ENTIÈREMENT cette méthode _buildTabletGridItem :
+
   Widget _buildTabletGridItem(BuildContext context, String route, String name,
       String imagePath, double maxWidth) {
     // Augmentation de la taille des icônes
@@ -1315,7 +1318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                  // Badge de notification pour les échanges
+                  // Badge de notification pour les échanges - CORRIGÉ
                   if (isExchangeIcon)
                     Positioned(
                       top: 0,
@@ -1323,24 +1326,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: FutureBuilder<List<String>>(
                         future: _getAssignedChildrenIds(),
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData) return SizedBox.shrink();
-
-                          final List<String> assignedChildIds =
-                              snapshot.data ?? [];
-
-                          if (assignedChildIds.isEmpty)
+                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
                             return SizedBox.shrink();
+                          }
+
+                          final List<String> assignedChildIds = snapshot.data!;
 
                           return StreamBuilder<QuerySnapshot>(
+                            // 🔥 CORRECTION CRITIQUE : Écouter les messages des PARENTS 🔥
                             stream: FirebaseFirestore.instance
                                 .collection('exchanges')
                                 .where('childId', whereIn: assignedChildIds)
                                 .where('nonLu', isEqualTo: true)
-                                .where('senderType', isEqualTo: 'parent')
+                                .where('senderType',
+                                    isEqualTo: 'parent') // ← AJOUTÉ !
                                 .snapshots(),
                             builder: (context, snapshot) {
                               final int nonLuCount =
                                   snapshot.data?.docs.length ?? 0;
+                              print(
+                                  "🔔 Badge Home Tablet - Messages non lus des PARENTS: $nonLuCount");
+
                               if (nonLuCount > 0) {
                                 return Container(
                                   padding: EdgeInsets.all(maxWidth * 0.01),
@@ -1392,6 +1398,216 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  // Dans home_screen.dart, remplacez la méthode _getAssignedChildrenIds() par cette version UNIVERSELLE :
+
+  Future<List<String>> _getAssignedChildrenIds() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print("❌ DEBUG: Utilisateur non connecté");
+        return [];
+      }
+
+      final currentUserEmail = user.email?.toLowerCase() ?? '';
+      print("🔍 DEBUG: Email utilisateur connecté: $currentUserEmail");
+      print("🔍 DEBUG: UID utilisateur: ${user.uid}");
+
+      // Vérifier si le document utilisateur existe
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (!userDoc.exists) {
+        print("⚠️ DEBUG: Document utilisateur non trouvé, essai par UID...");
+
+        // Recherche par UID dans les données
+        final queryByUid = await FirebaseFirestore.instance
+            .collection('users')
+            .where('uid', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+
+        if (queryByUid.docs.isNotEmpty) {
+          userDoc = queryByUid.docs.first;
+          print("✅ DEBUG: Document utilisateur trouvé par UID: ${userDoc.id}");
+        } else {
+          print(
+              "🔧 DEBUG: Aucun document trouvé, DÉTECTION AUTOMATIQUE du type d'utilisateur...");
+
+          // 🔥 DÉTECTION AUTOMATIQUE DU TYPE D'UTILISATEUR 🔥
+
+          // 1. Vérifier si c'est le propriétaire d'une structure
+          final structureQuery = await FirebaseFirestore.instance
+              .collection('structures')
+              .where('email', isEqualTo: currentUserEmail)
+              .get();
+
+          String role = 'unknown';
+          String structureId = user.uid;
+          String firstName =
+              user.displayName?.split(' ').first ?? 'Utilisateur';
+          String lastName = user.displayName?.split(' ').last ?? '';
+
+          if (structureQuery.docs.isNotEmpty) {
+            // C'est le propriétaire d'une structure
+            final structureData = structureQuery.docs.first.data();
+            final structureType =
+                structureData['structureType'] ?? 'AssistanteMaternelle';
+
+            if (structureType == 'MAM') {
+              role = 'mamFounder'; // Fondateur MAM
+            } else {
+              role =
+                  'assistanteMaternelle'; // Assistante maternelle individuelle
+            }
+
+            structureId = structureQuery.docs.first.id;
+            firstName = structureData['firstName'] ?? firstName;
+            lastName = structureData['lastName'] ?? lastName;
+
+            print("✅ DEBUG: Détecté comme propriétaire de structure ($role)");
+          } else {
+            // 2. Vérifier si c'est un membre MAM
+            final mamMemberQuery = await FirebaseFirestore.instance
+                .collectionGroup('members')
+                .where('email', isEqualTo: currentUserEmail)
+                .get();
+
+            if (mamMemberQuery.docs.isNotEmpty) {
+              role = 'mamMember';
+              final memberData = mamMemberQuery.docs.first.data();
+              structureId =
+                  mamMemberQuery.docs.first.reference.parent.parent!.id;
+              firstName = memberData['firstName'] ?? firstName;
+              lastName = memberData['lastName'] ?? lastName;
+
+              print("✅ DEBUG: Détecté comme membre MAM");
+            } else {
+              // 3. Vérifier si c'est un parent
+              final parentQuery = await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('email', isEqualTo: currentUserEmail)
+                  .where('role', isEqualTo: 'parent')
+                  .get();
+
+              if (parentQuery.docs.isEmpty) {
+                // Rechercher dans toutes les collections users par children array
+                final allUsersQuery =
+                    await FirebaseFirestore.instance.collection('users').get();
+
+                for (var doc in allUsersQuery.docs) {
+                  final data = doc.data();
+                  if (data['email']?.toString().toLowerCase() ==
+                          currentUserEmail ||
+                      doc.id.toLowerCase() == currentUserEmail) {
+                    role = data['role'] ?? 'parent';
+                    structureId = data['structureId'] ?? structureId;
+                    firstName = data['firstName'] ?? firstName;
+                    lastName = data['lastName'] ?? lastName;
+                    break;
+                  }
+                }
+
+                if (role == 'unknown') {
+                  role = 'parent'; // Par défaut
+                  print(
+                      "⚠️ DEBUG: Type non détecté, défini comme parent par défaut");
+                }
+              }
+            }
+          }
+
+          print(
+              "🔧 DEBUG: Création du document avec role=$role, structureId=$structureId");
+
+          // Créer le document utilisateur avec les données détectées
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserEmail)
+              .set({
+            'uid': user.uid,
+            'email': currentUserEmail,
+            'role': role,
+            'structureId': structureId,
+            'firstName': firstName,
+            'lastName': lastName,
+            'unreadMessages': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          print("✅ DEBUG: Document utilisateur créé avec succès!");
+
+          // Récupérer le document nouvellement créé
+          userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserEmail)
+              .get();
+        }
+      } else {
+        print("✅ DEBUG: Document utilisateur trouvé par email");
+      }
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final bool isMamMember = userData['role'] == 'mamMember';
+      final String structureId = userData['structureId'] ?? user.uid;
+
+      print("🔍 DEBUG: role=${userData['role']}, structureId=$structureId");
+
+      // Si c'est un parent, pas besoin de chercher des enfants assignés
+      if (userData['role'] == 'parent') {
+        print(
+            "👪 DEBUG: Utilisateur parent - pas de notification badge côté assistante");
+        return [];
+      }
+
+      // Récupérer les enfants (pour assistantes maternelles et membres MAM)
+      QuerySnapshot childrenSnapshot;
+
+      if (isMamMember) {
+        print("🔍 DEBUG: Recherche enfants assignés à $currentUserEmail");
+
+        childrenSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .where('assignedMemberEmail', isEqualTo: currentUserEmail)
+            .get();
+      } else {
+        print("🔍 DEBUG: Recherche TOUS les enfants (assistante individuelle)");
+
+        childrenSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .get();
+      }
+
+      // Extraire les IDs des enfants
+      final List<String> childIds =
+          childrenSnapshot.docs.map((doc) => doc.id).toList();
+
+      print("🔍 DEBUG: IDs enfants final: $childIds");
+
+      // TEST DIRECT des messages pour vérification
+      if (childIds.isNotEmpty) {
+        final testQuery = await FirebaseFirestore.instance
+            .collection('exchanges')
+            .where('childId', whereIn: childIds)
+            .where('nonLu', isEqualTo: true)
+            .where('senderType', isEqualTo: 'parent')
+            .get();
+
+        print("🔍 DEBUG: Messages non lus trouvés: ${testQuery.docs.length}");
+      }
+
+      return childIds;
+    } catch (e) {
+      print("❌ DEBUG: Erreur: $e");
+      return [];
+    }
   }
 
   void _showAddChildPopup() {
@@ -1865,6 +2081,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Dans home_screen.dart, remplacez ENTIÈREMENT cette méthode _buildGridItem :
+
   Widget _buildGridItem(BuildContext context, String route, String name,
       String imagePath, bool isTablet) {
     // Tailles adaptées pour tablette avec proportions améliorées
@@ -1882,8 +2100,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () => context.go(route),
         borderRadius: BorderRadius.circular(isTablet ? 20 : 16),
         child: Container(
-          // Utiliser un Container avec padding au lieu de Padding directement
-          // pour mieux contrôler la taille et le centrage
           padding: EdgeInsets.symmetric(
             horizontal: isTablet ? 16.0 : 6.0,
             vertical: isTablet ? 12.0 : 6.0,
@@ -1908,7 +2124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    // Badge de notification pour les échanges
+                    // Badge de notification pour les échanges - CORRIGÉ
                     if (isExchangeIcon)
                       Positioned(
                         top: 0,
@@ -1916,24 +2132,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: FutureBuilder<List<String>>(
                           future: _getAssignedChildrenIds(),
                           builder: (context, snapshot) {
-                            if (!snapshot.hasData) return SizedBox.shrink();
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return SizedBox.shrink();
+                            }
 
                             final List<String> assignedChildIds =
-                                snapshot.data ?? [];
-
-                            if (assignedChildIds.isEmpty)
-                              return SizedBox.shrink();
+                                snapshot.data!;
 
                             return StreamBuilder<QuerySnapshot>(
+                              // 🔥 CORRECTION CRITIQUE : Écouter les messages des PARENTS 🔥
                               stream: FirebaseFirestore.instance
                                   .collection('exchanges')
                                   .where('childId', whereIn: assignedChildIds)
                                   .where('nonLu', isEqualTo: true)
-                                  .where('senderType', isEqualTo: 'parent')
+                                  .where('senderType',
+                                      isEqualTo: 'parent') // ← AJOUTÉ !
                                   .snapshots(),
                               builder: (context, snapshot) {
                                 final int nonLuCount =
                                     snapshot.data?.docs.length ?? 0;
+                                print(
+                                    "🔔 Badge Home - Messages non lus des PARENTS: $nonLuCount");
+
                                 if (nonLuCount > 0) {
                                   return Container(
                                     padding: EdgeInsets.all(isTablet ? 6 : 4),
@@ -1980,58 +2200,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-// Ajoutez également cette méthode dans la classe _HomeScreenState
-  Future<List<String>> _getAssignedChildrenIds() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return [];
-
-      final currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (!userDoc.exists) return [];
-
-      final userData = userDoc.data()!;
-      final bool isMamMember = userData['role'] == 'mamMember';
-      final String structureId = userData['structureId'] ?? user.uid;
-
-      // Récupérer les enfants
-      QuerySnapshot childrenSnapshot;
-
-      if (isMamMember) {
-        // Pour un membre MAM, récupérer uniquement les enfants assignés à ce membre
-        childrenSnapshot = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(structureId)
-            .collection('children')
-            .where('assignedMemberEmail', isEqualTo: currentUserEmail)
-            .get();
-      } else {
-        // Pour une assistante maternelle individuelle, récupérer tous les enfants
-        childrenSnapshot = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(structureId)
-            .collection('children')
-            .get();
-      }
-
-      // Extraire les IDs des enfants
-      final List<String> childIds =
-          childrenSnapshot.docs.map((doc) => doc.id).toList();
-
-      print(
-          "👶 Enfants assignés à $currentUserEmail pour notifications: $childIds");
-      return childIds;
-    } catch (e) {
-      print("❌ Erreur lors de la récupération des enfants assignés: $e");
-      return [];
-    }
   }
 }

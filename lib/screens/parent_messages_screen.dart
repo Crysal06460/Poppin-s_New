@@ -182,6 +182,8 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
 
   // Dans le fichier parent_messages_screen.dart, modifiez la méthode _sendMessage() :
 
+  // Dans parent_messages_screen.dart, remplacez ENTIÈREMENT la méthode _sendMessage :
+
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty || _selectedChild == null) {
       return;
@@ -202,13 +204,17 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'text',
         'senderType': 'parent',
-        'nonLu':
-            true, // On garde cette valeur à true pour l'assistante maternelle
-        'readByParent':
-            true // Ajouter cette nouvelle propriété pour indiquer que le parent a déjà lu ce message
+        'nonLu': true, // Pour l'assistante maternelle
+        'readByParent': true // Le parent a déjà lu son propre message
       });
 
       _messageController.clear();
+
+      // 🔥 PARTIE CRITIQUE : NOTIFIER L'ASSISTANTE MATERNELLE 🔥
+      await _notifyAssistanteMaternel(childId, structureId);
+
+      // Fermer le clavier après l'envoi
+      FocusScope.of(context).unfocus();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Message envoyé avec succès')),
@@ -221,183 +227,296 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     }
   }
 
+// 🔥 NOUVELLE MÉTHODE : Notifier l'assistante maternelle
+  Future<void> _notifyAssistanteMaternel(
+      String childId, String structureId) async {
+    try {
+      print("🔔 Notification de l'assistante maternelle pour enfant: $childId");
+
+      // 1. Récupérer le document de l'enfant pour voir qui lui est assigné
+      final childDoc = await _firestore
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) {
+        print("❌ Document enfant non trouvé");
+        return;
+      }
+
+      final childData = childDoc.data()!;
+      final String? assignedMemberEmail =
+          childData['assignedMemberEmail']?.toString().toLowerCase();
+
+      // 2. Si l'enfant est assigné à un membre MAM spécifique
+      if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+        print("👤 Notification du membre MAM assigné: $assignedMemberEmail");
+
+        await _firestore
+            .collection('users')
+            .doc(assignedMemberEmail)
+            .update({'unreadMessages': FieldValue.increment(1)});
+
+        print("✅ Compteur mis à jour pour le membre MAM: $assignedMemberEmail");
+      } else {
+        // 3. Sinon, notifier l'assistante maternelle propriétaire de la structure
+        print("👩‍⚕️ Notification de l'assistante maternelle propriétaire");
+
+        // Récupérer la structure pour trouver le propriétaire
+        final structureDoc =
+            await _firestore.collection('structures').doc(structureId).get();
+
+        if (structureDoc.exists) {
+          final structureData = structureDoc.data()!;
+          final String? ownerEmail =
+              structureData['ownerEmail']?.toString().toLowerCase();
+
+          if (ownerEmail != null && ownerEmail.isNotEmpty) {
+            await _firestore
+                .collection('users')
+                .doc(ownerEmail)
+                .update({'unreadMessages': FieldValue.increment(1)});
+
+            print(
+                "✅ Compteur mis à jour pour l'assistante propriétaire: $ownerEmail");
+          } else {
+            print("❌ Email propriétaire non trouvé dans la structure");
+          }
+        } else {
+          print("❌ Document structure non trouvé");
+        }
+      }
+    } catch (e) {
+      print("❌ Erreur lors de la notification: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
+      // Ajouter cette propriété pour gérer le redimensionnement automatique
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
+        // Ajouter le bouton de retour personnalisé
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            // Fermer le clavier si ouvert
+            FocusScope.of(context).unfocus();
+            // Retourner à la page d'accueil
+            context.go('/parent/home');
+          },
+        ),
         title: Text(
           "Messages",
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
+            color: Colors.white,
           ),
         ),
         backgroundColor: primaryBlue,
         centerTitle: true,
+        // Ajouter une action pour fermer le clavier
+        actions: [
+          IconButton(
+            icon: Icon(Icons.keyboard_hide, color: Colors.white),
+            onPressed: () {
+              // Fermer explicitement le clavier
+              FocusScope.of(context).unfocus();
+            },
+            tooltip: "Fermer le clavier",
+          ),
+        ],
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _children.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: [
-                    // Sélecteur d'enfant (si plusieurs enfants)
-                    if (_children.length > 1)
-                      Container(
-                        padding:
-                            EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                        color: Colors.white,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Sélectionnez un enfant :",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[700],
+      body: GestureDetector(
+        // Ajouter un GestureDetector pour fermer le clavier quand on tape ailleurs
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : _children.isEmpty
+                ? _buildEmptyState()
+                : Column(
+                    children: [
+                      // Sélecteur d'enfant (si plusieurs enfants)
+                      if (_children.length > 1)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                          color: Colors.white,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Sélectionnez un enfant :",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
+                                ),
                               ),
-                            ),
-                            SizedBox(height: 8),
-                            SizedBox(
-                              height: 90,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _children.length,
-                                itemBuilder: (context, index) {
-                                  final child = _children[index];
-                                  final isSelected = _selectedChild != null &&
-                                      _selectedChild!['id'] == child['id'];
-                                  final isBoy = child['gender'] == 'Garçon';
+                              SizedBox(height: 8),
+                              SizedBox(
+                                height: 90,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _children.length,
+                                  itemBuilder: (context, index) {
+                                    final child = _children[index];
+                                    final isSelected = _selectedChild != null &&
+                                        _selectedChild!['id'] == child['id'];
+                                    final isBoy = child['gender'] == 'Garçon';
 
-                                  return GestureDetector(
-                                    onTap: () => _selectChild(child),
-                                    child: Container(
-                                      width: 70,
-                                      margin: EdgeInsets.only(right: 12),
-                                      decoration: BoxDecoration(
-                                        border: isSelected
-                                            ? Border.all(
-                                                color: primaryBlue, width: 2)
-                                            : null,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 25,
-                                            backgroundImage:
-                                                child['photoUrl'] != null &&
-                                                        child['photoUrl']
-                                                            .toString()
-                                                            .isNotEmpty
-                                                    ? NetworkImage(
-                                                        child['photoUrl'])
-                                                    : null,
-                                            backgroundColor: isBoy
-                                                ? primaryBlue.withOpacity(0.2)
-                                                : primaryRed.withOpacity(0.2),
-                                            child: (child['photoUrl'] == null ||
-                                                    child['photoUrl']
-                                                        .toString()
-                                                        .isEmpty)
-                                                ? Icon(
-                                                    isBoy
-                                                        ? Icons.boy
-                                                        : Icons.girl,
-                                                    color: isBoy
-                                                        ? primaryBlue
-                                                        : primaryRed)
-                                                : null,
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            child['firstName'],
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isSelected
-                                                  ? primaryBlue
-                                                  : Colors.black87,
+                                    return GestureDetector(
+                                      onTap: () => _selectChild(child),
+                                      child: Container(
+                                        width: 70,
+                                        margin: EdgeInsets.only(right: 12),
+                                        decoration: BoxDecoration(
+                                          border: isSelected
+                                              ? Border.all(
+                                                  color: primaryBlue, width: 2)
+                                              : null,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 25,
+                                              backgroundImage:
+                                                  child['photoUrl'] != null &&
+                                                          child['photoUrl']
+                                                              .toString()
+                                                              .isNotEmpty
+                                                      ? NetworkImage(
+                                                          child['photoUrl'])
+                                                      : null,
+                                              backgroundColor: isBoy
+                                                  ? primaryBlue.withOpacity(0.2)
+                                                  : primaryRed.withOpacity(0.2),
+                                              child:
+                                                  (child['photoUrl'] == null ||
+                                                          child['photoUrl']
+                                                              .toString()
+                                                              .isEmpty)
+                                                      ? Icon(
+                                                          isBoy
+                                                              ? Icons.boy
+                                                              : Icons.girl,
+                                                          color: isBoy
+                                                              ? primaryBlue
+                                                              : primaryRed)
+                                                      : null,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
+                                            SizedBox(height: 8),
+                                            Text(
+                                              child['firstName'],
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                                color: isSelected
+                                                    ? primaryBlue
+                                                    : Colors.black87,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Contenu des messages
+                      Expanded(
+                        child: _selectedChild != null
+                            ? _buildMessagesStream(_selectedChild!['id'],
+                                _selectedChild!['structureId'])
+                            : Center(child: Text("Sélectionnez un enfant")),
+                      ),
+
+                      // Champ de saisie de message - Amélioré pour la gestion du clavier
+                      Container(
+                        padding: EdgeInsets.fromLTRB(8.0, 8.0, 8.0,
+                            MediaQuery.of(context).padding.bottom + 8.0),
+                        color: Colors.white,
+                        child: SafeArea(
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.attach_file),
+                                onPressed: () {
+                                  // Fonctionnalité à implémenter plus tard
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('Fonctionnalité à venir')),
                                   );
                                 },
                               ),
-                            ),
-                          ],
+                              Expanded(
+                                child: TextField(
+                                  controller: _messageController,
+                                  decoration: InputDecoration(
+                                    hintText: "Écrivez votre message...",
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                  ),
+                                  minLines: 1,
+                                  maxLines: 4,
+                                  // Améliorer l'expérience utilisateur
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (value) {
+                                    if (value.trim().isNotEmpty) {
+                                      _sendMessage();
+                                    }
+                                  },
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.send, color: primaryBlue),
+                                onPressed: _sendMessage,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-
-                    // Contenu des messages
-                    Expanded(
-                      child: _selectedChild != null
-                          ? _buildMessagesStream(_selectedChild!['id'],
-                              _selectedChild!['structureId'])
-                          : Center(child: Text("Sélectionnez un enfant")),
-                    ),
-
-                    // Champ de saisie de message
-                    Container(
-                      padding: EdgeInsets.all(8.0),
-                      color: Colors.white,
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.attach_file),
-                            onPressed: () {
-                              // Fonctionnalité à implémenter plus tard
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text('Fonctionnalité à venir')),
-                              );
-                            },
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: InputDecoration(
-                                hintText: "Écrivez votre message...",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[100],
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                              ),
-                              minLines: 1,
-                              maxLines: 4,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.send, color: primaryBlue),
-                            onPressed: _sendMessage,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+      ),
       bottomNavigationBar: _isLoading || _children.isEmpty
           ? null
           : BottomNavigationBar(
               currentIndex: 1, // Index actif pour la page Messages
               onTap: (index) {
                 if (index == 0) {
+                  // Fermer le clavier avant de naviguer
+                  FocusScope.of(context).unfocus();
                   // Retour à l'accueil
                   context.go('/parent/home');
                 } else if (index == 2) {
+                  // Fermer le clavier avant de naviguer
+                  FocusScope.of(context).unfocus();
                   // Vers les stocks - réinitialiser le badge
                   StockBadgeUtil.resetBadge();
                   context.go('/parent/stocks');
@@ -596,7 +715,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         // Marquer les messages comme lus UNIQUEMENT pour les messages de l'assistante maternelle
         for (final doc in messages) {
           final message = doc.data() as Map<String, dynamic>;
-          if (message['senderType'] == 'staff' && message['nonLu'] == true) {
+          // CORRIGÉ: 'assistante' au lieu de 'staff'
+          if (message['senderType'] == 'assistante' &&
+              message['nonLu'] == true) {
             // Ajouter la mise à jour à la liste sans attendre
             messageUpdates.add(_firestore
                 .collection('exchanges')
