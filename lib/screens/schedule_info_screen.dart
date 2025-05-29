@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,6 +17,9 @@ class ScheduleInfoScreen extends StatefulWidget {
 bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
 }
+
+String structureName = "Chargement...";
+bool isLoadingStructure = true;
 
 class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   final List<String> weekDays = [
@@ -49,28 +51,65 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       daySegments[day] = [];
     }
     initializeDateFormatting('fr_FR', null);
+    // AJOUT : Charger les infos de structure
+    _loadStructureInfo();
   }
 
-  void _showTimePicker(
-      BuildContext context, TimeSegment segment, bool isStart) {
-    DatePicker.showTimePicker(
-      context,
-      showSecondsColumn: false,
-      showTitleActions: true,
-      onConfirm: (date) {
-        setState(() {
-          if (isStart) {
-            segment.startController.text =
-                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-          } else {
-            segment.endController.text =
-                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-          }
-        });
+  Future<void> _showTimePicker(
+      BuildContext context, TimeSegment segment, bool isStart) async {
+    // Obtenir l'heure actuelle ou celle déjà saisie
+    final controller =
+        isStart ? segment.startController : segment.endController;
+    TimeOfDay initialTime;
+
+    if (controller.text.isNotEmpty) {
+      final parts = controller.text.split(':');
+      initialTime = TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryBlue,
+              dayPeriodTextColor: primaryBlue,
+              dialHandColor: primaryBlue,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              // Fix pour le rectangle bleu
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryBlue.withOpacity(0.15)
+                      : Colors.transparent),
+              // Forme pour les conteneurs heure/minute
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryBlue,
+              ),
+            ),
+          ),
+          child: child!,
+        );
       },
-      currentTime: DateTime.now(),
-      locale: LocaleType.fr,
     );
+
+    if (picked != null) {
+      setState(() {
+        controller.text =
+            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      });
+    }
   }
 
   void _addTimeSegment(String day) {
@@ -86,6 +125,64 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       segment.endController.dispose();
       daySegments[day]!.removeAt(index);
     });
+  }
+
+  Future<void> _loadStructureInfo() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => isLoadingStructure = false);
+        return;
+      }
+
+      // Récupérer l'email de l'utilisateur actuel
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
+      String structureId = user.uid;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
+          structureId = userData['structureId'];
+          print(
+              "🔄 Schedule Info: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        }
+      }
+
+      // Récupération des informations de la structure avec l'ID correct
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      if (structureDoc.exists) {
+        final data = structureDoc.data() as Map<String, dynamic>;
+        setState(() {
+          structureName = data['structureName'] ?? 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      } else {
+        setState(() {
+          structureName = 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      }
+    } catch (e) {
+      print("Erreur lors du chargement des infos de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoadingStructure = false;
+      });
+    }
   }
 
   Widget _buildTabletLayout() {
@@ -593,98 +690,128 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     return Row(
       children: [
         Expanded(
-          child: TextField(
-            controller: segment.startController,
-            decoration: InputDecoration(
-              labelText: "Arrivée",
-              labelStyle: TextStyle(
-                color: primaryBlue,
-                fontSize: maxWidth * 0.014,
-              ),
-              prefixIcon: Icon(
-                Icons.access_time,
-                color: primaryBlue,
-                size: maxWidth * 0.02,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Arrivée",
+                style: TextStyle(
                   color: primaryBlue,
+                  fontSize: maxWidth * 0.014,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: maxWidth * 0.015,
-                vertical: maxHeight * 0.015,
+              SizedBox(height: 4),
+              InkWell(
+                onTap: () {
+                  _showTimePicker(context, segment, true);
+                  // Delay pour permettre la mise à jour avant le rafraîchissement
+                  Future.delayed(Duration(milliseconds: 100), () {
+                    setState(() {});
+                  });
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: maxWidth * 0.015,
+                    vertical: maxHeight * 0.015,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryBlue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        segment.startController.text.isEmpty
+                            ? '--:--'
+                            : segment.startController.text,
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.016,
+                          color: segment.startController.text.isEmpty
+                              ? Colors.grey
+                              : primaryBlue,
+                          fontWeight: segment.startController.text.isEmpty
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      Icon(
+                        Icons.access_time,
+                        color: primaryBlue,
+                        size: maxWidth * 0.02,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            style: TextStyle(fontSize: maxWidth * 0.016),
-            readOnly: true,
-            onTap: () {
-              _showTimePicker(context, segment, true);
-              // Delay pour permettre la mise à jour avant le rafraîchissement
-              Future.delayed(Duration(milliseconds: 100), () {
-                setState(() {});
-              });
-            },
+            ],
           ),
         ),
         SizedBox(width: maxWidth * 0.015),
         Expanded(
-          child: TextField(
-            controller: segment.endController,
-            decoration: InputDecoration(
-              labelText: "Départ",
-              labelStyle: TextStyle(
-                color: primaryBlue,
-                fontSize: maxWidth * 0.014,
-              ),
-              prefixIcon: Icon(
-                Icons.access_time,
-                color: primaryBlue,
-                size: maxWidth * 0.02,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Départ",
+                style: TextStyle(
                   color: primaryBlue,
+                  fontSize: maxWidth * 0.014,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: maxWidth * 0.015,
-                vertical: maxHeight * 0.015,
+              SizedBox(height: 4),
+              InkWell(
+                onTap: () {
+                  _showTimePicker(context, segment, false);
+                  // Delay pour permettre la mise à jour avant le rafraîchissement
+                  Future.delayed(Duration(milliseconds: 100), () {
+                    setState(() {});
+                  });
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: maxWidth * 0.015,
+                    vertical: maxHeight * 0.015,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryBlue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        segment.endController.text.isEmpty
+                            ? '--:--'
+                            : segment.endController.text,
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.016,
+                          color: segment.endController.text.isEmpty
+                              ? Colors.grey
+                              : primaryBlue,
+                          fontWeight: segment.endController.text.isEmpty
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      Icon(
+                        Icons.access_time,
+                        color: primaryBlue,
+                        size: maxWidth * 0.02,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            style: TextStyle(fontSize: maxWidth * 0.016),
-            readOnly: true,
-            onTap: () {
-              _showTimePicker(context, segment, false);
-              // Delay pour permettre la mise à jour avant le rafraîchissement
-              Future.delayed(Duration(milliseconds: 100), () {
-                setState(() {});
-              });
-            },
+            ],
           ),
         ),
         SizedBox(width: maxWidth * 0.01),
@@ -698,6 +825,116 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
             _removeTimeSegment(day, index);
             setState(() {}); // Rafraîchir l'aperçu
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeSegmentRow(String day, int index, TimeSegment segment) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Heure d'arrivée",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 4),
+              InkWell(
+                onTap: () => _showTimePicker(context, segment, true),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryBlue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        segment.startController.text.isEmpty
+                            ? '--:--'
+                            : segment.startController.text,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: segment.startController.text.isEmpty
+                              ? Colors.grey
+                              : primaryBlue,
+                          fontWeight: segment.startController.text.isEmpty
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      Icon(Icons.access_time, color: primaryBlue, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Heure de départ",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 4),
+              InkWell(
+                onTap: () => _showTimePicker(context, segment, false),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryBlue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        segment.endController.text.isEmpty
+                            ? '--:--'
+                            : segment.endController.text,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: segment.endController.text.isEmpty
+                              ? Colors.grey
+                              : primaryBlue,
+                          fontWeight: segment.endController.text.isEmpty
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      Icon(Icons.access_time, color: primaryBlue, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.delete_outline, color: primaryRed),
+          onPressed: () => _removeTimeSegment(day, index),
         ),
       ],
     );
@@ -808,6 +1045,8 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     }
   }
 
+  // CORRECTION : Remplacer le bouton retour qui utilise Navigator.pop() dans le build()
+
   @override
   Widget build(BuildContext context) {
     // Déterminer si on est sur iPad
@@ -831,7 +1070,15 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                         IconButton(
                           icon: const Icon(Icons.arrow_back),
                           onPressed: () {
-                            Navigator.of(context).pop();
+                            // CHANGEMENT : Utiliser context.go au lieu de Navigator.pop
+                            if (widget.childId.isNotEmpty) {
+                              print(
+                                  "🔄 Retour vers add-second-parent avec childId: ${widget.childId}");
+                              context.go('/add-second-parent',
+                                  extra: widget.childId);
+                            } else {
+                              _showError("Erreur : ID d'enfant manquant !");
+                            }
                           },
                           style: IconButton.styleFrom(
                             backgroundColor: lightBlue,
@@ -977,76 +1224,6 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     );
   }
 
-  Widget _buildTimeSegmentRow(String day, int index, TimeSegment segment) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: segment.startController,
-            decoration: InputDecoration(
-              labelText: "Heure d'arrivée",
-              labelStyle: TextStyle(color: primaryBlue),
-              prefixIcon: Icon(Icons.access_time, color: primaryBlue),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue,
-                ),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            readOnly: true,
-            onTap: () => _showTimePicker(context, segment, true),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: segment.endController,
-            decoration: InputDecoration(
-              labelText: "Heure de départ",
-              labelStyle: TextStyle(color: primaryBlue),
-              prefixIcon: Icon(Icons.access_time, color: primaryBlue),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: primaryBlue,
-                ),
-              ),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            readOnly: true,
-            onTap: () => _showTimePicker(context, segment, false),
-          ),
-        ),
-        IconButton(
-          icon: Icon(Icons.delete_outline, color: primaryRed),
-          onPressed: () => _removeTimeSegment(day, index),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAppBar() {
     return Container(
       width: double.infinity,
@@ -1082,7 +1259,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "Poppins",
+                      structureName, // CHANGEMENT : utiliser structureName au lieu de "Poppins"
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

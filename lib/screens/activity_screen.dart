@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
 
@@ -133,6 +132,62 @@ class _ActivityScreenState extends State<ActivityScreen> {
       });
     } catch (e) {
       print("Erreur lors du chargement de l'ID de structure: $e");
+    }
+  }
+
+  Future<void> _selectActivityTime(
+      StateSetter setState, Function(String) onTimeSelected) async {
+    // Obtenir l'heure actuelle ou celle déjà saisie
+    TimeOfDay initialTime;
+    if (_activityTime.isNotEmpty) {
+      // Utiliser _activityTime, pas _siesteTime
+      final parts = _activityTime.split(':');
+      initialTime = TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryColor,
+              dayPeriodTextColor: primaryColor,
+              dialHandColor: primaryColor,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              // Fix pour le rectangle bleu
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryColor.withOpacity(0.15)
+                      : Colors.transparent),
+              // Forme pour les conteneurs heure/minute
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final timeString =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        onTimeSelected(timeString);
+      });
     }
   }
 
@@ -1030,20 +1085,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   InkWell(
-                                    onTap: () {
-                                      DatePicker.showTimePicker(context,
-                                          showSecondsColumn: false,
-                                          showTitleActions: true,
-                                          onConfirm: (date) {
-                                        setState(() {
-                                          localActivityTime =
-                                              '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                          errorMessage = null;
-                                        });
-                                      },
-                                          currentTime: DateTime.now(),
-                                          locale: LocaleType.fr);
-                                    },
+                                    onTap: () =>
+                                        _selectActivityTime(setState, (time) {
+                                      localActivityTime =
+                                          time; // Utiliser localActivityTime, pas localSiesteTime
+                                      errorMessage = null;
+                                    }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 20),
@@ -1051,7 +1098,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         color: lightBlue,
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: localActivityTime.isEmpty
+                                          color: localActivityTime
+                                                  .isEmpty // Utiliser localActivityTime
                                               ? Colors.transparent
                                               : primaryColor.withOpacity(0.5),
                                           width: 1.5,
@@ -1062,19 +1110,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                             MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
-                                            localActivityTime.isEmpty
+                                            localActivityTime
+                                                    .isEmpty // Utiliser localActivityTime
                                                 ? 'Choisir l\'heure'
-                                                : localActivityTime,
+                                                : localActivityTime, // Utiliser localActivityTime
                                             style: TextStyle(
                                               fontSize:
                                                   isTabletDevice ? 18 : 16,
-                                              color: localActivityTime.isEmpty
+                                              color: localActivityTime
+                                                      .isEmpty // Utiliser localActivityTime
                                                   ? Colors.grey.shade600
                                                   : primaryColor,
-                                              fontWeight:
-                                                  localActivityTime.isEmpty
-                                                      ? FontWeight.normal
-                                                      : FontWeight.w600,
+                                              fontWeight: localActivityTime
+                                                      .isEmpty // Utiliser localActivityTime
+                                                  ? FontWeight.normal
+                                                  : FontWeight.w600,
                                             ),
                                           ),
                                           Icon(

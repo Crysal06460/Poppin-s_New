@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 
 class SanteScreen extends StatefulWidget {
   const SanteScreen({Key? key}) : super(key: key);
@@ -92,6 +93,61 @@ class _SanteScreenState extends State<SanteScreen> {
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadEnfantsDuJour();
     });
+  }
+
+  Future<void> _selectCareTime(
+      StateSetter setState, Function(String) onTimeSelected) async {
+    // Obtenir l'heure actuelle ou celle déjà saisie
+    TimeOfDay initialTime;
+    if (_careTime.isNotEmpty) {
+      final parts = _careTime.split(':');
+      initialTime = TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryColor,
+              dayPeriodTextColor: primaryColor,
+              dialHandColor: primaryColor,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              // Fix pour le rectangle bleu
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryColor.withOpacity(0.15)
+                      : Colors.transparent),
+              // Forme pour les conteneurs heure/minute
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final timeString =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        onTimeSelected(timeString);
+      });
+    }
   }
 
   Future<void> _loadEnfantsDuJour() async {
@@ -454,11 +510,17 @@ class _SanteScreenState extends State<SanteScreen> {
               // Largeur adaptée pour iPad
               insetPadding: isTabletDevice
                   ? EdgeInsets.symmetric(
-                      horizontal: MediaQuery.of(context).size.width * 0.25)
-                  : EdgeInsets.symmetric(horizontal: 20),
+                      horizontal: MediaQuery.of(context).size.width * 0.25,
+                      vertical: 40) // Ajouter un padding vertical
+                  : EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 40), // Ajouter un padding vertical
               child: Container(
-                padding: EdgeInsets.all(
-                    0), // Padding 0 pour permettre au header d'aller jusqu'au bord
+                // Limiter la hauteur maximale
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height *
+                      0.85, // 85% de la hauteur de l'écran
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -471,7 +533,8 @@ class _SanteScreenState extends State<SanteScreen> {
                   ],
                 ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisSize:
+                      MainAxisSize.min, // Important pour éviter l'overflow
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // En-tête avec dégradé
@@ -534,10 +597,11 @@ class _SanteScreenState extends State<SanteScreen> {
                       ),
                     ),
 
-                    // Contenu du formulaire avec padding
-                    Padding(
-                      padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
+                    // Contenu du formulaire avec SingleChildScrollView pour éviter l'overflow
+                    Flexible(
+                      // Remplacer Padding par Flexible
                       child: SingleChildScrollView(
+                        padding: EdgeInsets.all(isTabletDevice ? 24 : 20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -557,22 +621,11 @@ class _SanteScreenState extends State<SanteScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   InkWell(
-                                    onTap: () {
-                                      DatePicker.showTimePicker(
-                                        context,
-                                        showSecondsColumn: false,
-                                        showTitleActions: true,
-                                        onConfirm: (date) {
-                                          setState(() {
-                                            localCareTime =
-                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                            errorMessage = null;
-                                          });
-                                        },
-                                        currentTime: DateTime.now(),
-                                        locale: LocaleType.fr,
-                                      );
-                                    },
+                                    onTap: () =>
+                                        _selectCareTime(setState, (time) {
+                                      localCareTime = time;
+                                      errorMessage = null;
+                                    }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 20),

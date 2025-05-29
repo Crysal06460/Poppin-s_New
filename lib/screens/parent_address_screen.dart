@@ -22,6 +22,9 @@ bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
 }
 
+String structureName = "Chargement...";
+bool isLoadingStructure = true;
+
 class _ParentAddressScreenState extends State<ParentAddressScreen> {
   final TextEditingController addressController = TextEditingController();
   final TextEditingController postalCodeController = TextEditingController();
@@ -41,6 +44,66 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
   void initState() {
     super.initState();
     initializeDateFormatting('fr_FR', null);
+    // AJOUT : Charger les infos de structure
+    _loadStructureInfo();
+  }
+
+  Future<void> _loadStructureInfo() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => isLoadingStructure = false);
+        return;
+      }
+
+      // Récupérer l'email de l'utilisateur actuel
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
+      String structureId = user.uid;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
+          structureId = userData['structureId'];
+          print(
+              "🔄 Parent Address: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        }
+      }
+
+      // Récupération des informations de la structure avec l'ID correct
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      if (structureDoc.exists) {
+        final data = structureDoc.data() as Map<String, dynamic>;
+        setState(() {
+          structureName = data['structureName'] ?? 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      } else {
+        setState(() {
+          structureName = 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      }
+    } catch (e) {
+      print("Erreur lors du chargement des infos de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoadingStructure = false;
+      });
+    }
   }
 
   Future<void> _fetchCities(String postalCode) async {
@@ -1155,7 +1218,7 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "Poppins",
+                      structureName, // CHANGEMENT : utiliser structureName au lieu de "Poppins"
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

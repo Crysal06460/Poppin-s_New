@@ -31,7 +31,8 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
 
   bool _isSaving = false;
   int _selectedIndex = 2; // Pour la barre de navigation du bas
-
+  String structureName = "Chargement...";
+  bool isLoadingStructure = true;
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -43,6 +44,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
   void initState() {
     super.initState();
     initializeDateFormatting('fr_FR', null);
+    _loadStructureInfo(); // AJOUT : Charger les infos de structure
   }
 
   @override
@@ -50,6 +52,108 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
     _foodAllergiesController.dispose();
     _specialDietController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStructureInfo() async {
+    try {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print("❌ Utilisateur non connecté");
+        return;
+      }
+
+      final userEmail = user.email?.toLowerCase() ?? '';
+      print("📧 Email utilisateur: $userEmail");
+
+      // Vérifier d'abord si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        print("👤 Données utilisateur trouvées: $userData");
+
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM
+          final structureId = userData['structureId'];
+          print("🏢 Utilisateur MAM détecté - ID structure: $structureId");
+
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .get();
+
+          if (structureDoc.exists) {
+            final data = structureDoc.data() as Map<String, dynamic>;
+            setState(() {
+              structureName = data['structureName'] ?? 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+            print("🏢 Nom de structure MAM récupéré: $structureName");
+          } else {
+            print("❌ Document structure MAM non trouvé");
+            setState(() {
+              structureName = 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+          }
+        } else {
+          // Utilisateur normal (assistante maternelle individuelle)
+          print("👩‍🍼 Utilisateur assistante maternelle individuelle");
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(user.uid)
+              .get();
+
+          if (structureDoc.exists) {
+            final data = structureDoc.data() as Map<String, dynamic>;
+            setState(() {
+              structureName = data['structureName'] ?? 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+            print("🏢 Nom de structure individuelle récupéré: $structureName");
+          } else {
+            print("❌ Document structure individuelle non trouvé");
+            setState(() {
+              structureName = 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+          }
+        }
+      } else {
+        print(
+            "❌ Document utilisateur non trouvé, utilisation de l'ID utilisateur par défaut");
+        // Fallback : utiliser l'ID utilisateur comme ID de structure
+        final structureDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(user.uid)
+            .get();
+
+        if (structureDoc.exists) {
+          final data = structureDoc.data() as Map<String, dynamic>;
+          setState(() {
+            structureName = data['structureName'] ?? 'Structure inconnue';
+            isLoadingStructure = false;
+          });
+          print("🏢 Nom de structure fallback récupéré: $structureName");
+        } else {
+          print("❌ Aucun document structure trouvé");
+          setState(() {
+            structureName = 'Structure inconnue';
+            isLoadingStructure = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("❌ Erreur lors du chargement des infos de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoadingStructure = false;
+      });
+    }
   }
 
   Widget _buildTabletLayout() {
@@ -809,7 +913,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "Poppins",
+                      structureName, // MODIFICATION : Utiliser structureName au lieu de "Poppins"
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -943,11 +1047,19 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Back button
+                        // Back button - CORRECTION ICI
                         IconButton(
                           icon: const Icon(Icons.arrow_back),
                           onPressed: () {
-                            Navigator.pop(context);
+                            // CORRECTION : Utiliser context.go au lieu de Navigator.pop
+                            if (widget.childId.isNotEmpty) {
+                              print(
+                                  "🔄 Retour vers child-pickup-auth avec childId: ${widget.childId}");
+                              context.go('/child-pickup-auth',
+                                  extra: widget.childId);
+                            } else {
+                              _showError("Erreur : ID d'enfant manquant !");
+                            }
                           },
                           style: IconButton.styleFrom(
                             backgroundColor: lightBlue,

@@ -32,7 +32,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
   String? _parent2Name;
   bool? _parent2Authorized;
   bool _hasParent2 = false;
-
+  String structureName = "Chargement...";
+  bool isLoadingStructure = true;
   // Variables pour les personnes autorisées supplémentaires
   bool _addExtraPerson = false;
   List<AuthorizedPerson> _authorizedPersons = [];
@@ -48,7 +49,110 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
   void initState() {
     super.initState();
     initializeDateFormatting('fr_FR', null);
+    _loadStructureInfo(); // AJOUT : Charger les infos de structure
     _loadParentsInfo();
+  }
+
+  Future<void> _loadStructureInfo() async {
+    try {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print("❌ Utilisateur non connecté");
+        return;
+      }
+
+      final userEmail = user.email?.toLowerCase() ?? '';
+      print("📧 Email utilisateur: $userEmail");
+
+      // Vérifier d'abord si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        print("👤 Données utilisateur trouvées: $userData");
+
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM
+          final structureId = userData['structureId'];
+          print("🏢 Utilisateur MAM détecté - ID structure: $structureId");
+
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .get();
+
+          if (structureDoc.exists) {
+            final data = structureDoc.data() as Map<String, dynamic>;
+            setState(() {
+              structureName = data['structureName'] ?? 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+            print("🏢 Nom de structure MAM récupéré: $structureName");
+          } else {
+            print("❌ Document structure MAM non trouvé");
+            setState(() {
+              structureName = 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+          }
+        } else {
+          // Utilisateur normal (assistante maternelle individuelle)
+          print("👩‍🍼 Utilisateur assistante maternelle individuelle");
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(user.uid)
+              .get();
+
+          if (structureDoc.exists) {
+            final data = structureDoc.data() as Map<String, dynamic>;
+            setState(() {
+              structureName = data['structureName'] ?? 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+            print("🏢 Nom de structure individuelle récupéré: $structureName");
+          } else {
+            print("❌ Document structure individuelle non trouvé");
+            setState(() {
+              structureName = 'Structure inconnue';
+              isLoadingStructure = false;
+            });
+          }
+        }
+      } else {
+        print(
+            "❌ Document utilisateur non trouvé, utilisation de l'ID utilisateur par défaut");
+        // Fallback : utiliser l'ID utilisateur comme ID de structure
+        final structureDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(user.uid)
+            .get();
+
+        if (structureDoc.exists) {
+          final data = structureDoc.data() as Map<String, dynamic>;
+          setState(() {
+            structureName = data['structureName'] ?? 'Structure inconnue';
+            isLoadingStructure = false;
+          });
+          print("🏢 Nom de structure fallback récupéré: $structureName");
+        } else {
+          print("❌ Aucun document structure trouvé");
+          setState(() {
+            structureName = 'Structure inconnue';
+            isLoadingStructure = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("❌ Erreur lors du chargement des infos de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoadingStructure = false;
+      });
+    }
   }
 
   Widget _buildTabletLayout() {
@@ -1181,7 +1285,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "Poppins",
+                      structureName, // MODIFICATION : Utiliser structureName au lieu de "Poppins"
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -1300,6 +1404,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
     );
   }
 
+  // 5. CORRECTION : Bouton retour dans build() pour utiliser context.go au lieu de Navigator.pop
+
   @override
   Widget build(BuildContext context) {
     // Déterminer si on est sur iPad
@@ -1322,11 +1428,19 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Back button (seulement sur iPhone)
+                            // Back button (seulement sur iPhone) - CORRECTION ICI
                             IconButton(
                               icon: const Icon(Icons.arrow_back),
                               onPressed: () {
-                                Navigator.pop(context);
+                                // CORRECTION : Utiliser context.go au lieu de Navigator.pop
+                                if (widget.childId.isNotEmpty) {
+                                  print(
+                                      "🔄 Retour vers child-documents avec childId: ${widget.childId}");
+                                  context.go('/child-documents',
+                                      extra: widget.childId);
+                                } else {
+                                  _showError("Erreur : ID d'enfant manquant !");
+                                }
                               },
                               style: IconButton.styleFrom(
                                 backgroundColor: lightBlue,
@@ -1336,7 +1450,6 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                             ),
                             const SizedBox(height: 20),
 
-                            // Reste du contenu iPhone existant...
                             // Main card
                             Card(
                               elevation: 4,

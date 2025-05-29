@@ -18,6 +18,8 @@ class StructureInfoScreen extends StatefulWidget {
   _StructureInfoScreenState createState() => _StructureInfoScreenState();
 }
 
+List<String> citySuggestions = [];
+
 class _StructureInfoScreenState extends State<StructureInfoScreen> {
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350);
@@ -225,18 +227,56 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
   Future<void> _fetchCityFromPostalCode(String postalCode) async {
     if (postalCode.length == 5 && RegExp(r'^\d{5}$').hasMatch(postalCode)) {
-      final url = Uri.parse(
-          "https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom&format=json");
-      final response = await http.get(url);
+      setState(() {
+        isLoading = true;
+      });
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        if (data.isNotEmpty) {
+      final url = Uri.parse(
+          'https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom');
+      try {
+        final response = await http.get(url);
+        if (response.statusCode == 200) {
+          List<dynamic> cities = json.decode(response.body);
+
+          // Important: vider et mettre à jour les suggestions
+          List<String> newCities =
+              cities.map((city) => city['nom'].toString()).toList();
+
           setState(() {
-            cityController.text = data[0]['nom'];
+            citySuggestions = newCities;
+            isLoading = false;
+
+            // Mettre à jour le champ de ville avec la première suggestion
+            if (newCities.isNotEmpty) {
+              cityController.text = newCities.first;
+              print("Ville trouvée: ${newCities.first}");
+            } else {
+              cityController.text = "";
+              print("Aucune ville trouvée pour ce code postal");
+            }
+          });
+        } else {
+          setState(() {
+            citySuggestions = [];
+            cityController.text = "";
+            isLoading = false;
           });
         }
+      } catch (e) {
+        print("Erreur API: $e");
+        setState(() {
+          citySuggestions = [];
+          cityController.text = "";
+          isLoading = false;
+        });
       }
+    } else {
+      setState(() {
+        citySuggestions = [];
+        if (postalCode.isEmpty) {
+          cityController.text = "";
+        }
+      });
     }
   }
 
@@ -520,16 +560,8 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
                                 SizedBox(height: maxHeight * 0.025),
 
-                                // Ville
-                                _buildTabletTextField(
-                                  cityController,
-                                  "Ville",
-                                  icon: Icons.location_city_outlined,
-                                  isReadOnly: true,
-                                  color: primaryColor,
-                                  maxWidth: maxWidth,
-                                  maxHeight: maxHeight,
-                                ),
+                                // Ville avec dropdown
+                                _buildTabletCityField(maxWidth, maxHeight),
                               ],
                             ),
                           ),
@@ -596,6 +628,89 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           ),
         );
       },
+    );
+  }
+
+  // Nouvelle méthode pour le champ ville avec dropdown
+  Widget _buildTabletCityField(double maxWidth, double maxHeight) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: cityController,
+        readOnly: true,
+        decoration: InputDecoration(
+          labelText: "Ville",
+          labelStyle: TextStyle(
+            color: primaryColor.withOpacity(0.8),
+            fontSize: maxWidth * 0.016,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: primaryColor, width: 2),
+          ),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          prefixIcon: Container(
+            margin: EdgeInsets.all(maxWidth * 0.015),
+            padding: EdgeInsets.all(maxWidth * 0.01),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.location_city_outlined,
+              color: primaryColor,
+              size: maxWidth * 0.018,
+            ),
+          ),
+          suffixIcon: citySuggestions.isNotEmpty
+              ? PopupMenuButton<String>(
+                  icon: Icon(Icons.arrow_drop_down, color: primaryColor),
+                  onSelected: (String value) {
+                    setState(() {
+                      cityController.text = value;
+                    });
+                  },
+                  itemBuilder: (BuildContext context) {
+                    return citySuggestions
+                        .map<PopupMenuItem<String>>((String value) {
+                      return PopupMenuItem(value: value, child: Text(value));
+                    }).toList();
+                  },
+                )
+              : null,
+          hintText:
+              citySuggestions.isEmpty ? "Entrez d'abord un code postal" : null,
+          hintStyle: TextStyle(color: Colors.grey.shade500),
+          contentPadding: EdgeInsets.symmetric(
+            vertical: maxHeight * 0.02,
+            horizontal: maxWidth * 0.02,
+          ),
+        ),
+        style: TextStyle(
+          fontSize: maxWidth * 0.018,
+          color: Colors.black,
+        ),
+      ),
     );
   }
 

@@ -423,6 +423,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Modifiez la méthode _showChildProfilesSelection pour la rendre async
   void _showChildProfilesSelection() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -431,70 +445,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
-          content: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadChildren(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child: CircularProgressIndicator(color: primaryColor));
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Text(
-                  "Aucun enfant trouvé",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                );
-              }
-
-              return SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final child = snapshot.data![index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: primaryColor.withOpacity(0.7),
-                        backgroundImage: child['photoUrl'] != null &&
-                                child['photoUrl'].toString().isNotEmpty
-                            ? NetworkImage(child['photoUrl'])
-                            : null,
-                        child: child['photoUrl'] == null ||
-                                child['photoUrl'].toString().isEmpty
-                            ? Text(
-                                child['firstName'][0].toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text(
-                        child['firstName'],
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        // Obtenir l'ID de structure avant de naviguer
-                        String structId = await _getStructureId();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChildProfileDetailsScreen(
-                              childId: child['id'],
-                              structureId: structId,
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                        );
-                      },
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    // Obtenir l'ID de structure avant de naviguer
+                    String structId = await _getStructureId();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChildProfileDetailsScreen(
+                          childId: child['id'],
+                          structureId: structId,
+                        ),
+                      ),
                     );
                   },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -513,7 +509,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showPhotoManagement() {
+  void _showPhotoManagement() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -522,68 +532,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
-          content: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadChildren(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child: CircularProgressIndicator(color: primaryColor));
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Text(
-                  "Aucun enfant trouvé",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                );
-              }
-
-              return SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final child = snapshot.data![index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: primaryColor.withOpacity(0.7),
-                        backgroundImage: child['photoUrl'] != null &&
-                                child['photoUrl'].toString().isNotEmpty
-                            ? NetworkImage(child['photoUrl'])
-                            : null,
-                        child: child['photoUrl'] == null ||
-                                child['photoUrl'].toString().isEmpty
-                            ? Text(
-                                child['firstName'][0].toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text(
-                        child['firstName'],
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        // Utiliser Navigator.push au lieu de context.go
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PhotoManagementScreen(
-                              childId: child['id'],
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                        );
-                      },
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PhotoManagementScreen(
+                          childId: child['id'],
+                        ),
+                      ),
                     );
                   },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -602,7 +593,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showChildRemoval() {
+  void _showChildRemoval() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -611,68 +616,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
-          content: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadChildren(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child: CircularProgressIndicator(color: primaryColor));
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Text(
-                  "Aucun enfant trouvé",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                );
-              }
-
-              return SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final child = snapshot.data![index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: primaryColor.withOpacity(0.7),
-                        backgroundImage: child['photoUrl'] != null &&
-                                child['photoUrl'].toString().isNotEmpty
-                            ? NetworkImage(child['photoUrl'])
-                            : null,
-                        child: child['photoUrl'] == null ||
-                                child['photoUrl'].toString().isEmpty
-                            ? Text(
-                                child['firstName'][0].toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text(
-                        child['firstName'],
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        // Utiliser Navigator.push au lieu de context.go
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChildRemovalScreen(
-                              childId: child['id'],
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                        );
-                      },
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChildRemovalScreen(
+                          childId: child['id'],
+                        ),
+                      ),
                     );
                   },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(
@@ -934,7 +920,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _showScheduleModification() {
+  void _showScheduleModification() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -943,60 +943,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
-          content: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadChildren(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child: CircularProgressIndicator(color: primaryColor));
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Text(
-                  "Aucun enfant trouvé",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                );
-              }
-
-              return SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final child = snapshot.data![index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: primaryColor.withOpacity(0.7),
-                        backgroundImage: child['photoUrl'] != null &&
-                                child['photoUrl'].toString().isNotEmpty
-                            ? NetworkImage(child['photoUrl'])
-                            : null,
-                        child: child['photoUrl'] == null ||
-                                child['photoUrl'].toString().isEmpty
-                            ? Text(
-                                child['firstName'][0].toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : null,
-                      ),
-                      title: Text(
-                        child['firstName'],
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _editChildSchedule(child);
-                      },
-                    );
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _editChildSchedule(child);
                   },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           actions: [
             TextButton(

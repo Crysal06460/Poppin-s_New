@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
 
@@ -73,6 +72,61 @@ class _ChangeScreenState extends State<ChangeScreen> {
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadEnfantsDuJour();
     });
+  }
+
+  Future<void> _selectChangeTime(
+      StateSetter setState, Function(String) onTimeSelected) async {
+    // Obtenir l'heure actuelle ou celle déjà saisie
+    TimeOfDay initialTime;
+    if (_careTime.isNotEmpty) {
+      final parts = _careTime.split(':');
+      initialTime = TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryColor,
+              dayPeriodTextColor: primaryColor,
+              dialHandColor: primaryColor,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              // Fix pour le rectangle bleu
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryColor.withOpacity(0.15)
+                      : Colors.transparent),
+              // Forme pour les conteneurs heure/minute
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final timeString =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        onTimeSelected(timeString);
+      });
+    }
   }
 
   Future<void> _loadEnfantsDuJour() async {
@@ -625,20 +679,11 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   InkWell(
-                                    onTap: () {
-                                      DatePicker.showTimePicker(context,
-                                          showSecondsColumn: false,
-                                          showTitleActions: true,
-                                          onConfirm: (date) {
-                                        setState(() {
-                                          localCareTime =
-                                              '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                          errorMessage = null;
-                                        });
-                                      },
-                                          currentTime: DateTime.now(),
-                                          locale: LocaleType.fr);
-                                    },
+                                    onTap: () =>
+                                        _selectChangeTime(setState, (time) {
+                                      localCareTime = time;
+                                      errorMessage = null;
+                                    }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 20),

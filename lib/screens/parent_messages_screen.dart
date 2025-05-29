@@ -9,6 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:mime/mime.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ParentMessagesScreen extends StatefulWidget {
   final String?
@@ -37,6 +43,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
   bool _isLoading = true;
   bool _showStockBadge = false;
   bool _showMessageBadge = false;
+  bool _isUploadingFile = false;
 
   @override
   void initState() {
@@ -79,6 +86,225 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         _showStockBadge = shouldShow;
       });
     }
+  }
+
+  Future<void> _pickAndSendFile() async {
+    if (_selectedChild == null) return;
+
+    try {
+      setState(() => _isUploadingFile = true);
+
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        setState(() => _isUploadingFile = false);
+        return;
+      }
+
+      final file = result.files.first;
+      if (file.bytes == null) {
+        throw Exception('Fichier non valide');
+      }
+
+      // Vérifier la taille (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        throw Exception('Le fichier est trop volumineux (maximum 10MB)');
+      }
+
+      final fileName = file.name;
+      final mimeType = lookupMimeType(fileName) ?? 'application/octet-stream';
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final user = _auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Non connecté');
+      }
+
+      final childId = _selectedChild!['id'];
+      final structureId = _selectedChild!['structureId'];
+
+      // Créer le chemin du fichier
+      final storagePath = 'exchanges/${user.uid}/$timestamp-$fileName';
+      final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+
+      // Upload avec metadata
+      final metadata = SettableMetadata(
+        contentType: mimeType,
+        customMetadata: {
+          'userId': user.uid,
+          'childId': childId,
+          'originalName': fileName,
+        },
+      );
+
+      // Faire l'upload
+      final uploadTask = storageRef.putData(file.bytes!, metadata);
+
+      // Attendre la fin de l'upload
+      await uploadTask.whenComplete(() => null);
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      // Créer le message dans Firestore
+      await _firestore.collection('exchanges').add({
+        'childId': childId,
+        'senderId': user.uid,
+        'type': 'file',
+        'fileName': fileName,
+        'fileUrl': downloadUrl,
+        'fileType': mimeType,
+        'fileSize': file.size,
+        'timestamp': FieldValue.serverTimestamp(),
+        'senderType': 'parent',
+        'nonLu': true, // Pour l'assistante maternelle
+        'readByParent': true, // Le parent a déjà lu son propre message
+      });
+
+      // Notifier l'assistante maternelle
+      await _notifyAssistanteMaternel(childId, structureId);
+
+      setState(() => _isUploadingFile = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fichier envoyé avec succès'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Erreur upload: $e');
+      setState(() => _isUploadingFile = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('Exception:')
+                  ? e.toString().split('Exception: ')[1]
+                  : "Erreur lors de l'envoi du fichier",
+            ),
+            backgroundColor: primaryRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildFileMessage(Map<String, dynamic> message, bool isMe) {
+    final fileType = message['fileType'] ?? '';
+    final isImage = fileType.startsWith('image/');
+    final timestamp = message['timestamp'] as Timestamp?;
+    final formattedTime =
+        timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '';
+
+    Future<void> _openFile() async {
+      try {
+        final fileUrl = message['fileUrl'];
+        if (fileUrl == null) {
+          throw 'URL du fichier non disponible';
+        }
+
+        if (kIsWeb) {
+          if (await canLaunchUrlString(fileUrl)) {
+            await launchUrlString(fileUrl);
+          } else {
+            throw 'Impossible d\'ouvrir le fichier';
+          }
+        } else {
+          if (await canLaunchUrlString(fileUrl)) {
+            await launchUrlString(fileUrl);
+          } else {
+            throw 'Impossible d\'ouvrir le fichier';
+          }
+        }
+      } catch (e) {
+        print('Erreur lors de l\'ouverture du fichier: $e');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur: ${e.toString()}'),
+              backgroundColor: primaryRed,
+            ),
+          );
+        }
+      }
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isMe ? primaryBlue.withOpacity(0.9) : Colors.grey[200],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _openFile,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      isImage ? Icons.image : Icons.insert_drive_file,
+                      color: isMe ? Colors.white : primaryBlue,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        message['fileName'] ?? 'Fichier',
+                        style: TextStyle(
+                          color: isMe ? Colors.white : primaryBlue,
+                          decoration: TextDecoration.underline,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (isImage && message['fileUrl'] != null) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                message['fileUrl'],
+                width: 200,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 200,
+                    height: 150,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                  );
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            formattedTime,
+            style: TextStyle(
+              color: isMe ? Colors.white.withOpacity(0.7) : Colors.grey[600],
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkMessageBadge() async {
@@ -455,47 +681,57 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                             MediaQuery.of(context).padding.bottom + 8.0),
                         color: Colors.white,
                         child: SafeArea(
-                          child: Row(
+                          child: Column(
                             children: [
-                              IconButton(
-                                icon: Icon(Icons.attach_file),
-                                onPressed: () {
-                                  // Fonctionnalité à implémenter plus tard
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content:
-                                            Text('Fonctionnalité à venir')),
-                                  );
-                                },
-                              ),
-                              Expanded(
-                                child: TextField(
-                                  controller: _messageController,
-                                  decoration: InputDecoration(
-                                    hintText: "Écrivez votre message...",
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(24),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.grey[100],
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
+                              // Indicateur de progression d'upload
+                              if (_isUploadingFile)
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  child: LinearProgressIndicator(
+                                    backgroundColor: lightBlue,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        primaryBlue),
                                   ),
-                                  minLines: 1,
-                                  maxLines: 4,
-                                  // Améliorer l'expérience utilisateur
-                                  textInputAction: TextInputAction.send,
-                                  onSubmitted: (value) {
-                                    if (value.trim().isNotEmpty) {
-                                      _sendMessage();
-                                    }
-                                  },
                                 ),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.send, color: primaryBlue),
-                                onPressed: _sendMessage,
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.attach_file),
+                                    onPressed: _isUploadingFile
+                                        ? null
+                                        : _pickAndSendFile,
+                                  ),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _messageController,
+                                      decoration: InputDecoration(
+                                        hintText: "Écrivez votre message...",
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.grey[100],
+                                        contentPadding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                      ),
+                                      minLines: 1,
+                                      maxLines: 4,
+                                      textInputAction: TextInputAction.send,
+                                      onSubmitted: (value) {
+                                        if (value.trim().isNotEmpty) {
+                                          _sendMessage();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(Icons.send, color: primaryBlue),
+                                    onPressed: _sendMessage,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -827,34 +1063,38 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
             SizedBox(width: 8),
           ],
           Flexible(
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMe ? primaryBlue.withOpacity(0.9) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message['content'] ?? '',
-                    style: TextStyle(
-                      color: isMe ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    time,
-                    style: TextStyle(
+            child: message['type'] == 'file'
+                ? _buildFileMessage(message, isMe)
+                : Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
                       color: isMe
-                          ? Colors.white.withOpacity(0.7)
-                          : Colors.grey[600],
-                      fontSize: 10,
+                          ? primaryBlue.withOpacity(0.9)
+                          : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message['content'] ?? '',
+                          style: TextStyle(
+                            color: isMe ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          time,
+                          style: TextStyle(
+                            color: isMe
+                                ? Colors.white.withOpacity(0.7)
+                                : Colors.grey[600],
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
           if (isMe) SizedBox(width: 8),
         ],

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 
 class RepasScreen extends StatefulWidget {
   const RepasScreen({Key? key}) : super(key: key);
@@ -547,6 +548,61 @@ class _RepasScreenState extends State<RepasScreen> {
     );
   }
 
+  Future<void> _selectMealTime(
+      StateSetter setState, Function(String) onTimeSelected) async {
+    // Obtenir l'heure actuelle ou celle déjà saisie
+    TimeOfDay initialTime;
+    if (_mealTime.isNotEmpty) {
+      final parts = _mealTime.split(':');
+      initialTime = TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryBlue,
+              dayPeriodTextColor: primaryBlue,
+              dialHandColor: primaryBlue,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              // Fix pour le rectangle bleu
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryBlue.withOpacity(0.15)
+                      : Colors.transparent),
+              // Forme pour les conteneurs heure/minute
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryBlue,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final timeString =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        onTimeSelected(timeString);
+      });
+    }
+  }
+
   void _showAddMealPopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String localMealTime = _mealTime;
@@ -689,21 +745,10 @@ class _RepasScreenState extends State<RepasScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   InkWell(
-                                    onTap: () {
-                                      DatePicker.showTimePicker(
-                                        context,
-                                        showSecondsColumn: false,
-                                        showTitleActions: true,
-                                        onConfirm: (date) {
-                                          setState(() {
-                                            localMealTime =
-                                                '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-                                          });
-                                        },
-                                        currentTime: DateTime.now(),
-                                        locale: LocaleType.fr,
-                                      );
-                                    },
+                                    onTap: () =>
+                                        _selectMealTime(setState, (time) {
+                                      localMealTime = time;
+                                    }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 20),

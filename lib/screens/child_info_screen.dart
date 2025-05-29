@@ -23,7 +23,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
   TextEditingController birthDateController = TextEditingController();
   DateTime? selectedDate;
   int _selectedIndex = 2; // Pour la barre de navigation du bas
-
+  String structureName = "Chargement...";
+  bool isLoadingStructure = true;
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -41,6 +42,64 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         margin: EdgeInsets.all(16),
       ),
     );
+  }
+
+  Future<void> _loadStructureInfo() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() => isLoadingStructure = false);
+        return;
+      }
+
+      // Récupérer l'email de l'utilisateur actuel
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
+      String structureId = user.uid;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
+          structureId = userData['structureId'];
+          print(
+              "🔄 Child Info: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        }
+      }
+
+      // Récupération des informations de la structure avec l'ID correct
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      if (structureDoc.exists) {
+        final data = structureDoc.data() as Map<String, dynamic>;
+        setState(() {
+          structureName = data['structureName'] ?? 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      } else {
+        setState(() {
+          structureName = 'Structure inconnue';
+          isLoadingStructure = false;
+        });
+      }
+    } catch (e) {
+      print("Erreur lors du chargement des infos de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoadingStructure = false;
+      });
+    }
   }
 
   Widget _buildTabletLayout() {
@@ -803,6 +862,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
     super.initState();
     // Initialize date formatting for French locale
     initializeDateFormatting('fr_FR', null);
+    // AJOUT : Charger les infos de structure
+    _loadStructureInfo();
   }
 
   @override
@@ -1107,7 +1168,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      "Poppins",
+                      structureName, // CHANGEMENT : utiliser structureName au lieu de "Poppins"
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

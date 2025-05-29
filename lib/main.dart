@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // AJOUT : Import pour SystemChrome
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +20,12 @@ const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // NOUVEAU : Forcer l'orientation portrait pour toute l'application
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown, // Permet la rotation 180° si souhaité
+  ]);
 
   // Initialisation de Firebase avec les options spécifiques à la plateforme
   await Firebase.initializeApp(
