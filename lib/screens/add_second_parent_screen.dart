@@ -13,6 +13,10 @@ class AddSecondParentScreen extends StatefulWidget {
   _AddSecondParentScreenState createState() => _AddSecondParentScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
   int _selectedIndex = 2; // Pour la barre de navigation du bas
 
@@ -55,9 +59,245 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
     );
   }
 
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double contentWidth = (maxWidth * 0.6).clamp(400.0, 600.0);
+
+      return Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: (maxWidth * 0.05).clamp(20.0, 50.0),
+            vertical: (maxHeight * 0.02).clamp(10.0, 30.0),
+          ),
+          child: Container(
+            width: contentWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Card principale avec explication
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  padding: EdgeInsets.all((maxWidth * 0.04).clamp(24.0, 40.0)),
+                  child: Column(
+                    children: [
+                      // En-tête avec icône
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(
+                                (maxWidth * 0.015).clamp(12.0, 20.0)),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.family_restroom,
+                              color: primaryBlue,
+                              size: (maxWidth * 0.03).clamp(28.0, 40.0),
+                            ),
+                          ),
+                          SizedBox(width: (maxWidth * 0.02).clamp(16.0, 24.0)),
+                          Flexible(
+                            child: Text(
+                              "Ajout d'un deuxième parent",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.024).clamp(20.0, 28.0),
+                                fontWeight: FontWeight.bold,
+                                color: primaryBlue,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: (maxHeight * 0.03).clamp(20.0, 30.0)),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(
+                            (maxWidth * 0.025).clamp(20.0, 30.0)),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          "Souhaitez-vous ajouter un deuxième parent pour cet enfant ou continuer les autres étapes d'inscription ?",
+                          style: TextStyle(
+                            fontSize: (maxWidth * 0.018).clamp(15.0, 20.0),
+                            color: Colors.grey[700],
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: (maxHeight * 0.05).clamp(30.0, 50.0)),
+
+                // Icône illustration centrale
+                Container(
+                  padding: EdgeInsets.all((maxWidth * 0.035).clamp(30.0, 50.0)),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        lightBlue.withOpacity(0.7),
+                        lightBlue,
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryBlue.withOpacity(0.2),
+                        blurRadius: 16,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.family_restroom,
+                    size: (maxWidth * 0.08).clamp(80.0, 120.0),
+                    color: primaryBlue,
+                  ),
+                ),
+
+                SizedBox(height: (maxHeight * 0.06).clamp(40.0, 60.0)),
+
+                // Boutons d'action
+                Column(
+                  children: [
+                    // Bouton ajouter parent
+                    _buildButtonTablet(
+                      text: "Ajouter un deuxième parent",
+                      icon: Icons.person_add,
+                      onPressed: () {
+                        print(
+                            "DEBUG - Bouton 'Ajouter parent' - childId: '${widget.childId}'");
+                        if (widget.childId.isNotEmpty) {
+                          print(
+                              "✅ Redirection vers parent-second-info avec childId: ${widget.childId}");
+                          context.go('/parent-second-info',
+                              extra: widget.childId);
+                        } else {
+                          _showError("Erreur : ID d'enfant manquant !");
+                        }
+                      },
+                      color: primaryBlue,
+                      isPrimary: true,
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                    ),
+
+                    SizedBox(height: (maxHeight * 0.02).clamp(16.0, 24.0)),
+
+                    // Bouton continuer
+                    _buildButtonTablet(
+                      text: "Continuer l'ajout de l'enfant",
+                      icon: Icons.arrow_forward,
+                      onPressed: () {
+                        print(
+                            "DEBUG - Bouton 'Continuer' - childId avant navigation: '${widget.childId}'");
+                        if (widget.childId.isNotEmpty) {
+                          print(
+                              "✅ Redirection vers schedule-info avec childId: ${widget.childId}");
+                          context.go('/schedule-info', extra: widget.childId);
+                        } else {
+                          _showError("Erreur : ID d'enfant manquant !");
+                        }
+                      },
+                      color: Colors.grey.shade400,
+                      isPrimary: false,
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: (maxHeight * 0.04).clamp(30.0, 50.0)),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildButtonTablet({
+    required String text,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color color,
+    required bool isPrimary,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(
+        maxWidth: (maxWidth * 0.4).clamp(300.0, 450.0),
+      ),
+      child: ElevatedButton.icon(
+        icon: Icon(
+          icon,
+          color: isPrimary ? Colors.white : Colors.white,
+          size: (maxWidth * 0.022).clamp(20.0, 28.0),
+        ),
+        label: Text(
+          text,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(
+            horizontal: (maxWidth * 0.03).clamp(25.0, 40.0),
+            vertical: (maxHeight * 0.025).clamp(18.0, 25.0),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: isPrimary ? 4 : 2,
+          shadowColor:
+              isPrimary ? color.withOpacity(0.3) : Colors.grey.withOpacity(0.2),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     print("DEBUG - AddSecondParentScreen reçoit childId: '${widget.childId}'");
+
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -65,144 +305,150 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
         children: [
           _buildAppBar(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      if (widget.childId.isNotEmpty) {
-                        print(
-                            "🔄 Retour vers parent-address avec childId: ${widget.childId}");
-                        context.go('/parent-address', extra: widget.childId);
-                      } else {
-                        _showError("Erreur : ID d'enfant manquant !");
-                      }
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Card with explanation
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.family_restroom,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                "Ajout d'un deuxième parent",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
-                                ),
-                              ),
-                            ],
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : SingleChildScrollView(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            if (widget.childId.isNotEmpty) {
+                              print(
+                                  "🔄 Retour vers parent-address avec childId: ${widget.childId}");
+                              context.go('/parent-address',
+                                  extra: widget.childId);
+                            } else {
+                              _showError("Erreur : ID d'enfant manquant !");
+                            }
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            "Souhaitez-vous ajouter un deuxième parent pour cet enfant ou continuer les autres étapes d'inscription ?",
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey[700],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Card with explanation
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.family_restroom,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Ajout d'un deuxième parent",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryBlue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "Souhaitez-vous ajouter un deuxième parent pour cet enfant ou continuer les autres étapes d'inscription ?",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+
+                        SizedBox(height: 30),
+
+                        // Icon illustration
+                        Center(
+                          child: Container(
+                            padding: EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.family_restroom,
+                              size: 80,
+                              color: primaryBlue,
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 40),
+
+                        // Add second parent button
+                        _buildButton(
+                          text: "Ajouter un deuxième parent",
+                          icon: Icons.person_add,
+                          onPressed: () {
+                            print(
+                                "DEBUG - Bouton 'Ajouter parent' - childId: '${widget.childId}'");
+                            if (widget.childId.isNotEmpty) {
+                              print(
+                                  "✅ Redirection vers parent-second-info avec childId: ${widget.childId}");
+                              context.go('/parent-second-info',
+                                  extra: widget.childId);
+                            } else {
+                              _showError("Erreur : ID d'enfant manquant !");
+                            }
+                          },
+                          color: primaryBlue,
+                          isLoading: false,
+                        ),
+
+                        SizedBox(height: 20),
+
+                        // Continue button
+                        _buildButton(
+                          text: "Continuer l'ajout de l'enfant",
+                          icon: Icons.arrow_forward,
+                          onPressed: () {
+                            print(
+                                "DEBUG - Bouton 'Continuer' - childId avant navigation: '${widget.childId}'");
+                            if (widget.childId.isNotEmpty) {
+                              print(
+                                  "✅ Redirection vers schedule-info avec childId: ${widget.childId}");
+                              context.go('/schedule-info',
+                                  extra: widget.childId);
+                            } else {
+                              _showError("Erreur : ID d'enfant manquant !");
+                            }
+                          },
+                          color: Colors.grey.shade400,
+                          isLoading: false,
+                        ),
+
+                        SizedBox(height: 60),
+                      ],
                     ),
                   ),
-
-                  SizedBox(height: 30),
-
-                  // Icon illustration
-                  Center(
-                    child: Container(
-                      padding: EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: lightBlue,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.family_restroom,
-                        size: 80,
-                        color: primaryBlue,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 40),
-
-                  // Add second parent button
-                  _buildButton(
-                    text: "Ajouter un deuxième parent",
-                    icon: Icons.person_add,
-                    onPressed: () {
-                      print(
-                          "DEBUG - Bouton 'Ajouter parent' - childId: '${widget.childId}'");
-                      if (widget.childId.isNotEmpty) {
-                        print(
-                            "✅ Redirection vers parent-second-info avec childId: ${widget.childId}");
-                        context.go('/parent-second-info',
-                            extra: widget.childId);
-                      } else {
-                        _showError("Erreur : ID d'enfant manquant !");
-                      }
-                    },
-                    color: primaryBlue,
-                    isLoading: false,
-                  ),
-
-                  SizedBox(height: 20),
-
-                  // Continue button
-                  _buildButton(
-                    text: "Continuer l'ajout de l'enfant",
-                    icon: Icons.arrow_forward,
-                    onPressed: () {
-                      print(
-                          "DEBUG - Bouton 'Continuer' - childId avant navigation: '${widget.childId}'");
-                      if (widget.childId.isNotEmpty) {
-                        print(
-                            "✅ Redirection vers schedule-info avec childId: ${widget.childId}");
-                        context.go('/schedule-info', extra: widget.childId);
-                      } else {
-                        _showError("Erreur : ID d'enfant manquant !");
-                      }
-                    },
-                    color: Colors.grey.shade400,
-                    isLoading: false,
-                  ),
-
-                  SizedBox(height: 60),
-                ],
-              ),
-            ),
           ),
         ],
       ),

@@ -58,6 +58,12 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+
+    // Déterminer si on est sur iPad
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     // Déterminer la couleur d'accent selon le type d'invitation
     Color accentColor = primaryBlue;
     if (invitationType == 'mamMember') {
@@ -71,240 +77,724 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
       appBar: AppBar(
         title: Text(
           "Finaliser l'inscription",
-          style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: primaryBlue,
+            fontWeight: FontWeight.bold,
+            fontSize: isTablet ? 24 : 20,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: primaryBlue),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Icône et titre
-              Icon(
-                invitationType == 'mamMember'
-                    ? Icons.business
-                    : Icons.family_restroom,
-                size: 60,
-                color: accentColor,
+      body: isTablet
+          ? _buildTabletContent(context, screenSize, accentColor)
+          : _buildPhoneContent(context, accentColor),
+    );
+  }
+
+  Widget _buildPhoneContent(BuildContext context, Color accentColor) {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Icône et titre
+            Icon(
+              invitationType == 'mamMember'
+                  ? Icons.business
+                  : Icons.family_restroom,
+              size: 60,
+              color: accentColor,
+            ),
+
+            const SizedBox(height: 20),
+
+            Text(
+              invitationType == 'mamMember'
+                  ? "Rejoindre en tant que membre"
+                  : "Rejoindre en tant que parent",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryBlue,
               ),
+              textAlign: TextAlign.center,
+            ),
 
-              const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-              Text(
-                invitationType == 'mamMember'
-                    ? "Rejoindre en tant que membre"
-                    : "Rejoindre en tant que parent",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: primaryBlue,
-                ),
-                textAlign: TextAlign.center,
+            Text(
+              invitationType == 'mamMember'
+                  ? "Vous allez rejoindre $structureName"
+                  : "Vous allez rejoindre $structureName pour $childName",
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
               ),
+              textAlign: TextAlign.center,
+            ),
 
-              const SizedBox(height: 10),
+            const SizedBox(height: 30),
 
-              Text(
-                invitationType == 'mamMember'
-                    ? "Vous allez rejoindre $structureName"
-                    : "Vous allez rejoindre $structureName pour $childName",
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-                textAlign: TextAlign.center,
+            // Container informatif
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: lightBlue,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: primaryBlue.withOpacity(0.3)),
               ),
-
-              const SizedBox(height: 30),
-
-              // Container informatif
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: lightBlue,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryBlue.withOpacity(0.3)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: primaryBlue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "Création de votre compte",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: primaryBlue,
-                            ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: primaryBlue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Création de votre compte",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: primaryBlue,
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
+                    style: TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Affichage de l'email (non modifiable)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.email_outlined, color: accentColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      email,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Champ pour le mot de passe
+            TextField(
+              controller: passwordController,
+              obscureText: !_showPassword,
+              decoration: InputDecoration(
+                labelText: "Mot de passe",
+                hintText: "Créez un mot de passe",
+                helperText: "Minimum 6 caractères",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                prefixIcon: Icon(Icons.lock_outline, color: accentColor),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _showPassword ? Icons.visibility_off : Icons.visibility,
+                    color: accentColor,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showPassword = !_showPassword;
+                    });
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Confirmation du mot de passe
+            TextField(
+              controller: confirmPasswordController,
+              obscureText: !_showPassword,
+              decoration: InputDecoration(
+                labelText: "Confirmer le mot de passe",
+                hintText: "Confirmez votre mot de passe",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                prefixIcon: Icon(Icons.lock_outline, color: accentColor),
+              ),
+            ),
+
+            // Affichage des erreurs
+            if (errorMessage.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: primaryRed.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: primaryRed.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: primaryRed, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          errorMessage,
+                          style: TextStyle(
+                            color: primaryRed,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 40),
+
+            // Bouton de création de compte
+            SizedBox(
+              height: 54,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _createAccount,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        "CRÉER MON COMPTE",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Option pour retourner à l'accueil
+            TextButton.icon(
+              onPressed: () {
+                context.go('/');
+              },
+              icon: Icon(Icons.arrow_back, size: 16, color: primaryBlue),
+              label: Text(
+                "Retour à l'accueil",
+                style: TextStyle(color: primaryBlue),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabletContent(
+      BuildContext context, Size screenSize, Color accentColor) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        final double maxHeight = constraints.maxHeight;
+
+        // Calculer des dimensions en pourcentages pour une adaptation parfaite
+        final double contentWidth = maxWidth * 0.6; // 60% de la largeur
+        final double sideMargin =
+            (maxWidth - contentWidth) / 2; // Centrage automatique
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+              sideMargin,
+              maxHeight * 0.03, // 3% de marge en haut
+              sideMargin,
+              maxHeight * 0.03),
+          child: Container(
+            width: contentWidth,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  offset: const Offset(0, 12),
+                  blurRadius: 32,
+                  spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: accentColor.withOpacity(0.1),
+                  offset: const Offset(0, 6),
+                  blurRadius: 16,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(maxWidth * 0.04), // 4% de padding
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Container d'en-tête avec icône
+                  Container(
+                    width: maxWidth * 0.12,
+                    height: maxWidth * 0.12,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          accentColor.withOpacity(0.1),
+                          accentColor.withOpacity(0.2),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
-                      style: TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // Affichage de l'email (non modifiable)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.email_outlined, color: accentColor),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        email,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Champ pour le mot de passe
-              TextField(
-                controller: passwordController,
-                obscureText: !_showPassword,
-                decoration: InputDecoration(
-                  labelText: "Mot de passe",
-                  hintText: "Créez un mot de passe",
-                  helperText: "Minimum 6 caractères",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  prefixIcon: Icon(Icons.lock_outline, color: accentColor),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showPassword ? Icons.visibility_off : Icons.visibility,
+                    child: Icon(
+                      invitationType == 'mamMember'
+                          ? Icons.business
+                          : Icons.family_restroom,
+                      size: maxWidth * 0.06,
                       color: accentColor,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _showPassword = !_showPassword;
-                      });
-                    },
                   ),
-                ),
-              ),
 
-              const SizedBox(height: 20),
+                  SizedBox(height: maxHeight * 0.03),
 
-              // Confirmation du mot de passe
-              TextField(
-                controller: confirmPasswordController,
-                obscureText: !_showPassword,
-                decoration: InputDecoration(
-                  labelText: "Confirmer le mot de passe",
-                  hintText: "Confirmez votre mot de passe",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                  // Titre principal
+                  Text(
+                    invitationType == 'mamMember'
+                        ? "Rejoindre en tant que membre"
+                        : "Rejoindre en tant que parent",
+                    style: TextStyle(
+                      fontSize: maxWidth * 0.03,
+                      fontWeight: FontWeight.bold,
+                      color: primaryBlue,
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  prefixIcon: Icon(Icons.lock_outline, color: accentColor),
-                ),
-              ),
 
-              // Affichage des erreurs
-              if (errorMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
+                  SizedBox(height: maxHeight * 0.015),
+
+                  // Sous-titre
+                  Text(
+                    invitationType == 'mamMember'
+                        ? "Vous allez rejoindre $structureName"
+                        : "Vous allez rejoindre $structureName pour $childName",
+                    style: TextStyle(
+                      fontSize: maxWidth * 0.02,
+                      color: Colors.grey.shade600,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  SizedBox(height: maxHeight * 0.04),
+
+                  // Container informatif moderne
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(maxWidth * 0.025),
                     decoration: BoxDecoration(
-                      color: primaryRed.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: primaryRed.withOpacity(0.5)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          lightBlue.withOpacity(0.7),
+                          lightBlue.withOpacity(0.9),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: primaryBlue.withOpacity(0.25),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryBlue.withOpacity(0.1),
+                          blurRadius: 15,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // En-tête avec icône et titre
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(maxWidth * 0.015),
+                              decoration: BoxDecoration(
+                                color: primaryBlue.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.info_outline,
+                                  color: primaryBlue, size: maxWidth * 0.02),
+                            ),
+                            SizedBox(width: maxWidth * 0.02),
+                            Expanded(
+                              child: Text(
+                                "Création de votre compte",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryBlue,
+                                  fontSize: maxWidth * 0.02,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: maxHeight * 0.015),
+                        // Description
+                        Text(
+                          "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
+                          style: TextStyle(
+                            fontSize: maxWidth * 0.018,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: maxHeight * 0.04),
+
+                  // Affichage de l'email modernisé
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(maxWidth * 0.025),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.grey.shade100,
+                          Colors.grey.shade50,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accentColor.withOpacity(0.2),
+                        width: 1.5,
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, color: primaryRed, size: 18),
-                        const SizedBox(width: 8),
+                        Container(
+                          padding: EdgeInsets.all(maxWidth * 0.012),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.email_outlined,
+                              color: accentColor, size: maxWidth * 0.02),
+                        ),
+                        SizedBox(width: maxWidth * 0.02),
                         Expanded(
                           child: Text(
-                            errorMessage,
+                            email,
                             style: TextStyle(
-                              color: primaryRed,
-                              fontSize: 14,
+                              fontSize: maxWidth * 0.02,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
 
-              const SizedBox(height: 40),
+                  SizedBox(height: maxHeight * 0.03),
 
-              // Bouton de création de compte
-              SizedBox(
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _createAccount,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          "CRÉER MON COMPTE",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                  // Champ pour le mot de passe adaptatif
+                  Container(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: passwordController,
+                      obscureText: !_showPassword,
+                      style: TextStyle(fontSize: maxWidth * 0.019),
+                      decoration: InputDecoration(
+                        labelText: "Mot de passe",
+                        hintText: "Créez un mot de passe",
+                        helperText: "Minimum 6 caractères",
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: maxWidth * 0.025,
+                          vertical: maxHeight * 0.02,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: accentColor, width: 2.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                              color: Colors.grey.shade300, width: 1.5),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        prefixIcon: Padding(
+                          padding: EdgeInsets.all(maxWidth * 0.015),
+                          child: Icon(Icons.lock_outline,
+                              color: accentColor, size: maxWidth * 0.02),
+                        ),
+                        suffixIcon: Padding(
+                          padding: EdgeInsets.all(maxWidth * 0.015),
+                          child: IconButton(
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: accentColor,
+                              size: maxWidth * 0.02,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showPassword = !_showPassword;
+                              });
+                            },
                           ),
                         ),
-                ),
-              ),
+                        labelStyle: TextStyle(
+                          color: accentColor,
+                          fontSize: maxWidth * 0.018,
+                        ),
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: maxWidth * 0.018,
+                        ),
+                        helperStyle: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: maxWidth * 0.016,
+                        ),
+                      ),
+                    ),
+                  ),
 
-              const SizedBox(height: 20),
+                  SizedBox(height: maxHeight * 0.025),
 
-              // Option pour retourner à l'accueil
-              TextButton.icon(
-                onPressed: () {
-                  context.go('/');
-                },
-                icon: Icon(Icons.arrow_back, size: 16, color: primaryBlue),
-                label: Text(
-                  "Retour à l'accueil",
-                  style: TextStyle(color: primaryBlue),
-                ),
+                  // Confirmation du mot de passe adaptatif
+                  Container(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: confirmPasswordController,
+                      obscureText: !_showPassword,
+                      style: TextStyle(fontSize: maxWidth * 0.019),
+                      decoration: InputDecoration(
+                        labelText: "Confirmer le mot de passe",
+                        hintText: "Confirmez votre mot de passe",
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: maxWidth * 0.025,
+                          vertical: maxHeight * 0.02,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: accentColor, width: 2.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                              color: Colors.grey.shade300, width: 1.5),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        prefixIcon: Padding(
+                          padding: EdgeInsets.all(maxWidth * 0.015),
+                          child: Icon(Icons.lock_outline,
+                              color: accentColor, size: maxWidth * 0.02),
+                        ),
+                        labelStyle: TextStyle(
+                          color: accentColor,
+                          fontSize: maxWidth * 0.018,
+                        ),
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: maxWidth * 0.018,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Affichage des erreurs adaptatif
+                  if (errorMessage.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: maxHeight * 0.025),
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(maxWidth * 0.02),
+                        decoration: BoxDecoration(
+                          color: primaryRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryRed.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryRed.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(maxWidth * 0.01),
+                              decoration: BoxDecoration(
+                                color: primaryRed.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.error_outline,
+                                  color: primaryRed, size: maxWidth * 0.02),
+                            ),
+                            SizedBox(width: maxWidth * 0.015),
+                            Expanded(
+                              child: Text(
+                                errorMessage,
+                                style: TextStyle(
+                                  color: primaryRed,
+                                  fontSize: maxWidth * 0.017,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  SizedBox(height: maxHeight * 0.05),
+
+                  // Bouton de création de compte modernisé
+                  Container(
+                    width: contentWidth * 0.7, // 70% de la largeur du contenu
+                    height: maxHeight * 0.08,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : _createAccount,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        disabledBackgroundColor: accentColor.withOpacity(0.6),
+                      ),
+                      child: isLoading
+                          ? SizedBox(
+                              height: maxWidth * 0.025,
+                              width: maxWidth * 0.025,
+                              child: const CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            )
+                          : Text(
+                              "CRÉER MON COMPTE",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.021,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  SizedBox(height: maxHeight * 0.035),
+
+                  // Lien retour modernisé
+                  TextButton.icon(
+                    onPressed: () {
+                      context.go('/');
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: maxWidth * 0.025,
+                        vertical: maxHeight * 0.015,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: Icon(Icons.arrow_back,
+                        size: maxWidth * 0.02, color: primaryBlue),
+                    label: Text(
+                      "Retour à l'accueil",
+                      style: TextStyle(
+                        color: primaryBlue,
+                        fontSize: maxWidth * 0.019,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

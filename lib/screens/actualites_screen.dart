@@ -13,12 +13,21 @@ class ActualitesScreen extends StatefulWidget {
   _ActualitesScreenState createState() => _ActualitesScreenState();
 }
 
+// Fonction pour détecter si on est sur iPad
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ActualitesScreenState extends State<ActualitesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool isLoading = true;
   String structureName = "Chargement...";
   int _selectedIndex = 1;
+
+  // AJOUT: Variables pour gérer l'ID de structure
+  String structureId = "";
+  String currentUserEmail = "";
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -50,7 +59,6 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     _tabController = TabController(length: 3, vsync: this);
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadStructureData();
-      _loadActualites();
     });
   }
 
@@ -60,31 +68,66 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     super.dispose();
   }
 
+  // MODIFIÉ: Fonction pour déterminer le bon structureId selon le type (assmat ou MAM)
   Future<void> _loadStructureData() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(user.uid)
+      // Récupérer l'email de l'utilisateur actuel
+      currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
           .get();
 
-      setState(() {
-        structureName =
-            structureSnapshot['structureName'] ?? 'Structure inconnue';
-      });
+      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
+      structureId = user.uid;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Pour une MAM: utiliser l'ID de la structure MAM pour que tous les membres voient la même chose
+          structureId = userData['structureId'];
+          print(
+              "🔄 Actualités: Membre MAM détecté - Utilisation de l'ID de structure: $structureId");
+        } else {
+          print(
+              "🔄 Actualités: Assistante Maternelle - Utilisation de l'ID utilisateur: $structureId");
+        }
+      }
+
+      // Récupération des informations de la structure avec l'ID correct
+      final structureSnapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId) // Utiliser structureId au lieu de user.uid
+          .get();
+
+      if (structureSnapshot.exists) {
+        final data = structureSnapshot.data() as Map<String, dynamic>;
+        setState(() {
+          structureName = data['structureName'] ?? 'Structure inconnue';
+        });
+      }
+
+      // Charger les actualités avec le bon structureId
+      _loadActualites();
     } catch (e) {
       print("Erreur lors du chargement des données de structure: $e");
+      setState(() => isLoading = false);
     }
   }
 
-  Future<void> _checkAndResetWeeklyMenu(String userId) async {
+  // MODIFIÉ: Utiliser structureId au lieu de user.uid
+  Future<void> _checkAndResetWeeklyMenu(String targetStructureId) async {
     try {
       // Récupérer les informations de dernière mise à jour du menu
       final menuInfoDoc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(userId)
+          .doc(targetStructureId) // Utiliser le structureId passé en paramètre
           .collection('actualites')
           .doc('menu_info')
           .get();
@@ -102,7 +145,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
         shouldResetMenu = true;
         await FirebaseFirestore.instance
             .collection('structures')
-            .doc(userId)
+            .doc(targetStructureId)
             .collection('actualites')
             .doc('menu_info')
             .set({
@@ -120,7 +163,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
             // Mettre à jour la date de dernière réinitialisation
             await FirebaseFirestore.instance
                 .collection('structures')
-                .doc(userId)
+                .doc(targetStructureId)
                 .collection('actualites')
                 .doc('menu_info')
                 .update({
@@ -132,7 +175,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
           shouldResetMenu = true;
           await FirebaseFirestore.instance
               .collection('structures')
-              .doc(userId)
+              .doc(targetStructureId)
               .collection('actualites')
               .doc('menu_info')
               .update({
@@ -143,7 +186,8 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
       // Réinitialiser le menu si nécessaire
       if (shouldResetMenu) {
-        print("Réinitialisation du menu hebdomadaire");
+        print(
+            "Réinitialisation du menu hebdomadaire pour la structure: $targetStructureId");
         // Créer un menu vide
         Map<String, List<String>> emptyMenu = {
           'Lundi': [],
@@ -157,7 +201,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
         await FirebaseFirestore.instance
             .collection('structures')
-            .doc(userId)
+            .doc(targetStructureId)
             .collection('actualites')
             .doc('menu')
             .set(emptyMenu);
@@ -167,19 +211,24 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     }
   }
 
+  // MODIFIÉ: Utiliser structureId au lieu de user.uid
   Future<void> _loadActualites() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      // Vérifier que structureId est défini
+      if (structureId.isEmpty) {
+        print("Erreur: structureId vide");
+        setState(() => isLoading = false);
+        return;
+      }
 
       // Gérer la réinitialisation hebdomadaire du menu
-      await _checkAndResetWeeklyMenu(user.uid);
+      await _checkAndResetWeeklyMenu(structureId);
 
       // Charger les événements
       final eventsSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc('events')
           .collection('items')
@@ -189,7 +238,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       // Charger les sorties
       final sortiesSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc('sorties')
           .collection('items')
@@ -199,7 +248,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       // Charger les menus de la semaine
       final menuSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc('menu')
           .get();
@@ -706,12 +755,16 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     );
   }
 
+  // MODIFIÉ: Utiliser structureId au lieu de user.uid
   Future<void> _addActualite(
       String titre, String description, DateTime date, bool isSortie,
       [String? lieu]) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      // Vérifier que structureId est défini
+      if (structureId.isEmpty) {
+        print("Erreur: structureId vide lors de l'ajout d'actualité");
+        return;
+      }
 
       final collection = isSortie ? 'sorties' : 'events';
       final data = isSortie
@@ -731,7 +784,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc(collection)
           .collection('items')
@@ -773,10 +826,14 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     }
   }
 
+  // MODIFIÉ: Utiliser structureId au lieu de user.uid
   Future<void> _saveMenu(Map<String, List<String>> menu) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      // Vérifier que structureId est défini
+      if (structureId.isEmpty) {
+        print("Erreur: structureId vide lors de la sauvegarde du menu");
+        return;
+      }
 
       // Convertir en Map<String, dynamic> pour Firestore
       final Map<String, dynamic> data = {};
@@ -786,7 +843,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc('menu')
           .set(data);
@@ -827,16 +884,20 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     }
   }
 
+  // MODIFIÉ: Utiliser structureId au lieu de user.uid
   Future<void> _deleteActualite(String id, bool isSortie) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      // Vérifier que structureId est défini
+      if (structureId.isEmpty) {
+        print("Erreur: structureId vide lors de la suppression d'actualité");
+        return;
+      }
 
       final collection = isSortie ? 'sorties' : 'events';
 
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId
           .collection('actualites')
           .doc(collection)
           .collection('items')
@@ -879,6 +940,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     }
   }
 
+  // VERSION MOBILE (EXISTANTE) - Menu Tab
   Widget _buildMenuTab() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -1044,6 +1106,253 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     );
   }
 
+  // VERSION IPAD - Menu Tab
+  Widget _buildMenuTabForTablet() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 15,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // En-tête avec gradient
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primaryBlue, primaryBlue.withOpacity(0.85)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.restaurant_menu,
+                        color: Colors.white, size: 32),
+                  ),
+                  SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Menu de la semaine',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.event_note,
+                                  color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Semaine du ${DateFormat('dd/MM').format(currentWeekStart)}',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.edit, color: Colors.white, size: 28),
+                      onPressed: _showEditMenuDialog,
+                      tooltip: 'Modifier le menu',
+                      padding: EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Contenu en grille
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 1.3,
+                    crossAxisSpacing: 20,
+                    mainAxisSpacing: 20,
+                  ),
+                  itemCount: 5, // Lundi à Vendredi
+                  itemBuilder: (context, index) {
+                    final days = [
+                      'Lundi',
+                      'Mardi',
+                      'Mercredi',
+                      'Jeudi',
+                      'Vendredi'
+                    ];
+                    final day = days[index];
+                    final hasMenu = menuSemaine[day]!.isNotEmpty;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: hasMenu
+                            ? lightBlue.withOpacity(0.3)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: hasMenu
+                              ? primaryBlue.withOpacity(0.3)
+                              : Colors.grey.shade200,
+                          width: 2,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: hasMenu
+                                        ? primaryBlue.withOpacity(0.1)
+                                        : Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.calendar_today,
+                                    color: hasMenu
+                                        ? primaryBlue
+                                        : Colors.grey.shade500,
+                                    size: 20,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  day,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: hasMenu
+                                        ? primaryBlue
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            Expanded(
+                              child: hasMenu
+                                  ? SingleChildScrollView(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: menuSemaine[day]!
+                                            .map((item) => Padding(
+                                                  padding: EdgeInsets.only(
+                                                      bottom: 8),
+                                                  child: Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.restaurant,
+                                                        size: 16,
+                                                        color: primaryBlue
+                                                            .withOpacity(0.7),
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: Text(
+                                                          item,
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            height: 1.3,
+                                                            color:
+                                                                Colors.black87,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ))
+                                            .toList(),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.restaurant_menu,
+                                            size: 32,
+                                            color: Colors.grey.shade400,
+                                          ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            'Aucun menu défini',
+                                            style: TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.grey.shade500,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // VERSION MOBILE (EXISTANTE) - Events Tab
   Widget _buildEventsTab() {
     return Stack(
       children: [
@@ -1236,6 +1545,262 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     );
   }
 
+  // VERSION IPAD - Events Tab
+  Widget _buildEventsTabForTablet() {
+    return Stack(
+      children: [
+        events.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: lightBlue.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.event_busy,
+                        size: 80,
+                        color: primaryBlue.withOpacity(0.6),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Aucun événement prévu',
+                      style: TextStyle(
+                        fontSize: 24,
+                        color: primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Ajoutez des événements à venir pour les parents',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            : Padding(
+                padding: EdgeInsets.all(24),
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 1.3,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 24,
+                  ),
+                  itemCount: events.length,
+                  itemBuilder: (context, index) {
+                    final event = events[index];
+                    final date = event['date'].toDate();
+                    final bool isPast = date
+                        .isBefore(DateTime.now().subtract(Duration(days: 1)));
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 15,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // En-tête avec statut
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: isPast
+                                    ? [
+                                        Colors.grey.shade400,
+                                        Colors.grey.shade500
+                                      ]
+                                    : [
+                                        primaryBlue,
+                                        primaryBlue.withOpacity(0.85)
+                                      ],
+                              ),
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(24)),
+                            ),
+                            padding: EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    isPast ? Icons.event_busy : Icons.event,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    isPast ? 'Événement passé' : 'Événement',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: Icon(Icons.delete_outline,
+                                        color: Colors.white, size: 20),
+                                    onPressed: () =>
+                                        _showDeleteConfirmationDialog(
+                                            event['id'], event['titre'], false),
+                                    padding: EdgeInsets.all(8),
+                                    constraints: BoxConstraints(
+                                        minWidth: 0, minHeight: 0),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Contenu
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    event['titre'],
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: isPast
+                                          ? Colors.grey.shade600
+                                          : primaryBlue,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: isPast
+                                          ? Colors.grey.shade100
+                                          : lightBlue,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today,
+                                          size: 16,
+                                          color: isPast
+                                              ? Colors.grey.shade500
+                                              : primaryBlue,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            DateFormat('dd/MM/yyyy')
+                                                .format(date),
+                                            style: TextStyle(
+                                              color: isPast
+                                                  ? Colors.grey.shade600
+                                                  : Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (event['description'].isNotEmpty) ...[
+                                    SizedBox(height: 12),
+                                    Expanded(
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.grey.shade200),
+                                        ),
+                                        child: SingleChildScrollView(
+                                          child: Text(
+                                            event['description'],
+                                            style: TextStyle(
+                                              color: isPast
+                                                  ? Colors.grey.shade500
+                                                  : Colors.black87,
+                                              height: 1.3,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+        Positioned(
+          bottom: 24,
+          right: 24,
+          child: FloatingActionButton.extended(
+            backgroundColor: primaryBlue,
+            elevation: 6,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            onPressed: () => _showAddEventDialog(false),
+            icon: Icon(Icons.add, size: 24),
+            label: Text(
+              'Ajouter',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // VERSION MOBILE (EXISTANTE) - Sorties Tab
   Widget _buildSortiesTab() {
     return Stack(
       children: [
@@ -1466,6 +2031,306 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     );
   }
 
+  // VERSION IPAD - Sorties Tab
+  Widget _buildSortiesTabForTablet() {
+    return Stack(
+      children: [
+        sorties.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: lightBlue.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.hiking,
+                        size: 80,
+                        color: primaryBlue.withOpacity(0.6),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Aucune sortie prévue',
+                      style: TextStyle(
+                        fontSize: 24,
+                        color: primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Ajoutez des sorties à venir pour les parents',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            : Padding(
+                padding: EdgeInsets.all(24),
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 1.2,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 24,
+                  ),
+                  itemCount: sorties.length,
+                  itemBuilder: (context, index) {
+                    final sortie = sorties[index];
+                    final date = sortie['date'].toDate();
+                    final bool isPast = date
+                        .isBefore(DateTime.now().subtract(Duration(days: 1)));
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 15,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // En-tête avec statut
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: isPast
+                                    ? [
+                                        Colors.grey.shade400,
+                                        Colors.grey.shade500
+                                      ]
+                                    : [
+                                        brightCyan,
+                                        brightCyan.withOpacity(0.85)
+                                      ],
+                              ),
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(24)),
+                            ),
+                            padding: EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    isPast
+                                        ? Icons.hiking_outlined
+                                        : Icons.hiking,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    isPast ? 'Sortie passée' : 'Sortie',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: Icon(Icons.delete_outline,
+                                        color: Colors.white, size: 20),
+                                    onPressed: () =>
+                                        _showDeleteConfirmationDialog(
+                                            sortie['id'],
+                                            sortie['titre'],
+                                            true),
+                                    padding: EdgeInsets.all(8),
+                                    constraints: BoxConstraints(
+                                        minWidth: 0, minHeight: 0),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Contenu
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sortie['titre'],
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: isPast
+                                          ? Colors.grey.shade600
+                                          : primaryBlue,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: isPast
+                                              ? Colors.grey.shade100
+                                              : lightBlue,
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.calendar_today,
+                                              size: 14,
+                                              color: isPast
+                                                  ? Colors.grey.shade500
+                                                  : primaryBlue,
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              DateFormat('dd/MM/yyyy')
+                                                  .format(date),
+                                              style: TextStyle(
+                                                color: isPast
+                                                    ? Colors.grey.shade600
+                                                    : Colors.black87,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 8),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isPast
+                                          ? Colors.grey.shade100
+                                          : brightCyan.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 14,
+                                          color: isPast
+                                              ? Colors.grey.shade500
+                                              : primaryBlue,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            sortie['lieu'],
+                                            style: TextStyle(
+                                              color: isPast
+                                                  ? Colors.grey.shade600
+                                                  : Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 12,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (sortie['description'].isNotEmpty) ...[
+                                    SizedBox(height: 12),
+                                    Expanded(
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.grey.shade200),
+                                        ),
+                                        child: SingleChildScrollView(
+                                          child: Text(
+                                            sortie['description'],
+                                            style: TextStyle(
+                                              color: isPast
+                                                  ? Colors.grey.shade500
+                                                  : Colors.black87,
+                                              height: 1.3,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+        Positioned(
+          bottom: 24,
+          right: 24,
+          child: FloatingActionButton.extended(
+            backgroundColor: brightCyan,
+            elevation: 6,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            onPressed: () => _showAddEventDialog(true),
+            icon: Icon(Icons.add, size: 24, color: Colors.white),
+            label: Text(
+              'Ajouter',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showDeleteConfirmationDialog(String id, String title, bool isSortie) {
     showDialog(
       context: context,
@@ -1547,11 +2412,14 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Détection de l'iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          _buildAppBar(),
+          _buildAppBar(context, isTabletDevice),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1571,19 +2439,20 @@ class _ActualitesScreenState extends State<ActualitesScreen>
               indicatorWeight: 3,
               labelStyle: TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
+                fontSize: isTabletDevice ? 16 : 14,
               ),
               tabs: [
                 Tab(
-                  icon: Icon(Icons.restaurant_menu),
+                  icon: Icon(Icons.restaurant_menu,
+                      size: isTabletDevice ? 26 : 22),
                   text: 'Menu',
                 ),
                 Tab(
-                  icon: Icon(Icons.event),
+                  icon: Icon(Icons.event, size: isTabletDevice ? 26 : 22),
                   text: 'Événements',
                 ),
                 Tab(
-                  icon: Icon(Icons.hiking),
+                  icon: Icon(Icons.hiking, size: isTabletDevice ? 26 : 22),
                   text: 'Sorties',
                 ),
               ],
@@ -1598,9 +2467,16 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      SingleChildScrollView(child: _buildMenuTab()),
-                      _buildEventsTab(),
-                      _buildSortiesTab(),
+                      // Utilisation conditionnelle des widgets selon le device
+                      isTabletDevice
+                          ? _buildMenuTabForTablet()
+                          : SingleChildScrollView(child: _buildMenuTab()),
+                      isTabletDevice
+                          ? _buildEventsTabForTablet()
+                          : _buildEventsTab(),
+                      isTabletDevice
+                          ? _buildSortiesTabForTablet()
+                          : _buildSortiesTab(),
                     ],
                   ),
           ),
@@ -1610,7 +2486,8 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     );
   }
 
-  Widget _buildAppBar() {
+  // AppBar adapté pour iPad
+  Widget _buildAppBar(BuildContext context, bool isTabletDevice) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1636,19 +2513,23 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            isTabletDevice ? 24 : 16,
+            16,
+            isTabletDevice ? 28 : 20,
+          ),
           child: Column(
             children: [
               // Première ligne: nom structure et date
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.location_on, color: Colors.white, size: 24),
                   Expanded(
                     child: Text(
                       structureName,
-                      style: const TextStyle(
-                        fontSize: 24,
+                      style: TextStyle(
+                        fontSize: isTabletDevice ? 28 : 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -1656,27 +2537,32 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Bell icon removed
                 ],
               ),
-              SizedBox(height: 15),
+              SizedBox(height: isTabletDevice ? 22 : 15),
               Text(
                 DateFormat('EEEE d MMMM yyyy', 'fr_FR')
                     .format(DateTime.now())
                     .toLowerCase(),
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: isTabletDevice ? 20 : 18,
                   color: Colors.white.withOpacity(0.9),
                   letterSpacing: 0.5,
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 15),
+              SizedBox(height: isTabletDevice ? 22 : 15),
               // Icône et titre de la page
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTabletDevice ? 22 : 16,
+                  vertical: isTabletDevice ? 12 : 8,
+                ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(
+                    color: Colors.white,
+                    width: isTabletDevice ? 2.5 : 2,
+                  ),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -1684,19 +2570,19 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                   children: [
                     Image.asset(
                       'assets/images/Icone_Actualites.png',
-                      width: 26,
-                      height: 26,
+                      width: isTabletDevice ? 36 : 26,
+                      height: isTabletDevice ? 36 : 26,
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.event_note,
-                        size: 26,
+                        size: isTabletDevice ? 32 : 26,
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: isTabletDevice ? 12 : 8),
                     Text(
                       'Actualités',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: isTabletDevice ? 24 : 20,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),

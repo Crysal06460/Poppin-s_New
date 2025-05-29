@@ -18,6 +18,10 @@ class ChildFinancialInfoScreen extends StatefulWidget {
       _ChildFinancialInfoScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
   // Variables pour le tableau mensuel
   bool? _useMonthlyTable = null;
@@ -50,6 +54,738 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
     _mealExpensesController.dispose();
     _kmExpensesController.dispose();
     super.dispose();
+  }
+
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = (maxWidth * 0.03).clamp(10.0, 30.0);
+      final double columnGap = (maxWidth * 0.025).clamp(10.0, 25.0);
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau gauche - Aperçu des informations
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du panneau
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.preview_rounded,
+                              color: primaryBlue,
+                              size: (maxWidth * 0.025).clamp(20.0, 30.0),
+                            ),
+                          ),
+                          SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                          Expanded(
+                            child: Text(
+                              "Aperçu",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Aperçu du choix tableau mensuel
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: _useMonthlyTable == null
+                              ? Colors.grey.shade50
+                              : lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _useMonthlyTable == null
+                                ? Colors.grey.shade200
+                                : primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              "Tableau mensuel",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            if (_useMonthlyTable != null) ...[
+                              Container(
+                                padding: EdgeInsets.all(
+                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: _useMonthlyTable == true
+                                        ? [
+                                            primaryBlue.withOpacity(0.7),
+                                            primaryBlue
+                                          ]
+                                        : [
+                                            primaryRed.withOpacity(0.7),
+                                            primaryRed
+                                          ],
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _useMonthlyTable == true
+                                      ? Icons.check
+                                      : Icons.close,
+                                  size: (maxWidth * 0.04).clamp(24.0, 40.0),
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.015),
+                              Text(
+                                _useMonthlyTable == true ? "Oui" : "Non",
+                                style: TextStyle(
+                                  fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+                                  fontWeight: FontWeight.bold,
+                                  color: _useMonthlyTable == true
+                                      ? primaryBlue
+                                      : primaryRed,
+                                ),
+                              ),
+                            ] else ...[
+                              Container(
+                                padding: EdgeInsets.all(
+                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.help_outline,
+                                  size: (maxWidth * 0.04).clamp(24.0, 40.0),
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.015),
+                              Text(
+                                "Non sélectionné",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.018).clamp(14.0, 20.0),
+                                  color: Colors.grey.shade500,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Aperçu des informations financières
+                      if (_useMonthlyTable == true) ...[
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(
+                                (maxWidth * 0.02).clamp(12.0, 20.0)),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(
+                                          (maxWidth * 0.01).clamp(6.0, 12.0)),
+                                      decoration: BoxDecoration(
+                                        color: primaryBlue.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.euro_rounded,
+                                        color: primaryBlue,
+                                        size:
+                                            (maxWidth * 0.02).clamp(16.0, 24.0),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                        width:
+                                            (maxWidth * 0.01).clamp(6.0, 12.0)),
+                                    Flexible(
+                                      child: Text(
+                                        "Informations financières",
+                                        style: TextStyle(
+                                          fontSize: (maxWidth * 0.018)
+                                              .clamp(14.0, 20.0),
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: maxHeight * 0.03),
+
+                                // Salaire mensuel
+                                _buildInfoRowTablet(
+                                    "Salaire mensuel",
+                                    _monthlySalaryController.text.isEmpty
+                                        ? "Non renseigné"
+                                        : "${_monthlySalaryController.text} €",
+                                    maxWidth),
+                                SizedBox(height: maxHeight * 0.02),
+
+                                // Frais d'entretien
+                                _buildInfoRowTablet(
+                                    "Frais d'entretien",
+                                    _careExpensesController.text.isEmpty
+                                        ? "Non renseigné"
+                                        : "${_careExpensesController.text} €/jour",
+                                    maxWidth),
+                                SizedBox(height: maxHeight * 0.02),
+
+                                // Frais de repas
+                                _buildInfoRowTablet(
+                                    "Frais de repas",
+                                    _mealExpensesController.text.isEmpty
+                                        ? "Non renseigné"
+                                        : "${_mealExpensesController.text} €/jour",
+                                    maxWidth),
+                                SizedBox(height: maxHeight * 0.02),
+
+                                // Frais kilométriques
+                                _buildInfoRowTablet(
+                                    "Frais km",
+                                    _kmExpensesController.text.isEmpty
+                                        ? "Non renseigné"
+                                        : "${_kmExpensesController.text} €/km",
+                                    maxWidth),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(
+                                (maxWidth * 0.02).clamp(12.0, 20.0)),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: (maxWidth * 0.04).clamp(32.0, 48.0),
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  SizedBox(height: maxHeight * 0.02),
+                                  Text(
+                                    "Les informations financières\nseront affichées ici",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize:
+                                          (maxWidth * 0.016).clamp(12.0, 18.0),
+                                      color: Colors.grey.shade500,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau droit - Formulaire
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du formulaire
+                      Text(
+                        "Configuration du tableau mensuel",
+                        style: TextStyle(
+                          fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(
+                                  (maxWidth * 0.01).clamp(6.0, 12.0)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.table_chart_rounded,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                              ),
+                            ),
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Le tableau mensuel permet de suivre automatiquement la facturation et de générer des récapitulatifs mensuels.",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.016).clamp(12.0, 18.0),
+                                  color: primaryBlue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Question
+                      Text(
+                        "Souhaitez-vous utiliser le tableau mensuel ?",
+                        style: TextStyle(
+                          fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: maxHeight * 0.025),
+
+                      // Boutons Oui/Non
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildToggleButtonTablet(
+                              "Oui", _useMonthlyTable == true, () {
+                            setState(() => _useMonthlyTable = true);
+                          }, maxWidth, maxHeight),
+                          SizedBox(width: maxWidth * 0.04),
+                          _buildToggleButtonTablet(
+                              "Non", _useMonthlyTable == false, () {
+                            setState(() => _useMonthlyTable = false);
+                          }, maxWidth, maxHeight),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Formulaire financier
+                      if (_useMonthlyTable == true) ...[
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _buildCurrencyTextFieldTablet(
+                                    _monthlySalaryController,
+                                    "Salaire net mensuel",
+                                    "€",
+                                    maxWidth,
+                                    maxHeight),
+                                SizedBox(height: maxHeight * 0.03),
+                                _buildCurrencyTextFieldTablet(
+                                    _careExpensesController,
+                                    "Frais d'entretien par jour",
+                                    "€/jour",
+                                    maxWidth,
+                                    maxHeight),
+                                SizedBox(height: maxHeight * 0.03),
+                                _buildCurrencyTextFieldTablet(
+                                    _mealExpensesController,
+                                    "Frais de repas par jour",
+                                    "€/jour",
+                                    maxWidth,
+                                    maxHeight),
+                                SizedBox(height: maxHeight * 0.03),
+                                _buildCurrencyTextFieldTablet(
+                                    _kmExpensesController,
+                                    "Frais kilométriques par km",
+                                    "€/km",
+                                    maxWidth,
+                                    maxHeight),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: (maxWidth * 0.04).clamp(32.0, 48.0),
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  SizedBox(height: maxHeight * 0.02),
+                                  Text(
+                                    "Les champs financiers\napparaîtront si vous\nsélectionnez 'Oui'",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize:
+                                          (maxWidth * 0.016).clamp(12.0, 18.0),
+                                      color: Colors.grey.shade500,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Information sur l'invitation
+                      Container(
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: primaryBlue.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.02).clamp(16.0, 24.0)),
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
+                                style: TextStyle(
+                                    color: primaryBlue,
+                                    fontSize:
+                                        (maxWidth * 0.016).clamp(12.0, 18.0)),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton Terminer
+                      Center(
+                        child: Container(
+                          width: (maxWidth * 0.25).clamp(200.0, 300.0),
+                          child: ElevatedButton(
+                            onPressed: _useMonthlyTable == null
+                                ? null
+                                : _saveFinancialInfo,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      (maxWidth * 0.03).clamp(20.0, 40.0),
+                                  vertical:
+                                      (maxHeight * 0.02).clamp(12.0, 20.0)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                            child: _isSaving
+                                ? SizedBox(
+                                    width: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    height: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Terminer",
+                                        style: TextStyle(
+                                          fontSize: (maxWidth * 0.02)
+                                              .clamp(14.0, 20.0),
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                          width: (maxWidth * 0.01)
+                                              .clamp(6.0, 12.0)),
+                                      Icon(Icons.check_circle_outline,
+                                          color: Colors.white,
+                                          size: (maxWidth * 0.02)
+                                              .clamp(16.0, 24.0)),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(
+          flex: 2,
+          child: Text(
+            "$label:",
+            style: TextStyle(
+              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: maxWidth * 0.01),
+        Expanded(
+          flex: 3,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+              fontWeight:
+                  value.contains("Non") ? FontWeight.normal : FontWeight.w600,
+              color:
+                  value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
+              fontStyle:
+                  value.contains("Non") ? FontStyle.italic : FontStyle.normal,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToggleButtonTablet(String label, bool isSelected,
+      VoidCallback onTap, double maxWidth, double maxHeight) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: Duration(milliseconds: 300),
+            padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 25.0)),
+            decoration: BoxDecoration(
+              gradient: isSelected
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        primaryBlue.withOpacity(0.7),
+                        primaryBlue,
+                      ],
+                    )
+                  : null,
+              color: isSelected ? null : Colors.grey.shade200,
+              shape: BoxShape.circle,
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: primaryBlue.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      )
+                    ]
+                  : [],
+            ),
+            child: Icon(
+              isSelected ? Icons.check : Icons.help_outline,
+              size: (maxWidth * 0.045).clamp(32.0, 48.0),
+              color: isSelected ? Colors.white : Colors.grey,
+            ),
+          ),
+          SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? primaryBlue : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrencyTextFieldTablet(TextEditingController controller,
+      String labelText, String suffixText, double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          labelText,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 3),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: controller,
+            onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+            decoration: InputDecoration(
+              labelText: "Montant en €",
+              labelStyle: TextStyle(color: Colors.grey.shade600),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: primaryBlue, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+                vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+              ),
+              suffixText: suffixText,
+              suffixStyle: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*[,.]?\d*')),
+            ],
+            style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 20.0)),
+          ),
+        ),
+      ],
+    );
   }
 
   // Méthode pour sauvegarder les informations financières
@@ -418,7 +1154,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      '10 - Tableau mensuel',
+                      'Tableau mensuel',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -503,290 +1239,307 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back button
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Main card - Monthly Table
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.table_chart_rounded,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  "Configuration du tableau mensuel",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryBlue,
-                                  ),
-                                ),
-                              ),
-                            ],
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : SingleChildScrollView(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Back button (seulement pour iPhone)
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            "Le tableau mensuel permet de suivre automatiquement la facturation et de générer des récapitulatifs mensuels.",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
+                        ),
+                        const SizedBox(height: 20),
 
-                          const SizedBox(height: 24),
-
-                          // Question
-                          Text(
-                            "Souhaitez-vous utiliser le tableau mensuel ?",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
+                        // Main card - Monthly Table
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Oui", _useMonthlyTable == true, () {
-                                  setState(() => _useMonthlyTable = true);
-                                }),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Non", _useMonthlyTable == false, () {
-                                  setState(() => _useMonthlyTable = false);
-                                }),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Détails du tableau mensuel
-                  if (_useMonthlyTable == true) ...[
-                    const SizedBox(height: 20),
-                    Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: lightBlue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.euro_rounded,
-                                    color: primaryBlue,
-                                    size: 24,
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.table_chart_rounded,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        "Configuration du tableau mensuel",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "Le tableau mensuel permet de suivre automatiquement la facturation et de générer des récapitulatifs mensuels.",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
                                   ),
                                 ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    "Informations financières",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: primaryBlue,
-                                    ),
+
+                                const SizedBox(height: 24),
+
+                                // Question
+                                Text(
+                                  "Souhaitez-vous utiliser le tableau mensuel ?",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Oui", _useMonthlyTable == true, () {
+                                        setState(() => _useMonthlyTable = true);
+                                      }),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Non", _useMonthlyTable == false, () {
+                                        setState(
+                                            () => _useMonthlyTable = false);
+                                      }),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            SizedBox(height: 20),
-
-                            // Salaire mensuel
-                            Text(
-                              "Salaire net mensuel :",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildCurrencyTextField(
-                                _monthlySalaryController, "Montant en €", "€"),
-
-                            const SizedBox(height: 20),
-
-                            // Frais d'entretien
-                            Text(
-                              "Frais d'entretien par jour :",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildCurrencyTextField(_careExpensesController,
-                                "Montant en €", "€/jour"),
-
-                            const SizedBox(height: 20),
-
-                            // Frais de repas
-                            Text(
-                              "Frais de repas par jour :",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildCurrencyTextField(_mealExpensesController,
-                                "Montant en €", "€/jour"),
-
-                            const SizedBox(height: 20),
-
-                            // Frais kilométriques
-                            Text(
-                              "Frais kilométriques par km :",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildCurrencyTextField(
-                                _kmExpensesController, "Montant en €", "€/km"),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
 
-                  const SizedBox(height: 32),
+                        // Détails du tableau mensuel
+                        if (_useMonthlyTable == true) ...[
+                          const SizedBox(height: 20),
+                          Card(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: lightBlue,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.euro_rounded,
+                                          color: primaryBlue,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          "Informations financières",
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 20),
 
-                  // Information sur l'invitation automatique
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: primaryBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: primaryBlue.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: primaryBlue),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
-                            style: TextStyle(color: primaryBlue, fontSize: 14),
+                                  // Salaire mensuel
+                                  Text(
+                                    "Salaire net mensuel :",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildCurrencyTextField(
+                                      _monthlySalaryController,
+                                      "Montant en €",
+                                      "€"),
+
+                                  const SizedBox(height: 20),
+
+                                  // Frais d'entretien
+                                  Text(
+                                    "Frais d'entretien par jour :",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildCurrencyTextField(
+                                      _careExpensesController,
+                                      "Montant en €",
+                                      "€/jour"),
+
+                                  const SizedBox(height: 20),
+
+                                  // Frais de repas
+                                  Text(
+                                    "Frais de repas par jour :",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildCurrencyTextField(
+                                      _mealExpensesController,
+                                      "Montant en €",
+                                      "€/jour"),
+
+                                  const SizedBox(height: 20),
+
+                                  // Frais kilométriques
+                                  Text(
+                                    "Frais kilométriques par km :",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildCurrencyTextField(_kmExpensesController,
+                                      "Montant en €", "€/km"),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 32),
+
+                        // Information sur l'invitation automatique
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: primaryBlue.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: primaryBlue),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
+                                  style: TextStyle(
+                                      color: primaryBlue, fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Terminer button
+                        Container(
+                          width: double.infinity,
+                          margin: EdgeInsets.symmetric(horizontal: 20),
+                          child: ElevatedButton(
+                            onPressed: _useMonthlyTable == null
+                                ? null
+                                : _saveFinancialInfo,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                            child: _isSaving
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Terminer",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(Icons.check_circle_outline,
+                                          color: Colors.white),
+                                    ],
+                                  ),
                           ),
                         ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // Terminer button
-                  Container(
-                    width: double.infinity,
-                    margin: EdgeInsets.symmetric(horizontal: 20),
-                    child: ElevatedButton(
-                      onPressed:
-                          _useMonthlyTable == null ? null : _saveFinancialInfo,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 3,
-                      ),
-                      child: _isSaving
-                          ? SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  "Terminer",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(Icons.check_circle_outline,
-                                    color: Colors.white),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

@@ -18,6 +18,10 @@ class ParentAddressScreen extends StatefulWidget {
   _ParentAddressScreenState createState() => _ParentAddressScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ParentAddressScreenState extends State<ParentAddressScreen> {
   final TextEditingController addressController = TextEditingController();
   final TextEditingController postalCodeController = TextEditingController();
@@ -184,96 +188,712 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
     }
   }
 
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = (maxWidth * 0.03).clamp(10.0, 30.0);
+      final double columnGap = (maxWidth * 0.025).clamp(10.0, 25.0);
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau gauche - Aperçu de l'adresse
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du panneau
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.preview_rounded,
+                              color: primaryBlue,
+                              size: (maxWidth * 0.025).clamp(20.0, 30.0),
+                            ),
+                          ),
+                          SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                          Expanded(
+                            child: Text(
+                              "Aperçu",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Aperçu de l'adresse
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(
+                              (maxWidth * 0.02).clamp(12.0, 20.0)),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Titre
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(
+                                        (maxWidth * 0.01).clamp(6.0, 12.0)),
+                                    decoration: BoxDecoration(
+                                      color: primaryBlue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.home_outlined,
+                                      color: primaryBlue,
+                                      size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                      width:
+                                          (maxWidth * 0.01).clamp(6.0, 12.0)),
+                                  Flexible(
+                                    child: Text(
+                                      "Adresse du parent",
+                                      style: TextStyle(
+                                        fontSize: (maxWidth * 0.018)
+                                            .clamp(14.0, 20.0),
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: maxHeight * 0.03),
+
+                              // Adresse
+                              _buildInfoRowTablet(
+                                  "Adresse",
+                                  addressController.text.isEmpty
+                                      ? "Non renseignée"
+                                      : addressController.text,
+                                  maxWidth),
+                              SizedBox(height: maxHeight * 0.02),
+
+                              // Code postal
+                              _buildInfoRowTablet(
+                                  "Code postal",
+                                  postalCodeController.text.isEmpty
+                                      ? "Non renseigné"
+                                      : postalCodeController.text,
+                                  maxWidth),
+                              SizedBox(height: maxHeight * 0.02),
+
+                              // Ville
+                              _buildInfoRowTablet(
+                                  "Ville",
+                                  cityController.text.isEmpty
+                                      ? "Non renseignée"
+                                      : cityController.text,
+                                  maxWidth),
+
+                              SizedBox(height: maxHeight * 0.03),
+
+                              // Aperçu complet de l'adresse
+                              if (addressController.text.isNotEmpty &&
+                                  postalCodeController.text.isNotEmpty &&
+                                  cityController.text.isNotEmpty) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(10.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    color: lightBlue.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: primaryBlue.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on,
+                                            color: primaryBlue,
+                                            size: (maxWidth * 0.018)
+                                                .clamp(14.0, 20.0),
+                                          ),
+                                          SizedBox(width: maxWidth * 0.01),
+                                          Text(
+                                            "Adresse complète",
+                                            style: TextStyle(
+                                              fontSize: (maxWidth * 0.016)
+                                                  .clamp(12.0, 18.0),
+                                              fontWeight: FontWeight.w600,
+                                              color: primaryBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: maxHeight * 0.01),
+                                      Text(
+                                        "${addressController.text}\n${postalCodeController.text} ${cityController.text}",
+                                        style: TextStyle(
+                                          fontSize: (maxWidth * 0.015)
+                                              .clamp(11.0, 16.0),
+                                          color: Colors.black87,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau droit - Formulaire
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du formulaire
+                      Text(
+                        "Adresse du parent",
+                        style: TextStyle(
+                          fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(
+                                  (maxWidth * 0.01).clamp(6.0, 12.0)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.info_outline,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                              ),
+                            ),
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Veuillez renseigner l'adresse du parent",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.016).clamp(12.0, 18.0),
+                                  color: primaryBlue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Champs de saisie
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildAddressFieldTablet(
+                                  "Adresse",
+                                  addressController,
+                                  Icons.location_on,
+                                  maxWidth,
+                                  maxHeight),
+                              SizedBox(height: maxHeight * 0.03),
+                              _buildPostalCodeFieldTablet(maxWidth, maxHeight),
+                              SizedBox(height: maxHeight * 0.03),
+                              _buildCityDropdownTablet(maxWidth, maxHeight),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton Suivant
+                      Center(
+                        child: Container(
+                          width: (maxWidth * 0.25).clamp(200.0, 300.0),
+                          child: ElevatedButton.icon(
+                            icon: _isLoading
+                                ? SizedBox(
+                                    width: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    height: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : Icon(Icons.arrow_forward,
+                                    color: Colors.white,
+                                    size: (maxWidth * 0.02).clamp(16.0, 24.0)),
+                            label: Text(
+                              "Suivant",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onPressed: _isLoading ? null : _saveAddressInfo,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      (maxWidth * 0.03).clamp(20.0, 40.0),
+                                  vertical:
+                                      (maxHeight * 0.02).clamp(12.0, 20.0)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(
+          flex: 2,
+          child: Text(
+            "$label:",
+            style: TextStyle(
+              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: maxWidth * 0.01),
+        Expanded(
+          flex: 3,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+              fontWeight:
+                  value.contains("Non") ? FontWeight.normal : FontWeight.w600,
+              color:
+                  value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
+              fontStyle:
+                  value.contains("Non") ? FontStyle.italic : FontStyle.normal,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddressFieldTablet(
+      String label,
+      TextEditingController controller,
+      IconData icon,
+      double maxWidth,
+      double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 3),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: controller,
+            autofillHints: const [AutofillHints.streetAddressLine1],
+            onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+            decoration: InputDecoration(
+              prefixIcon: Icon(icon, color: primaryBlue),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: primaryBlue, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+                vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+              ),
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+            ),
+            style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 20.0)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPostalCodeFieldTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Code postal",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 3),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: postalCodeController,
+            keyboardType: TextInputType.number,
+            maxLength: 5,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (value) {
+              _fetchCities(value);
+              setState(() {}); // Pour rafraîchir l'aperçu
+            },
+            autocorrect: true,
+            enableSuggestions: true,
+            autofillHints: const [AutofillHints.postalCode],
+            decoration: InputDecoration(
+              prefixIcon: Icon(Icons.map, color: primaryBlue),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: primaryBlue, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+                vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+              ),
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+              counterText: "",
+              suffixIcon: _isLoading
+                  ? Container(
+                      padding: EdgeInsets.all(12),
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: primaryBlue,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : null,
+            ),
+            style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 20.0)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCityDropdownTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Ville",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 3),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: cityController,
+            onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+            decoration: InputDecoration(
+              prefixIcon: Icon(Icons.location_city, color: primaryBlue),
+              suffixIcon: citySuggestions.isNotEmpty
+                  ? PopupMenuButton<String>(
+                      icon: Icon(Icons.arrow_drop_down, color: primaryBlue),
+                      onSelected: (String value) {
+                        setState(() {
+                          cityController.text = value;
+                        });
+                      },
+                      itemBuilder: (BuildContext context) {
+                        return citySuggestions
+                            .map<PopupMenuItem<String>>((String value) {
+                          return PopupMenuItem(
+                              value: value, child: Text(value));
+                        }).toList();
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: primaryBlue, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+                vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+              ),
+              hintText: citySuggestions.isEmpty
+                  ? "Entrez d'abord un code postal"
+                  : null,
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+            ),
+            readOnly: true,
+            style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 20.0)),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () =>
-                        context.go('/parent-info', extra: widget.childId),
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.home_outlined,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                "Adresse du parent",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
-                                ),
-                              ),
-                            ],
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : SingleChildScrollView(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () =>
+                              context.go('/parent-info', extra: widget.childId),
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            "Veuillez renseigner l'adresse du parent :",
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey[700],
+                        ),
+                        SizedBox(height: 20),
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.home_outlined,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Adresse du parent",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryBlue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "Veuillez renseigner l'adresse du parent :",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        SizedBox(height: 24),
+                        _buildAddressField(
+                            "Adresse", addressController, Icons.location_on),
+                        _buildPostalCodeField(),
+                        _buildCityDropdown(),
+                        SizedBox(height: 40),
+                        Center(
+                          child: _buildButton(
+                            text: "Suivant",
+                            icon: Icons.arrow_forward,
+                            onPressed: _isLoading ? null : _saveAddressInfo,
+                            color: primaryBlue,
+                            isLoading: _isLoading,
+                          ),
+                        ),
+                        SizedBox(height: 60),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 24),
-                  _buildAddressField(
-                      "Adresse", addressController, Icons.location_on),
-                  _buildPostalCodeField(),
-                  _buildCityDropdown(),
-                  SizedBox(height: 40),
-                  Center(
-                    child: _buildButton(
-                      text: "Suivant",
-                      icon: Icons.arrow_forward,
-                      onPressed: _isLoading ? null : _saveAddressInfo,
-                      color: primaryBlue,
-                      isLoading: _isLoading,
-                    ),
-                  ),
-                  SizedBox(height: 60),
-                ],
-              ),
-            ),
           ),
         ],
       ),

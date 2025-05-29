@@ -38,6 +38,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool needFridgeTemperatureCheck =
       false; // Indique si la température n'a pas été relevée aujourd'hui
   int _abacusClickCount = 0;
+  int _selectedSection = 0; // 0: Structure, 1: Enfants, 2: Rapports
+
   // Définition des couleurs de la palette
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -1113,6 +1115,731 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Nouvelle méthode pour le contenu tablette
+  Widget _buildTabletContent() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = maxWidth * 0.03;
+      final double columnGap = maxWidth * 0.025;
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          sideMargin,
+          maxHeight * 0.02,
+          sideMargin,
+          maxHeight * 0.02,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau latéral gauche (Sections principales)
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre avec icône
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/Icone_Dashboard.png',
+                            width: maxWidth * 0.07,
+                            height: maxWidth * 0.07,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.dashboard,
+                              color: primaryColor,
+                              size: maxWidth * 0.07,
+                            ),
+                          ),
+                          SizedBox(width: maxWidth * 0.015),
+                          Expanded(
+                            child: Text(
+                              "Paramètres",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.022,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.025),
+
+                      // Liste des sections principales
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            _buildSectionItem(
+                              title: "Gestion de la structure",
+                              icon: Icons.business,
+                              imagePath: 'assets/images/Icone_Structure.png',
+                              index: 0,
+                              maxWidth: maxWidth,
+                              badge:
+                                  (isMAMStructure && needFridgeTemperatureCheck)
+                                      ? "1"
+                                      : null,
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            _buildSectionItem(
+                              title: "Gestion des enfants",
+                              icon: Icons.child_care,
+                              imagePath:
+                                  'assets/images/Icone_Enfant_Present.png',
+                              index: 1,
+                              maxWidth: maxWidth,
+                            ),
+                            if (showMonthlyTableReports) ...[
+                              SizedBox(height: maxHeight * 0.02),
+                              _buildSectionItem(
+                                title: "Rapports",
+                                icon: Icons.assessment,
+                                imagePath:
+                                    'assets/images/Icone_Recaptitulatif.png',
+                                index: 2,
+                                maxWidth: maxWidth,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau de droite (Actions détaillées)
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.02),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre de la section détaillée
+                      Text(
+                        _getSectionTitle(_selectedSection),
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.022,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.01),
+
+                      // Actions détaillées selon la section sélectionnée
+                      Expanded(
+                        child: _buildSectionDetails(
+                            _selectedSection, maxWidth, maxHeight),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  // Nouvelle méthode pour construire un élément de section
+  Widget _buildSectionItem({
+    required String title,
+    required IconData icon,
+    required String imagePath,
+    required int index,
+    required double maxWidth,
+    String? badge,
+  }) {
+    final bool isSelected = _selectedSection == index;
+
+    return Material(
+      color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedSection = index;
+          });
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.all(maxWidth * 0.02),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border:
+                isSelected ? Border.all(color: primaryColor, width: 2) : null,
+          ),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  Image.asset(
+                    imagePath,
+                    width: maxWidth * 0.06,
+                    height: maxWidth * 0.06,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      icon,
+                      color: isSelected ? primaryColor : Colors.grey.shade600,
+                      size: maxWidth * 0.06,
+                    ),
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        padding: EdgeInsets.all(maxWidth * 0.008),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          badge,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: maxWidth * 0.012,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(width: maxWidth * 0.02),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: maxWidth * 0.018,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? primaryColor : Colors.black87,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(
+                  Icons.chevron_right,
+                  color: primaryColor,
+                  size: maxWidth * 0.025,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Nouvelle méthode pour obtenir le titre de la section
+  String _getSectionTitle(int sectionIndex) {
+    switch (sectionIndex) {
+      case 0:
+        return "Structure";
+      case 1:
+        return "Enfants";
+      case 2:
+        return "Rapports";
+      default:
+        return "Actions";
+    }
+  }
+
+  // Nouvelle méthode pour construire les détails de section
+  Widget _buildSectionDetails(
+      int sectionIndex, double maxWidth, double maxHeight) {
+    switch (sectionIndex) {
+      case 0:
+        return _buildStructureActions(maxWidth, maxHeight);
+      case 1:
+        return _buildChildrenActions(maxWidth, maxHeight);
+      case 2:
+        return _buildReportsActions(maxWidth, maxHeight);
+      default:
+        return Container();
+    }
+  }
+
+  // Méthode pour les actions de structure
+  Widget _buildStructureActions(double maxWidth, double maxHeight) {
+    return ListView(
+      children: [
+        _buildTabletActionItem(
+          icon: Icons.edit_note,
+          title: "Modifier les coordonnées",
+          description: "Changer les informations de la structure",
+          onTap: () => context.go('/structure-management'),
+          maxWidth: maxWidth,
+        ),
+        if (isMAMStructure) ...[
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.people,
+            title: "Modifier les membres",
+            description: "Gérer les membres de la MAM",
+            onTap: _showMemberManagement,
+            maxWidth: maxWidth,
+          ),
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.settings,
+            title: "Fonctionnement de la MAM",
+            description: "Température frigo, planning ménage...",
+            onTap: _showMAMFunctioning,
+            maxWidth: maxWidth,
+            badge: needFridgeTemperatureCheck ? "1" : null,
+          ),
+        ],
+      ],
+    );
+  }
+
+  // Méthode pour les actions enfants
+  Widget _buildChildrenActions(double maxWidth, double maxHeight) {
+    return ListView(
+      children: [
+        _buildTabletActionItem(
+          icon: Icons.access_time,
+          title: "Modifier les horaires",
+          description: "Ajuster les horaires de garde",
+          onTap: _showScheduleModification,
+          maxWidth: maxWidth,
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.photo_library,
+          title: "Gestion des photos",
+          description: "Ajouter ou supprimer des photos",
+          onTap: _showPhotoManagement,
+          maxWidth: maxWidth,
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.edit_note,
+          title: "Modifier les profils complets",
+          description: "Éditer toutes les informations enfant",
+          onTap: _showChildProfilesSelection,
+          maxWidth: maxWidth,
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.person_remove,
+          title: "Retrait d'enfant",
+          description: "Gérer le départ d'un enfant",
+          onTap: _showChildRemoval,
+          maxWidth: maxWidth,
+        ),
+      ],
+    );
+  }
+
+  // Méthode pour les actions rapports
+  Widget _buildReportsActions(double maxWidth, double maxHeight) {
+    return ListView(
+      children: [
+        _buildTabletActionItem(
+          icon: Icons.calendar_month,
+          title: "Tableau mensuel",
+          description: "Consulter les rapports mensuels",
+          onTap: () => context.go('/monthly-report-selection'),
+          maxWidth: maxWidth,
+        ),
+      ],
+    );
+  }
+
+  // Méthode pour construire un élément d'action pour tablette
+  Widget _buildTabletActionItem({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+    required double maxWidth,
+    String? badge,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.all(maxWidth * 0.025),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(maxWidth * 0.015),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: primaryColor,
+                      size: maxWidth * 0.025,
+                    ),
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: EdgeInsets.all(maxWidth * 0.008),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          badge,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: maxWidth * 0.012,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(width: maxWidth * 0.02),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.018,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: maxWidth * 0.005),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.014,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.grey,
+                size: maxWidth * 0.025,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Conserver la méthode _buildPhoneContent() (ne pas la modifier)
+  Widget _buildPhoneContent() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Gestion de la Structure
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _abacusClickCount++;
+                            print(
+                                "🧮 Image structure cliquée: $_abacusClickCount fois");
+                            if (_abacusClickCount >= 5) {
+                              _abacusClickCount = 0;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text("Accès administrateur déverrouillé"),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => AdminScreen()),
+                              );
+                            }
+                          });
+                        },
+                        child: Image.asset(
+                          'assets/images/Icone_Structure.png',
+                          width: 60,
+                          height: 60,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.business,
+                            color: primaryColor,
+                            size: 60,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Gestion de la structure",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.edit_note,
+                    title: "Modifier les coordonnées",
+                    onTap: () => context.go('/structure-management'),
+                  ),
+                  if (isMAMStructure)
+                    _buildActionItem(
+                      icon: Icons.people,
+                      title: "Modifier les membres",
+                      onTap: _showMemberManagement,
+                    ),
+                  if (isMAMStructure)
+                    _buildActionItem(
+                      icon: Icons.settings,
+                      title: "Fonctionnement de la MAM",
+                      onTap: _showMAMFunctioning,
+                      badge: needFridgeTemperatureCheck
+                          ? Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "1",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+
+            // Section Gestion des Enfants
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _abacusClickCount++;
+                            print(
+                                "🧮 Image enfant cliquée: $_abacusClickCount fois");
+                            if (_abacusClickCount >= 5) {
+                              _abacusClickCount = 0;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text("Accès administrateur déverrouillé"),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => AdminScreen()),
+                              );
+                            }
+                          });
+                        },
+                        child: Image.asset(
+                          'assets/images/Icone_Enfant_Present.png',
+                          width: 60,
+                          height: 60,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.child_care,
+                            color: primaryColor,
+                            size: 60,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Gestion des enfants",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.access_time,
+                    title: "Modifier les horaires",
+                    onTap: _showScheduleModification,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.photo_library,
+                    title: "Gestion des photos",
+                    onTap: _showPhotoManagement,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.edit_note,
+                    title: "Modifier les profils complets",
+                    onTap: _showChildProfilesSelection,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.person_remove,
+                    title: "Retrait d'enfant",
+                    onTap: _showChildRemoval,
+                  ),
+                ],
+              ),
+            ),
+
+            // Section Rapports - Affichée conditionnellement
+            if (showMonthlyTableReports)
+              Container(
+                margin: EdgeInsets.only(bottom: 16),
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Image.asset(
+                          'assets/images/Icone_Recaptitulatif.png',
+                          width: 60,
+                          height: 60,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.assessment,
+                            color: primaryColor,
+                            size: 60,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            "Rapports",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    _buildActionItem(
+                      icon: Icons.calendar_month,
+                      title: "Tableau mensuel",
+                      onTap: () => context.go('/monthly-report-selection'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -1124,11 +1851,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // En-tête avec fond de couleur
+          // En-tête avec fond de couleur - identique pour phone et tablet
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -1140,9 +1871,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   primaryColor.withOpacity(0.85),
                 ],
               ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(screenSize.width * 0.06),
+                bottomRight: Radius.circular(screenSize.width * 0.06),
               ),
               boxShadow: [
                 BoxShadow(
@@ -1154,7 +1885,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                padding: EdgeInsets.fromLTRB(
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * 0.02,
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * (isTablet ? 0.02 : 0.025),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1165,23 +1901,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text(
                           "Tableau de bord",
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize:
+                                screenSize.width * (isTablet ? 0.032 : 0.06),
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
                         Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: EdgeInsets.symmetric(
+                            horizontal:
+                                screenSize.width * (isTablet ? 0.018 : 0.03),
+                            vertical:
+                                screenSize.height * (isTablet ? 0.01 : 0.006),
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(
+                              screenSize.width * (isTablet ? 0.025 : 0.05),
+                            ),
                           ),
                           child: Text(
                             DateFormat('EEEE d MMMM', 'fr_FR')
                                 .format(DateTime.now()),
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize:
+                                  screenSize.width * (isTablet ? 0.018 : 0.035),
                               color: Colors.white.withOpacity(0.95),
                               fontWeight: FontWeight.w500,
                             ),
@@ -1194,7 +1938,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       structureName,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: screenSize.width * (isTablet ? 0.024 : 0.045),
                         fontWeight: FontWeight.w500,
                         color: Colors.white,
                       ),
@@ -1216,7 +1960,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: Text(
                                 "MAM",
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: screenSize.width *
+                                      (isTablet ? 0.016 : 0.03),
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
@@ -1226,7 +1971,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Text(
                               "$currentMemberCount/$maxMemberCount membres",
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: screenSize.width *
+                                    (isTablet ? 0.016 : 0.03),
                                 color: Colors.white.withOpacity(0.9),
                               ),
                             ),
@@ -1239,274 +1985,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          // Contenu principal
+          // Contenu principal avec adaptation pour iPad
           Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Section Gestion de la Structure
-                    Container(
-                      margin: EdgeInsets.only(bottom: 16),
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            offset: const Offset(0, 3),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              // Image de la section
-                              Image.asset(
-                                'assets/images/Icone_Structure.png',
-                                width: 60,
-                                height: 60,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(
-                                  Icons.business,
-                                  color: primaryColor,
-                                  size: 60,
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  "Gestion de la structure",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-                          _buildActionItem(
-                            icon: Icons.edit_note,
-                            title: "Modifier les coordonnées",
-                            onTap: () => context.go('/structure-management'),
-                          ),
-
-                          // Afficher les options spécifiques MAM si c'est une MAM
-                          if (isMAMStructure)
-                            _buildActionItem(
-                              icon: Icons.people,
-                              title: "Modifier les membres",
-                              onTap: _showMemberManagement,
-                            ),
-
-                          // Ajouter l'option Fonctionnement de la MAM si c'est une MAM
-                          if (isMAMStructure)
-                            _buildActionItem(
-                              icon: Icons.settings,
-                              title: "Fonctionnement de la MAM",
-                              onTap: _showMAMFunctioning,
-                              // Ajouter un badge de notification si la température n'a pas été relevée
-                              badge: needFridgeTemperatureCheck
-                                  ? Container(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        "1",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                        ],
-                      ),
-                    ),
-
-                    // Section Gestion des Enfants
-                    Container(
-                      margin: EdgeInsets.only(bottom: 16),
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            offset: const Offset(0, 3),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Remplacez ce bloc de code dans le fichier dashboard_screen.dart
-                          Row(
-                            children: [
-                              // Image de la section
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _abacusClickCount++;
-                                    print(
-                                        "🧮 Image enfant cliquée: $_abacusClickCount fois");
-
-                                    // Si l'utilisateur a cliqué 5 fois, accéder à l'écran admin
-                                    if (_abacusClickCount >= 5) {
-                                      _abacusClickCount =
-                                          0; // Réinitialiser le compteur
-
-                                      // Afficher un message discret pour confirmer l'accès
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                              "Accès administrateur déverrouillé"),
-                                          duration: Duration(seconds: 1),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-
-                                      // Naviguer vers l'écran admin
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => AdminScreen(),
-                                        ),
-                                      );
-                                    }
-                                  });
-                                },
-                                child: Image.asset(
-                                  'assets/images/Icone_Enfant_Present.png',
-                                  width: 60,
-                                  height: 60,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Icon(
-                                    Icons.child_care,
-                                    color: primaryColor,
-                                    size: 60,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  "Gestion des enfants",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-                          _buildActionItem(
-                            icon: Icons.access_time,
-                            title: "Modifier les horaires",
-                            onTap: _showScheduleModification,
-                          ),
-                          _buildActionItem(
-                            icon: Icons.photo_library,
-                            title: "Gestion des photos",
-                            onTap: _showPhotoManagement,
-                          ),
-                          _buildActionItem(
-                            icon: Icons.edit_note,
-                            title: "Modifier les profils complets",
-                            onTap: _showChildProfilesSelection,
-                          ),
-                          _buildActionItem(
-                            icon: Icons.person_remove,
-                            title: "Retrait d'enfant",
-                            onTap: _showChildRemoval,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Section Rapports - Affichée conditionnellement
-                    if (showMonthlyTableReports)
-                      Container(
-                        margin: EdgeInsets.only(bottom: 16),
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              offset: const Offset(0, 3),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                // Image de la section
-                                Image.asset(
-                                  'assets/images/Icone_Recaptitulatif.png',
-                                  width: 60,
-                                  height: 60,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Icon(
-                                    Icons.assessment,
-                                    color: primaryColor,
-                                    size: 60,
-                                  ),
-                                ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    "Rapports",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 16),
-                            _buildActionItem(
-                              icon: Icons.calendar_month,
-                              title: "Tableau mensuel",
-                              onTap: () =>
-                                  context.go('/monthly-report-selection'),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
           ),
         ],
       ),
 
-      // BottomNavigationBar similaire à HomeScreen
+      // BottomNavigationBar identique
       bottomNavigationBar: BottomNavigationBar(
         onTap: _onItemTapped,
         backgroundColor: Colors.white,
@@ -1517,32 +2003,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         type: BottomNavigationBarType.fixed,
         currentIndex: 0, // Dashboard est sélectionné
         items: [
-          // Premier item - Dashboard
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/Icone_Dashboard.png',
-              width: 60,
-              height: 60,
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Dashboard",
           ),
-
-          // Deuxième item - Home (Maison)
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/maison_icon.png',
-              width: 60,
-              height: 60,
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Home",
           ),
-
-          // Troisième item - Ajouter enfant
           BottomNavigationBarItem(
             icon: Image.asset(
               'assets/images/Icone_Ajout_Enfant.png',
-              width: 60,
-              height: 60,
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
             label: "Ajouter",
           ),

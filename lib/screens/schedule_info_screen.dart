@@ -15,6 +15,10 @@ class ScheduleInfoScreen extends StatefulWidget {
   _ScheduleInfoScreenState createState() => _ScheduleInfoScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   final List<String> weekDays = [
     'Lundi',
@@ -82,6 +86,621 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       segment.endController.dispose();
       daySegments[day]!.removeAt(index);
     });
+  }
+
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = maxWidth * 0.03;
+      final double columnGap = maxWidth * 0.025;
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau gauche - Aperçu des horaires
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du panneau
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.preview_rounded,
+                              color: primaryBlue,
+                              size: maxWidth * 0.025,
+                            ),
+                          ),
+                          SizedBox(width: maxWidth * 0.015),
+                          Expanded(
+                            child: Text(
+                              "Aperçu des horaires",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.022,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Aperçu des horaires sélectionnés
+                      Expanded(
+                        child: _buildSchedulePreviewTablet(maxWidth, maxHeight),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau droit - Formulaire
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du formulaire
+                      Text(
+                        "Horaires de garde",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.025,
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(maxWidth * 0.02),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(maxWidth * 0.01),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.info_outline,
+                                color: primaryBlue,
+                                size: maxWidth * 0.02,
+                              ),
+                            ),
+                            SizedBox(width: maxWidth * 0.015),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Veuillez renseigner les horaires de garde",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.016,
+                                      color: primaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    "Pour les horaires coupés, ajoutez plusieurs créneaux par jour",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.014,
+                                      color: primaryBlue.withOpacity(0.8),
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Liste des jours
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: weekDays.length,
+                          itemBuilder: (context, index) {
+                            final day = weekDays[index];
+                            return _buildDayCardTablet(
+                                day, maxWidth, maxHeight);
+                          },
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton Suivant
+                      Center(
+                        child: Container(
+                          width: maxWidth * 0.25,
+                          child: ElevatedButton.icon(
+                            icon: Icon(Icons.arrow_forward,
+                                color: Colors.white, size: maxWidth * 0.02),
+                            label: Text(
+                              "Suivant",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.02,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onPressed: _saveSchedule,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: maxWidth * 0.03,
+                                  vertical: maxHeight * 0.02),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildSchedulePreviewTablet(double maxWidth, double maxHeight) {
+    // Compter le nombre total de créneaux
+    int totalSlots = 0;
+    List<String> activeDays = [];
+
+    for (var day in weekDays) {
+      final segments = daySegments[day] ?? [];
+      if (segments.isNotEmpty) {
+        totalSlots += segments.length;
+        activeDays.add(day);
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(maxWidth * 0.02),
+      decoration: BoxDecoration(
+        color:
+            totalSlots > 0 ? lightBlue.withOpacity(0.3) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: totalSlots > 0
+              ? primaryBlue.withOpacity(0.3)
+              : Colors.grey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête avec statistiques
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(maxWidth * 0.01),
+                decoration: BoxDecoration(
+                  color: totalSlots > 0 ? primaryBlue : Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.schedule,
+                  color: Colors.white,
+                  size: maxWidth * 0.02,
+                ),
+              ),
+              SizedBox(width: maxWidth * 0.015),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      totalSlots > 0 ? "Horaires configurés" : "Aucun horaire",
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.016,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    if (totalSlots > 0)
+                      Text(
+                        "$totalSlots créneaux sur ${activeDays.length} jours",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.014,
+                          color: primaryBlue,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: maxHeight * 0.03),
+
+          // Liste des jours avec horaires
+          Expanded(
+            child: totalSlots > 0
+                ? ListView.separated(
+                    itemCount: activeDays.length,
+                    separatorBuilder: (_, __) =>
+                        SizedBox(height: maxHeight * 0.015),
+                    itemBuilder: (context, index) {
+                      final day = activeDays[index];
+                      final segments = daySegments[day] ?? [];
+
+                      return Container(
+                        padding: EdgeInsets.all(maxWidth * 0.015),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  day,
+                                  style: TextStyle(
+                                    fontSize: maxWidth * 0.015,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryBlue,
+                                  ),
+                                ),
+                                Spacer(),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: maxWidth * 0.008,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: primaryBlue,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    "${segments.length}",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.012,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: maxHeight * 0.01),
+                            ...segments.map((segment) {
+                              final start = segment.startController.text;
+                              final end = segment.endController.text;
+                              if (start.isNotEmpty && end.isNotEmpty) {
+                                return Padding(
+                                  padding: EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    "$start - $end",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.013,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                );
+                              }
+                              return SizedBox.shrink();
+                            }).toList(),
+                          ],
+                        ),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(maxWidth * 0.02),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.schedule_outlined,
+                            size: maxWidth * 0.04,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        SizedBox(height: maxHeight * 0.02),
+                        Text(
+                          "Aucun horaire configuré",
+                          style: TextStyle(
+                            fontSize: maxWidth * 0.016,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayCardTablet(String day, double maxWidth, double maxHeight) {
+    final segments = daySegments[day] ?? [];
+    final bool hasSegments = segments.isNotEmpty;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: maxHeight * 0.02),
+      decoration: BoxDecoration(
+        color: hasSegments ? lightBlue.withOpacity(0.3) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasSegments
+              ? primaryBlue.withOpacity(0.3)
+              : Colors.grey.withOpacity(0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(maxWidth * 0.02),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      day,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.018,
+                        fontWeight:
+                            hasSegments ? FontWeight.bold : FontWeight.w500,
+                        color: hasSegments ? primaryBlue : Colors.black87,
+                      ),
+                    ),
+                    if (hasSegments) ...[
+                      SizedBox(width: maxWidth * 0.01),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: maxWidth * 0.008, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: primaryBlue,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "${segments.length} créneaux",
+                          style: TextStyle(
+                            fontSize: maxWidth * 0.014,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                TextButton.icon(
+                  icon: Icon(Icons.add, size: maxWidth * 0.02),
+                  label: Text(
+                    "Ajouter",
+                    style: TextStyle(fontSize: maxWidth * 0.016),
+                  ),
+                  onPressed: () {
+                    _addTimeSegment(day);
+                    setState(() {}); // Rafraîchir l'aperçu
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: primaryBlue,
+                    padding: EdgeInsets.symmetric(
+                        horizontal: maxWidth * 0.015, vertical: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (hasSegments) ...[
+              SizedBox(height: maxHeight * 0.02),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: segments.length,
+                separatorBuilder: (_, __) =>
+                    SizedBox(height: maxHeight * 0.015),
+                itemBuilder: (context, segmentIndex) {
+                  return _buildTimeSegmentRowTablet(day, segmentIndex,
+                      segments[segmentIndex], maxWidth, maxHeight);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSegmentRowTablet(String day, int index, TimeSegment segment,
+      double maxWidth, double maxHeight) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: segment.startController,
+            decoration: InputDecoration(
+              labelText: "Arrivée",
+              labelStyle: TextStyle(
+                color: primaryBlue,
+                fontSize: maxWidth * 0.014,
+              ),
+              prefixIcon: Icon(
+                Icons.access_time,
+                color: primaryBlue,
+                size: maxWidth * 0.02,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: primaryBlue.withOpacity(0.3),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: primaryBlue,
+                ),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: maxWidth * 0.015,
+                vertical: maxHeight * 0.015,
+              ),
+            ),
+            style: TextStyle(fontSize: maxWidth * 0.016),
+            readOnly: true,
+            onTap: () {
+              _showTimePicker(context, segment, true);
+              // Delay pour permettre la mise à jour avant le rafraîchissement
+              Future.delayed(Duration(milliseconds: 100), () {
+                setState(() {});
+              });
+            },
+          ),
+        ),
+        SizedBox(width: maxWidth * 0.015),
+        Expanded(
+          child: TextField(
+            controller: segment.endController,
+            decoration: InputDecoration(
+              labelText: "Départ",
+              labelStyle: TextStyle(
+                color: primaryBlue,
+                fontSize: maxWidth * 0.014,
+              ),
+              prefixIcon: Icon(
+                Icons.access_time,
+                color: primaryBlue,
+                size: maxWidth * 0.02,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: primaryBlue.withOpacity(0.3),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: primaryBlue,
+                ),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: maxWidth * 0.015,
+                vertical: maxHeight * 0.015,
+              ),
+            ),
+            style: TextStyle(fontSize: maxWidth * 0.016),
+            readOnly: true,
+            onTap: () {
+              _showTimePicker(context, segment, false);
+              // Delay pour permettre la mise à jour avant le rafraîchissement
+              Future.delayed(Duration(milliseconds: 100), () {
+                setState(() {});
+              });
+            },
+          ),
+        ),
+        SizedBox(width: maxWidth * 0.01),
+        IconButton(
+          icon: Icon(
+            Icons.delete_outline,
+            color: primaryRed,
+            size: maxWidth * 0.02,
+          ),
+          onPressed: () {
+            _removeTimeSegment(day, index);
+            setState(() {}); // Rafraîchir l'aperçu
+          },
+        ),
+      ],
+    );
   }
 
   Future<void> _saveSchedule() async {
@@ -191,58 +810,66 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : Padding(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          "Veuillez renseigner les horaires de garde :",
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Pour les horaires coupés, ajoutez plusieurs créneaux par jour",
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 20),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: weekDays.length,
+                            itemBuilder: (context, index) {
+                              final day = weekDays[index];
+                              return _buildDayCard(day);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _buildButton(
+                          text: "Suivant",
+                          icon: Icons.arrow_forward,
+                          onPressed: _saveSchedule,
+                          color: primaryBlue,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Veuillez renseigner les horaires de garde :",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Pour les horaires coupés, ajoutez plusieurs créneaux par jour",
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: weekDays.length,
-                      itemBuilder: (context, index) {
-                        final day = weekDays[index];
-                        return _buildDayCard(day);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildButton(
-                    text: "Suivant",
-                    icon: Icons.arrow_forward,
-                    onPressed: _saveSchedule,
-                    color: primaryBlue,
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

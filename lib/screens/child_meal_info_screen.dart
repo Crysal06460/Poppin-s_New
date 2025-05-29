@@ -15,6 +15,10 @@ class ChildMealInfoScreen extends StatefulWidget {
   _ChildMealInfoScreenState createState() => _ChildMealInfoScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
   // Variables pour les allergies alimentaires
   bool? _hasFoodAllergies = false;
@@ -46,6 +50,627 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
     _foodAllergiesController.dispose();
     _specialDietController.dispose();
     super.dispose();
+  }
+
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = (maxWidth * 0.03).clamp(10.0, 30.0);
+      final double columnGap = (maxWidth * 0.025).clamp(10.0, 25.0);
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau gauche - Aperçu des informations alimentaires
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du panneau
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.preview_rounded,
+                              color: primaryBlue,
+                              size: (maxWidth * 0.025).clamp(20.0, 30.0),
+                            ),
+                          ),
+                          SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                          Expanded(
+                            child: Text(
+                              "Aperçu",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Aperçu des allergies alimentaires
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: _hasFoodAllergies == null
+                              ? Colors.grey.shade50
+                              : (_hasFoodAllergies == true
+                                  ? primaryRed.withOpacity(0.1)
+                                  : Colors.green.withOpacity(0.1)),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _hasFoodAllergies == null
+                                ? Colors.grey.shade200
+                                : (_hasFoodAllergies == true
+                                    ? primaryRed.withOpacity(0.3)
+                                    : Colors.green.withOpacity(0.3)),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              "Allergies alimentaires",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            if (_hasFoodAllergies != null) ...[
+                              Container(
+                                padding: EdgeInsets.all(
+                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                decoration: BoxDecoration(
+                                  color: _hasFoodAllergies == true
+                                      ? primaryRed
+                                      : Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _hasFoodAllergies == true
+                                      ? Icons.warning
+                                      : Icons.check,
+                                  size: (maxWidth * 0.03).clamp(20.0, 35.0),
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.015),
+                              Text(
+                                _hasFoodAllergies == true ? "Oui" : "Non",
+                                style: TextStyle(
+                                  fontSize: (maxWidth * 0.02).clamp(14.0, 22.0),
+                                  fontWeight: FontWeight.bold,
+                                  color: _hasFoodAllergies == true
+                                      ? primaryRed
+                                      : Colors.green,
+                                ),
+                              ),
+                              if (_hasFoodAllergies == true &&
+                                  _foodAllergiesController.text.isNotEmpty) ...[
+                                SizedBox(height: maxHeight * 0.01),
+                                Text(
+                                  _foodAllergiesController.text,
+                                  style: TextStyle(
+                                    fontSize:
+                                        (maxWidth * 0.016).clamp(12.0, 18.0),
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ] else ...[
+                              Container(
+                                padding: EdgeInsets.all(
+                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.help_outline,
+                                  size: (maxWidth * 0.03).clamp(20.0, 35.0),
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.015),
+                              Text(
+                                "Non renseigné",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.018).clamp(14.0, 20.0),
+                                  color: Colors.grey.shade500,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Aperçu du régime alimentaire
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(
+                              (maxWidth * 0.02).clamp(12.0, 20.0)),
+                          decoration: BoxDecoration(
+                            color: _hasSpecialDiet == null
+                                ? Colors.grey.shade50
+                                : (_hasSpecialDiet == true
+                                    ? primaryBlue.withOpacity(0.1)
+                                    : Colors.green.withOpacity(0.1)),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _hasSpecialDiet == null
+                                  ? Colors.grey.shade200
+                                  : (_hasSpecialDiet == true
+                                      ? primaryBlue.withOpacity(0.3)
+                                      : Colors.green.withOpacity(0.3)),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                "Régime alimentaire",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.018).clamp(14.0, 20.0),
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.02),
+                              if (_hasSpecialDiet != null) ...[
+                                Container(
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    color: _hasSpecialDiet == true
+                                        ? primaryBlue
+                                        : Colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _hasSpecialDiet == true
+                                        ? Icons.restaurant_menu
+                                        : Icons.check,
+                                    size: (maxWidth * 0.03).clamp(20.0, 35.0),
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: maxHeight * 0.015),
+                                Text(
+                                  _hasSpecialDiet == true ? "Oui" : "Non",
+                                  style: TextStyle(
+                                    fontSize:
+                                        (maxWidth * 0.02).clamp(14.0, 22.0),
+                                    fontWeight: FontWeight.bold,
+                                    color: _hasSpecialDiet == true
+                                        ? primaryBlue
+                                        : Colors.green,
+                                  ),
+                                ),
+                                if (_hasSpecialDiet == true &&
+                                    _specialDietController.text.isNotEmpty) ...[
+                                  SizedBox(height: maxHeight * 0.01),
+                                  Text(
+                                    _specialDietController.text,
+                                    style: TextStyle(
+                                      fontSize:
+                                          (maxWidth * 0.016).clamp(12.0, 18.0),
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ] else ...[
+                                Container(
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.help_outline,
+                                    size: (maxWidth * 0.03).clamp(20.0, 35.0),
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                SizedBox(height: maxHeight * 0.015),
+                                Text(
+                                  "Non renseigné",
+                                  style: TextStyle(
+                                    fontSize:
+                                        (maxWidth * 0.018).clamp(14.0, 20.0),
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau droit - Formulaire
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du formulaire
+                      Text(
+                        "Informations sur l'alimentation",
+                        style: TextStyle(
+                          fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(
+                                  (maxWidth * 0.01).clamp(6.0, 12.0)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.restaurant_menu,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                              ),
+                            ),
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Ces informations sont importantes pour garantir la sécurité et le bien-être de l'enfant pendant les repas.",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.016).clamp(12.0, 18.0),
+                                  color: primaryBlue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Contenu du formulaire
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Section allergies alimentaires
+                              _buildAllergyFormTablet(maxWidth, maxHeight),
+
+                              SizedBox(height: maxHeight * 0.04),
+
+                              // Section régime alimentaire
+                              _buildDietFormTablet(maxWidth, maxHeight),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton Continuer
+                      Center(
+                        child: Container(
+                          width: (maxWidth * 0.25).clamp(200.0, 300.0),
+                          child: ElevatedButton.icon(
+                            icon: _isSaving
+                                ? SizedBox(
+                                    width: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    height: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : Icon(Icons.arrow_forward,
+                                    color: Colors.white,
+                                    size: (maxWidth * 0.02).clamp(16.0, 24.0)),
+                            label: Text(
+                              "Continuer",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onPressed: _isSaving ? null : _saveMealInfo,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      (maxWidth * 0.03).clamp(20.0, 40.0),
+                                  vertical:
+                                      (maxHeight * 0.02).clamp(12.0, 20.0)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildAllergyFormTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "L'enfant a-t-il des allergies alimentaires ?",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(14.0, 22.0),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        Row(
+          children: [
+            Expanded(
+              child: _buildToggleButtonTablet("Oui", _hasFoodAllergies == true,
+                  () {
+                setState(() => _hasFoodAllergies = true);
+              }, maxWidth, maxHeight),
+            ),
+            SizedBox(width: maxWidth * 0.02),
+            Expanded(
+              child: _buildToggleButtonTablet("Non", _hasFoodAllergies == false,
+                  () {
+                setState(() {
+                  _hasFoodAllergies = false;
+                  _foodAllergiesController.clear();
+                });
+              }, maxWidth, maxHeight),
+            ),
+          ],
+        ),
+        if (_hasFoodAllergies == true) ...[
+          SizedBox(height: maxHeight * 0.03),
+          _buildTextFieldTablet(
+            "Précisez les allergies alimentaires",
+            _foodAllergiesController,
+            maxWidth,
+            maxHeight,
+            maxLines: 3,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDietFormTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "L'enfant suit-il un régime alimentaire spécifique ?",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(14.0, 22.0),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        Row(
+          children: [
+            Expanded(
+              child:
+                  _buildToggleButtonTablet("Oui", _hasSpecialDiet == true, () {
+                setState(() => _hasSpecialDiet = true);
+              }, maxWidth, maxHeight),
+            ),
+            SizedBox(width: maxWidth * 0.02),
+            Expanded(
+              child:
+                  _buildToggleButtonTablet("Non", _hasSpecialDiet == false, () {
+                setState(() {
+                  _hasSpecialDiet = false;
+                  _specialDietController.clear();
+                });
+              }, maxWidth, maxHeight),
+            ),
+          ],
+        ),
+        if (_hasSpecialDiet == true) ...[
+          SizedBox(height: maxHeight * 0.03),
+          _buildTextFieldTablet(
+            "Précisez le régime (halal, kasher, sans gluten, etc.)",
+            _specialDietController,
+            maxWidth,
+            maxHeight,
+            maxLines: 3,
+            hintText: "Ex: Sans gluten, Végétarien, Halal...",
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildToggleButtonTablet(String label, bool isSelected,
+      VoidCallback onTap, double maxWidth, double maxHeight) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            vertical: (maxHeight * 0.02).clamp(10.0, 18.0)),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryBlue : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: primaryBlue.withOpacity(0.3),
+                    offset: const Offset(0, 2),
+                    blurRadius: 5,
+                  )
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+              fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextFieldTablet(
+    String label,
+    TextEditingController controller,
+    double maxWidth,
+    double maxHeight, {
+    int maxLines = 1,
+    String? hintText,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 3),
+            blurRadius: 5,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primaryBlue, width: 2),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+            vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+          ),
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
+          ),
+        ),
+        style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 20.0)),
+      ),
+    );
   }
 
   // Méthode pour sauvegarder les informations alimentaires
@@ -229,7 +854,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      '09 - Alimentation',
+                      'Alimentation',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -300,336 +925,354 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back button
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Food Allergies Section
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.restaurant_menu,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  "Informations sur l'alimentation",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryBlue,
-                                  ),
-                                ),
-                              ),
-                            ],
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : SingleChildScrollView(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Back button
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            "Ces informations sont importantes pour garantir la sécurité et le bien-être de l'enfant pendant les repas.",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Allergies alimentaires
-                          Text(
-                            "L'enfant a-t-il des allergies alimentaires ?",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Oui", _hasFoodAllergies == true, () {
-                                  setState(() => _hasFoodAllergies = true);
-                                }),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Non", _hasFoodAllergies == false, () {
-                                  setState(() {
-                                    _hasFoodAllergies = false;
-                                    _foodAllergiesController.clear();
-                                  });
-                                }),
-                              ),
-                            ],
-                          ),
-
-                          if (_hasFoodAllergies == true) ...[
-                            const SizedBox(height: 20),
-                            Container(
-                              decoration: BoxDecoration(
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    offset: const Offset(0, 3),
-                                    blurRadius: 5,
-                                  ),
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _foodAllergiesController,
-                                decoration: InputDecoration(
-                                  labelText:
-                                      "Précisez les allergies alimentaires",
-                                  labelStyle:
-                                      TextStyle(color: Colors.grey.shade600),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                        color: primaryBlue, width: 2),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                ),
-                                maxLines: 3,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Régime alimentaire section
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.food_bank_rounded,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  "Régime alimentaire",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryBlue,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            "L'enfant suit-il un régime alimentaire spécifique ?",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Oui", _hasSpecialDiet == true, () {
-                                  setState(() => _hasSpecialDiet = true);
-                                }),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Non", _hasSpecialDiet == false, () {
-                                  setState(() {
-                                    _hasSpecialDiet = false;
-                                    _specialDietController.clear();
-                                  });
-                                }),
-                              ),
-                            ],
-                          ),
-                          if (_hasSpecialDiet == true) ...[
-                            const SizedBox(height: 20),
-                            Container(
-                              decoration: BoxDecoration(
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    offset: const Offset(0, 3),
-                                    blurRadius: 5,
-                                  ),
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _specialDietController,
-                                decoration: InputDecoration(
-                                  labelText:
-                                      "Précisez le régime (halal, kasher, sans gluten, etc.)",
-                                  labelStyle:
-                                      TextStyle(color: Colors.grey.shade600),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                        color: primaryBlue, width: 2),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                  hintText:
-                                      "Ex: Sans gluten, Végétarien, Halal...",
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey.shade400,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                maxLines: 3,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Continue button
-                  Container(
-                    width: double.infinity,
-                    margin: EdgeInsets.symmetric(horizontal: 20),
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _saveMealInfo,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
                         ),
-                        elevation: 3,
-                      ),
-                      child: _isSaving
-                          ? SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                        const SizedBox(height: 20),
+
+                        // Food Allergies Section
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.restaurant_menu,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        "Informations sur l'alimentation",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
                                 Text(
-                                  "Continuer",
+                                  "Ces informations sont importantes pour garantir la sécurité et le bien-être de l'enfant pendant les repas.",
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
                                   ),
                                 ),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward, color: Colors.white),
+
+                                const SizedBox(height: 24),
+
+                                // Allergies alimentaires
+                                Text(
+                                  "L'enfant a-t-il des allergies alimentaires ?",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Oui", _hasFoodAllergies == true, () {
+                                        setState(
+                                            () => _hasFoodAllergies = true);
+                                      }),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Non", _hasFoodAllergies == false,
+                                          () {
+                                        setState(() {
+                                          _hasFoodAllergies = false;
+                                          _foodAllergiesController.clear();
+                                        });
+                                      }),
+                                    ),
+                                  ],
+                                ),
+
+                                if (_hasFoodAllergies == true) ...[
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: const Offset(0, 3),
+                                          blurRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _foodAllergiesController,
+                                      decoration: InputDecoration(
+                                        labelText:
+                                            "Précisez les allergies alimentaires",
+                                        labelStyle: TextStyle(
+                                            color: Colors.grey.shade600),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: primaryBlue, width: 2),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
+                                      ),
+                                      maxLines: 3,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Régime alimentaire section
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.food_bank_rounded,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        "Régime alimentaire",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "L'enfant suit-il un régime alimentaire spécifique ?",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Oui", _hasSpecialDiet == true, () {
+                                        setState(() => _hasSpecialDiet = true);
+                                      }),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Non", _hasSpecialDiet == false, () {
+                                        setState(() {
+                                          _hasSpecialDiet = false;
+                                          _specialDietController.clear();
+                                        });
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                                if (_hasSpecialDiet == true) ...[
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: const Offset(0, 3),
+                                          blurRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _specialDietController,
+                                      decoration: InputDecoration(
+                                        labelText:
+                                            "Précisez le régime (halal, kasher, sans gluten, etc.)",
+                                        labelStyle: TextStyle(
+                                            color: Colors.grey.shade600),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: primaryBlue, width: 2),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
+                                        hintText:
+                                            "Ex: Sans gluten, Végétarien, Halal...",
+                                        hintStyle: TextStyle(
+                                          color: Colors.grey.shade400,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      maxLines: 3,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Continue button
+                        Container(
+                          width: double.infinity,
+                          margin: EdgeInsets.symmetric(horizontal: 20),
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _saveMealInfo,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                            child: _isSaving
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Continuer",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(Icons.arrow_forward,
+                                          color: Colors.white),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

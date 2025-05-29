@@ -24,6 +24,10 @@ class ChildDocumentsScreen extends StatefulWidget {
   _ChildDocumentsScreenState createState() => _ChildDocumentsScreenState();
 }
 
+bool isTablet(BuildContext context) {
+  return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
 class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
   // Variables pour les vaccins
   PlatformFile? _vaccinFile;
@@ -89,6 +93,670 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
     } catch (e) {
       print("Erreur lors de la sélection du fichier de vaccination: $e");
       _showError("Erreur lors de la sélection du fichier");
+    }
+  }
+
+  Widget _buildTabletLayout() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = (maxWidth * 0.03).clamp(10.0, 30.0);
+      final double columnGap = (maxWidth * 0.025).clamp(10.0, 25.0);
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+            sideMargin, maxHeight * 0.02, sideMargin, maxHeight * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau gauche - Aperçu des documents
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du panneau
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.preview_rounded,
+                              color: primaryBlue,
+                              size: (maxWidth * 0.025).clamp(20.0, 30.0),
+                            ),
+                          ),
+                          SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                          Expanded(
+                            child: Text(
+                              "Aperçu des documents",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Aperçu des documents
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              // Carnet de vaccination
+                              _buildDocumentPreviewTablet(
+                                  "Carnet de vaccination",
+                                  Icons.assignment_rounded,
+                                  _vaccinFile != null,
+                                  _vaccinFileName,
+                                  maxWidth,
+                                  maxHeight),
+
+                              SizedBox(height: maxHeight * 0.03),
+
+                              // PAI
+                              _buildDocumentPreviewTablet(
+                                  "PAI",
+                                  Icons.medical_services_rounded,
+                                  _hasPAI == true,
+                                  _hasPAI == true && _paiFile != null
+                                      ? _paiFileName
+                                      : null,
+                                  maxWidth,
+                                  maxHeight,
+                                  subtitle: _hasPAI == null
+                                      ? "Non défini"
+                                      : (_hasPAI == true ? "Oui" : "Non")),
+
+                              SizedBox(height: maxHeight * 0.03),
+
+                              // Allergies
+                              _buildDocumentPreviewTablet(
+                                  "Allergies",
+                                  Icons.warning_amber_rounded,
+                                  _hasAllergies == true,
+                                  _hasAllergies == true
+                                      ? _allergiesController.text
+                                      : null,
+                                  maxWidth,
+                                  maxHeight,
+                                  subtitle: _hasAllergies == null
+                                      ? "Non défini"
+                                      : (_hasAllergies == true
+                                          ? "Oui"
+                                          : "Non")),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau droit - Formulaire
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre du formulaire
+                      Text(
+                        "Documents importants",
+                        style: TextStyle(
+                          fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Description
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+                        decoration: BoxDecoration(
+                          color: lightBlue.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(
+                                  (maxWidth * 0.01).clamp(6.0, 12.0)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.info_outline,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                              ),
+                            ),
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Veuillez renseigner les documents nécessaires",
+                                style: TextStyle(
+                                  fontSize:
+                                      (maxWidth * 0.016).clamp(12.0, 18.0),
+                                  color: primaryBlue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Formulaire
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Carnet de vaccination
+                              _buildVaccinSectionTablet(maxWidth, maxHeight),
+
+                              SizedBox(height: maxHeight * 0.04),
+
+                              // PAI Section
+                              _buildPAISectionTablet(maxWidth, maxHeight),
+
+                              SizedBox(height: maxHeight * 0.04),
+
+                              // Allergies Section
+                              _buildAllergiesSectionTablet(maxWidth, maxHeight),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton Continuer
+                      Center(
+                        child: Container(
+                          width: (maxWidth * 0.25).clamp(200.0, 300.0),
+                          child: ElevatedButton.icon(
+                            icon: _isSaving
+                                ? SizedBox(
+                                    width: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    height: (maxWidth * 0.02).clamp(16.0, 24.0),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : Icon(Icons.arrow_forward,
+                                    color: Colors.white,
+                                    size: (maxWidth * 0.02).clamp(16.0, 24.0)),
+                            label: Text(
+                              "Continuer",
+                              style: TextStyle(
+                                fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onPressed: _isSaving ? null : _saveDocuments,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      (maxWidth * 0.03).clamp(20.0, 40.0),
+                                  vertical:
+                                      (maxHeight * 0.02).clamp(12.0, 20.0)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildDocumentPreviewTablet(String title, IconData icon,
+      bool isSelected, String? content, double maxWidth, double maxHeight,
+      {String? subtitle}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+      decoration: BoxDecoration(
+        color: isSelected ? lightBlue.withOpacity(0.3) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              isSelected ? primaryBlue.withOpacity(0.3) : Colors.grey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all((maxWidth * 0.01).clamp(6.0, 12.0)),
+                decoration: BoxDecoration(
+                  color: isSelected ? primaryBlue : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: isSelected ? Colors.white : Colors.grey,
+                  size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                ),
+              ),
+              SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? primaryBlue : Colors.grey.shade700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          if (subtitle != null) ...[
+            SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+                color: isSelected ? primaryBlue : Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          if (content != null && content.isNotEmpty) ...[
+            SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+            Text(
+              content.length > 50 ? "${content.substring(0, 50)}..." : content,
+              style: TextStyle(
+                fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVaccinSectionTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Carnet de vaccination",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.02).clamp(10.0, 20.0)),
+        GestureDetector(
+          onTap: _isVaccinUploading ? null : _pickVaccinFile,
+          child: Container(
+            width: double.infinity,
+            height: (maxHeight * 0.15).clamp(80.0, 120.0),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: primaryBlue.withOpacity(0.3),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  offset: const Offset(0, 2),
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+            child: _isVaccinUploading
+                ? const Center(
+                    child: CircularProgressIndicator(color: primaryBlue))
+                : _vaccinFile != null
+                    ? _displaySelectedFileTablet(
+                        _vaccinBytes, _vaccinFileName, maxWidth)
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.upload_file,
+                              size: (maxWidth * 0.04).clamp(30.0, 48.0),
+                              color: Colors.grey),
+                          SizedBox(height: (maxHeight * 0.01).clamp(5.0, 8.0)),
+                          Text(
+                            "Télécharger le carnet de vaccination",
+                            style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: (maxWidth * 0.018).clamp(12.0, 16.0)),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPAISectionTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Projet d'Accueil Individualisé (PAI)",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Text(
+          "L'enfant a-t-il un PAI ?",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(12.0, 18.0),
+            color: Colors.grey.shade700,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.02).clamp(10.0, 20.0)),
+        Row(
+          children: [
+            Expanded(
+              child: _buildToggleButtonTablet("Oui", _hasPAI == true, () {
+                setState(() => _hasPAI = true);
+              }, maxWidth, maxHeight),
+            ),
+            SizedBox(width: (maxWidth * 0.02).clamp(10.0, 16.0)),
+            Expanded(
+              child: _buildToggleButtonTablet("Non", _hasPAI == false, () {
+                setState(() {
+                  _hasPAI = false;
+                  _paiFile = null;
+                  _paiBytes = null;
+                });
+              }, maxWidth, maxHeight),
+            ),
+          ],
+        ),
+        if (_hasPAI == true) ...[
+          SizedBox(height: (maxHeight * 0.03).clamp(15.0, 25.0)),
+          GestureDetector(
+            onTap: _isPAIUploading ? null : _pickPAIFile,
+            child: Container(
+              width: double.infinity,
+              height: (maxHeight * 0.15).clamp(80.0, 120.0),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: primaryBlue.withOpacity(0.3),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    offset: const Offset(0, 2),
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+              child: _isPAIUploading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: primaryBlue))
+                  : _paiFile != null
+                      ? _displaySelectedFileTablet(
+                          _paiBytes, _paiFileName, maxWidth)
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.upload_file,
+                                size: (maxWidth * 0.04).clamp(30.0, 48.0),
+                                color: Colors.grey),
+                            SizedBox(
+                                height: (maxHeight * 0.01).clamp(5.0, 8.0)),
+                            Text(
+                              "Télécharger le document PAI",
+                              style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize:
+                                      (maxWidth * 0.018).clamp(12.0, 16.0)),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAllergiesSectionTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Allergies",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        Text(
+          "L'enfant a-t-il des allergies (hors alimentaire) ?",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(12.0, 18.0),
+            color: Colors.grey.shade700,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.02).clamp(10.0, 20.0)),
+        Row(
+          children: [
+            Expanded(
+              child: _buildToggleButtonTablet("Oui", _hasAllergies == true, () {
+                setState(() => _hasAllergies = true);
+              }, maxWidth, maxHeight),
+            ),
+            SizedBox(width: (maxWidth * 0.02).clamp(10.0, 16.0)),
+            Expanded(
+              child:
+                  _buildToggleButtonTablet("Non", _hasAllergies == false, () {
+                setState(() {
+                  _hasAllergies = false;
+                  _allergiesController.clear();
+                });
+              }, maxWidth, maxHeight),
+            ),
+          ],
+        ),
+        if (_hasAllergies == true) ...[
+          SizedBox(height: (maxHeight * 0.03).clamp(15.0, 25.0)),
+          Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  offset: const Offset(0, 3),
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _allergiesController,
+              onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+              decoration: InputDecoration(
+                labelText: "Précisez les allergies",
+                labelStyle: TextStyle(color: Colors.grey.shade600),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: primaryBlue, width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: (maxWidth * 0.02).clamp(12.0, 16.0),
+                  vertical: (maxHeight * 0.02).clamp(12.0, 16.0),
+                ),
+              ),
+              maxLines: 3,
+              style: TextStyle(fontSize: (maxWidth * 0.018).clamp(14.0, 16.0)),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildToggleButtonTablet(String label, bool isSelected,
+      VoidCallback onTap, double maxWidth, double maxHeight) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            vertical: (maxHeight * 0.02).clamp(10.0, 14.0)),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryBlue : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: primaryBlue.withOpacity(0.3),
+                    offset: const Offset(0, 2),
+                    blurRadius: 5,
+                  )
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+              fontSize: (maxWidth * 0.018).clamp(14.0, 16.0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _displaySelectedFileTablet(
+      Uint8List? bytes, String? fileName, double maxWidth) {
+    // Si c'est une image et que nous avons les bytes
+    if (bytes != null &&
+        fileName != null &&
+        (fileName.toLowerCase().endsWith('.jpg') ||
+            fileName.toLowerCase().endsWith('.jpeg') ||
+            fileName.toLowerCase().endsWith('.png'))) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    // Sinon on affiche une icône et le nom du fichier
+    else {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(_getFileIcon(fileName),
+              size: (maxWidth * 0.035).clamp(30.0, 42.0), color: primaryBlue),
+          SizedBox(height: (maxWidth * 0.01).clamp(5.0, 8.0)),
+          Text(
+            fileName ?? "Fichier sélectionné",
+            style: TextStyle(
+                color: Colors.black87,
+                fontSize: (maxWidth * 0.016).clamp(12.0, 14.0)),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      );
     }
   }
 
@@ -375,7 +1043,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      '07 - Documents importants',
+                      'Documents importants',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -446,418 +1114,437 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Déterminer si on est sur iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back button
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      foregroundColor: primaryBlue,
-                      padding: EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+            child: isTabletDevice
+                ? _buildTabletLayout() // Layout spécifique pour iPad
+                : SingleChildScrollView(
+                    // Layout original pour iPhone
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Back button
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
 
-                  // Documents section
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.assignment_rounded,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                "Documents conseillés",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
-                                ),
-                              ),
-                            ],
+                        // Documents section
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          SizedBox(height: 16),
-
-                          // Carnet de vaccination
-                          Text(
-                            "Carnet de vaccination",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: _isVaccinUploading ? null : _pickVaccinFile,
-                            child: Container(
-                              width: double.infinity,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: primaryBlue.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    offset: const Offset(0, 2),
-                                    blurRadius: 5,
-                                  ),
-                                ],
-                              ),
-                              child: _isVaccinUploading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(
-                                          color: primaryBlue))
-                                  : _vaccinFile != null
-                                      ? _displaySelectedFile(
-                                          _vaccinBytes, _vaccinFileName)
-                                      : Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.upload_file,
-                                                size: 48, color: Colors.grey),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              "Télécharger le carnet de vaccination",
-                                              style: TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 16),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // PAI Section
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.medical_services_rounded,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  "Projet d'Accueil Individualisé (PAI)",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryBlue,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            "L'enfant a-t-il un PAI (Projet d'Accueil Individualisé) ?",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Oui", _hasPAI == true, () {
-                                  setState(() => _hasPAI = true);
-                                }),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Non", _hasPAI == false, () {
-                                  setState(() {
-                                    _hasPAI = false;
-                                    _paiFile = null;
-                                    _paiBytes = null;
-                                  });
-                                }),
-                              ),
-                            ],
-                          ),
-                          if (_hasPAI == true) ...[
-                            const SizedBox(height: 20),
-                            GestureDetector(
-                              onTap: _isPAIUploading ? null : _pickPAIFile,
-                              child: Container(
-                                width: double.infinity,
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: primaryBlue.withOpacity(0.3),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      offset: const Offset(0, 2),
-                                      blurRadius: 5,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.assignment_rounded,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Documents conseillés",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryBlue,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child: _isPAIUploading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(
-                                            color: primaryBlue))
-                                    : _paiFile != null
-                                        ? _displaySelectedFile(
-                                            _paiBytes, _paiFileName)
-                                        : Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.upload_file,
-                                                  size: 48, color: Colors.grey),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                "Télécharger le document PAI",
-                                                style: TextStyle(
-                                                    color: Colors.grey,
-                                                    fontSize: 16),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ],
-                                          ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
+                                SizedBox(height: 16),
 
-                  const SizedBox(height: 20),
-
-                  // Allergies Section
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: lightBlue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: primaryBlue,
-                                  size: 24,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                "Allergies",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            "L'enfant a-t-il des allergies (hors alimentaire) ?",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Oui", _hasAllergies == true, () {
-                                  setState(() => _hasAllergies = true);
-                                }),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildToggleButton(
-                                    "Non", _hasAllergies == false, () {
-                                  setState(() {
-                                    _hasAllergies = false;
-                                    _allergiesController.clear();
-                                  });
-                                }),
-                              ),
-                            ],
-                          ),
-                          if (_hasAllergies == true) ...[
-                            const SizedBox(height: 20),
-                            Container(
-                              decoration: BoxDecoration(
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    offset: const Offset(0, 3),
-                                    blurRadius: 5,
-                                  ),
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _allergiesController,
-                                decoration: InputDecoration(
-                                  labelText: "Précisez les allergies",
-                                  labelStyle:
-                                      TextStyle(color: Colors.grey.shade600),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                        color: primaryBlue, width: 2),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                ),
-                                maxLines: 3,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Continue button
-                  Container(
-                    width: double.infinity,
-                    margin: EdgeInsets.symmetric(horizontal: 20),
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _saveDocuments,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 3,
-                      ),
-                      child: _isSaving
-                          ? SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
+                                // Carnet de vaccination
                                 Text(
-                                  "Continuer",
+                                  "Carnet de vaccination",
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward, color: Colors.white),
+                                const SizedBox(height: 10),
+                                GestureDetector(
+                                  onTap: _isVaccinUploading
+                                      ? null
+                                      : _pickVaccinFile,
+                                  child: Container(
+                                    width: double.infinity,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: primaryBlue.withOpacity(0.3),
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: const Offset(0, 2),
+                                          blurRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: _isVaccinUploading
+                                        ? const Center(
+                                            child: CircularProgressIndicator(
+                                                color: primaryBlue))
+                                        : _vaccinFile != null
+                                            ? _displaySelectedFile(
+                                                _vaccinBytes, _vaccinFileName)
+                                            : Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.upload_file,
+                                                      size: 48,
+                                                      color: Colors.grey),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    "Télécharger le carnet de vaccination",
+                                                    style: TextStyle(
+                                                        color: Colors.grey,
+                                                        fontSize: 16),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ],
+                                              ),
+                                  ),
+                                ),
                               ],
                             ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // PAI Section
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.medical_services_rounded,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        "Projet d'Accueil Individualisé (PAI)",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "L'enfant a-t-il un PAI (Projet d'Accueil Individualisé) ?",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Oui", _hasPAI == true, () {
+                                        setState(() => _hasPAI = true);
+                                      }),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Non", _hasPAI == false, () {
+                                        setState(() {
+                                          _hasPAI = false;
+                                          _paiFile = null;
+                                          _paiBytes = null;
+                                        });
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                                if (_hasPAI == true) ...[
+                                  const SizedBox(height: 20),
+                                  GestureDetector(
+                                    onTap:
+                                        _isPAIUploading ? null : _pickPAIFile,
+                                    child: Container(
+                                      width: double.infinity,
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: primaryBlue.withOpacity(0.3),
+                                          width: 2,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.05),
+                                            offset: const Offset(0, 2),
+                                            blurRadius: 5,
+                                          ),
+                                        ],
+                                      ),
+                                      child: _isPAIUploading
+                                          ? const Center(
+                                              child: CircularProgressIndicator(
+                                                  color: primaryBlue))
+                                          : _paiFile != null
+                                              ? _displaySelectedFile(
+                                                  _paiBytes, _paiFileName)
+                                              : Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.upload_file,
+                                                        size: 48,
+                                                        color: Colors.grey),
+                                                    const SizedBox(height: 8),
+                                                    Text(
+                                                      "Télécharger le document PAI",
+                                                      style: TextStyle(
+                                                          color: Colors.grey,
+                                                          fontSize: 16),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                  ],
+                                                ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Allergies Section
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.warning_amber_rounded,
+                                        color: primaryBlue,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Allergies",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryBlue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  "L'enfant a-t-il des allergies (hors alimentaire) ?",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Oui", _hasAllergies == true, () {
+                                        setState(() => _hasAllergies = true);
+                                      }),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildToggleButton(
+                                          "Non", _hasAllergies == false, () {
+                                        setState(() {
+                                          _hasAllergies = false;
+                                          _allergiesController.clear();
+                                        });
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                                if (_hasAllergies == true) ...[
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          offset: const Offset(0, 3),
+                                          blurRadius: 5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: TextField(
+                                      controller: _allergiesController,
+                                      decoration: InputDecoration(
+                                        labelText: "Précisez les allergies",
+                                        labelStyle: TextStyle(
+                                            color: Colors.grey.shade600),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide(
+                                              color: primaryBlue, width: 2),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
+                                      ),
+                                      maxLines: 3,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Continue button
+                        Container(
+                          width: double.infinity,
+                          margin: EdgeInsets.symmetric(horizontal: 20),
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _saveDocuments,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 3,
+                            ),
+                            child: _isSaving
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Continuer",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(Icons.arrow_forward,
+                                          color: Colors.white),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

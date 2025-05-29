@@ -472,86 +472,28 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       );
     }
 
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+
+    // Déterminer si on est sur iPad
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Membres de la MAM"),
-        backgroundColor: const Color(0xFF16A085),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Titre et explication
-            Text(
-              "Ajouter les membres de votre MAM",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF16A085),
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Votre abonnement vous permet d'ajouter jusqu'à ${_maxMemberCount - 1} autre${_maxMemberCount > 2 ? 's' : ''} membre${_maxMemberCount > 2 ? 's' : ''} (${_maxMemberCount} au total).",
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-            ),
-            const SizedBox(height: 20),
-
-            // Liste des membres
-            ..._buildMembersList(),
-
-            const SizedBox(height: 20),
-
-            // Bouton pour ajouter un membre
-            if (_members.length < _maxMemberCount)
-              Center(
-                child: OutlinedButton.icon(
-                  onPressed: _addNewMember,
-                  icon: const Icon(Icons.add),
-                  label: const Text("Ajouter un autre membre"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF16A085),
-                    side: const BorderSide(color: Color(0xFF16A085)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 40),
-
-            // Boutons d'action
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                TextButton(
-                  onPressed: () => context.go('/home'),
-                  child: const Text(
-                    "PASSER",
-                    style: TextStyle(
-                        color: Colors.grey, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: _saveMembers,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF16A085),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text(
-                    "VALIDER",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        title: Text(
+          "Membres de la MAM",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: isTablet ? 24 : 20,
+          ),
         ),
+        backgroundColor: const Color(0xFF16A085),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        centerTitle: true,
       ),
+      body: isTablet ? _buildTabletContent(screenSize) : _buildPhoneContent(),
     );
   }
 
@@ -567,6 +509,753 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     }
 
     return memberWidgets;
+  }
+
+  Widget _buildPhoneContent() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Titre et explication
+          Text(
+            "Ajouter les membres de votre MAM",
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF16A085),
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Votre abonnement vous permet d'ajouter jusqu'à ${_maxMemberCount - 1} autre${_maxMemberCount > 2 ? 's' : ''} membre${_maxMemberCount > 2 ? 's' : ''} (${_maxMemberCount} au total).",
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 20),
+
+          // Liste des membres
+          ..._buildMembersList(),
+
+          const SizedBox(height: 20),
+
+          // Bouton pour ajouter un membre
+          if (_members.length < _maxMemberCount)
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _addNewMember,
+                icon: const Icon(Icons.add),
+                label: const Text("Ajouter un autre membre"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF16A085),
+                  side: const BorderSide(color: Color(0xFF16A085)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 40),
+
+          // Boutons d'action
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton(
+                onPressed: () => context.go('/home'),
+                child: const Text(
+                  "PASSER",
+                  style: TextStyle(
+                      color: Colors.grey, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _saveMembers,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A085),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: const Text(
+                  "VALIDER",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletContent(Size screenSize) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        final double maxHeight = constraints.maxHeight;
+
+        // Calculer des dimensions en pourcentages
+        final double sideMargin = maxWidth * 0.04; // 4% de marge sur les côtés
+        final double columnGap =
+            maxWidth * 0.03; // 3% d'écart entre les colonnes
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+              sideMargin, maxHeight * 0.03, sideMargin, maxHeight * 0.02),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Panneau gauche - Informations et instructions
+              Expanded(
+                flex: 4,
+                child: Container(
+                  margin: EdgeInsets.only(right: columnGap),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF16A085),
+                        const Color(0xFF16A085).withOpacity(0.85),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF16A085).withOpacity(0.3),
+                        offset: const Offset(0, 8),
+                        blurRadius: 20,
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(maxWidth * 0.035),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Logo et titre
+                        Row(
+                          children: [
+                            Container(
+                              width: maxWidth * 0.08,
+                              height: maxWidth * 0.08,
+                              padding: EdgeInsets.all(maxWidth * 0.015),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.15),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.people_alt_rounded,
+                                color: const Color(0xFF16A085),
+                                size: maxWidth * 0.04,
+                              ),
+                            ),
+                            SizedBox(width: maxWidth * 0.02),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Membres de la MAM",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.028,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  Text(
+                                    _structureName,
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.018,
+                                      color: Colors.white.withOpacity(0.9),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: maxHeight * 0.04),
+
+                        // Instructions
+                        Container(
+                          padding: EdgeInsets.all(maxWidth * 0.025),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: Colors.white,
+                                    size: maxWidth * 0.022,
+                                  ),
+                                  SizedBox(width: maxWidth * 0.015),
+                                  Text(
+                                    "Informations",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.02,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: maxHeight * 0.02),
+                              Text(
+                                "Votre abonnement vous permet d'ajouter jusqu'à ${_maxMemberCount - 1} autre${_maxMemberCount > 2 ? 's' : ''} membre${_maxMemberCount > 2 ? 's' : ''} (${_maxMemberCount} au total).",
+                                style: TextStyle(
+                                  fontSize: maxWidth * 0.016,
+                                  color: Colors.white.withOpacity(0.95),
+                                  height: 1.4,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.025),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: maxWidth * 0.02,
+                                  vertical: maxHeight * 0.01,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.group,
+                                      color: const Color(0xFF16A085),
+                                      size: maxWidth * 0.018,
+                                    ),
+                                    SizedBox(width: maxWidth * 0.01),
+                                    Text(
+                                      "${_members.length} / $_maxMemberCount membres",
+                                      style: TextStyle(
+                                        fontSize: maxWidth * 0.016,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF16A085),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        // Avantages MAM
+                        Container(
+                          padding: EdgeInsets.all(maxWidth * 0.025),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Avantages de la MAM",
+                                style: TextStyle(
+                                  fontSize: maxWidth * 0.018,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.015),
+                              ...[
+                                "Collaboration entre assistantes maternelles",
+                                "Partage des responsabilités",
+                                "Flexibilité pour les parents",
+                                "Suivi coordonné des enfants"
+                              ].map((advantage) => Padding(
+                                    padding: EdgeInsets.only(
+                                        bottom: maxHeight * 0.008),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.check_circle_outline,
+                                          color: Colors.white,
+                                          size: maxWidth * 0.015,
+                                        ),
+                                        SizedBox(width: maxWidth * 0.01),
+                                        Expanded(
+                                          child: Text(
+                                            advantage,
+                                            style: TextStyle(
+                                              fontSize: maxWidth * 0.014,
+                                              color:
+                                                  Colors.white.withOpacity(0.9),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Panneau droit - Formulaire des membres
+              Expanded(
+                flex: 6,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        offset: const Offset(0, 4),
+                        blurRadius: 15,
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(maxWidth * 0.03),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Titre section membres
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person_add_rounded,
+                                  color: const Color(0xFF16A085),
+                                  size: maxWidth * 0.025,
+                                ),
+                                SizedBox(width: maxWidth * 0.015),
+                                Text(
+                                  "Ajouter les membres",
+                                  style: TextStyle(
+                                    fontSize: maxWidth * 0.024,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF16A085),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_members.length < _maxMemberCount)
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: _addNewMember,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: maxWidth * 0.02,
+                                      vertical: maxHeight * 0.01,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16A085)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFF16A085),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.add,
+                                          color: const Color(0xFF16A085),
+                                          size: maxWidth * 0.018,
+                                        ),
+                                        SizedBox(width: maxWidth * 0.008),
+                                        Text(
+                                          "Ajouter",
+                                          style: TextStyle(
+                                            fontSize: maxWidth * 0.016,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF16A085),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        SizedBox(height: maxHeight * 0.03),
+
+                        // Liste des membres avec scroll
+                        Expanded(
+                          child: _members.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    "Aucun membre ajouté",
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.018,
+                                      color: Colors.grey.shade600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: _members.length,
+                                  separatorBuilder: (context, index) =>
+                                      SizedBox(height: maxHeight * 0.02),
+                                  itemBuilder: (context, index) =>
+                                      _buildTabletMemberCard(index,
+                                          _members[index], maxWidth, maxHeight),
+                                ),
+                        ),
+
+                        SizedBox(height: maxHeight * 0.02),
+
+                        // Boutons d'action
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton(
+                              onPressed: () => context.go('/home'),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: maxWidth * 0.03,
+                                  vertical: maxHeight * 0.015,
+                                ),
+                              ),
+                              child: Text(
+                                "PASSER",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: maxWidth * 0.016,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF16A085)
+                                        .withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                onPressed: _saveMembers,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A085),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: maxWidth * 0.04,
+                                    vertical: maxHeight * 0.015,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  "VALIDER",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: maxWidth * 0.018,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabletMemberCard(
+      int index, MAMMember member, double maxWidth, double maxHeight) {
+    final bool isFounder = member.isFounder;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isFounder
+            ? const Color(0xFF16A085).withOpacity(0.05)
+            : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFounder
+              ? const Color(0xFF16A085).withOpacity(0.3)
+              : Colors.grey.shade200,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(maxWidth * 0.025),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête de la carte membre
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(maxWidth * 0.008),
+                      decoration: BoxDecoration(
+                        color: isFounder
+                            ? const Color(0xFF16A085)
+                            : Colors.grey.shade400,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isFounder ? Icons.star : Icons.person,
+                        color: Colors.white,
+                        size: maxWidth * 0.015,
+                      ),
+                    ),
+                    SizedBox(width: maxWidth * 0.015),
+                    Text(
+                      isFounder ? "Fondateur" : "Membre ${index + 1}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: maxWidth * 0.018,
+                        color: isFounder
+                            ? const Color(0xFF16A085)
+                            : Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isFounder)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _removeMember(index),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: EdgeInsets.all(maxWidth * 0.008),
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red.shade400,
+                          size: maxWidth * 0.018,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            SizedBox(height: maxHeight * 0.02),
+
+            // Formulaire en ligne pour iPad
+            Row(
+              children: [
+                // Prénom
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Prénom",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.014,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      SizedBox(height: maxHeight * 0.008),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              offset: const Offset(0, 1),
+                              blurRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          enabled: !isFounder,
+                          controller:
+                              TextEditingController(text: member.firstName),
+                          onChanged: (value) => member.firstName = value,
+                          style: TextStyle(fontSize: maxWidth * 0.016),
+                          decoration: InputDecoration(
+                            hintText: isFounder
+                                ? member.firstName
+                                : "Entrez le prénom",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor:
+                                isFounder ? Colors.grey.shade100 : Colors.white,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: maxWidth * 0.015,
+                              vertical: maxHeight * 0.015,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(width: maxWidth * 0.02),
+
+                // Nom
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Nom",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.014,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      SizedBox(height: maxHeight * 0.008),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              offset: const Offset(0, 1),
+                              blurRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          enabled: !isFounder,
+                          controller:
+                              TextEditingController(text: member.lastName),
+                          onChanged: (value) => member.lastName = value,
+                          style: TextStyle(fontSize: maxWidth * 0.016),
+                          decoration: InputDecoration(
+                            hintText:
+                                isFounder ? member.lastName : "Entrez le nom",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor:
+                                isFounder ? Colors.grey.shade100 : Colors.white,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: maxWidth * 0.015,
+                              vertical: maxHeight * 0.015,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(width: maxWidth * 0.02),
+
+                // Email
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Email",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.014,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      SizedBox(height: maxHeight * 0.008),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              offset: const Offset(0, 1),
+                              blurRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          enabled: !isFounder,
+                          controller: TextEditingController(text: member.email),
+                          onChanged: (value) => member.email = value,
+                          style: TextStyle(fontSize: maxWidth * 0.016),
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            hintText: "Entrez l'adresse email",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor:
+                                isFounder ? Colors.grey.shade100 : Colors.white,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: maxWidth * 0.015,
+                              vertical: maxHeight * 0.015,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // Construire une carte pour un membre

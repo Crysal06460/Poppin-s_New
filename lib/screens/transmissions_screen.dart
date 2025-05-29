@@ -18,6 +18,10 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   String structureName = "Chargement...";
   int _selectedIndex = 1;
 
+  bool isTablet(BuildContext context) {
+    return MediaQuery.of(context).size.shortestSide >= 600;
+  }
+
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -551,6 +555,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   }
 
   // Avatar par défaut avec l'initiale du prénom
+  // Avatar par défaut avec l'initiale du prénom
   Widget _buildFallbackAvatar(String name) {
     return Container(
       width: 56,
@@ -563,7 +568,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         child: Text(
           name.isNotEmpty ? name[0].toUpperCase() : "?",
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 28, // Augmenté pour iPad
             fontWeight: FontWeight.bold,
             color: primaryColor,
           ),
@@ -832,6 +837,9 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Détection de l'iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -846,10 +854,12 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   )
                 : enfants.isEmpty
                     ? _buildEmptyState()
-                    : ListView.builder(
-                        itemCount: enfants.length,
-                        itemBuilder: _buildEnfantCard,
-                      ),
+                    : isTabletDevice
+                        ? _buildTabletLayout() // Layout adapté pour iPad
+                        : ListView.builder(
+                            itemCount: enfants.length,
+                            itemBuilder: _buildEnfantCard,
+                          ),
           )
         ],
       ),
@@ -857,8 +867,287 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
+// Nouveau layout pour iPad - affiche les enfants dans une grille
+  Widget _buildTabletLayout() {
+    return GridView.builder(
+      padding: EdgeInsets.all(16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, // 2 cartes par ligne
+        childAspectRatio: 1.2, // Un peu plus large que haut
+        crossAxisSpacing: 20, // Espace horizontal entre les cartes
+        mainAxisSpacing: 20, // Espace vertical entre les cartes
+      ),
+      itemCount: enfants.length,
+      itemBuilder: (context, index) =>
+          _buildEnfantCardForTablet(context, index),
+    );
+  }
+
+// Carte enfant adaptée pour iPad
+  Widget _buildEnfantCardForTablet(BuildContext context, int index) {
+    final enfant = enfants[index];
+    bool isBoy = enfant['genre'] == 'Garçon';
+    Color cardColor = isBoy ? primaryBlue : primaryRed;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // En-tête avec gradient et infos enfant
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [cardColor, cardColor.withOpacity(0.85)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar avec badge
+                Stack(
+                  children: [
+                    // Photo de l'enfant
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: cardColor.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: ClipOval(
+                        child: enfant['photoUrl'] != null &&
+                                enfant['photoUrl'].isNotEmpty
+                            ? Image.network(
+                                enfant['photoUrl'],
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _buildFallbackAvatar(enfant['prenom']),
+                              )
+                            : _buildFallbackAvatar(enfant['prenom']),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Informations de l'enfant
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          enfant['prenom'],
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Bouton d'ajout
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: cardColor, size: 24),
+                      onPressed: () => _showAddTransmissionPopup(enfant['id']),
+                      tooltip: "Ajouter une transmission",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Contenu de la carte
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Liste des transmissions (directement, sans SizedBox)
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('structures')
+                          .doc(enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid)
+                          .collection('children')
+                          .doc(enfant['id'])
+                          .collection('transmissions')
+                          .where('date',
+                              isGreaterThanOrEqualTo: DateTime(
+                                DateTime.now().year,
+                                DateTime.now().month,
+                                DateTime.now().day,
+                              ))
+                          .where('date',
+                              isLessThan: DateTime(
+                                DateTime.now().year,
+                                DateTime.now().month,
+                                DateTime.now().day,
+                              ).add(Duration(days: 1)))
+                          .orderBy('date', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return Center(
+                            child: Text(
+                              "Chargement des transmissions...",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.share_arrival_time,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  "Aucune transmission aujourd'hui",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          itemCount: snapshot.data!.docs.length,
+                          itemBuilder: (context, idx) {
+                            final doc = snapshot.data!.docs[idx];
+                            final transmissionData =
+                                doc.data() as Map<String, dynamic>;
+
+                            return GestureDetector(
+                              onTap: () => _showTransmissionDetailsPopup(
+                                  transmissionData),
+                              child: Container(
+                                margin: EdgeInsets.only(bottom: 10),
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: primaryBlue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 8, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        transmissionData['heure'] ?? "08:30",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                            _getCategoryIcon(
+                                                transmissionData['category']),
+                                            color: primaryBlue,
+                                            size: 20),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          transmissionData['category'] ??
+                                              "Général",
+                                          style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Spacer(),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.grey.shade400,
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // AppBar personnalisé avec gradient
   // AppBar personnalisé avec gradient
   Widget _buildAppBar(BuildContext context) {
+    // Détection de l'iPad
+    final bool isTabletDevice = isTablet(context);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -884,7 +1173,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          // Plus de padding vertical pour iPad
+          padding: EdgeInsets.fromLTRB(
+              16,
+              isTabletDevice ? 24 : 16, // Augmenté pour iPad
+              16,
+              isTabletDevice ? 28 : 20 // Augmenté pour iPad
+              ),
           child: Column(
             children: [
               // Première ligne: nom structure et date
@@ -894,8 +1189,9 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   Expanded(
                     child: Text(
                       structureName,
-                      style: const TextStyle(
-                        fontSize: 24,
+                      style: TextStyle(
+                        fontSize:
+                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -903,8 +1199,11 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: EdgeInsets.symmetric(
+                      horizontal:
+                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
+                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -912,7 +1211,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     child: Text(
                       DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize:
+                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
                         color: Colors.white.withOpacity(0.95),
                         fontWeight: FontWeight.w500,
                       ),
@@ -920,12 +1220,19 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: 15),
+              SizedBox(
+                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
               // Icône et titre de la page
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
+                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
+                ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(
+                      color: Colors.white,
+                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
+                      ),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -933,19 +1240,22 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   children: [
                     Image.asset(
                       'assets/images/Icone_Transmission.png',
-                      width: 30,
-                      height: 30,
+                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
+                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
                       errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.share_arrival_time,
-                        size: 26,
+                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(
+                        width:
+                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
                     Text(
                       'Transmissions',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize:
+                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),

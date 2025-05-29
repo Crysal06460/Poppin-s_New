@@ -146,7 +146,824 @@ class _MAMMemberRemovalScreenState extends State<MAMMemberRemovalScreen> {
     }
   }
 
+  Widget _buildTabletContent() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = maxWidth * 0.03;
+      final double columnGap = maxWidth * 0.025;
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          sideMargin,
+          maxHeight * 0.02,
+          sideMargin,
+          maxHeight * 0.02,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau latéral gauche (Informations et statut)
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre avec icône
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: primaryRed,
+                            size: maxWidth * 0.07,
+                          ),
+                          SizedBox(width: maxWidth * 0.015),
+                          Expanded(
+                            child: Text(
+                              "Informations",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.022,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Carte d'information principale
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(maxWidth * 0.025),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              lightBlue.withOpacity(0.3),
+                              lightBlue.withOpacity(0.1),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: lightBlue,
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: primaryBlue,
+                              size: maxWidth * 0.04,
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            Text(
+                              "Suppression de membre",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.018,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: maxHeight * 0.015),
+                            Text(
+                              "Cette page vous permet de supprimer un membre de votre MAM. Cette action est définitive et supprimera toutes les données associées à ce membre.",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.014,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Statistiques des membres
+                      _buildTabletInfoCard(
+                        icon: Icons.people,
+                        title: "Membres trouvés",
+                        value: "${members.length}",
+                        maxWidth: maxWidth,
+                        color: primaryBlue,
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Avertissement
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(maxWidth * 0.02),
+                        decoration: BoxDecoration(
+                          color: primaryRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: primaryRed.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: primaryRed,
+                              size: maxWidth * 0.03,
+                            ),
+                            SizedBox(height: maxHeight * 0.01),
+                            Text(
+                              "Attention",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.016,
+                                fontWeight: FontWeight.bold,
+                                color: primaryRed,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.01),
+                            Text(
+                              "La suppression d'un membre est définitive et irréversible",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.013,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau de droite (Liste des membres)
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre de la section
+                      Text(
+                        "Liste des membres",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.022,
+                          fontWeight: FontWeight.bold,
+                          color: primaryBlue,
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Message d'erreur
+                      if (errorMessage.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(maxWidth * 0.02),
+                          margin: EdgeInsets.only(bottom: maxHeight * 0.02),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: Colors.red.withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error,
+                                  color: Colors.red, size: maxWidth * 0.02),
+                              SizedBox(width: maxWidth * 0.015),
+                              Expanded(
+                                child: Text(
+                                  errorMessage,
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: maxWidth * 0.014,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Liste des membres ou état vide
+                      Expanded(
+                        child: members.isEmpty
+                            ? _buildTabletEmptyState(maxWidth, maxHeight)
+                            : _buildTabletMembersList(maxWidth, maxHeight),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+// Méthode pour créer une carte d'information pour iPad
+  Widget _buildTabletInfoCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required double maxWidth,
+    required Color color,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(maxWidth * 0.02),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(maxWidth * 0.015),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: maxWidth * 0.025,
+            ),
+          ),
+          SizedBox(width: maxWidth * 0.02),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: maxWidth * 0.014,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: maxWidth * 0.005),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: maxWidth * 0.018,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour l'état vide sur iPad
+  Widget _buildTabletEmptyState(double maxWidth, double maxHeight) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.people_alt_outlined,
+            size: maxWidth * 0.08,
+            color: Colors.grey.withOpacity(0.7),
+          ),
+          SizedBox(height: maxHeight * 0.03),
+          Text(
+            "Aucun membre à afficher",
+            style: TextStyle(
+              fontSize: maxWidth * 0.020,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: maxHeight * 0.01),
+          Text(
+            "Il n'y a actuellement aucun membre dans votre MAM",
+            style: TextStyle(
+              fontSize: maxWidth * 0.014,
+              color: Colors.grey.shade500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour la liste des membres sur iPad
+  Widget _buildTabletMembersList(double maxWidth, double maxHeight) {
+    return ListView.builder(
+      itemCount: members.length,
+      itemBuilder: (context, index) {
+        final member = members[index];
+        return Container(
+          margin: EdgeInsets.only(bottom: maxHeight * 0.02),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 2),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(maxWidth * 0.02),
+            child: Row(
+              children: [
+                // Avatar du membre
+                Container(
+                  width: maxWidth * 0.06,
+                  height: maxWidth * 0.06,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [primaryBlue.withOpacity(0.7), primaryBlue],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      "${member['firstName'].isNotEmpty ? member['firstName'][0] : '?'}${member['lastName'].isNotEmpty ? member['lastName'][0] : '?'}",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: maxWidth * 0.018,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: maxWidth * 0.02),
+                // Informations du membre
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${member['firstName']} ${member['lastName']}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: maxWidth * 0.016,
+                          color: Colors.black87,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: maxWidth * 0.005),
+                      Text(
+                        "Email: ${member['email']}",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.013,
+                          color: Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (member['isSelf'] == true)
+                        Container(
+                          margin: EdgeInsets.only(top: maxWidth * 0.005),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: maxWidth * 0.01,
+                            vertical: maxWidth * 0.003,
+                          ),
+                          decoration: BoxDecoration(
+                            color: primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "Vous",
+                            style: TextStyle(
+                              fontSize: maxWidth * 0.011,
+                              color: primaryBlue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Bouton de suppression
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _showRemoveConfirmation(member),
+                    borderRadius: BorderRadius.circular(25),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: maxWidth * 0.025,
+                        vertical: maxWidth * 0.01,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primaryRed, primaryRed.withOpacity(0.8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(25),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryRed.withOpacity(0.3),
+                            offset: const Offset(0, 2),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_remove,
+                            color: Colors.white,
+                            size: maxWidth * 0.015,
+                          ),
+                          SizedBox(width: maxWidth * 0.008),
+                          Text(
+                            "Supprimer",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: maxWidth * 0.013,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+// Méthode pour le contenu iPhone (améliorée)
+  Widget _buildPhoneContent() {
+    return SafeArea(
+      child: Column(
+        children: [
+          // En-tête explicatif amélioré
+          Container(
+            padding: EdgeInsets.all(20),
+            margin: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  lightBlue.withOpacity(0.3),
+                  lightBlue.withOpacity(0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: lightBlue),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: primaryBlue,
+                  size: 32,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  "Suppression de membre",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  "Cette page vous permet de supprimer un membre de votre MAM. "
+                  "Cette action est définitive et supprimera toutes les données associées à ce membre.",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+
+          // Statistiques
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: primaryBlue.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.people, color: primaryBlue, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  "Membres trouvés: ${members.length}",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Message d'erreur
+          if (errorMessage.isNotEmpty)
+            Container(
+              padding: EdgeInsets.all(16),
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error, color: Colors.red, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      errorMessage,
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Liste vide ou liste des membres
+          Expanded(
+            child: members.isEmpty
+                ? _buildPhoneEmptyState()
+                : _buildPhoneMembersList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour l'état vide sur iPhone
+  Widget _buildPhoneEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.people_alt_outlined,
+            size: 80,
+            color: Colors.grey.withOpacity(0.7),
+          ),
+          SizedBox(height: 24),
+          Text(
+            "Aucun membre à afficher",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              "Il n'y a actuellement aucun membre dans votre MAM que vous pouvez supprimer",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour la liste des membres sur iPhone
+  Widget _buildPhoneMembersList() {
+    return ListView.builder(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: members.length,
+      itemBuilder: (context, index) {
+        final member = members[index];
+        return Container(
+          margin: EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 3),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // Avatar du membre
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primaryBlue.withOpacity(0.7), primaryBlue],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          "${member['firstName'].isNotEmpty ? member['firstName'][0] : '?'}${member['lastName'].isNotEmpty ? member['lastName'][0] : '?'}",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    // Informations du membre
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${member['firstName']} ${member['lastName']}",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            "Email: ${member['email']}",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (member['isSelf'] == true) ...[
+                            SizedBox(height: 6),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryBlue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "Vous",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: primaryBlue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                // Bouton de suppression
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryRed.withOpacity(0.3),
+                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _showRemoveConfirmation(member),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [primaryRed, primaryRed.withOpacity(0.8)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.person_remove,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              "Supprimer ce membre",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+// Améliorer la méthode _showRemoveConfirmation existante
   void _showRemoveConfirmation(Map<String, dynamic> member) {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -155,104 +972,183 @@ class _MAMMemberRemovalScreenState extends State<MAMMemberRemovalScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text(
-            "⚠️ Confirmation de suppression",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: primaryRed,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: Row(
             children: [
-              Text(
-                "Vous êtes sur le point de supprimer définitivement le membre:",
-                textAlign: TextAlign.center,
+              Icon(
+                Icons.warning_amber_rounded,
+                color: primaryRed,
+                size: isTablet ? 32 : 28,
               ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      "${member['firstName']} ${member['lastName']}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      member['email'],
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        color: Colors.black87,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 24),
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: primaryRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryRed.withOpacity(0.3)),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: primaryRed,
-                      size: 28,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      "ATTENTION : Cette action est définitive et ne pourra pas être annulée. Toutes les données associées à ce membre seront effacées définitivement.",
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Confirmation de suppression",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: primaryRed,
+                    fontSize: isTablet ? 18 : 16,
+                  ),
                 ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text(
-                "ANNULER",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
+          content: Container(
+            width: isTablet ? 500 : double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Vous êtes sur le point de supprimer définitivement le membre:",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: isTablet ? 16 : 14,
+                  ),
                 ),
-              ),
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.grey.withOpacity(0.1),
+                        Colors.grey.withOpacity(0.05),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: primaryBlue.withOpacity(0.7),
+                        radius: isTablet ? 24 : 20,
+                        child: Text(
+                          "${member['firstName'].isNotEmpty ? member['firstName'][0] : '?'}${member['lastName'].isNotEmpty ? member['lastName'][0] : '?'}",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: isTablet ? 18 : 16,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        "${member['firstName']} ${member['lastName']}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: isTablet ? 18 : 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        member['email'],
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                          fontSize: isTablet ? 14 : 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryRed.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: primaryRed.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: primaryRed,
+                        size: isTablet ? 32 : 28,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        "ATTENTION : Cette action est définitive et ne pourra pas être annulée. Toutes les données associées à ce membre seront effacées définitivement.",
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                          fontSize: isTablet ? 14 : 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _removeMember(member);
-              },
-              child: Text(
-                "CONFIRMER",
-                style: TextStyle(
-                  color: primaryRed,
-                  fontWeight: FontWeight.bold,
+          ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: Text(
+                      "ANNULER",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isTablet ? 16 : 14,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _removeMember(member);
+                      },
+                      borderRadius: BorderRadius.circular(25),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [primaryRed, primaryRed.withOpacity(0.8)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryRed.withOpacity(0.3),
+                              offset: const Offset(0, 2),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          "CONFIRMER",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: isTablet ? 16 : 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -356,191 +1252,100 @@ class _MAMMemberRemovalScreenState extends State<MAMMemberRemovalScreen> {
     }
   }
 
+  // Remplacer la méthode build() existante par celle-ci
   @override
   Widget build(BuildContext context) {
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Retrait d'un membre"),
-        backgroundColor: primaryBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(20),
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: isLoading
-            ? Center(
-                child: CircularProgressIndicator(color: primaryBlue),
-              )
-            : Column(
-                children: [
-                  // En-tête explicatif
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    margin: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: lightBlue.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: lightBlue),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: primaryBlue,
-                          size: 28,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          "Cette page vous permet de supprimer un membre de votre MAM. "
-                          "Cette action est définitive et supprimera toutes les données associées à ce membre.",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Message d'erreur
-                  if (errorMessage.isNotEmpty)
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        errorMessage,
-                        style: TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  // Nombre de membres
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      "Membres trouvés: ${members.length}",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 8),
-
-                  // Liste vide
-                  if (members.isEmpty && !isLoading)
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.people_alt_outlined,
-                              size: 60,
-                              color: Colors.grey.withOpacity(0.7),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              "Aucun membre à afficher",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                  // Liste des membres
-                  if (members.isNotEmpty)
-                    Expanded(
-                      child: ListView.builder(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: members.length,
-                        itemBuilder: (context, index) {
-                          final member = members[index];
-
-                          return Card(
-                            margin: EdgeInsets.only(bottom: 12),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: ListTile(
-                              contentPadding: EdgeInsets.all(16),
-                              leading: CircleAvatar(
-                                backgroundColor: primaryBlue.withOpacity(0.2),
-                                child: Text(
-                                  "${member['firstName'].isNotEmpty ? member['firstName'][0] : '?'}${member['lastName'].isNotEmpty ? member['lastName'][0] : '?'}",
-                                  style: TextStyle(
-                                    color: primaryBlue,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              title: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "${member['firstName']} ${member['lastName']}",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 2,
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    "Email: ${member['email']}",
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  Text(
-                                    "ID: ${member['id']}",
-                                    style: TextStyle(
-                                        fontSize: 10, color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                              trailing: ElevatedButton(
-                                onPressed: () =>
-                                    _showRemoveConfirmation(member),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryRed,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                ),
-                                child: Text(
-                                  "Supprimer",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // En-tête avec fond de couleur - Responsive
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  primaryBlue,
+                  primaryBlue.withOpacity(0.85),
                 ],
               ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(screenSize.width * 0.06),
+                bottomRight: Radius.circular(screenSize.width * 0.06),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryBlue.withOpacity(0.3),
+                  offset: const Offset(0, 4),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * 0.02,
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * (isTablet ? 0.02 : 0.025),
+                ),
+                child: Row(
+                  children: [
+                    // Bouton retour avec meilleur contraste
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: EdgeInsets.all(
+                            screenSize.width * (isTablet ? 0.015 : 0.02)),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: screenSize.width * (isTablet ? 0.025 : 0.06),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                        width: screenSize.width * (isTablet ? 0.02 : 0.04)),
+                    // Titre avec meilleur style
+                    Expanded(
+                      child: Text(
+                        "Retrait d'un membre",
+                        style: TextStyle(
+                          fontSize:
+                              screenSize.width * (isTablet ? 0.028 : 0.055),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Contenu principal avec adaptation pour iPad
+          isLoading
+              ? Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(color: primaryBlue),
+                  ),
+                )
+              : Expanded(
+                  child:
+                      isTablet ? _buildTabletContent() : _buildPhoneContent(),
+                ),
+        ],
       ),
     );
   }

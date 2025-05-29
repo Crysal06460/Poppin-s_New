@@ -366,33 +366,1278 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
     );
   }
 
+  // Remplacer la méthode build() existante par celle-ci
   @override
   Widget build(BuildContext context) {
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Gestion des membres"),
-        backgroundColor: primaryBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(20),
-          ),
-        ),
-      ),
-      body: _isLoading && _currentMemberCount == 0
-          ? Center(child: CircularProgressIndicator(color: primaryBlue))
-          : SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  // Interface différente quand la limite est atteinte
-                  child: _currentMemberCount >= _maxMemberCount
-                      ? _buildLimitReachedUI()
-                      : _buildAddMemberForm(),
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // En-tête avec fond de couleur - Responsive
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  primaryBlue,
+                  primaryBlue.withOpacity(0.85),
+                ],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(screenSize.width * 0.06),
+                bottomRight: Radius.circular(screenSize.width * 0.06),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryBlue.withOpacity(0.3),
+                  offset: const Offset(0, 4),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * 0.02,
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * (isTablet ? 0.02 : 0.025),
+                ),
+                child: Row(
+                  children: [
+                    // Bouton retour avec meilleur contraste
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: EdgeInsets.all(
+                            screenSize.width * (isTablet ? 0.015 : 0.02)),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: screenSize.width * (isTablet ? 0.025 : 0.06),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                        width: screenSize.width * (isTablet ? 0.02 : 0.04)),
+                    // Titre avec meilleur style
+                    Expanded(
+                      child: Text(
+                        "Gestion des membres",
+                        style: TextStyle(
+                          fontSize:
+                              screenSize.width * (isTablet ? 0.028 : 0.055),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+
+          // Contenu principal avec adaptation pour iPad
+          _isLoading && _currentMemberCount == 0
+              ? Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(color: primaryBlue),
+                  ),
+                )
+              : Expanded(
+                  child:
+                      isTablet ? _buildTabletContent() : _buildPhoneContent(),
+                ),
+        ],
+      ),
+    );
+  }
+
+// Nouvelle méthode pour le contenu tablette
+  Widget _buildTabletContent() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final double maxWidth = constraints.maxWidth;
+      final double maxHeight = constraints.maxHeight;
+      final double sideMargin = maxWidth * 0.03;
+      final double columnGap = maxWidth * 0.025;
+
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          sideMargin,
+          maxHeight * 0.02,
+          sideMargin,
+          maxHeight * 0.02,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panneau latéral gauche (Informations MAM et statut)
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: EdgeInsets.only(right: columnGap),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre avec icône
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.people_alt,
+                            color: primaryBlue,
+                            size: maxWidth * 0.07,
+                          ),
+                          SizedBox(width: maxWidth * 0.015),
+                          Expanded(
+                            child: Text(
+                              "Statut des membres",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.022,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Carte du statut des membres
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(maxWidth * 0.025),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              primaryBlue.withOpacity(0.1),
+                              lightBlue.withOpacity(0.3),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: primaryBlue.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.groups,
+                              color: primaryBlue,
+                              size: maxWidth * 0.08,
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            Text(
+                              "$_currentMemberCount/$_maxMemberCount",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.035,
+                                fontWeight: FontWeight.bold,
+                                color: primaryBlue,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.01),
+                            Text(
+                              "Membres actuels",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.018,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.02),
+                            // Barre de progression
+                            Container(
+                              width: double.infinity,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: _maxMemberCount > 0
+                                    ? _currentMemberCount / _maxMemberCount
+                                    : 0,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color:
+                                        _currentMemberCount >= _maxMemberCount
+                                            ? primaryRed
+                                            : primaryBlue,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Information sur l'abonnement
+                      _buildTabletInfoCard(
+                        icon: Icons.card_membership,
+                        title: "Abonnement",
+                        description: "Limite: $_maxMemberCount membres",
+                        maxWidth: maxWidth,
+                      ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      // Information sur l'invitation
+                      _buildTabletInfoCard(
+                        icon: Icons.email,
+                        title: "Processus d'invitation",
+                        description:
+                            "Le membre recevra un email d'invitation pour rejoindre votre MAM",
+                        maxWidth: maxWidth,
+                      ),
+
+                      if (_currentMemberCount >= _maxMemberCount) ...[
+                        SizedBox(height: maxHeight * 0.04),
+                        // Actions alternatives quand limite atteinte
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(maxWidth * 0.02),
+                          decoration: BoxDecoration(
+                            color: primaryRed.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: primaryRed.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.warning,
+                                color: primaryRed,
+                                size: maxWidth * 0.03,
+                              ),
+                              SizedBox(height: maxHeight * 0.01),
+                              Text(
+                                "Limite atteinte",
+                                style: TextStyle(
+                                  fontSize: maxWidth * 0.018,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryRed,
+                                ),
+                              ),
+                              SizedBox(height: maxHeight * 0.01),
+                              Text(
+                                "Retirez un membre ou mettez à niveau votre abonnement",
+                                style: TextStyle(
+                                  fontSize: maxWidth * 0.014,
+                                  color: Colors.black87,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Panneau de droite (Formulaire ou limite atteinte)
+            Expanded(
+              flex: 6,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.025),
+                  child: _currentMemberCount >= _maxMemberCount
+                      ? _buildTabletLimitReached(maxWidth, maxHeight)
+                      : _buildTabletAddForm(maxWidth, maxHeight),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+// Méthode pour créer une carte d'information pour iPad
+  Widget _buildTabletInfoCard({
+    required IconData icon,
+    required String title,
+    required String description,
+    required double maxWidth,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(maxWidth * 0.02),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(maxWidth * 0.01),
+                decoration: BoxDecoration(
+                  color: primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: primaryBlue,
+                  size: maxWidth * 0.02,
+                ),
+              ),
+              SizedBox(width: maxWidth * 0.015),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: maxWidth * 0.016,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: maxWidth * 0.01),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: maxWidth * 0.014,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour le formulaire d'ajout sur iPad
+  Widget _buildTabletAddForm(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Titre de la section
+        Text(
+          "Ajouter un nouveau membre",
+          style: TextStyle(
+            fontSize: maxWidth * 0.022,
+            fontWeight: FontWeight.bold,
+            color: primaryBlue,
+          ),
+        ),
+
+        SizedBox(height: maxHeight * 0.03),
+
+        // Formulaire
+        Expanded(
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              children: [
+                _buildTabletFormField(
+                  controller: _emailController,
+                  label: 'Adresse email',
+                  icon: Icons.email,
+                  maxWidth: maxWidth,
+                  keyboardType: TextInputType.emailAddress,
+                  hintText: 'email@exemple.com',
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Veuillez entrer une adresse email";
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                        .hasMatch(value)) {
+                      return "Veuillez entrer une adresse email valide";
+                    }
+                    return null;
+                  },
+                ),
+
+                SizedBox(height: maxHeight * 0.025),
+
+                _buildTabletFormField(
+                  controller: _firstNameController,
+                  label: 'Prénom',
+                  icon: Icons.person,
+                  maxWidth: maxWidth,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Veuillez entrer un prénom";
+                    }
+                    return null;
+                  },
+                ),
+
+                SizedBox(height: maxHeight * 0.025),
+
+                _buildTabletFormField(
+                  controller: _lastNameController,
+                  label: 'Nom',
+                  icon: Icons.person_outline,
+                  maxWidth: maxWidth,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Veuillez entrer un nom";
+                    }
+                    return null;
+                  },
+                ),
+
+                SizedBox(height: maxHeight * 0.025),
+
+                // Message d'erreur
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: EdgeInsets.all(maxWidth * 0.02),
+                    margin: EdgeInsets.only(bottom: maxHeight * 0.025),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error,
+                            color: Colors.red, size: maxWidth * 0.02),
+                        SizedBox(width: maxWidth * 0.015),
+                        Expanded(
+                          child: Text(
+                            _errorMessage,
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: maxWidth * 0.014,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                SizedBox(height: maxHeight * 0.04),
+
+                // Bouton d'ajout
+                Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isLoading ? null : _addMAMMember,
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: maxWidth * 0.08,
+                          vertical: maxHeight * 0.02,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: _isLoading
+                              ? null
+                              : LinearGradient(
+                                  colors: [
+                                    primaryBlue,
+                                    primaryBlue.withOpacity(0.8)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                          color: _isLoading ? Colors.grey.shade300 : null,
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: _isLoading
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: primaryBlue.withOpacity(0.3),
+                                    offset: const Offset(0, 4),
+                                    blurRadius: 12,
+                                  ),
+                                ],
+                        ),
+                        child: _isLoading
+                            ? SizedBox(
+                                width: maxWidth * 0.025,
+                                height: maxWidth * 0.025,
+                                child: CircularProgressIndicator(
+                                  color: primaryBlue,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.person_add,
+                                    color: Colors.white,
+                                    size: maxWidth * 0.022,
+                                  ),
+                                  SizedBox(width: maxWidth * 0.015),
+                                  Text(
+                                    'AJOUTER LE MEMBRE',
+                                    style: TextStyle(
+                                      fontSize: maxWidth * 0.018,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+// Méthode pour l'interface limite atteinte sur iPad
+  Widget _buildTabletLimitReached(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Titre de la section
+        Text(
+          "Limite de membres atteinte",
+          style: TextStyle(
+            fontSize: maxWidth * 0.022,
+            fontWeight: FontWeight.bold,
+            color: primaryRed,
+          ),
+        ),
+
+        SizedBox(height: maxHeight * 0.04),
+
+        // Contenu centré
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.people_alt_outlined,
+                size: maxWidth * 0.1,
+                color: primaryRed.withOpacity(0.7),
+              ),
+              SizedBox(height: maxHeight * 0.03),
+              Container(
+                padding: EdgeInsets.all(maxWidth * 0.025),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) autorisé par votre abonnement.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.016,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: maxHeight * 0.02),
+                    Text(
+                      "Pour ajouter d'autres membres, veuillez retirer un membre existant ou mettre à niveau votre abonnement.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.014,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: maxHeight * 0.04),
+              // Boutons d'action pour iPad
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTabletActionButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MAMMemberRemovalScreen(),
+                          ),
+                        );
+                      },
+                      icon: Icons.person_remove,
+                      label: "RETIRER UN MEMBRE",
+                      color: primaryRed,
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                    ),
+                  ),
+                  SizedBox(width: maxWidth * 0.02),
+                  Expanded(
+                    child: _buildTabletActionButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.go('/subscription-upgrade');
+                      },
+                      icon: Icons.upgrade,
+                      label: "METTRE À NIVEAU",
+                      color: primaryBlue,
+                      maxWidth: maxWidth,
+                      maxHeight: maxHeight,
+                      isOutlined: true,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// Méthode pour créer un bouton d'action pour iPad
+  Widget _buildTabletActionButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+    required double maxWidth,
+    required double maxHeight,
+    bool isOutlined = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: maxHeight * 0.015,
+          ),
+          decoration: BoxDecoration(
+            gradient: isOutlined
+                ? null
+                : LinearGradient(
+                    colors: [color, color.withOpacity(0.8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            color: isOutlined ? Colors.white : null,
+            border: isOutlined ? Border.all(color: color, width: 2) : null,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: isOutlined
+                ? null
+                : [
+                    BoxShadow(
+                      color: color.withOpacity(0.3),
+                      offset: const Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isOutlined ? color : Colors.white,
+                size: maxWidth * 0.02,
+              ),
+              SizedBox(width: maxWidth * 0.01),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: maxWidth * 0.014,
+                  color: isOutlined ? color : Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+// Méthode pour créer un champ de formulaire stylé pour iPad
+  Widget _buildTabletFormField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required double maxWidth,
+    TextInputType? keyboardType,
+    String? hintText,
+    String? Function(String?)? validator,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        validator: validator,
+        style: TextStyle(
+          fontSize: maxWidth * 0.018,
+          color: Colors.black87,
+        ),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hintText,
+          prefixIcon: Container(
+            margin: EdgeInsets.all(maxWidth * 0.015),
+            padding: EdgeInsets.all(maxWidth * 0.01),
+            decoration: BoxDecoration(
+              color: primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: primaryBlue,
+              size: maxWidth * 0.022,
+            ),
+          ),
+          labelStyle: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: maxWidth * 0.016,
+          ),
+          hintStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: maxWidth * 0.015,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: primaryBlue, width: 2),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2),
+          ),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: maxWidth * 0.04,
+            vertical: maxWidth * 0.02,
+          ),
+        ),
+      ),
+    );
+  }
+
+// Méthode pour le contenu iPhone (améliorée)
+  Widget _buildPhoneContent() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+        child: _currentMemberCount >= _maxMemberCount
+            ? _buildPhoneLimitReached()
+            : _buildPhoneAddForm(),
+      ),
+    );
+  }
+
+// Méthode pour l'interface limite atteinte sur iPhone
+  Widget _buildPhoneLimitReached() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: 40),
+        Icon(
+          Icons.people_alt,
+          size: 80,
+          color: primaryBlue.withOpacity(0.7),
+        ),
+        SizedBox(height: 24),
+        Text(
+          "Limite de membres atteinte",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        SizedBox(height: 24),
+        Container(
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.red.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Text(
+                "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) autorisé par votre abonnement.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.red[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                "Pour ajouter d'autres membres, veuillez retirer un membre existant ou mettre à niveau votre abonnement.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 40),
+        _buildPhoneActionButton(
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MAMMemberRemovalScreen(),
+              ),
+            );
+          },
+          icon: Icons.person_remove,
+          label: "RETIRER UN MEMBRE",
+          color: primaryRed,
+        ),
+        SizedBox(height: 16),
+        _buildPhoneActionButton(
+          onPressed: () {
+            Navigator.pop(context);
+            context.go('/subscription-upgrade');
+          },
+          icon: Icons.upgrade,
+          label: "METTRE À NIVEAU L'ABONNEMENT",
+          color: primaryBlue,
+          isOutlined: true,
+        ),
+      ],
+    );
+  }
+
+// Méthode pour le formulaire d'ajout sur iPhone
+  Widget _buildPhoneAddForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Titre de la page
+          Text(
+            "Informations du nouveau membre",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+
+          // Carte du statut des membres
+          Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  primaryBlue.withOpacity(0.1),
+                  lightBlue.withOpacity(0.3),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: primaryBlue.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.people,
+                  color: primaryBlue,
+                  size: 32,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  "Membres: $_currentMemberCount/$_maxMemberCount",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                // Barre de progression
+                Container(
+                  width: double.infinity,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: _maxMemberCount > 0
+                        ? _currentMemberCount / _maxMemberCount
+                        : 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _currentMemberCount >= _maxMemberCount
+                            ? primaryRed
+                            : primaryBlue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 24),
+
+          // Informations
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: lightBlue.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: lightBlue),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: primaryBlue,
+                  size: 28,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  "Le membre recevra une invitation par email pour rejoindre votre MAM. "
+                  "Il devra s'inscrire avec l'adresse email que vous indiquez ci-dessous.",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 32),
+
+          // Formulaire
+          _buildPhoneFormField(
+            controller: _emailController,
+            label: "Adresse email",
+            icon: Icons.email,
+            keyboardType: TextInputType.emailAddress,
+            hintText: "email@exemple.com",
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return "Veuillez entrer une adresse email";
+              }
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                  .hasMatch(value)) {
+                return "Veuillez entrer une adresse email valide";
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: 20),
+
+          _buildPhoneFormField(
+            controller: _firstNameController,
+            label: "Prénom",
+            icon: Icons.person,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return "Veuillez entrer un prénom";
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: 20),
+
+          _buildPhoneFormField(
+            controller: _lastNameController,
+            label: "Nom",
+            icon: Icons.person_outline,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return "Veuillez entrer un nom";
+              }
+              return null;
+            },
+          ),
+
+          SizedBox(height: 24),
+
+          // Message d'erreur
+          if (_errorMessage.isNotEmpty)
+            Container(
+              padding: EdgeInsets.all(16),
+              margin: EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error, color: Colors.red, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _errorMessage,
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Bouton d'ajout
+          _buildPhoneActionButton(
+            onPressed: _isLoading ? null : _addMAMMember,
+            icon: Icons.person_add,
+            label: _isLoading ? "AJOUT EN COURS..." : "AJOUTER LE MEMBRE",
+            color: primaryBlue,
+            isLoading: _isLoading,
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour créer un champ de formulaire stylé pour iPhone
+  Widget _buildPhoneFormField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    String? hintText,
+    String? Function(String?)? validator,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        validator: validator,
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.black87,
+        ),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hintText,
+          prefixIcon: Container(
+            margin: EdgeInsets.all(12),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: primaryBlue,
+              size: 20,
+            ),
+          ),
+          labelStyle: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 14,
+          ),
+          hintStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 14,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: primaryBlue, width: 2),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2),
+          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        ),
+      ),
+    );
+  }
+
+// Méthode pour créer un bouton d'action pour iPhone
+  Widget _buildPhoneActionButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+    bool isOutlined = false,
+    bool isLoading = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: isOutlined || onPressed == null
+            ? null
+            : [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              gradient: isOutlined || onPressed == null
+                  ? null
+                  : LinearGradient(
+                      colors: [color, color.withOpacity(0.8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              color: isOutlined
+                  ? Colors.white
+                  : (onPressed == null ? Colors.grey.shade300 : null),
+              border: isOutlined ? Border.all(color: color, width: 2) : null,
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: isLoading
+                ? Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        icon,
+                        color: isOutlined ? color : Colors.white,
+                        size: 20,
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isOutlined ? color : Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -30,324 +30,845 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     // Déterminer si l'appareil est un iPad (écran large)
-    final bool isTablet = MediaQuery.of(context).size.shortestSide >= 600;
-
-    // Adapter les dimensions en fonction du type d'appareil
-    final double contentMaxWidth = isTablet ? 480 : double.infinity;
-    final double logoSize = isTablet ? 90 : 100;
-    final double horizontalPadding = isTablet ? 0 : 24;
-    final double buttonHeight = isTablet ? 50 : 56;
-    final double fontSize = isTablet ? 15 : 16;
-    final double titleFontSize = isTablet ? 22 : 24;
+    final screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Inscription",
-          style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: primaryBlue,
+            fontSize: isTablet ? 20 : 20,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: primaryBlue),
+          icon: Icon(
+            Icons.arrow_back,
+            color: primaryBlue,
+            size: isTablet ? 24 : 24,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: Container(
-                width: contentMaxWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                        height: 25), // Légèrement plus petit pour iPad
+        child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
+      ),
+    );
+  }
 
-                    // Logo
-                    Image.asset(
-                      "assets/images/parapluie.png",
-                      height: logoSize,
-                      width: logoSize,
-                      fit: BoxFit.contain,
+  // Version iPhone (garde le code original)
+  Widget _buildPhoneContent() {
+    return Center(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 25),
+
+              // Logo
+              Image.asset(
+                "assets/images/parapluie.png",
+                height: 100,
+                width: 100,
+                fit: BoxFit.contain,
+              ),
+
+              const SizedBox(height: 25),
+
+              Text(
+                "Créer un compte structure",
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: primaryBlue),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 20),
+
+              // Sélection du type de structure
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTypeCheckbox(
+                      title: "Assistante Maternelle",
+                      isChecked: isAssistanteMaterCheck,
+                      onChanged: (value) {
+                        if (value == true) {
+                          setState(() {
+                            isAssistanteMaterCheck = true;
+                            isMAMCheck = false;
+                          });
+                        }
+                      },
+                      isTablet: false,
                     ),
-
-                    const SizedBox(
-                        height: 25), // Légèrement plus petit pour iPad
-
-                    Text(
-                      "Créer un compte structure",
-                      style: TextStyle(
-                          fontSize: titleFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue),
-                      textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildTypeCheckbox(
+                      title: "MAM",
+                      isChecked: isMAMCheck,
+                      onChanged: (value) {
+                        if (value == true) {
+                          setState(() {
+                            isAssistanteMaterCheck = false;
+                            isMAMCheck = true;
+                          });
+                        }
+                      },
+                      isTablet: false,
                     ),
+                  ),
+                ],
+              ),
 
-                    const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-                    // Sélection du type de structure - Adaptée pour iPad
-                    Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: isTablet ? 20 : 0),
-                      child: Row(
+              // Message d'information pour MAM
+              if (isMAMCheck)
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: lightBlue,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: primaryBlue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
                         children: [
+                          Icon(Icons.info_outline,
+                              color: primaryBlue, size: 20),
+                          SizedBox(width: 8),
                           Expanded(
-                            child: _buildTypeCheckbox(
-                              title: "Assistante Maternelle",
-                              isChecked: isAssistanteMaterCheck,
-                              onChanged: (value) {
-                                if (value == true) {
-                                  setState(() {
-                                    isAssistanteMaterCheck = true;
-                                    isMAMCheck = false;
-                                  });
-                                }
-                              },
-                              isTablet: isTablet,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildTypeCheckbox(
-                              title: "MAM",
-                              isChecked: isMAMCheck,
-                              onChanged: (value) {
-                                if (value == true) {
-                                  setState(() {
-                                    isAssistanteMaterCheck = false;
-                                    isMAMCheck = true;
-                                  });
-                                }
-                              },
-                              isTablet: isTablet,
+                            child: Text(
+                              "Information importante",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: primaryBlue,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ],
                       ),
+                      SizedBox(height: 8),
+                      Text(
+                        "Un seul membre de la MAM doit créer le compte. Les autres membres pourront être ajoutés par la suite via des invitations.",
+                        style:
+                            TextStyle(fontSize: 13, color: Color(0xFF455A64)),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 20),
+
+              // Champs de formulaire
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: "Email",
+                  labelStyle: TextStyle(color: primaryBlue),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: primaryBlue, width: 2)),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Mot de passe",
+                  labelStyle: TextStyle(color: primaryBlue),
+                  helperText: "Minimum 6 caractères",
+                  helperStyle: TextStyle(
+                    color: primaryBlue.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: primaryBlue, width: 2)),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: confirmPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Confirmer le mot de passe",
+                  labelStyle: TextStyle(color: primaryBlue),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: primaryBlue, width: 2)),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+
+              // Affichage des erreurs
+              if (errorMessage.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: primaryRed.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: primaryRed.withOpacity(0.5)),
                     ),
-
-                    const SizedBox(height: 20),
-
-                    // Message d'information pour MAM - Adapté pour iPad
-                    if (isMAMCheck)
-                      Container(
-                        padding: EdgeInsets.all(isTablet ? 14 : 16),
-                        decoration: BoxDecoration(
-                          color: lightBlue,
-                          borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: primaryBlue.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.info_outline,
-                                    color: primaryBlue,
-                                    size: isTablet ? 18 : 20),
-                                SizedBox(width: isTablet ? 6 : 8),
-                                Expanded(
-                                  child: Text(
-                                    "Information importante",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: primaryBlue,
-                                      fontSize: isTablet ? 13 : 14,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: isTablet ? 6 : 8),
-                            Text(
-                              "Un seul membre de la MAM doit créer le compte. Les autres membres pourront être ajoutés par la suite via des invitations.",
-                              style: TextStyle(
-                                  fontSize: isTablet ? 12 : 13,
-                                  color: Color(0xFF455A64)),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    // Champs de formulaire adaptés pour iPad
-                    TextField(
-                      controller: emailController,
-                      decoration: InputDecoration(
-                        labelText: "Email",
-                        labelStyle: TextStyle(color: primaryBlue),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide:
-                                BorderSide(color: primaryBlue, width: 2)),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16, vertical: isTablet ? 12 : 14),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-
-                    const SizedBox(height: 16), // Plus compact pour iPad
-
-                    // Champ mot de passe
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: "Mot de passe",
-                        labelStyle: TextStyle(color: primaryBlue),
-                        helperText: "Minimum 6 caractères",
-                        helperStyle: TextStyle(
-                          color: primaryBlue.withOpacity(0.7),
-                          fontSize: isTablet ? 11 : 12,
-                        ),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide:
-                                BorderSide(color: primaryBlue, width: 2)),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16, vertical: isTablet ? 12 : 14),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16), // Plus compact pour iPad
-
-                    // Champ confirmation mot de passe
-                    TextField(
-                      controller: confirmPasswordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: "Confirmer le mot de passe",
-                        labelStyle: TextStyle(color: primaryBlue),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide:
-                                BorderSide(color: primaryBlue, width: 2)),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16, vertical: isTablet ? 12 : 14),
-                      ),
-                    ),
-
-                    // Affichage des erreurs - Adapté pour iPad
-                    if (errorMessage.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: primaryRed.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border:
-                                Border.all(color: primaryRed.withOpacity(0.5)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline,
-                                  color: primaryRed, size: isTablet ? 16 : 18),
-                              SizedBox(width: isTablet ? 6 : 8),
-                              Expanded(
-                                child: Text(
-                                  errorMessage,
-                                  style: TextStyle(
-                                    color: primaryRed,
-                                    fontSize: isTablet ? 13 : 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    const SizedBox(height: 25), // Ajusté pour iPad
-
-                    // Bouton S'inscrire - Adapté pour iPad
-                    SizedBox(
-                      width: double.infinity,
-                      height: buttonHeight,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryYellow,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                              vertical: isTablet ? 12 : 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 2,
-                        ),
-                        child: isLoading
-                            ? SizedBox(
-                                height: isTablet ? 22 : 24,
-                                width: isTablet ? 22 : 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                "S'INSCRIRE",
-                                style: TextStyle(
-                                    fontSize: isTablet ? 16 : 18,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16), // Plus compact pour iPad
-
-                    // Déjà un compte - Adapté pour iPad
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Row(
                       children: [
-                        Text(
-                          "Vous avez déjà un compte ?",
-                          style: TextStyle(
-                            fontSize: isTablet ? 14 : 15,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            context.go('/login');
-                          },
+                        Icon(Icons.error_outline, color: primaryRed, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
                           child: Text(
-                            "Se connecter",
-                            style: TextStyle(
-                              color: primaryBlue,
-                              fontWeight: FontWeight.bold,
-                              fontSize: isTablet ? 14 : 15,
-                            ),
-                          ),
-                          style: TextButton.styleFrom(
-                            foregroundColor: primaryBlue,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isTablet ? 8 : 10,
-                              vertical: isTablet ? 4 : 6,
-                            ),
+                            errorMessage,
+                            style: TextStyle(color: primaryRed, fontSize: 14),
                           ),
                         ),
                       ],
                     ),
+                  ),
+                ),
 
-                    const SizedBox(height: 16), // Plus petit pour iPad
+              const SizedBox(height: 25),
+
+              // Bouton S'inscrire
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: isLoading ? null : _register,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryYellow,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    elevation: 2,
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          "S'INSCRIRE",
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Déjà un compte
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Vous avez déjà un compte ?",
+                      style: TextStyle(fontSize: 15)),
+                  TextButton(
+                    onPressed: () => context.go('/login'),
+                    child: Text(
+                      "Se connecter",
+                      style: TextStyle(
+                        color: primaryBlue,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: primaryBlue,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Version iPad - Layout moderne et optimisé
+  Widget _buildTabletContent() {
+    final screenSize = MediaQuery.of(context).size;
+    final double maxWidth = screenSize.width;
+    final double maxHeight = screenSize.height;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: maxWidth * 0.1, // 10% de marge horizontale
+                vertical: maxHeight * 0.03, // 3% de marge verticale
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: maxWidth * 0.7, // 70% de la largeur max
+                  minHeight: maxHeight * 0.8, // 80% de la hauteur min
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 8),
+                      blurRadius: 32,
+                      spreadRadius: 0,
+                    ),
+                    BoxShadow(
+                      color: primaryBlue.withOpacity(0.1),
+                      offset: const Offset(0, 0),
+                      blurRadius: 1,
+                      spreadRadius: 1,
+                    ),
                   ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.04), // 4% de padding
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // En-tête avec logo et titre
+                      _buildTabletHeader(maxWidth, maxHeight),
+
+                      SizedBox(height: maxHeight * 0.04),
+
+                      // Section de sélection du type
+                      _buildTabletTypeSelection(maxWidth, maxHeight),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Message d'information MAM
+                      if (isMAMCheck) _buildTabletMAMInfo(maxWidth, maxHeight),
+
+                      if (isMAMCheck) SizedBox(height: maxHeight * 0.03),
+
+                      // Formulaire
+                      _buildTabletForm(maxWidth, maxHeight),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Bouton et liens
+                      _buildTabletActions(maxWidth, maxHeight),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabletHeader(double maxWidth, double maxHeight) {
+    return Column(
+      children: [
+        // Logo avec design plus subtil
+        Container(
+          padding: EdgeInsets.all(maxWidth * 0.015), // Réduit de 0.02 à 0.015
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                primaryBlue.withOpacity(0.08), // Plus subtil
+                brightCyan.withOpacity(0.08),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: Image.asset(
+            "assets/images/parapluie.png",
+            height: maxWidth * 0.06, // Réduit de 0.08 à 0.06
+            width: maxWidth * 0.06,
+            fit: BoxFit.contain,
+          ),
+        ),
+
+        SizedBox(height: maxHeight * 0.015), // Réduit de 0.02 à 0.015
+
+        // Titre principal
+        Text(
+          "Créer un compte structure",
+          style: TextStyle(
+            fontSize: maxWidth * 0.025, // Réduit de 0.028 à 0.025
+            fontWeight: FontWeight.w700, // Légèrement moins gras
+            color: primaryBlue,
+            letterSpacing: 0.3, // Réduit
+          ),
+          textAlign: TextAlign.center,
+        ),
+
+        SizedBox(height: maxHeight * 0.008), // Réduit de 0.01 à 0.008
+
+        // Sous-titre plus discret
+        Text(
+          "Rejoignez notre plateforme et facilitez la gestion de votre structure",
+          style: TextStyle(
+            fontSize: maxWidth * 0.016, // Réduit de 0.018 à 0.016
+            color: Colors.grey.shade600,
+            height: 1.3, // Réduit
+            fontWeight: FontWeight.w400,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabletTypeSelection(double maxWidth, double maxHeight) {
+    return Container(
+      padding: EdgeInsets.all(maxWidth * 0.02), // Réduit de 0.025 à 0.02
+      decoration: BoxDecoration(
+        color: lightBlue.withOpacity(0.2), // Plus subtil
+        borderRadius: BorderRadius.circular(16), // Réduit de 20 à 16
+        border: Border.all(color: primaryBlue.withOpacity(0.15)), // Plus subtil
+      ),
+      child: Column(
+        children: [
+          Text(
+            "Type de structure",
+            style: TextStyle(
+              fontSize: maxWidth * 0.02, // Réduit de 0.022 à 0.02
+              fontWeight: FontWeight.w600, // Moins gras
+              color: primaryBlue,
+            ),
+          ),
+          SizedBox(height: maxHeight * 0.015), // Réduit de 0.02 à 0.015
+          Row(
+            children: [
+              Expanded(
+                child: _buildTabletTypeCard(
+                  title: "Assistante Maternelle",
+                  subtitle: "Structure individuelle",
+                  icon: Icons.person,
+                  isSelected: isAssistanteMaterCheck,
+                  onTap: () {
+                    setState(() {
+                      isAssistanteMaterCheck = true;
+                      isMAMCheck = false;
+                    });
+                  },
+                  maxWidth: maxWidth,
+                  maxHeight: maxHeight,
+                ),
+              ),
+              SizedBox(width: maxWidth * 0.015), // Réduit de 0.02 à 0.015
+              Expanded(
+                child: _buildTabletTypeCard(
+                  title: "MAM",
+                  subtitle: "Maison d'Assistantes Maternelles",
+                  icon: Icons.group,
+                  isSelected: isMAMCheck,
+                  onTap: () {
+                    setState(() {
+                      isAssistanteMaterCheck = false;
+                      isMAMCheck = true;
+                    });
+                  },
+                  maxWidth: maxWidth,
+                  maxHeight: maxHeight,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletTypeCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: maxWidth * 0.015,
+          vertical: maxHeight * 0.015,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryBlue : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? primaryBlue : Colors.grey.shade300,
+            width: 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: primaryBlue.withOpacity(0.2),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: maxWidth * 0.025, // Réduit de 0.035 à 0.025
+              color: isSelected ? Colors.white : primaryBlue,
+            ),
+            SizedBox(height: maxHeight * 0.008),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: maxWidth * 0.016, // Réduit de 0.018 à 0.016
+                fontWeight: FontWeight.w600,
+                color: isSelected ? Colors.white : primaryBlue,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            SizedBox(height: maxHeight * 0.003),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: maxWidth * 0.012, // Réduit de 0.014 à 0.012
+                color: isSelected
+                    ? Colors.white.withOpacity(0.8)
+                    : Colors.grey.shade600,
+                fontWeight: FontWeight.w400,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTabletMAMInfo(double maxWidth, double maxHeight) {
+    return Container(
+      padding: EdgeInsets.all(maxWidth * 0.025),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            primaryYellow.withOpacity(0.1),
+            primaryYellow.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryYellow.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: primaryYellow,
+            size: maxWidth * 0.025,
+          ),
+          SizedBox(width: maxWidth * 0.015),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Information importante",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: primaryYellow,
+                    fontSize: maxWidth * 0.018,
+                  ),
+                ),
+                SizedBox(height: maxHeight * 0.01),
+                Text(
+                  "Un seul membre de la MAM doit créer le compte. Les autres membres pourront être ajoutés par la suite via des invitations.",
+                  style: TextStyle(
+                    fontSize: maxWidth * 0.016,
+                    color: Color(0xFF455A64),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletForm(double maxWidth, double maxHeight) {
+    return Column(
+      children: [
+        // Email
+        _buildTabletTextField(
+          controller: emailController,
+          label: "Adresse email",
+          hint: "votre@email.com",
+          icon: Icons.email_outlined,
+          keyboardType: TextInputType.emailAddress,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+
+        SizedBox(height: maxHeight * 0.025),
+
+        // Mot de passe
+        _buildTabletTextField(
+          controller: passwordController,
+          label: "Mot de passe",
+          hint: "Minimum 6 caractères",
+          icon: Icons.lock_outline,
+          isPassword: true,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+
+        SizedBox(height: maxHeight * 0.025),
+
+        // Confirmation mot de passe
+        _buildTabletTextField(
+          controller: confirmPasswordController,
+          label: "Confirmer le mot de passe",
+          hint: "Ressaisissez votre mot de passe",
+          icon: Icons.lock_outline,
+          isPassword: true,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+
+        // Message d'erreur
+        if (errorMessage.isNotEmpty) ...[
+          SizedBox(height: maxHeight * 0.02),
+          Container(
+            padding: EdgeInsets.all(maxWidth * 0.02),
+            decoration: BoxDecoration(
+              color: primaryRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: primaryRed.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  color: primaryRed,
+                  size: maxWidth * 0.02,
+                ),
+                SizedBox(width: maxWidth * 0.015),
+                Expanded(
+                  child: Text(
+                    errorMessage,
+                    style: TextStyle(
+                      color: primaryRed,
+                      fontSize: maxWidth * 0.016,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTabletTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType? keyboardType,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword,
+        keyboardType: keyboardType,
+        style: TextStyle(fontSize: maxWidth * 0.018),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(
+            icon,
+            color: primaryBlue,
+            size: maxWidth * 0.022,
+          ),
+          labelStyle: TextStyle(
+            color: primaryBlue,
+            fontSize: maxWidth * 0.016,
+          ),
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: maxWidth * 0.015,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: primaryBlue, width: 2),
+          ),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: maxWidth * 0.02,
+            vertical: maxHeight * 0.02,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabletActions(double maxWidth, double maxHeight) {
+    return Column(
+      children: [
+        // Bouton S'inscrire - Plus sobre et moderne
+        Container(
+          width: double.infinity,
+          height: maxHeight * 0.06, // Réduit de 0.08 à 0.06
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _register,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryYellow,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12), // Réduit de 16 à 12
+              ),
+              elevation: 2, // Réduit l'élévation
+              shadowColor: primaryYellow.withOpacity(0.3),
+            ),
+            child: isLoading
+                ? SizedBox(
+                    height: maxWidth * 0.02, // Réduit de 0.025 à 0.02
+                    width: maxWidth * 0.02,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : Text(
+                    "S'INSCRIRE",
+                    style: TextStyle(
+                      fontSize: maxWidth * 0.018, // Réduit de 0.02 à 0.018
+                      fontWeight: FontWeight.w600, // Moins gras
+                      letterSpacing: 0.5, // Réduit de 1 à 0.5
+                    ),
+                  ),
+          ),
+        ),
+
+        SizedBox(height: maxHeight * 0.02), // Réduit de 0.025 à 0.02
+
+        // Lien de connexion - Plus subtil
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Vous avez déjà un compte ? ",
+              style: TextStyle(
+                fontSize: maxWidth * 0.015, // Réduit de 0.017 à 0.015
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.go('/login'),
+              style: TextButton.styleFrom(
+                foregroundColor: primaryBlue,
+                padding: EdgeInsets.symmetric(
+                  horizontal: maxWidth * 0.008, // Réduit
+                  vertical: maxHeight * 0.008,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                "Se connecter",
+                style: TextStyle(
+                  color: primaryBlue,
+                  fontWeight: FontWeight.w600, // Moins gras
+                  fontSize: maxWidth * 0.015, // Réduit de 0.017 à 0.015
+                  decoration: TextDecoration.underline,
+                  decorationColor: primaryBlue,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

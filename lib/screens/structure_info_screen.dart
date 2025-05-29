@@ -251,191 +251,667 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
   Widget build(BuildContext context) {
     print("🔍 Dans build - isMAM = $isMAM, structureType = $structureType");
 
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+
+    // Déterminer si on est sur iPad
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
           "Informations sur la structure",
-          style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+            fontSize: isTablet ? 24 : 20,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: primaryColor),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 40),
+      body: isTablet ? _buildTabletContent(screenSize) : _buildPhoneContent(),
+    );
+  }
 
-            // Icône avec un cercle de fond
-            Container(
-              width: 120,
-              height: 120,
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.business,
-                size: 70,
-                color: primaryColor,
-              ),
-            ),
+  Widget _buildTabletContent(Size screenSize) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        final double maxHeight = constraints.maxHeight;
 
-            const SizedBox(height: 20),
+        // Calculer des dimensions en pourcentages
+        final double sideMargin = maxWidth * 0.04; // 4% de marge sur les côtés
+        final double topMargin = maxHeight * 0.02; // 2% de marge en haut
 
-            // Titre
-            Text(
-              "Ajoutez les informations de votre ${isMAM ? 'MAM' : 'activité'}",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: 30),
-
-// Champ Nom de la structure (uniquement affiché pour les MAM)
-            if (isMAM) ...[
-              _buildTextField(
-                structureNameController,
-                "Nom de la MAM",
-                icon: Icons.business_outlined,
-                color: primaryColor,
-                helperText: "Entrez le nom de votre MAM",
-              ),
-              const SizedBox(height: 15),
-            ],
-
-// Champs de formulaire
-            _buildTextField(
-              firstNameController,
-              "Prénom",
-              icon: Icons.person_outline,
-              color: primaryColor,
-              onChanged: (value) {
-                if (!isMAM) {
-                  // Mettre à jour automatiquement le nom de la structure pour AssistanteMaternelle
-                  structureNameController.text = value;
-                }
-              },
-            ),
-
-            const SizedBox(height: 15),
-
-            _buildTextField(lastNameController, "Nom",
-                icon: Icons.person_outline, color: primaryColor),
-
-            const SizedBox(height: 15),
-
-            _buildTextField(addressController, "Adresse",
-                icon: Icons.location_on_outlined, color: primaryColor),
-
-            const SizedBox(height: 15),
-
-            _buildTextField(postalCodeController, "Code postal",
-                icon: Icons.pin_outlined,
-                isNumeric: true,
-                maxLength: 5,
-                color: primaryColor, onChanged: (value) {
-              _fetchCityFromPostalCode(value);
-            }),
-
-            const SizedBox(height: 15),
-
-            _buildTextField(cityController, "Ville",
-                icon: Icons.location_city_outlined,
-                isReadOnly: true,
-                color: primaryColor),
-
-            const SizedBox(height: 15),
-
-            // Nouveau champ pour le téléphone
-            _buildTextField(phoneController, "Téléphone",
-                icon: Icons.phone_outlined,
-                isNumeric: true,
-                maxLength: 10,
-                color: primaryColor),
-
-            const SizedBox(height: 20),
-
-            // Message d'erreur
-            if (errorMessage != null)
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+              sideMargin, topMargin, sideMargin, maxHeight * 0.02),
+          child: Column(
+            children: [
+              // Section d'en-tête moderne avec gradient
               Container(
-                padding: const EdgeInsets.all(16),
+                width: double.infinity,
+                padding: EdgeInsets.all(maxWidth * 0.04),
                 decoration: BoxDecoration(
-                  color: primaryRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: primaryRed.withOpacity(0.3)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      primaryColor,
+                      primaryColor.withOpacity(0.85),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      offset: const Offset(0, 8),
+                      blurRadius: 20,
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.error_outline,
-                      color: primaryRed,
-                      size: 24,
+                    // Icône avec design moderne
+                    Container(
+                      width: maxWidth * 0.12,
+                      height: maxWidth * 0.12,
+                      padding: EdgeInsets.all(maxWidth * 0.025),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.business,
+                        size: maxWidth * 0.06,
+                        color: primaryColor,
+                      ),
                     ),
-                    const SizedBox(width: 12),
+
+                    SizedBox(width: maxWidth * 0.03),
+
+                    // Titre et description
                     Expanded(
-                      child: Text(
-                        errorMessage!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: primaryRed,
-                          height: 1.4,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Informations de votre ${isMAM ? 'MAM' : 'activité'}",
+                            style: TextStyle(
+                              fontSize: maxWidth * 0.026,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: maxHeight * 0.01),
+                          Text(
+                            "Complétez les informations ci-dessous pour finaliser votre profil professionnel",
+                            style: TextStyle(
+                              fontSize: maxWidth * 0.016,
+                              color: Colors.white.withOpacity(0.9),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
 
-            const SizedBox(height: 30),
+              SizedBox(height: maxHeight * 0.04),
 
-            // Bouton de validation
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                onPressed: isLoading ? null : _saveStructureInfo,
-                icon: isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.0,
+              // Formulaire principal avec design moderne
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 4),
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(maxWidth * 0.035),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Titre de la section formulaire
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(maxWidth * 0.012),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              color: primaryColor,
+                              size: maxWidth * 0.02,
+                            ),
+                          ),
+                          SizedBox(width: maxWidth * 0.015),
+                          Text(
+                            "Informations professionnelles",
+                            style: TextStyle(
+                              fontSize: maxWidth * 0.022,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.03),
+
+                      // Formulaire en deux colonnes pour optimiser l'espace iPad
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Colonne gauche
+                          Expanded(
+                            child: Column(
+                              children: [
+                                // Champ Nom de la structure (uniquement pour MAM)
+                                if (isMAM) ...[
+                                  _buildTabletTextField(
+                                    structureNameController,
+                                    "Nom de la MAM",
+                                    icon: Icons.business_outlined,
+                                    color: primaryColor,
+                                    helperText: "Entrez le nom de votre MAM",
+                                    maxWidth: maxWidth,
+                                    maxHeight: maxHeight,
+                                  ),
+                                  SizedBox(height: maxHeight * 0.025),
+                                ],
+
+                                // Prénom
+                                _buildTabletTextField(
+                                  firstNameController,
+                                  "Prénom",
+                                  icon: Icons.person_outline,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                  onChanged: (value) {
+                                    if (!isMAM) {
+                                      structureNameController.text = value;
+                                    }
+                                  },
+                                ),
+
+                                SizedBox(height: maxHeight * 0.025),
+
+                                // Nom
+                                _buildTabletTextField(
+                                  lastNameController,
+                                  "Nom",
+                                  icon: Icons.person_outline,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                ),
+
+                                SizedBox(height: maxHeight * 0.025),
+
+                                // Téléphone
+                                _buildTabletTextField(
+                                  phoneController,
+                                  "Téléphone",
+                                  icon: Icons.phone_outlined,
+                                  isNumeric: true,
+                                  maxLength: 10,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(width: maxWidth * 0.04),
+
+                          // Colonne droite
+                          Expanded(
+                            child: Column(
+                              children: [
+                                // Adresse
+                                _buildTabletTextField(
+                                  addressController,
+                                  "Adresse",
+                                  icon: Icons.location_on_outlined,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                ),
+
+                                SizedBox(height: maxHeight * 0.025),
+
+                                // Code postal
+                                _buildTabletTextField(
+                                  postalCodeController,
+                                  "Code postal",
+                                  icon: Icons.pin_outlined,
+                                  isNumeric: true,
+                                  maxLength: 5,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                  onChanged: (value) {
+                                    _fetchCityFromPostalCode(value);
+                                  },
+                                ),
+
+                                SizedBox(height: maxHeight * 0.025),
+
+                                // Ville
+                                _buildTabletTextField(
+                                  cityController,
+                                  "Ville",
+                                  icon: Icons.location_city_outlined,
+                                  isReadOnly: true,
+                                  color: primaryColor,
+                                  maxWidth: maxWidth,
+                                  maxHeight: maxHeight,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: maxHeight * 0.025),
+
+                      // Message d'erreur adaptatif
+                      if (errorMessage != null)
+                        Container(
+                          padding: EdgeInsets.all(maxWidth * 0.025),
+                          decoration: BoxDecoration(
+                            color: primaryRed.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border:
+                                Border.all(color: primaryRed.withOpacity(0.3)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryRed.withOpacity(0.1),
+                                offset: const Offset(0, 2),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(maxWidth * 0.01),
+                                decoration: BoxDecoration(
+                                  color: primaryRed.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.error_outline,
+                                  color: primaryRed,
+                                  size: maxWidth * 0.02,
+                                ),
+                              ),
+                              SizedBox(width: maxWidth * 0.02),
+                              Expanded(
+                                child: Text(
+                                  errorMessage!,
+                                  style: TextStyle(
+                                    fontSize: maxWidth * 0.016,
+                                    color: primaryRed,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      )
-                    : Icon(Icons.check, color: Colors.white),
-                label: Text(
-                  "VALIDER",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    ],
                   ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
+              ),
+
+              SizedBox(height: maxHeight * 0.04),
+
+              // Bouton d'action adaptatif pour iPad
+              _buildTabletActionButton(maxWidth, maxHeight),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabletTextField(
+    TextEditingController controller,
+    String label, {
+    bool isNumeric = false,
+    int? maxLength,
+    bool isReadOnly = false,
+    Function(String)? onChanged,
+    required IconData icon,
+    required Color color,
+    String? helperText,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+        maxLength: maxLength,
+        readOnly: isReadOnly,
+        inputFormatters:
+            isNumeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: color.withOpacity(0.8),
+            fontSize: maxWidth * 0.016,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: color, width: 2),
+          ),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          prefixIcon: Container(
+            margin: EdgeInsets.all(maxWidth * 0.015),
+            padding: EdgeInsets.all(maxWidth * 0.01),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: maxWidth * 0.018,
+            ),
+          ),
+          counterText: "",
+          helperText: helperText,
+          helperStyle:
+              helperText != null ? TextStyle(fontSize: maxWidth * 0.014) : null,
+          contentPadding: EdgeInsets.symmetric(
+            vertical: maxHeight * 0.02,
+            horizontal: maxWidth * 0.02,
+          ),
+        ),
+        onChanged: onChanged,
+        style: TextStyle(
+          fontSize: maxWidth * 0.018,
+          color: isReadOnly ? Colors.grey : Colors.black,
+        ),
+        cursorColor: color,
+      ),
+    );
+  }
+
+  Widget _buildTabletActionButton(double maxWidth, double maxHeight) {
+    return Container(
+      width: maxWidth * 0.4, // 40% de la largeur de l'écran
+      height: maxHeight * 0.08, // 8% de la hauteur de l'écran
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : _saveStructureInfo,
+        icon: isLoading
+            ? SizedBox(
+                width: maxWidth * 0.025,
+                height: maxWidth * 0.025,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.0,
                 ),
+              )
+            : Icon(
+                Icons.check_circle_outline,
+                color: Colors.white,
+                size: maxWidth * 0.022,
+              ),
+        label: Text(
+          "VALIDER",
+          style: TextStyle(
+            fontSize: maxWidth * 0.02,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.1,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          side: BorderSide(
+            color: primaryColor.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhoneContent() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 40),
+
+          // Icône avec un cercle de fond
+          Container(
+            width: 120,
+            height: 120,
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.business,
+              size: 70,
+              color: primaryColor,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Titre
+          Text(
+            "Ajoutez les informations de votre ${isMAM ? 'MAM' : 'activité'}",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: 30),
+
+          // Champ Nom de la structure (uniquement affiché pour les MAM)
+          if (isMAM) ...[
+            _buildTextField(
+              structureNameController,
+              "Nom de la MAM",
+              icon: Icons.business_outlined,
+              color: primaryColor,
+              helperText: "Entrez le nom de votre MAM",
+            ),
+            const SizedBox(height: 15),
+          ],
+
+          // Champs de formulaire
+          _buildTextField(
+            firstNameController,
+            "Prénom",
+            icon: Icons.person_outline,
+            color: primaryColor,
+            onChanged: (value) {
+              if (!isMAM) {
+                // Mettre à jour automatiquement le nom de la structure pour AssistanteMaternelle
+                structureNameController.text = value;
+              }
+            },
+          ),
+
+          const SizedBox(height: 15),
+
+          _buildTextField(lastNameController, "Nom",
+              icon: Icons.person_outline, color: primaryColor),
+
+          const SizedBox(height: 15),
+
+          _buildTextField(addressController, "Adresse",
+              icon: Icons.location_on_outlined, color: primaryColor),
+
+          const SizedBox(height: 15),
+
+          _buildTextField(postalCodeController, "Code postal",
+              icon: Icons.pin_outlined,
+              isNumeric: true,
+              maxLength: 5,
+              color: primaryColor, onChanged: (value) {
+            _fetchCityFromPostalCode(value);
+          }),
+
+          const SizedBox(height: 15),
+
+          _buildTextField(cityController, "Ville",
+              icon: Icons.location_city_outlined,
+              isReadOnly: true,
+              color: primaryColor),
+
+          const SizedBox(height: 15),
+
+          // Nouveau champ pour le téléphone
+          _buildTextField(phoneController, "Téléphone",
+              icon: Icons.phone_outlined,
+              isNumeric: true,
+              maxLength: 10,
+              color: primaryColor),
+
+          const SizedBox(height: 20),
+
+          // Message d'erreur
+          if (errorMessage != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: primaryRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: primaryRed.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: primaryRed,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      errorMessage!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: primaryRed,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 40),
-          ],
-        ),
+          const SizedBox(height: 30),
+
+          // Bouton de validation
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: isLoading ? null : _saveStructureInfo,
+              icon: isLoading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.0,
+                      ),
+                    )
+                  : Icon(Icons.check, color: Colors.white),
+              label: Text(
+                "VALIDER",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 40),
+        ],
       ),
     );
   }
