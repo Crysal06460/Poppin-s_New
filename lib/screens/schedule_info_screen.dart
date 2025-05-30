@@ -237,7 +237,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                           SizedBox(width: maxWidth * 0.015),
                           Expanded(
                             child: Text(
-                              "Aperçu des horaires",
+                              "Aperçu",
                               style: TextStyle(
                                 fontSize: maxWidth * 0.022,
                                 fontWeight: FontWeight.bold,

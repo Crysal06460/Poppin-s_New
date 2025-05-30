@@ -136,7 +136,7 @@ class PoppinsApp extends StatelessWidget {
           color: Colors.grey[300],
           thickness: 1,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

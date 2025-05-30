@@ -699,7 +699,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                 foregroundColor: primaryBlue,
               ),
             ),
-            dialogTheme: DialogTheme(
+            dialogTheme: DialogThemeData(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),

@@ -209,7 +209,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
                           SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                           Expanded(
                             child: Text(
-                              "Aperçu des documents",
+                              "Aperçu",
                               style: TextStyle(
                                 fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
                                 fontWeight: FontWeight.bold,

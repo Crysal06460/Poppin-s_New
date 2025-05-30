@@ -1368,10 +1368,16 @@ class _SanteScreenState extends State<SanteScreen> {
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.add_circle, color: primaryColor, size: 30),
-                  onPressed: () => _showAddCarePopup(enfant['id']),
-                  tooltip: 'Ajouter un soin',
+                Container(
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.add, color: primaryColor, size: 24),
+                    onPressed: () => _showAddCarePopup(enfant['id']),
+                    tooltip: "Ajouter un soin",
+                  ),
                 ),
               ],
             ),
@@ -1715,11 +1721,33 @@ class _SanteScreenState extends State<SanteScreen> {
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.add_circle,
-                      color: Colors.white, size: 36), // Plus grand pour iPad
-                  onPressed: () => _showAddCarePopup(enfant['id']),
-                  tooltip: 'Ajouter un soin',
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.add,
+                          color: isBoy ? primaryBlue : primaryRed, size: 24),
+                      onPressed: () => _showAddCarePopup(enfant['id']),
+                      tooltip: "Ajouter un soin",
+                      padding: EdgeInsets.all(10),
+                      constraints: BoxConstraints(minWidth: 0, minHeight: 0),
+                    ),
+                  ),
                 ),
               ],
             ),

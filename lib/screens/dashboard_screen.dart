@@ -8,13 +8,13 @@ import 'package:poppins_app/screens/edit_schedule_screen.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:poppins_app/screens/photo_management_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
-// Ajout des nouvelles importations pour les écrans de gestion des membres
 import 'package:poppins_app/screens/mam_member_add_screen.dart';
 import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
-// En haut du fichier
 import 'package:poppins_app/screens/admin_screen.dart';
+import 'package:poppins_app/screens/freezer_temperature_screen.dart';
+import 'package:poppins_app/screens/child_removal_screen.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -31,14 +31,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isLoading = true;
   String structureName = "Chargement...";
   bool showMonthlyTableReports = false;
-  bool isMAMStructure =
-      false; // Nouvelle variable pour identifier si c'est une MAM
-  int maxMemberCount = 0; // Nombre maximum de membres selon l'abonnement
-  int currentMemberCount = 0; // Nombre actuel de membres
-  bool needFridgeTemperatureCheck =
-      false; // Indique si la température n'a pas été relevée aujourd'hui
+  bool isMAMStructure = false;
+  int maxMemberCount = 0;
+  int currentMemberCount = 0;
+  bool needFridgeTemperatureCheck = false;
+  bool needFreezerTemperatureCheck = false; // NOUVEAU
+  bool? hasFreezer;
   int _abacusClickCount = 0;
-  int _selectedSection = 0; // 0: Structure, 1: Enfants, 2: Rapports
+  int _selectedSection = 0;
 
   // Définition des couleurs de la palette
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -58,16 +58,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     primaryColor = primaryBlue;
     secondaryColor = lightBlue;
 
-    // Initialiser avec les valeurs par défaut (au lieu de forcer l'état MAM)
+    // Initialiser avec les valeurs par défaut
     isMAMStructure = false;
     maxMemberCount = 1;
     currentMemberCount = 1;
     needFridgeTemperatureCheck = false;
+    needFreezerTemperatureCheck = false; // NOUVEAU
 
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadData();
       _checkMonthlyTableEnabled();
-      _checkIfMAMStructure(); // Ne commentez plus cette ligne
+      _checkIfMAMStructure();
     });
   }
 
@@ -82,18 +83,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           title: Text("Fonctionnement de la MAM", textAlign: TextAlign.center),
           content: Container(
-            width: double.maxFinite, // Assurer une largeur suffisante
+            width: double.maxFinite,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Frigo - TOUJOURS en premier
                 ListTile(
                   leading: Icon(Icons.thermostat,
                       color: needFridgeTemperatureCheck
                           ? Colors.red
                           : primaryColor),
                   title: Wrap(
-                    // Utiliser un Wrap au lieu d'un Row pour permettre le retour à la ligne
-                    spacing: 8, // Espacement horizontal entre les éléments
+                    spacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
@@ -128,6 +129,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _navigateToFridgeTemperature();
                   },
                 ),
+
+                // Congélateur - Affiché seulement si pas encore configuré OU si la MAM en a un
+                // hasFreezer == null = pas encore configuré (première fois)
+                // hasFreezer == true = la MAM a un congélateur
+                // hasFreezer == false = la MAM n'a PAS de congélateur (ne pas afficher)
+                if (hasFreezer == null || hasFreezer == true)
+                  ListTile(
+                    leading: Icon(Icons.kitchen,
+                        color: needFreezerTemperatureCheck
+                            ? Colors.red
+                            : primaryColor),
+                    title: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          "Température congélateur",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: needFreezerTemperatureCheck
+                                ? Colors.red
+                                : Colors.black87,
+                          ),
+                        ),
+                        if (needFreezerTemperatureCheck && hasFreezer == true)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              "À relever aujourd'hui",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navigateToFreezerTemperature();
+                    },
+                  ),
+
                 ListTile(
                   leading: Icon(Icons.cleaning_services, color: primaryColor),
                   title: Text(
@@ -136,10 +185,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(context);
-                    // Remplacer ce commentaire et la SnackBar par la navigation
                     context.go('/cleaning-schedule');
                   },
                 ),
+
                 ListTile(
                   leading: Icon(Icons.calendar_month, color: primaryColor),
                   title: Text(
@@ -174,6 +223,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       },
     );
+  }
+
+  void _navigateToFreezerTemperature() {
+    context.go('/freezer-temperature');
   }
 
   // Méthode pour naviguer vers l'écran de température du frigo
@@ -261,6 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Si c'est une MAM, récupérer les informations sur les membres
         int maxMembers = 1; // Par défaut (pour AssistanteMaternelle)
         int currentMembers = 1; // Par défaut
+        bool? structureHasFreezer; // ✅ CORRECT - nullable
 
         if (isMam) {
           // Récupérer le nombre max de membres de l'abonnement
@@ -282,10 +336,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           currentMembers = membersSnapshot.docs.length;
 
-          print("MAM détectée: $currentMembers/$maxMembers membres");
+          // Vérifier si la structure a un congélateur
+          if (data.containsKey('hasFreezer')) {
+            structureHasFreezer = data['hasFreezer'] as bool;
+          } else {
+            structureHasFreezer = null; // Première fois, pas encore configuré
+          }
 
-          // Si c'est une MAM, vérifier aussi l'état de la température du frigo
+          print(
+              "MAM détectée: $currentMembers/$maxMembers membres, congélateur: $structureHasFreezer");
+
+          // Si c'est une MAM, vérifier l'état des températures
           _checkFridgeTemperatureStatus(structureId);
+          if (structureHasFreezer == true) {
+            _checkFreezerTemperatureStatus(structureId);
+          }
         } else {
           print(
               "AssistanteMaternelle détectée, pas d'affichage des options MAM");
@@ -296,6 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           isMAMStructure = isMam;
           maxMemberCount = maxMembers;
           currentMemberCount = currentMembers;
+          hasFreezer = structureHasFreezer;
         });
       }
     } catch (e) {
@@ -304,6 +370,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         isMAMStructure = false;
       });
+    }
+  }
+
+  Future<void> _checkFreezerTemperatureStatus(String structureId) async {
+    try {
+      // Obtenir la date d'aujourd'hui à minuit pour la comparaison
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+
+      // Rechercher s'il y a un relevé de température du congélateur pour aujourd'hui
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('freezerTemperatures')
+          .where('timestamp',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .limit(1)
+          .get();
+
+      setState(() {
+        // S'il n'y a pas de relevé aujourd'hui, indiquer qu'un relevé est nécessaire
+        needFreezerTemperatureCheck = snapshot.docs.isEmpty;
+      });
+
+      print(
+          "Vérification température congélateur: ${needFreezerTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
+    } catch (e) {
+      print(
+          "Erreur lors de la vérification du statut de température du congélateur: $e");
     }
   }
 
@@ -645,13 +740,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child['firstName'],
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
+                    // CORRECTION: Récupérer l'ID de structure avant de naviguer
+                    String structId = await _getStructureId();
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => ChildRemovalScreen(
                           childId: child['id'],
+                          structureId:
+                              structId, // ← AJOUT DU PARAMÈTRE MANQUANT
                         ),
                       ),
                     );
@@ -1268,6 +1367,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final bool isSelected = _selectedSection == index;
 
+    // Calculer le nombre de notifications pour la section Structure
+    String? sectionBadge = badge;
+    if (index == 0 && isMAMStructure) {
+      int notificationCount = 0;
+      if (needFridgeTemperatureCheck) notificationCount++;
+      // Afficher badge congélateur seulement si configuré ET nécessaire
+      if (needFreezerTemperatureCheck && hasFreezer == true)
+        notificationCount++;
+
+      if (notificationCount > 0) {
+        sectionBadge = notificationCount.toString();
+      }
+    }
+
     return Material(
       color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
       borderRadius: BorderRadius.circular(16),
@@ -1299,7 +1412,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       size: maxWidth * 0.06,
                     ),
                   ),
-                  if (badge != null)
+                  if (sectionBadge != null)
                     Positioned(
                       top: -2,
                       right: -2,
@@ -1310,7 +1423,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Text(
-                          badge,
+                          sectionBadge,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: maxWidth * 0.012,
@@ -1376,6 +1489,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Méthode pour les actions de structure
   Widget _buildStructureActions(double maxWidth, double maxHeight) {
+    // Calculer le nombre de notifications pour le badge "Fonctionnement de la MAM"
+    int notificationCount = 0;
+    if (needFridgeTemperatureCheck) notificationCount++;
+// Badge congélateur seulement si configuré ET nécessaire
+    if (needFreezerTemperatureCheck && hasFreezer == true) notificationCount++;
+
+    String? functioningBadge;
+    if (notificationCount > 0) {
+      functioningBadge = notificationCount.toString();
+    }
+
     return ListView(
       children: [
         _buildTabletActionItem(
@@ -1398,10 +1522,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildTabletActionItem(
             icon: Icons.settings,
             title: "Fonctionnement de la MAM",
-            description: "Température frigo, planning ménage...",
+            description: "Température frigo, congélateur, planning ménage...",
             onTap: _showMAMFunctioning,
             maxWidth: maxWidth,
-            badge: needFridgeTemperatureCheck ? "1" : null,
+            badge: functioningBadge,
           ),
         ],
       ],
@@ -1647,7 +1771,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: Icons.settings,
                       title: "Fonctionnement de la MAM",
                       onTap: _showMAMFunctioning,
-                      badge: needFridgeTemperatureCheck
+                      badge: (needFridgeTemperatureCheck ||
+                              (needFreezerTemperatureCheck &&
+                                  hasFreezer == true))
                           ? Container(
                               padding: EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
@@ -1656,7 +1782,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                "1",
+                                ((needFridgeTemperatureCheck ? 1 : 0) +
+                                        (needFreezerTemperatureCheck &&
+                                                hasFreezer == true // ✅ CORRECT
+                                            ? 1
+                                            : 0))
+                                    .toString(),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 12,

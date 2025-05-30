@@ -51,6 +51,7 @@ import 'package:poppins_app/screens/add-mam-members.dart';
 import 'package:poppins_app/screens/register_screen.dart';
 import 'package:poppins_app/screens/pricing_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
+import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 
 // Nouveaux imports pour le système d'authentification
 import 'package:poppins_app/screens/welcome_screen.dart';
@@ -145,6 +146,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/freezer-temperature',
+      builder: (context, state) => const FreezerTemperatureScreen(),
     ),
     GoRoute(
       path: '/subscription-confirmed',

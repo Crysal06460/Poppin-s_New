@@ -207,13 +207,16 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                           SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                           Expanded(
                             child: Text(
-                              "Aperçu des autorisations",
+                              "Aperçu",
                               style: TextStyle(
                                 fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              maxLines:
+                                  2, // AJOUT : Permet l'affichage sur 2 lignes
+                              overflow: TextOverflow
+                                  .visible, // MODIFICATION : Permet l'affichage complet
                             ),
                           ),
                         ],
@@ -272,9 +275,11 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                               _buildParentPreviewTablet(
                                   "Parent 1", _parent1Name!, true, maxWidth),
 
-                            // Parent 2
+// Parent 2
                             if (_hasParent2 && _parent2Name != null) ...[
-                              SizedBox(height: maxHeight * 0.015),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.025), // Augmenté de 0.015 à 0.025
                               _buildParentPreviewTablet(
                                   "Parent 2",
                                   _parent2Name!,
@@ -490,7 +495,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Autorisations de récupération",
+                        "Personnes autorisées à récuperer",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -646,52 +651,64 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
               : Colors.grey.shade300,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: EdgeInsets.all((maxWidth * 0.008).clamp(4.0, 8.0)),
-            decoration: BoxDecoration(
-              color: isAuthorized ? primaryBlue : Colors.grey,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isAuthorized ? Icons.check : Icons.close,
-              color: Colors.white,
-              size: (maxWidth * 0.015).clamp(12.0, 18.0),
-            ),
-          ),
-          SizedBox(width: (maxWidth * 0.01).clamp(6.0, 12.0)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade600,
-                  ),
+          // Première ligne : Label et statut
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
                 ),
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: (maxWidth * 0.008).clamp(4.0, 8.0),
+                  vertical: (maxWidth * 0.004).clamp(2.0, 6.0),
                 ),
-              ],
-            ),
+                decoration: BoxDecoration(
+                  color: isAuthorized ? primaryBlue : Colors.grey,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isAuthorized ? Icons.check : Icons.close,
+                      color: Colors.white,
+                      size: (maxWidth * 0.012).clamp(10.0, 16.0),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      isAuthorized ? "Autorisé" : "Non autorisé",
+                      style: TextStyle(
+                        fontSize: (maxWidth * 0.012).clamp(8.0, 14.0),
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          SizedBox(height: (maxWidth * 0.008).clamp(4.0, 8.0)),
+          // Deuxième ligne : Nom complet
           Text(
-            isAuthorized ? "Autorisé" : "Non autorisé",
+            name,
             style: TextStyle(
-              fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
-              fontWeight: FontWeight.w500,
-              color: isAuthorized ? primaryBlue : Colors.grey.shade600,
+              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
             ),
+            maxLines:
+                2, // Permet au nom de s'afficher sur 2 lignes si nécessaire
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

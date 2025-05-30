@@ -380,27 +380,33 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                         ? "Non renseigné"
                                         : "${_monthlySalaryController.text} €",
                                     maxWidth),
-                                SizedBox(height: maxHeight * 0.02),
+                                SizedBox(
+                                    height: maxHeight *
+                                        0.03), // Augmenté de 0.02 à 0.03
 
-                                // Frais d'entretien
+// Frais d'entretien
                                 _buildInfoRowTablet(
                                     "Frais d'entretien",
                                     _careExpensesController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_careExpensesController.text} €/jour",
                                     maxWidth),
-                                SizedBox(height: maxHeight * 0.02),
+                                SizedBox(
+                                    height: maxHeight *
+                                        0.03), // Augmenté de 0.02 à 0.03
 
-                                // Frais de repas
+// Frais de repas
                                 _buildInfoRowTablet(
                                     "Frais de repas",
                                     _mealExpensesController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_mealExpensesController.text} €/jour",
                                     maxWidth),
-                                SizedBox(height: maxHeight * 0.02),
+                                SizedBox(
+                                    height: maxHeight *
+                                        0.03), // Augmenté de 0.02 à 0.03
 
-                                // Frais kilométriques
+// Frais kilométriques
                                 _buildInfoRowTablet(
                                     "Frais km",
                                     _kmExpensesController.text.isEmpty
@@ -517,7 +523,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Le tableau mensuel permet de suivre automatiquement la facturation et de générer des récapitulatifs mensuels.",
+                                "Le tableau mensuel est proposé à titre d'indication et de générer des récapitulatifs mensuels.",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -738,38 +744,35 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
   }
 
   Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          flex: 2,
-          child: Text(
-            "$label:",
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
-            ),
-            overflow: TextOverflow.ellipsis,
+        // Label
+        Text(
+          "$label:",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade600,
           ),
         ),
-        SizedBox(width: maxWidth * 0.01),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              fontWeight:
-                  value.contains("Non") ? FontWeight.normal : FontWeight.w600,
-              color:
-                  value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
-              fontStyle:
-                  value.contains("Non") ? FontStyle.italic : FontStyle.normal,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
+        SizedBox(
+            height: (maxWidth * 0.008)
+                .clamp(4.0, 8.0)), // Petit espacement entre label et valeur
+        // Valeur
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight:
+                value.contains("Non") ? FontWeight.normal : FontWeight.w600,
+            color:
+                value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
+            fontStyle:
+                value.contains("Non") ? FontStyle.italic : FontStyle.normal,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
         ),
       ],
     );

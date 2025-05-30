@@ -228,27 +228,33 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                                       ? "Non renseigné"
                                       : firstNameController.text,
                                   maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
 
-                              // Nom
+// Nom
                               _buildInfoRowTablet(
                                   "Nom",
                                   lastNameController.text.isEmpty
                                       ? "Non renseigné"
                                       : lastNameController.text,
                                   maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
 
-                              // Email
+// Email
                               _buildInfoRowTablet(
                                   "Email",
                                   emailController.text.isEmpty
                                       ? "Non renseigné"
                                       : emailController.text,
                                   maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
 
-                              // Téléphone
+// Téléphone
                               _buildInfoRowTablet(
                                   "Téléphone",
                                   phoneController.text.isEmpty
@@ -432,40 +438,35 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
   }
 
   Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Utiliser Flexible au lieu d'un Container avec width fixe
-        Flexible(
-          flex: 2, // 2 parts pour le label
-          child: Text(
-            "$label:",
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0), // Taille min/max
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
-            ),
-            overflow: TextOverflow.ellipsis,
+        // Label
+        Text(
+          "$label:",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade600,
           ),
         ),
-        SizedBox(width: maxWidth * 0.01),
-        // Utiliser Expanded pour le reste de l'espace
-        Expanded(
-          flex: 3, // 3 parts pour la valeur
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0), // Taille min/max
-              fontWeight:
-                  value.contains("Non") ? FontWeight.normal : FontWeight.w600,
-              color:
-                  value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
-              fontStyle:
-                  value.contains("Non") ? FontStyle.italic : FontStyle.normal,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
+        SizedBox(
+            height: (maxWidth * 0.008)
+                .clamp(4.0, 8.0)), // Petit espacement entre label et valeur
+        // Valeur
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight:
+                value.contains("Non") ? FontWeight.normal : FontWeight.w600,
+            color:
+                value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
+            fontStyle:
+                value.contains("Non") ? FontStyle.italic : FontStyle.normal,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
         ),
       ],
     );

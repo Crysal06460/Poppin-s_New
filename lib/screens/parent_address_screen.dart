@@ -373,18 +373,22 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
                                       ? "Non renseignée"
                                       : addressController.text,
                                   maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
 
-                              // Code postal
+// Code postal
                               _buildInfoRowTablet(
                                   "Code postal",
                                   postalCodeController.text.isEmpty
                                       ? "Non renseigné"
                                       : postalCodeController.text,
                                   maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
 
-                              // Ville
+// Ville
                               _buildInfoRowTablet(
                                   "Ville",
                                   cityController.text.isEmpty
@@ -610,38 +614,35 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
   }
 
   Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          flex: 2,
-          child: Text(
-            "$label:",
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
-            ),
-            overflow: TextOverflow.ellipsis,
+        // Label
+        Text(
+          "$label:",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade600,
           ),
         ),
-        SizedBox(width: maxWidth * 0.01),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              fontWeight:
-                  value.contains("Non") ? FontWeight.normal : FontWeight.w600,
-              color:
-                  value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
-              fontStyle:
-                  value.contains("Non") ? FontStyle.italic : FontStyle.normal,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
+        SizedBox(
+            height: (maxWidth * 0.008)
+                .clamp(4.0, 8.0)), // Petit espacement entre label et valeur
+        // Valeur
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight:
+                value.contains("Non") ? FontWeight.normal : FontWeight.w600,
+            color:
+                value.contains("Non") ? Colors.grey.shade400 : Colors.black87,
+            fontStyle:
+                value.contains("Non") ? FontStyle.italic : FontStyle.normal,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
         ),
       ],
     );

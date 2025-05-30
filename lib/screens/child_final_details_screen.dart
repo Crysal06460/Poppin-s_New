@@ -261,10 +261,14 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
                               // Autorisations
                               _buildAuthorizationPreviewTablet(
                                   "Maquillage", _makeupAllowed, maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
                               _buildAuthorizationPreviewTablet(
                                   "Photos/Vidéos", _photosAllowed, maxWidth),
-                              SizedBox(height: maxHeight * 0.02),
+                              SizedBox(
+                                  height: maxHeight *
+                                      0.03), // Augmenté de 0.02 à 0.03
                               _buildAuthorizationPreviewTablet(
                                   "Sorties", _outingsAllowed, maxWidth),
                             ],
@@ -518,69 +522,66 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
 
   Widget _buildAuthorizationPreviewTablet(
       String label, bool? value, double maxWidth) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          flex: 2,
-          child: Text(
-            "$label:",
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade600,
-            ),
-            overflow: TextOverflow.ellipsis,
+        // Label
+        Text(
+          "$label:",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade600,
           ),
         ),
-        SizedBox(width: maxWidth * 0.01),
-        Expanded(
-          flex: 3,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: (maxWidth * 0.01).clamp(6.0, 12.0),
-              vertical: (maxWidth * 0.005).clamp(3.0, 8.0),
-            ),
-            decoration: BoxDecoration(
+        SizedBox(
+            height: (maxWidth * 0.008)
+                .clamp(4.0, 8.0)), // Petit espacement entre label et valeur
+        // Valeur avec statut
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: (maxWidth * 0.01).clamp(6.0, 12.0),
+            vertical: (maxWidth * 0.005).clamp(3.0, 8.0),
+          ),
+          decoration: BoxDecoration(
+            color: value == null
+                ? Colors.grey.shade200
+                : (value
+                    ? primaryBlue.withOpacity(0.1)
+                    : primaryRed.withOpacity(0.1)),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
               color: value == null
-                  ? Colors.grey.shade200
+                  ? Colors.grey.shade300
                   : (value
-                      ? primaryBlue.withOpacity(0.1)
-                      : primaryRed.withOpacity(0.1)),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: value == null
-                    ? Colors.grey.shade300
-                    : (value
-                        ? primaryBlue.withOpacity(0.3)
-                        : primaryRed.withOpacity(0.3)),
-              ),
+                      ? primaryBlue.withOpacity(0.3)
+                      : primaryRed.withOpacity(0.3)),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  value == null
-                      ? Icons.help_outline
-                      : (value ? Icons.check_circle : Icons.cancel),
-                  size: (maxWidth * 0.015).clamp(12.0, 18.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                value == null
+                    ? Icons.help_outline
+                    : (value ? Icons.check_circle : Icons.cancel),
+                size: (maxWidth * 0.015).clamp(12.0, 18.0),
+                color: value == null
+                    ? Colors.grey
+                    : (value ? primaryBlue : primaryRed),
+              ),
+              SizedBox(width: 4),
+              Text(
+                value == null ? "Non défini" : (value ? "Oui" : "Non"),
+                style: TextStyle(
+                  fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
+                  fontWeight: FontWeight.w600,
                   color: value == null
-                      ? Colors.grey
+                      ? Colors.grey.shade600
                       : (value ? primaryBlue : primaryRed),
                 ),
-                SizedBox(width: 4),
-                Text(
-                  value == null ? "Non défini" : (value ? "Oui" : "Non"),
-                  style: TextStyle(
-                    fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
-                    fontWeight: FontWeight.w600,
-                    color: value == null
-                        ? Colors.grey.shade600
-                        : (value ? primaryBlue : primaryRed),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
