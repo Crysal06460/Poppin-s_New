@@ -7,6 +7,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'routes.dart';
 
+// 🔥 NOUVEL IMPORT POUR LES NOTIFICATIONS
+import 'services/notification_service.dart';
+
 // Clé globale pour le ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -31,6 +34,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 🔥 INITIALISER LES NOTIFICATIONS (NOUVEAU)
+  await NotificationService.initialize();
 
   // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());

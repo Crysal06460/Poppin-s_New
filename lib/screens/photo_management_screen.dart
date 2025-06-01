@@ -19,6 +19,7 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   final ImagePicker _picker = ImagePicker();
+  String structureId = ''; // Ajouter cette variable
 
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
@@ -27,7 +28,13 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
   @override
   void initState() {
     super.initState();
-    _loadChildren();
+    _initializeData();
+  }
+
+  // Nouvelle méthode pour initialiser les données
+  Future<void> _initializeData() async {
+    await _getStructureId();
+    await _loadChildren();
 
     // Si un childId spécifique est fourni, ouvrir directement le dialogue pour cet enfant
     if (widget.childId != null && widget.childId!.isNotEmpty) {
@@ -35,6 +42,43 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadSpecificChild(widget.childId!);
       });
+    }
+  }
+
+  // Nouvelle méthode pour récupérer l'ID de structure (similaire à EditScheduleScreen)
+  Future<void> _getStructureId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Par défaut, l'ID de structure est l'ID de l'utilisateur
+      structureId = user.uid;
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
+          structureId = userData['structureId'];
+          print(
+              "🔄 PhotoManagement: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        }
+      }
+    } catch (e) {
+      print("Erreur lors de la récupération de l'ID de structure: $e");
+      // En cas d'erreur, utiliser l'ID utilisateur par défaut
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        structureId = user.uid;
+      }
     }
   }
 
@@ -65,27 +109,76 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
     }
   }
 
+  // Méthode _loadChildren modifiée pour supporter le système MAM
   Future<void> _loadChildren() async {
     setState(() => isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        setState(() => isLoading = false);
+        return;
+      }
 
+      // Si l'ID de structure n'est pas encore récupéré, attendre un peu et réessayer
+      if (structureId.isEmpty) {
+        await _getStructureId();
+        // Si toujours vide, utiliser l'ID utilisateur par défaut
+        if (structureId.isEmpty) {
+          structureId = user.uid;
+        }
+      }
+
+      // Récupérer l'email de l'utilisateur actuel
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+
+      // Récupérer le type de structure (MAM ou AssistanteMaternelle)
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      final String structureType = structureDoc.exists
+          ? (structureDoc.data()?['structureType'] ?? "AssistanteMaternelle")
+          : "AssistanteMaternelle";
+
+      // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId)
           .collection('children')
           .get();
 
-      enfants = snapshot.docs.map((doc) {
+      // Liste complète de tous les enfants
+      List<Map<String, dynamic>> allChildren = snapshot.docs.map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
-          'prenom': data['firstName'],
+          'prenom': data['firstName'] ?? 'Sans nom',
           'photoUrl': data['photoUrl'],
+          'assignedMemberEmail':
+              data['assignedMemberEmail']?.toString().toLowerCase() ?? '',
         };
       }).toList();
 
+      // Appliquer le filtrage selon le type de structure
+      List<Map<String, dynamic>> filteredChildren = [];
+
+      if (structureType == "MAM") {
+        // Pour une MAM: filtrer par assignedMemberEmail
+        filteredChildren = allChildren.where((child) {
+          return child['assignedMemberEmail'] == currentUserEmail;
+        }).toList();
+
+        print(
+            "👨‍👧‍👦 PhotoManagement: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+      } else {
+        // Pour une assistante maternelle individuelle: tous les enfants sont affichés
+        filteredChildren = allChildren;
+        print(
+            "👩‍👧‍👦 PhotoManagement: Assistante Maternelle - affichage de tous les enfants");
+      }
+
+      enfants = filteredChildren;
       setState(() => isLoading = false);
     } catch (e) {
       print("Erreur lors du chargement des enfants: $e");
@@ -127,9 +220,10 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
 
       final newPhotoUrl = await storageRef.getDownloadURL();
 
+      // Utiliser le bon structureId pour la mise à jour
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // Utiliser structureId au lieu de user.uid
           .collection('children')
           .doc(childId)
           .update({'photoUrl': newPhotoUrl});

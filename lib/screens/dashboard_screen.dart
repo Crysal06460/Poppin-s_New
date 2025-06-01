@@ -658,6 +658,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   onTap: () {
                     Navigator.pop(context);
+                    // Naviguer directement vers PhotoManagementScreen avec l'ID de l'enfant
                     Navigator.push(
                       context,
                       MaterialPageRoute(

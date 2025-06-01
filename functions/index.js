@@ -1,258 +1,287 @@
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
-const admin = require('firebase-admin');
-const fs = require('fs');
-const handlebars = require('handlebars');
-const path = require('path');
-const Mailjet = require('node-mailjet');
+const {initializeApp} = require('firebase-admin/app');
+const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {getMessaging} = require('firebase-admin/messaging');
 
 // Initialiser Firebase Admin
-admin.initializeApp();
+initializeApp();
 
-// Configurer Mailjet
-const mailjet = Mailjet.apiConnect(
-    '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
-    '22096ea903efc5beb1e190890b870f97' // Votre clé secrète Mailjet
-);
+const db = getFirestore();
+const messaging = getMessaging();
 
-// Fonction déclenchée à chaque nouvel élément dans la collection emailQueue
-exports.sendEmail = onDocumentCreated({
-  region: 'europe-west1',
-  document: 'emailQueue/{docId}',
-}, async (event) => {
-  const snap = event.data;
-  if (!snap) {
-    console.log('Pas de données trouvées dans l\'événement');
-    return null;
-  }
+// Fonction pour envoyer des notifications push
+exports.sendNotification = onDocumentCreated('notifications/{notificationId}', async (event) => {
+    try {
+        const notification = event.data.data();
+        console.log('📤 Nouvelle notification à envoyer:', notification);
 
-  const emailData = snap.data();
-  console.log('Données entrantes:', JSON.stringify({
-    ...emailData,
-    pdfAttachment: emailData.pdfAttachment ? '[PDF_DATA_PRESENT]' : 'null',
-  }));
-
-  // Vérifier si toutes les données nécessaires sont présentes
-  if (!emailData.to || !emailData.templateData) {
-    console.error('Données d\'email insuffisantes:', emailData);
-    return snap.ref.update({
-      status: 'error',
-      error: 'Données insuffisantes',
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-
-  try {
-    // DEBUGGING: Afficher les données reçues
-    console.log('📧 Email data template:', emailData.template);
-    console.log('📧 Email data keys:', Object.keys(emailData));
-
-    // Charger et compiler le template d'email
-    let templatePath = 'templates/parent-invitation.html'; // Template par défaut
-
-    if (emailData.template && typeof emailData.template === 'string') {
-      console.log('🔍 Template demandé:', emailData.template);
-
-      // Mapping des templates
-      const templateMapping = {
-        'child-history': 'templates/child-history.html',
-        'parent-invitation': 'templates/parent-invitation.html',
-      };
-
-      const requestedTemplate = templateMapping[emailData.template];
-      console.log('🗺️ Template mappé:', requestedTemplate);
-
-      if (requestedTemplate) {
-        try {
-          // Vérifier si le fichier existe
-          fs.accessSync(path.join(__dirname, requestedTemplate), fs.constants.R_OK);
-          templatePath = requestedTemplate;
-          console.log(`✅ Utilisation du template: ${templatePath}`);
-        } catch (e) {
-          console.warn(`❌ Le template '${requestedTemplate}' n'existe pas, utilisation du template par défaut`);
-          console.warn('Erreur détaillée:', e.message);
-
-          // Lister les fichiers disponibles pour le debugging
-          try {
-            const templatesDir = path.join(__dirname, 'templates');
-            const files = fs.readdirSync(templatesDir);
-            console.log('📁 Fichiers disponibles dans templates/:', files);
-          } catch (dirError) {
-            console.warn('❌ Impossible de lire le dossier templates:', dirError.message);
-          }
+        // Vérifier si la notification a déjà été envoyée
+        if (notification.sent) {
+            console.log('⚠️ Notification déjà envoyée');
+            return;
         }
-      } else {
-        console.warn(`⚠️ Template '${emailData.template}' non trouvé dans le mapping`);
-      }
-    } else {
-      console.log('ℹ️ Aucun template spécifié, utilisation du template par défaut');
+
+        const recipientUserId = notification.recipientUserId;
+        console.log('🎯 Recherche utilisateur:', recipientUserId);
+        
+        // CORRECTION: Rechercher directement par email (ID du document)
+        const userDoc = await db
+            .collection('users')
+            .doc(recipientUserId)
+            .get();
+
+        if (!userDoc.exists) {
+            console.log('❌ Utilisateur non trouvé:', recipientUserId);
+            // Marquer comme échoué
+            await event.data.ref.update({
+                sent: false,
+                error: 'Utilisateur non trouvé',
+                errorAt: FieldValue.serverTimestamp(),
+            });
+            return;
+        }
+
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+
+        if (!fcmToken) {
+            console.log('❌ Token FCM non trouvé pour:', recipientUserId);
+            // Marquer comme échoué
+            await event.data.ref.update({
+                sent: false,
+                error: 'Token FCM non trouvé',
+                errorAt: FieldValue.serverTimestamp(),
+            });
+            return;
+        }
+
+        console.log('🎯 Token FCM trouvé:', fcmToken.substring(0, 20) + '...');
+
+        // Préparer le message
+        const message = {
+            notification: {
+                title: notification.title,
+                body: notification.body,
+            },
+            data: {
+                ...notification.data,
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            },
+            token: fcmToken,
+            apns: {
+                payload: {
+                    aps: {
+                        badge: 1,
+                        sound: 'default',
+                        'content-available': 1,
+                    },
+                },
+            },
+            android: {
+                priority: 'high',
+                notification: {
+                    channel_id: 'messages_channel',
+                    priority: 'high',
+                    visibility: 'public',
+                },
+            },
+        };
+
+        // Envoyer la notification
+        const response = await messaging.send(message);
+        console.log('✅ Notification envoyée avec succès:', response);
+
+        // Marquer la notification comme envoyée
+        await event.data.ref.update({
+            sent: true,
+            sentAt: FieldValue.serverTimestamp(),
+            messageId: response,
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur lors de l\'envoi de la notification:', error);
+        
+        // Marquer la notification comme échouée
+        await event.data.ref.update({
+            sent: false,
+            error: error.message,
+            errorAt: FieldValue.serverTimestamp(),
+        });
     }
-
-    console.log('📄 Template final utilisé:', templatePath);
-
-    const templateSource = fs.readFileSync(path.join(__dirname, templatePath), 'utf8');
-    console.log('✅ Template chargé avec succès');
-
-    const compiledTemplate = handlebars.compile(templateSource);
-
-    // Générer le contenu HTML avec les données du template
-    const htmlContent = compiledTemplate(emailData.templateData);
-
-    // Préparer la structure de l'email
-    const mailjetMessage = {
-      From: {
-        Email: 'noreply@poppin-s.app', // Votre domaine vérifié
-        Name: 'Les Lutins - Application Poppins',
-      },
-      To: [
-        {
-          Email: emailData.to,
-        },
-      ],
-      Subject: emailData.subject || 'Invitation à l\'application Poppins',
-      HTMLPart: htmlContent,
-    };
-
-    // Ajouter la pièce jointe PDF si elle existe
-    if (emailData.pdfAttachment && emailData.pdfFilename) {
-      mailjetMessage.Attachments = [
-        {
-          ContentType: 'application/pdf',
-          Filename: emailData.pdfFilename,
-          Base64Content: emailData.pdfAttachment,
-        },
-      ];
-      console.log(`Pièce jointe PDF ajoutée: ${emailData.pdfFilename}`);
-    }
-
-    // Envoyer l'email via Mailjet
-    const request = mailjet.post('send', {version: 'v3.1'}).request({
-      Messages: [mailjetMessage],
-    });
-
-    const result = await request;
-
-    // Mettre à jour le statut dans Firestore
-    await snap.ref.update({
-      status: 'sent',
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    console.log(`Email envoyé avec succès à ${emailData.to}`);
-    if (emailData.pdfAttachment) {
-      console.log(`avec pièce jointe PDF: ${emailData.pdfFilename}`);
-    }
-    return null;
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'email:', error);
-    console.error('Détails de l\'erreur:', JSON.stringify(error));
-
-    // Mettre à jour le statut avec l'erreur
-    await snap.ref.update({
-      status: 'error',
-      error: error.message,
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return null;
-  }
 });
 
-// FONCTION EXISTANTE: Duplication automatique des plannings de ménage
-// S'exécute tous les dimanches à minuit (00:00)
-exports.duplicateCleaningSchedules = onSchedule({
-  schedule: '0 0 * * 0', // Format cron: minute heure jour-du-mois mois jour-de-la-semaine (0 = dimanche)
-  timeZone: 'Europe/Paris', // Fuseau horaire français
-  region: 'europe-west1', // Même région que votre autre fonction
-}, async (event) => {
-  const db = admin.firestore();
-  console.log('Démarrage de la duplication automatique des plannings de ménage');
+// 🔥 FONCTION PRINCIPALE CORRIGÉE : Gérer TOUS les messages (avec ou sans parentId)
+exports.onNewMessage = onDocumentCreated('exchanges/{messageId}', async (event) => {
+    console.log('🔥 DEBUT onNewMessage - Message détecté !');
+    
+    try {
+        const messageData = event.data.data();
+        console.log('📋 Message data:', JSON.stringify(messageData, null, 2));
 
-  try {
-    // Récupérer toutes les structures (MAMs)
-    const structuresSnapshot = await db.collection('structures').get();
-    console.log(`Nombre de structures trouvées: ${structuresSnapshot.size}`);
+        const { childId, senderType, content } = messageData;
 
-    let duplicatedCount = 0; // Compteur pour les statistiques
-
-    for (const structureDoc of structuresSnapshot.docs) {
-      const structureId = structureDoc.id;
-
-      try {
-        // Calculer les dates
-        const today = new Date();
-
-        // Calculer le début de la semaine actuelle (lundi précédent)
-        const currentWeekStart = new Date(today);
-        currentWeekStart.setDate(today.getDate() - today.getDay() + 1); // Lundi de cette semaine (today.getDay() retourne 0 pour dimanche)
-        if (today.getDay() === 0) { // Si aujourd'hui est dimanche
-          currentWeekStart.setDate(currentWeekStart.getDate() - 7); // On prend le lundi de la semaine qui vient de s'écouler
+        // Skip si déjà traité
+        if (messageData.notificationSent) {
+            console.log('⚠️ Notification déjà traitée');
+            return;
         }
 
-        // Calculer le début de la semaine suivante
-        const nextWeekStart = new Date(currentWeekStart);
-        nextWeekStart.setDate(nextWeekStart.getDate() + 7); // Lundi de la semaine prochaine
+        let recipientEmail = null;
+        let title = '';
 
-        // Formater les dates pour les IDs de documents
-        const currentWeekId = formatDate(currentWeekStart);
-        const nextWeekId = formatDate(nextWeekStart);
+        if (senderType === 'parent') {
+            // 🟢 MESSAGE PARENT → ASSISTANTE (ça marche déjà)
+            console.log('👨‍👩‍👧‍👦 Message du parent vers assistante');
+            title = 'Nouveau message d\'un parent';
+            recipientEmail = await getAssistantEmail(childId);
+            
+        } else if (senderType === 'assistante') {
+            // 🔴 MESSAGE ASSISTANTE → PARENT (à corriger)
+            console.log('👩‍⚕️ Message de l\'assistante vers parent');
+            title = 'Nouveau message de Poppin\'s';
+            
+            // 🔥 CORRECTION : Ne pas utiliser parentId du message, le chercher dynamiquement
+            console.log('🔍 Recherche parent pour childId:', childId);
+            
+            // Chercher directement les parents qui ont cet enfant
+            const parentQuery = await db
+                .collection('users')
+                .where('children', 'array-contains', childId)
+                .get();
 
-        console.log(`Structure ${structureId}: Tentative de duplication du planning ${currentWeekId} vers ${nextWeekId}`);
+            console.log('👪 Nombre de parents trouvés:', parentQuery.size);
 
-        // Vérifier si un planning existe déjà pour la semaine suivante
-        const nextWeekPlanningRef = db
-            .collection('structures')
-            .doc(structureId)
-            .collection('cleaningSchedules')
-            .doc(nextWeekId);
+            if (!parentQuery.empty) {
+                recipientEmail = parentQuery.docs[0].id; // ID = email
+                console.log('📧 Email parent trouvé:', recipientEmail);
+            } else {
+                console.log('❌ Aucun parent trouvé pour childId:', childId);
+                
+                // FALLBACK : Chercher dans les documents enfants pour récupérer parentId
+                const structuresSnapshot = await db.collection('structures').get();
+                
+                for (const structureDoc of structuresSnapshot.docs) {
+                    const childDoc = await db
+                        .collection('structures')
+                        .doc(structureDoc.id)
+                        .collection('children')
+                        .doc(childId)
+                        .get();
 
-        const nextWeekPlanningDoc = await nextWeekPlanningRef.get();
+                    if (childDoc.exists) {
+                        const childData = childDoc.data();
+                        const parentId = childData.parentId;
+                        
+                        if (parentId && parentId.includes('@')) {
+                            recipientEmail = parentId.toLowerCase();
+                            console.log('📧 Email parent trouvé via document enfant:', recipientEmail);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
-        // Si aucun planning n'existe pour la semaine suivante
-        if (!nextWeekPlanningDoc.exists) {
-          // Récupérer le planning de la semaine actuelle
-          const currentPlanningRef = db
-              .collection('structures')
-              .doc(structureId)
-              .collection('cleaningSchedules')
-              .doc(currentWeekId);
+        if (recipientEmail) {
+            console.log('✅ Destinataire trouvé:', recipientEmail);
+            
+            // Créer la notification
+            const notificationData = {
+                recipientUserId: recipientEmail,
+                title: title,
+                body: content || 'Nouveau message',
+                data: {
+                    childId: childId,
+                    messageId: event.params.messageId,
+                    type: 'message'
+                },
+                timestamp: FieldValue.serverTimestamp(),
+                sent: false,
+                platform: 'ios'
+            };
 
-          const currentPlanningDoc = await currentPlanningRef.get();
+            console.log('📬 Création notification:', JSON.stringify(notificationData, null, 2));
 
-          // Si un planning existe pour la semaine actuelle, le dupliquer
-          if (currentPlanningDoc.exists && currentPlanningDoc.data()) {
-            await nextWeekPlanningRef.set(currentPlanningDoc.data());
-            console.log(`Planning dupliqué pour la structure ${structureId} pour la semaine du ${nextWeekId}`);
-            duplicatedCount++;
-          } else {
-            console.log(`Aucun planning trouvé pour la structure ${structureId} pour la semaine actuelle ${currentWeekId}`);
-          }
+            await db.collection('notifications').add(notificationData);
+
+            // Marquer le message comme traité
+            await event.data.ref.update({
+                notificationSent: true
+            });
+
+            console.log('✅ Notification créée avec succès pour:', recipientEmail);
         } else {
-          console.log(`Un planning existe déjà pour la structure ${structureId} pour la semaine ${nextWeekId}`);
+            console.log('❌ AUCUN destinataire trouvé !');
+            console.log('📋 Debug info:', {
+                senderType: senderType,
+                childId: childId,
+                parentId: messageData.parentId
+            });
         }
-      } catch (structureError) {
-        console.error(`Erreur lors du traitement de la structure ${structureId}:`, structureError);
-        // Continuer avec la structure suivante
-      }
-    }
 
-    console.log(`Duplication terminée. ${duplicatedCount} plannings dupliqués sur ${structuresSnapshot.size} structures.`);
-    return null;
-  } catch (error) {
-    console.error('Erreur globale lors de la duplication des plannings:', error);
-    return null;
-  }
+    } catch (error) {
+        console.error('❌ Erreur dans onNewMessage:', error);
+    }
 });
 
-/**
- * Fonction utilitaire pour formater la date au format YYYY-MM-DD
- * @param {Date} date - La date à formater
- * @return {string} - La date formatée
- */
-function formatDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// 🔥 FONCTION HELPER : Trouver l'email de l'assistante
+async function getAssistantEmail(childId) {
+    try {
+        console.log('🔍 Recherche assistante pour enfant:', childId);
+        
+        // Chercher dans toutes les structures
+        const structuresSnapshot = await db.collection('structures').get();
+
+        for (const structureDoc of structuresSnapshot.docs) {
+            const childDoc = await db
+                .collection('structures')
+                .doc(structureDoc.id)
+                .collection('children')
+                .doc(childId)
+                .get();
+
+            if (childDoc.exists) {
+                const childData = childDoc.data();
+                const assignedMemberEmail = childData.assignedMemberEmail;
+
+                // Si assigné à un membre MAM
+                if (assignedMemberEmail) {
+                    console.log('📧 Membre MAM assigné trouvé:', assignedMemberEmail);
+                    return assignedMemberEmail.toLowerCase();
+                } else {
+                    // Sinon, propriétaire de la structure
+                    const structureData = structureDoc.data();
+                    const ownerEmail = structureData.ownerEmail;
+                    
+                    if (ownerEmail) {
+                        console.log('📧 Propriétaire structure trouvé:', ownerEmail);
+                        return ownerEmail.toLowerCase();
+                    }
+                }
+            }
+        }
+
+        console.log('❌ Aucune assistante trouvée pour childId:', childId);
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur recherche assistante:', error);
+        return null;
+    }
 }
+
+// Fonction pour nettoyer les anciennes notifications
+exports.cleanupOldNotifications = onSchedule('every 24 hours', async (event) => {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 jours
+    
+    const snapshot = await db
+        .collection('notifications')
+        .where('timestamp', '<', cutoff)
+        .get();
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    
+    await batch.commit();
+    console.log(`🗑️ ${snapshot.size} anciennes notifications supprimées`);
+});

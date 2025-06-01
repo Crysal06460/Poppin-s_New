@@ -15,6 +15,8 @@ import 'package:mime/mime.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+// 🔥 AJOUT DE L'IMPORT
+import '../services/notification_service.dart';
 
 class ParentMessagesScreen extends StatefulWidget {
   final String?
@@ -53,6 +55,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     });
     _checkStockBadge();
     _checkMessageBadge();
+
+    // 🔥 AJOUTER : Réinitialiser le badge iOS
+    NotificationService.clearBadge();
 
     // Réinitialiser le badge des messages puisque nous sommes sur l'écran des messages
     MessageBadgeUtil.resetBadge();
@@ -410,6 +415,8 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
 
   // Dans parent_messages_screen.dart, remplacez ENTIÈREMENT la méthode _sendMessage :
 
+  // Dans parent_messages_screen.dart, modifiez la méthode _sendMessage() :
+
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty || _selectedChild == null) {
       return;
@@ -434,7 +441,19 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         'readByParent': true // Le parent a déjà lu son propre message
       });
 
+      final messageContent = _messageController.text.trim();
       _messageController.clear();
+
+      // 🔥 NOUVEAU : ENVOYER NOTIFICATION PUSH À L'ASSISTANTE MATERNELLE
+      // ✅ CORRIGÉ : Utiliser l'EMAIL au lieu de l'UID
+      final assistantEmail = await _getAssistantEmail(childId, structureId);
+      if (assistantEmail != null) {
+        await NotificationService.sendNotificationToUser(
+          recipientUserId: assistantEmail, // ✅ EMAIL au lieu d'UID
+          title: 'Nouveau message d\'un parent',
+          body: messageContent,
+        );
+      }
 
       // 🔥 PARTIE CRITIQUE : NOTIFIER L'ASSISTANTE MATERNELLE 🔥
       await _notifyAssistanteMaternel(childId, structureId);
@@ -450,6 +469,105 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur lors de l\'envoi du message')),
       );
+    }
+  }
+
+// 🔥 NOUVELLE MÉTHODE : Récupérer l'EMAIL de l'assistante maternelle
+  Future<String?> _getAssistantEmail(String childId, String structureId) async {
+    try {
+      // 1. Récupérer le document de l'enfant
+      final childDoc = await _firestore
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) return null;
+
+      final childData = childDoc.data()!;
+      final String? assignedMemberEmail =
+          childData['assignedMemberEmail']?.toString().toLowerCase();
+
+      // 2. Si l'enfant est assigné à un membre MAM spécifique
+      if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+        print("📧 Email assistant trouvé (membre MAM): $assignedMemberEmail");
+        return assignedMemberEmail;
+      } else {
+        // 3. Sinon, récupérer l'assistante propriétaire
+        final structureDoc =
+            await _firestore.collection('structures').doc(structureId).get();
+
+        if (structureDoc.exists) {
+          final structureData = structureDoc.data()!;
+          final String? ownerEmail =
+              structureData['ownerEmail']?.toString().toLowerCase();
+
+          if (ownerEmail != null && ownerEmail.isNotEmpty) {
+            print("📧 Email assistant trouvé (propriétaire): $ownerEmail");
+            return ownerEmail;
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('Erreur récupération email assistante: $e');
+      return null;
+    }
+  }
+
+// Méthode pour récupérer l'ID de l'assistante maternelle
+  Future<String?> _getAssistantUserId(
+      String childId, String structureId) async {
+    try {
+      // 1. Récupérer le document de l'enfant
+      final childDoc = await _firestore
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) return null;
+
+      final childData = childDoc.data()!;
+      final String? assignedMemberEmail =
+          childData['assignedMemberEmail']?.toString().toLowerCase();
+
+      // 2. Si l'enfant est assigné à un membre MAM spécifique
+      if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
+        final memberDoc =
+            await _firestore.collection('users').doc(assignedMemberEmail).get();
+
+        if (memberDoc.exists) {
+          return memberDoc.data()?['uid'];
+        }
+      } else {
+        // 3. Sinon, récupérer l'assistante propriétaire
+        final structureDoc =
+            await _firestore.collection('structures').doc(structureId).get();
+
+        if (structureDoc.exists) {
+          final structureData = structureDoc.data()!;
+          final String? ownerEmail =
+              structureData['ownerEmail']?.toString().toLowerCase();
+
+          if (ownerEmail != null && ownerEmail.isNotEmpty) {
+            final ownerDoc =
+                await _firestore.collection('users').doc(ownerEmail).get();
+
+            if (ownerDoc.exists) {
+              return ownerDoc.data()?['uid'];
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('Erreur récupération assistante: $e');
+      return null;
     }
   }
 
@@ -971,6 +1089,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         if (messageUpdates.isNotEmpty) {
           // Effectuer toutes les mises à jour en parallèle
           Future.wait(messageUpdates).then((_) {
+            // 🔥 AJOUTER : Réinitialiser le badge iOS en premier
+            NotificationService.clearBadge();
+
             // Une fois toutes les mises à jour terminées, réinitialiser le badge
             MessageBadgeUtil.resetBadge().then((_) {
               if (mounted) {

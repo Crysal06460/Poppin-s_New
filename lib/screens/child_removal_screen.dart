@@ -1,4 +1,4 @@
-// child_removal_screen.dart - Version corrigée
+// child_removal_screen.dart - Version modifiée
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,7 +27,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
   bool _isLoading = false;
   String _status = '';
 
-  // Service de génération PDF et envoi email CORRIGÉ
+  // Service de génération PDF et envoi email MODIFIÉ - UNIQUEMENT ASSMAT
   Future<void> _generateAndSendChildHistory() async {
     try {
       setState(() {
@@ -66,14 +66,14 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       final pdfBase64 = base64Encode(pdfBytes);
 
       setState(() {
-        _status = 'Envoi des emails...';
+        _status = 'Envoi de l\'email à l\'assistante maternelle...';
       });
 
-      // 4. Envoyer l'email avec le PDF - CORRECTION ICI
-      await _sendHistoryEmail(childData, pdfBase64, widget.structureId);
+      // 4. Envoyer l'email UNIQUEMENT à l'assistante maternelle
+      await _sendHistoryEmailToAssmat(childData, pdfBase64, widget.structureId);
 
       setState(() {
-        _status = 'Suppression des données...';
+        _status = 'Suppression définitive des données...';
       });
 
       // 5. Supprimer toutes les données
@@ -90,9 +90,8 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
     }
   }
 
-  // CORRECTION FINALE : Méthode d'envoi email pour l'historique
-  // CORRECTION MAJEURE : Méthode d'envoi email avec les bons noms de champs
-  Future<void> _sendHistoryEmail(Map<String, dynamic> childData,
+  // MODIFICATION : Envoi email UNIQUEMENT à l'assistante maternelle
+  Future<void> _sendHistoryEmailToAssmat(Map<String, dynamic> childData,
       String pdfBase64, String structureId) async {
     // Récupérer l'email de l'assistante maternelle
     final structureDoc = await FirebaseFirestore.instance
@@ -105,34 +104,31 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
     final structureName =
         structureData['nom'] ?? structureData['structureName'] ?? 'Structure';
 
-    // CORRECTION : Utiliser les vrais noms de champs de Firestore
-    final parentEmail =
-        childData['parentEmail'] ?? childData['parent_email'] ?? '';
     final childName = childData['firstName'] ?? childData['prenom'] ?? 'Enfant';
-    final parentName =
-        childData['parentName'] ?? childData['parent_nom'] ?? 'Parent';
 
-    print("🔍 DEBUG - Données enfant récupérées:");
-    print("  - childData keys: ${childData.keys.toList()}");
-    print("  - firstName: ${childData['firstName']}");
-    print("  - parentEmail: ${childData['parentEmail']}");
+    print("🔍 DEBUG - Envoi email uniquement à l'assistante maternelle:");
+    print("  - assistanteEmail: $assistanteEmail");
     print("  - structureName: $structureName");
+    print("  - childName: $childName");
 
-    if (parentEmail.isEmpty && assistanteEmail.isEmpty) {
-      throw Exception('Aucun email de destinataire trouvé');
+    if (assistanteEmail.isEmpty) {
+      throw Exception('Email de l\'assistante maternelle non trouvé');
     }
 
-    // Structure des données conforme à votre Cloud Function
+    // Structure des données pour l'email à l'assistante maternelle uniquement
     final emailData = {
-      'to': parentEmail.isNotEmpty ? parentEmail : assistanteEmail,
-      'subject': 'Historique complet de $childName',
-      'template': 'child-history', // ← Template correct
+      'to': assistanteEmail,
+      'subject': 'Historique complet de $childName - Enfant retiré',
+      'template':
+          'child-history-removal', // Template spécifique pour le retrait
       'templateData': {
         'childName': childName,
         'structureName': structureName,
-        'firstName': parentName,
+        'firstName': 'Assistante maternelle',
         'lastName': '',
         'currentDate': DateFormat('dd/MM/yyyy à HH:mm').format(DateTime.now()),
+        'message':
+            'Cet enfant a été retiré de votre structure. Voici son historique complet pour vos dossiers.',
       },
       'pdfAttachment': pdfBase64,
       'pdfFilename':
@@ -141,32 +137,16 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    print("📧 Email data à envoyer:");
+    print("📧 Email data à envoyer à l'assistante maternelle:");
     print("  - to: ${emailData['to']}");
     print("  - template: ${emailData['template']}");
     print("  - subject: ${emailData['subject']}");
 
     try {
-      if (parentEmail.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('emailQueue')
-            .add(emailData);
-        print("✅ Email parent ajouté à la queue");
-      }
-
-      if (assistanteEmail.isNotEmpty && assistanteEmail != parentEmail) {
-        final emailDataAssmat = Map<String, dynamic>.from(emailData);
-        emailDataAssmat['to'] = assistanteEmail;
-        emailDataAssmat['subject'] =
-            'Historique complet de $childName - Copie assistante maternelle';
-
-        await FirebaseFirestore.instance
-            .collection('emailQueue')
-            .add(emailDataAssmat);
-        print("✅ Email assistante maternelle ajouté à la queue");
-      }
+      await FirebaseFirestore.instance.collection('emailQueue').add(emailData);
+      print("✅ Email assistante maternelle ajouté à la queue");
     } catch (e) {
-      print("❌ Erreur lors de l'ajout des emails: $e");
+      print("❌ Erreur lors de l'ajout de l'email: $e");
       throw e;
     }
   }
@@ -931,11 +911,11 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       final pdfBase64 = base64Encode(pdfBytes);
       print("✅ PDF généré: ${pdfBase64.length} caractères");
 
-      // 4. Envoyer l'email
-      await _sendHistoryEmail(childData, pdfBase64, widget.structureId);
-      print("✅ Email envoyé");
+      // 4. Envoyer l'email UNIQUEMENT à l'assistante maternelle
+      await _sendHistoryEmailToAssmat(childData, pdfBase64, widget.structureId);
+      print("✅ Email envoyé à l'assistante maternelle uniquement");
 
-      // 5. NOUVEAU : Supprimer complètement l'enfant de Firebase
+      // 5. Supprimer complètement l'enfant de Firebase
       await _deleteChildFromFirebase(widget.childId, widget.structureId);
       print("✅ Enfant supprimé de Firebase");
 
@@ -944,7 +924,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Enfant retiré avec succès. L\'historique a été envoyé par email et toutes les données ont été supprimées.'),
+                'Enfant retiré avec succès. L\'historique a été envoyé à l\'assistante maternelle et toutes les données ont été supprimées définitivement.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 5),
           ),
@@ -1019,6 +999,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
     await batch.commit();
   }
 
+  // POPUP D'AVERTISSEMENT RENFORCÉ
   Future<void> _showRemovalConfirmationDialog() async {
     final childDoc = await FirebaseFirestore.instance
         .collection('structures')
@@ -1036,22 +1017,111 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Retirer $childName'),
+              title: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'RETRAIT DÉFINITIF',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Êtes-vous sûr de vouloir retirer cet enfant ?',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      border: Border.all(color: Colors.red.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⚠️ ATTENTION : ACTION IRRÉVERSIBLE',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade800,
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Êtes-vous absolument certain de vouloir retirer définitivement $childName ?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   SizedBox(height: 16),
-                  Text('Cette action va :'),
-                  Text('• Générer un PDF avec tout l\'historique'),
                   Text(
-                      '• Envoyer l\'historique par email aux parents et à l\'assistante maternelle'),
+                    'Cette action va DÉFINITIVEMENT :',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text('✅ Générer un PDF avec l\'historique complet'),
                   Text(
-                      '• Supprimer définitivement toutes les données de l\'enfant'),
+                      '✅ Envoyer l\'historique à l\'assistante maternelle UNIQUEMENT'),
+                  SizedBox(height: 8),
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange.shade300),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🗑️ SUPPRESSION TOTALE ET IRRÉVERSIBLE :',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade800,
+                          ),
+                        ),
+                        Text('• Toutes les données de repas'),
+                        Text('• Toutes les activités'),
+                        Text('• Tous les horaires d\'arrivée/départ'),
+                        Text('• Toutes les siestes'),
+                        Text('• Tous les changes'),
+                        Text('• Toutes les données de santé'),
+                        Text('• Toutes les transmissions'),
+                        Text('• Le profil complet de l\'enfant'),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      border: Border.all(color: Colors.red.shade400),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '❌ AUCUNE RÉCUPÉRATION POSSIBLE\nToutes les données seront perdues à jamais !',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade800,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                   SizedBox(height: 16),
                   if (_isLoading) ...[
                     LinearProgressIndicator(),
@@ -1064,13 +1134,16 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                 if (!_isLoading) ...[
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Text('Annuler'),
+                    child: Text(
+                      'Annuler',
+                      style: TextStyle(color: Colors.green),
+                    ),
                   ),
                   ElevatedButton(
                     onPressed: () async {
                       setDialogState(() {
                         _isLoading = true;
-                        _status = 'Début du processus...';
+                        _status = 'Début de la suppression définitive...';
                       });
 
                       try {
@@ -1080,8 +1153,9 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                                'Enfant retiré avec succès. L\'email avec l\'historique a été envoyé.'),
+                                'Enfant retiré définitivement. L\'historique a été envoyé à l\'assistante maternelle. Toutes les données ont été supprimées.'),
                             backgroundColor: Colors.green,
+                            duration: Duration(seconds: 7),
                           ),
                         );
                         context.go('/home');
@@ -1103,7 +1177,10 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
-                    child: Text('Retirer définitivement'),
+                    child: Text(
+                      'JE CONFIRME LA SUPPRESSION',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ],
@@ -1170,7 +1247,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
             ),
           ),
 
-          // Contenu principal
+          // Contenu principal avec avertissements renforcés
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -1178,29 +1255,77 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.warning_amber_rounded,
+                    Icons.delete_forever,
                     size: 64,
-                    color: Colors.orange,
+                    color: Colors.red,
                   ),
                   SizedBox(height: 24),
                   Text(
-                    'Attention',
+                    '⚠️ SUPPRESSION DÉFINITIVE',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Colors.red,
                     ),
                   ),
                   SizedBox(height: 16),
                   Text(
-                    'Cette action retirera définitivement l\'enfant de l\'application.',
+                    'Cette action supprimera DÉFINITIVEMENT et IRRÉVERSIBLEMENT toutes les données de l\'enfant de l\'application.',
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.black54,
+                      color: Colors.red.shade700,
                       height: 1.5,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   SizedBox(height: 24),
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade300, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🗑️ DONNÉES QUI SERONT PERDUES À JAMAIS :',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade800,
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text('• Historique complet des repas et quantités'),
+                        Text('• Toutes les activités et participations'),
+                        Text('• Horaires d\'arrivée et de départ'),
+                        Text('• Journal des siestes et qualité du sommeil'),
+                        Text('• Historique des changes'),
+                        Text('• Données de santé et températures'),
+                        Text('• Toutes les transmissions et notes'),
+                        Text('• Profil et informations personnelles'),
+                        SizedBox(height: 12),
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '❌ AUCUNE RÉCUPÉRATION POSSIBLE',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade800,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 20),
                   Container(
                     padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -1212,18 +1337,17 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ce qui va se passer :',
+                          '📧 Un email sera envoyé avec l\'historique complet :',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.blue.shade800,
                           ),
                         ),
                         SizedBox(height: 8),
-                        Text('• Un PDF avec tout l\'historique sera généré'),
+                        Text('• Uniquement à l\'assistante maternelle'),
+                        Text('• Contient un PDF avec tout l\'historique'),
                         Text(
-                            '• L\'historique sera envoyé par email aux parents et à l\'assistante maternelle'),
-                        Text(
-                            '• Toutes les données de l\'enfant seront supprimées définitivement'),
+                            '• Permet de conserver une trace pour les dossiers'),
                       ],
                     ),
                   ),
@@ -1241,13 +1365,23 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                         ),
                       ),
                       child: Text(
-                        'Retirer l\'enfant',
+                        'SUPPRIMER DÉFINITIVEMENT',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    '⚠️ Cette action est irréversible. Toutes les données seront perdues à jamais.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),

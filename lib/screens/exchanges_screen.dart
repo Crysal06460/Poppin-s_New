@@ -13,6 +13,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/message_badge_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// 🔥 AJOUT DE L'IMPORT
+import '../services/notification_service.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -25,7 +27,8 @@ bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
 }
 
-class _ExchangesScreenState extends State<ExchangesScreen> {
+class _ExchangesScreenState extends State<ExchangesScreen>
+    with WidgetsBindingObserver {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
@@ -45,16 +48,28 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // AJOUTÉ
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadEnfantsDuJour();
     });
+    NotificationService.clearBadge();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // AJOUTÉ
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // NOUVELLE MÉTHODE AJOUTÉE :
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      print('🔄 App resumed - clearing badge');
+      NotificationService.clearBadge();
+    }
   }
 
   Future<void> _loadEnfantsDuJour() async {
@@ -146,17 +161,18 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       final List<Map<String, dynamic>> loadedEnfants = [];
       for (var child in filteredChildren) {
-        if (child['schedule']?[capitalizedWeekday] != null) {
-          loadedEnfants.add({
-            'id': child['id'],
-            'prenom': child['firstName'] ?? 'Sans nom',
-            'genre': child['gender'] ?? 'Non spécifié',
-            'photoUrl': child['photoUrl'] ?? '',
-            'parentId': child['parentId'] ?? '',
-            'discussionEnCours': child['discussionEnCours'] ?? false,
-            'structureId': structureId,
-          });
-        }
+        // ✅ SUPPRESSION DU FILTRE PAR JOUR :
+        // On enlève la condition : if (child['schedule']?[capitalizedWeekday] != null)
+        // Maintenant, TOUS les enfants assignés sont affichés
+        loadedEnfants.add({
+          'id': child['id'],
+          'prenom': child['firstName'] ?? 'Sans nom',
+          'genre': child['gender'] ?? 'Non spécifié',
+          'photoUrl': child['photoUrl'] ?? '',
+          'parentId': child['parentId'] ?? '',
+          'discussionEnCours': child['discussionEnCours'] ?? false,
+          'structureId': structureId,
+        });
       }
 
       setState(() {
@@ -484,9 +500,6 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
       return;
     }
 
-    // Déboguer avant d'envoyer
-    await _debugChildAndParentInfo(childId);
-
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -506,116 +519,8 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
       final messageContent =
           replyToId != null ? messageText.split(': ')[1] : messageText;
 
-      // MÉTHODE 1: Récupérer le parentId à partir du document enfant
-      var parentId;
-      final childDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
-          .get();
-
-      if (childDoc.exists) {
-        final childData = childDoc.data();
-        parentId = childData?['parentId'];
-
-        // MÉTHODE 2: Si parentId est manquant, chercher dans la collection users
-        if (parentId == null || parentId.isEmpty) {
-          print(
-              "🔍 parentId manquant dans le document enfant, recherche alternative...");
-
-          final parentUsers = await FirebaseFirestore.instance
-              .collection('users')
-              .where('children', arrayContains: childId)
-              .limit(1)
-              .get();
-
-          if (parentUsers.docs.isNotEmpty) {
-            final parentUser = parentUsers.docs.first;
-            parentId = parentUser.data()['uid'];
-            print("✅ parentId trouvé via la collection users: $parentId");
-
-            // Mettre à jour l'enfant avec le parentId pour la prochaine fois
-            try {
-              await FirebaseFirestore.instance
-                  .collection('structures')
-                  .doc(structureId)
-                  .collection('children')
-                  .doc(childId)
-                  .update({'parentId': parentId});
-
-              print("✅ Document enfant mis à jour avec parentId: $parentId");
-            } catch (e) {
-              print("❌ Erreur lors de la mise à jour du document enfant: $e");
-            }
-          }
-
-          // MÉTHODE 3: Chercher par l'ID de l'enfant s'il correspond à un email
-          if ((parentId == null || parentId.isEmpty) && childId.contains('@')) {
-            try {
-              final parentUserDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(childId.toLowerCase())
-                  .get();
-
-              if (parentUserDoc.exists) {
-                parentId = parentUserDoc.data()?['uid'];
-                print(
-                    "✅ parentId trouvé via l'ID de l'enfant (email): $parentId");
-              }
-            } catch (e) {
-              print("❌ Erreur lors de la recherche par email: $e");
-            }
-          }
-        }
-      }
-
-      // Trouver l'email du membre assigné à l'enfant
-      try {
-        if (childDoc.exists) {
-          final childData = childDoc.data();
-          final String? assignedMemberEmail =
-              childData?['assignedMemberEmail']?.toString().toLowerCase();
-
-          if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
-            // Si l'enfant est assigné à un membre, forcer le badge uniquement pour ce membre
-            print(
-                "✉️ Nouveau message pour enfant assigné à: $assignedMemberEmail");
-
-            // Mettre à jour le compteur unreadMessages du membre assigné
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(assignedMemberEmail)
-                .update({'unreadMessages': FieldValue.increment(1)});
-
-            // Si ce message n'est pas envoyé par vous, alors forcer le badge
-            if (user.email?.toLowerCase() != assignedMemberEmail) {
-              print(
-                  "🔔 Notification sera envoyée uniquement à: $assignedMemberEmail");
-            } else {
-              // Pour vous-même, mettre à jour les préférences locales
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('has_unread_messages', true);
-            }
-          } else {
-            // Si l'enfant n'est assigné à aucun membre spécifique (cas d'une assistante maternelle individuelle)
-            print(
-                "🔔 Enfant non assigné à un membre spécifique, notification standard");
-            await _forceShowBadgeForChild(childId);
-          }
-        } else {
-          // Document de l'enfant non trouvé, utiliser méthode standard
-          print("⚠️ Document enfant non trouvé, notification standard");
-          await MessageBadgeUtil.forceShowBadge(childId);
-        }
-      } catch (e) {
-        print(
-            "❌ Erreur lors de la notification: $e - Notification standard utilisée");
-        await MessageBadgeUtil.forceShowBadge(childId);
-      }
-
-      // Créer les données du message
-      final messageData = {
+      // 🔥 EXACTEMENT COMME PARENT_MESSAGES_SCREEN : PAS DE PARENTID DANS LE MESSAGE !
+      await FirebaseFirestore.instance.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
         'content': messageContent,
@@ -624,124 +529,89 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
         'senderType': 'assistante',
         'nonLu': true,
         'replyTo': replyToId,
-      };
-
-      // Ajouter le parentId si trouvé
-      if (parentId != null && parentId.isNotEmpty) {
-        messageData['parentId'] = parentId;
-      }
-
-      // ÉTAPE CRITIQUE: Ajouter le message à Firestore
-      final messageRef = await FirebaseFirestore.instance
-          .collection('exchanges')
-          .add(messageData);
+        // ❌ PAS DE PARENTID ! Comme dans parent_messages_screen.dart
+      });
 
       _messageController.clear();
-      print("✅ Message envoyé avec ID: ${messageRef.id}");
+      print("✅ Message envoyé SANS parentId (comme parent)");
 
-      // NOTIFICATION: Si nous avons trouvé un parentId, mettre à jour le compteur de messages non lus
-      if (parentId != null && parentId.isNotEmpty) {
-        try {
-          // Trouver l'email du parent via son ID
-          final parentUserQuery = await FirebaseFirestore.instance
-              .collection('users')
-              .where('uid', isEqualTo: parentId)
-              .limit(1)
-              .get();
-
-          String? parentEmail;
-          if (parentUserQuery.docs.isNotEmpty) {
-            parentEmail = parentUserQuery.docs.first.id;
-            print("📧 Email du parent trouvé: $parentEmail");
-          } else {
-            // Deuxième tentative: chercher par l'ID directement (si c'est un email)
-            if (parentId.contains('@')) {
-              parentEmail = parentId.toLowerCase();
-              print("📧 Email du parent utilisé directement: $parentEmail");
-            }
-          }
-
-          // Si nous avons un email, mettre à jour le compteur
-          if (parentEmail != null && parentEmail.isNotEmpty) {
-            final parentDocRef =
-                FirebaseFirestore.instance.collection('users').doc(parentEmail);
-
-            final parentDoc = await parentDocRef.get();
-
-            if (parentDoc.exists) {
-              // Mise à jour du compteur de messages non lus
-              await parentDocRef
-                  .update({'unreadMessages': FieldValue.increment(1)});
-              print(
-                  "✅ Compteur de messages non lus mis à jour pour: $parentEmail");
-            } else {
-              // Créer le document avec un compteur initial
-              await parentDocRef.set({'unreadMessages': 1, 'uid': parentId},
-                  SetOptions(merge: true));
-              print("✅ Document créé avec compteur initial pour: $parentEmail");
-            }
-
-            // Message de succès avec confirmation
-            ScaffoldMessenger.of(dialogContext).showSnackBar(
-              SnackBar(
-                content: Text('Message envoyé avec succès'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else {
-            print("⚠️ Email du parent non trouvé pour l'UID: $parentId");
-            _showMessageSentWithWarning(dialogContext);
-          }
-        } catch (e) {
-          print("❌ Erreur lors de l'envoi de la notification: $e");
-          _showMessageSentWithWarning(dialogContext);
-        }
-      } else {
-        print("⚠️ parentId manquant, impossible d'envoyer une notification");
-
-        // Malgré l'absence de parentId, tentons d'envoyer des notifications
-        try {
-          // Chercher les parents qui ont cet enfant dans leur liste
-          final parentUsers = await FirebaseFirestore.instance
-              .collection('users')
-              .where('children', arrayContains: childId)
-              .get();
-
-          if (parentUsers.docs.isNotEmpty) {
-            for (var doc in parentUsers.docs) {
-              // Mettre à jour le compteur pour chaque parent trouvé
-              await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(doc.id)
-                  .update({'unreadMessages': FieldValue.increment(1)});
-
-              print("✅ Compteur mis à jour pour parent: ${doc.id}");
-            }
-
-            // Le message a été envoyé avec succès
-            ScaffoldMessenger.of(dialogContext).showSnackBar(
-              SnackBar(
-                content: Text('Message envoyé avec succès'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else {
-            // Si aucun parent n'a été trouvé, afficher l'avertissement
-            _showMessageSentWithWarning(dialogContext);
-          }
-        } catch (e) {
-          print("❌ Erreur lors de la tentative d'envoi alternatif: $e");
-          _showMessageSentWithWarning(dialogContext);
-        }
+      // 🔥 COPIER EXACTEMENT LA LOGIQUE DE PARENT_MESSAGES_SCREEN
+      // Récupérer l'email du parent et envoyer notification
+      final parentEmail =
+          await _getParentEmailForNotification(childId, structureId);
+      if (parentEmail != null) {
+        await NotificationService.sendNotificationToUser(
+          recipientUserId: parentEmail,
+          title: 'Nouveau message de Poppin\'s',
+          body: messageContent,
+        );
+        print("✅ Notification envoyée au parent: $parentEmail");
       }
+
+      // Notifier le parent (comme dans parent_messages_screen)
+      await _notifyParent(childId, structureId);
+
+      // Message de succès
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        SnackBar(
+          content: Text('Message envoyé avec succès'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       print("❌ Erreur lors de l'envoi du message: $error");
       if (dialogContext.mounted) {
         _showErrorSnackBar("Erreur lors de l'envoi du message",
             dialogContext: dialogContext);
       }
+    }
+  }
+
+  // 🔥 NOUVELLE MÉTHODE : Comme _getAssistantEmail dans parent_messages_screen
+  Future<String?> _getParentEmailForNotification(
+      String childId, String structureId) async {
+    try {
+      // Chercher dans les users qui ont cet enfant
+      final parentUsers = await FirebaseFirestore.instance
+          .collection('users')
+          .where('children', arrayContains: childId)
+          .get();
+
+      if (parentUsers.docs.isNotEmpty) {
+        String parentEmail = parentUsers.docs.first.id;
+        print("📧 Email parent trouvé: $parentEmail");
+        return parentEmail;
+      }
+
+      return null;
+    } catch (e) {
+      print('Erreur récupération email parent: $e');
+      return null;
+    }
+  }
+
+  // 🔥 NOUVELLE MÉTHODE : Comme _notifyAssistanteMaternel dans parent_messages_screen
+  Future<void> _notifyParent(String childId, String structureId) async {
+    try {
+      print("🔔 Notification du parent pour enfant: $childId");
+
+      // Chercher les parents qui ont cet enfant dans leur liste
+      final parentUsers = await FirebaseFirestore.instance
+          .collection('users')
+          .where('children', arrayContains: childId)
+          .get();
+
+      for (var parentDoc in parentUsers.docs) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(parentDoc.id)
+            .update({'unreadMessages': FieldValue.increment(1)});
+
+        print("✅ Compteur mis à jour pour parent: ${parentDoc.id}");
+      }
+    } catch (e) {
+      print("❌ Erreur lors de la notification: $e");
     }
   }
 
@@ -769,6 +639,106 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
       _messageController.text = '@${messageData['senderId']}: ';
       _messageController.selection = TextSelection.fromPosition(
           TextPosition(offset: _messageController.text.length));
+    }
+  }
+
+// Dans exchanges_screen.dart, remplacez la méthode _getParentEmail() par celle-ci avec debug complet :
+
+  Future<String?> _getParentEmail(String parentId) async {
+    try {
+      print("🔍 Recherche email parent pour UID: $parentId");
+
+      // Méthode 1: Si parentId est déjà un email
+      if (parentId.contains('@')) {
+        print("📧 Email parent utilisé directement: $parentId");
+        return parentId.toLowerCase();
+      }
+
+      // Méthode 2: Chercher par UID dans la collection users
+      print("🔍 Recherche par UID dans la collection users...");
+      final parentUserQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('uid', isEqualTo: parentId)
+          .get();
+
+      print(
+          "👥 Nombre de documents trouvés par UID: ${parentUserQuery.docs.length}");
+
+      if (parentUserQuery.docs.isNotEmpty) {
+        String parentEmail = parentUserQuery.docs.first.id;
+        print("📧 Email parent trouvé par UID: $parentEmail");
+        return parentEmail;
+      }
+
+      // Méthode 3: Chercher TOUS les parents qui ont cet enfant
+      print("🔍 Recherche alternative par relation enfant...");
+
+      // Trouver l'enfant actuel par parentId
+      String? currentChildId;
+      for (var enfant in enfants) {
+        if (enfant['parentId'] == parentId) {
+          currentChildId = enfant['id'];
+          break;
+        }
+      }
+
+      if (currentChildId != null) {
+        print("🧒 Enfant trouvé: $currentChildId");
+
+        // Chercher les parents qui ont cet enfant dans leur liste
+        final parentUsers = await FirebaseFirestore.instance
+            .collection('users')
+            .where('children', arrayContains: currentChildId)
+            .get();
+
+        print(
+            "👪 Nombre de parents trouvés via relation: ${parentUsers.docs.length}");
+
+        if (parentUsers.docs.isNotEmpty) {
+          String parentEmail = parentUsers.docs.first.id;
+          print("📧 Email parent trouvé via relation enfant: $parentEmail");
+          return parentEmail;
+        }
+      }
+
+      // Méthode 4: Recherche générale par enfants
+      print("🔍 Recherche générale dans tous les parents...");
+      final allParents = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'parent')
+          .get();
+
+      print("👪 Total parents trouvés: ${allParents.docs.length}");
+
+      for (var parentDoc in allParents.docs) {
+        final parentData = parentDoc.data();
+        final children = parentData['children'] as List<dynamic>?;
+
+        if (children != null) {
+          // Chercher si un des enfants correspond
+          for (var enfant in enfants) {
+            if (children.contains(enfant['id'])) {
+              String parentEmail = parentDoc.id;
+              print(
+                  "📧 Email parent trouvé via recherche générale: $parentEmail");
+              return parentEmail;
+            }
+          }
+        }
+      }
+
+      // Méthode 5: DERNIÈRE TENTATIVE - Premier parent disponible
+      if (allParents.docs.isNotEmpty) {
+        String fallbackEmail = allParents.docs.first.id;
+        print("📧 Email parent FALLBACK utilisé: $fallbackEmail");
+        return fallbackEmail;
+      }
+
+      print("❌ AUCUN email parent trouvé pour l'UID: $parentId");
+      return null;
+    } catch (e) {
+      print('❌ Erreur récupération email parent: $e');
+      return null;
     }
   }
 
@@ -1230,6 +1200,9 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
                           ],
                         ),
                       ),
+                      // 🧪 BOUTON TEST AJOUTÉ
+
+                      SizedBox(width: 8),
                       IconButton(
                         icon: Icon(
                           Icons.close,
@@ -1331,6 +1304,11 @@ class _ExchangesScreenState extends State<ExchangesScreen> {
                               .doc(messages[index].id)
                               .update({
                             'nonLu': false,
+                          }).then((_) {
+                            print(
+                                '🔍 Avant clearBadge - message marqué comme lu');
+                            NotificationService.clearBadge();
+                            print('🔍 Après clearBadge');
                           });
                           return _buildMessage(
                             messageData,
