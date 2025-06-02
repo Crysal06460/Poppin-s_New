@@ -102,6 +102,28 @@ class _PlanningTableViewState extends State<PlanningTableView> {
     print("===== FIN DEBUG =====");
   }
 
+// NOUVELLE MÉTHODE À AJOUTER : Calculer la hauteur du récapitulatif en fonction du nombre de membres
+  double _calculateRecapHeight() {
+    // Hauteur de base pour le titre et les marges
+    double baseHeight = 50;
+
+    // Hauteur de l'en-tête du tableau
+    double headerHeight = 30;
+
+    // Hauteur pour chaque ligne de membre (30px par ligne)
+    double rowHeight = 30;
+
+    // Nombre de membres
+    int nombreMembres = widget.membres.length;
+
+    // Hauteur totale = base + en-tête + (nombre de membres × hauteur par ligne)
+    double totalHeight =
+        baseHeight + headerHeight + (nombreMembres * rowHeight);
+
+    // Hauteur minimum de 135 et maximum de 300 pour éviter que ça devienne trop grand
+    return totalHeight.clamp(135.0, 300.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Récupérer le jour de la semaine (1 = lundi, etc.)
@@ -379,7 +401,8 @@ class _PlanningTableViewState extends State<PlanningTableView> {
           // Récapitulatif en bas (nombre d'enfants par heure)
           if (_showRecap)
             Container(
-              height: 135, // Hauteur fixe pour le récapitulatif
+              // MODIFIÉ: Hauteur dynamique basée sur le nombre de membres
+              height: _calculateRecapHeight(),
               margin: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),

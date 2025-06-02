@@ -335,7 +335,7 @@ class _SubscriptionConfirmedScreenState
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
-                            "Vous pouvez gérer votre abonnement à tout moment depuis les paramètres de votre compte.",
+                            "Vous pouvez gérer votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
                             style: TextStyle(
                               fontSize: 14,
                               height: 1.4,
@@ -1084,7 +1084,7 @@ class _SubscriptionConfirmedScreenState
                                     ),
                                     SizedBox(height: maxHeight * 0.005),
                                     Text(
-                                      "Vous pouvez modifier ou résilier votre abonnement à tout moment depuis les paramètres de votre compte.",
+                                      "Vous pouvez modifier ou résilier votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
                                       style: TextStyle(
                                         fontSize: maxWidth * 0.016,
                                         height: 1.4,

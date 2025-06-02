@@ -185,6 +185,20 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
         founderLastName = founderData['lastName'] ?? "";
       }
 
+      // CORRECTION ESSENTIELLE : Récupérer le nombre de membres existants pour générer le bon ID séquentiel
+      final membersCollection = FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('members');
+
+      final existingMembers = await membersCollection.get();
+      final nextMemberNumber = existingMembers.docs.length + 1;
+      final memberId =
+          'member_$nextMemberNumber'; // ID séquentiel comme dans add-mam-members.dart
+
+      print(
+          "🔍 ID généré pour le nouveau membre: $memberId (nombre actuel: ${existingMembers.docs.length})");
+
       // Créer le document utilisateur
       await FirebaseFirestore.instance.collection('users').doc(email).set({
         'email': email,
@@ -196,17 +210,18 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Ajouter le membre à la collection de membres de la structure
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .collection('members')
-          .add({
-        'email': email,
-        'firstName': firstName,
-        'lastName': lastName,
-        'joinedAt': FieldValue.serverTimestamp(),
+      // CORRECTION : Ajouter le membre avec un ID séquentiel (.doc().set()) au lieu d'un ID aléatoire (.add())
+      await membersCollection.doc(memberId).set({
+        'firstName': firstName, // Même ordre que add-mam-members.dart
+        'lastName': lastName, // Même ordre que add-mam-members.dart
+        'email': email, // Déjà en lowercase
+        'isFounder': false, // Ce n'est pas le fondateur
+        'memberNumber': nextMemberNumber, // Numéro séquentiel du membre
+        'createdAt': FieldValue
+            .serverTimestamp(), // Même nom de champ que add-mam-members.dart
       });
+
+      print("✅ Membre ajouté avec l'ID séquentiel: $memberId");
 
       // Envoi de l'invitation par email (comme dans add-mam-members.dart)
       await _sendInvitationEmail(email, firstName, lastName, structureName,
@@ -218,6 +233,11 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
           backgroundColor: Colors.green,
         ),
       );
+
+      // Mettre à jour le compteur local
+      setState(() {
+        _currentMemberCount = nextMemberNumber;
+      });
 
       // Afficher la boîte de dialogue de confirmation
       _showConfirmationDialog(email, structureName);

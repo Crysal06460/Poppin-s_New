@@ -220,7 +220,7 @@ class _PricingScreenState extends State<PricingScreen> {
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
-                          "Vous pouvez résilier votre abonnement à tout moment depuis les paramètres de votre compte.",
+                          "Vous pouvez résilier votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
                           style: TextStyle(
                             fontSize: 14,
                             height: 1.4,
@@ -344,7 +344,7 @@ class _PricingScreenState extends State<PricingScreen> {
         'Journal quotidien',
         'Gestion des présences',
         'Communication avec les parents',
-        'Gestion multi-membres',
+        'Gestion\nmulti-membres',
         'Tableau de bord partagé',
       ],
     };
@@ -605,7 +605,7 @@ class _PricingScreenState extends State<PricingScreen> {
                               SizedBox(width: maxWidth * 0.02),
                               Expanded(
                                 child: Text(
-                                  "Vous pouvez résilier votre abonnement à tout moment depuis les paramètres de votre compte.",
+                                  "Vous pouvez résilier votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
                                   style: TextStyle(
                                     fontSize: maxWidth * 0.016,
                                     height: 1.4,

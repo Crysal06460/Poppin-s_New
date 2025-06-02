@@ -845,20 +845,23 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
             child: Column(
               children: [
                 // En-tête de la section historique
+                // En-tête de la section historique
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "Historique des températures",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                    Expanded(
+                      child: Text(
+                        "Historique des températures",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
+                    SizedBox(width: 8),
                     Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: lightBlue,
                         borderRadius: BorderRadius.circular(20),
@@ -866,7 +869,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                       child: Text(
                         "${temperatureRecords.length} relevés",
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: primaryColor,
                         ),

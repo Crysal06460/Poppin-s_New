@@ -93,9 +93,85 @@ class _MonthlyReportSelectionScreenState
     }
   }
 
+  // Ajoutez cette méthode pour déboguer le problème de structure
+  // Ajoutez cette méthode pour déboguer le problème de structure
+  Future<void> _debugStructureIssue() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      String userEmail = user.email?.toLowerCase() ?? '';
+      print("🔍 DEBUG - Email utilisateur: $userEmail");
+      print("🔍 DEBUG - UID utilisateur: ${user.uid}");
+
+      // Vérifier le document utilisateur
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userEmail)
+          .get();
+
+      print("🔍 DEBUG - Document utilisateur existe: ${userDoc.exists}");
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        print("🔍 DEBUG - Données utilisateur: $userData");
+
+        if (userData != null && userData.containsKey('structureId')) {
+          String structId = userData['structureId'];
+          print("🔍 DEBUG - Structure ID depuis userData: $structId");
+
+          // Vérifier si ce document de structure existe
+          final structDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structId)
+              .get();
+
+          print("🔍 DEBUG - Document structure existe: ${structDoc.exists}");
+          if (structDoc.exists) {
+            print("🔍 DEBUG - Données structure: ${structDoc.data()}");
+          }
+
+          // Vérifier si la sous-collection children existe
+          final childrenSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structId)
+              .collection('children')
+              .limit(1)
+              .get();
+
+          print(
+              "🔍 DEBUG - Sous-collection children existe: ${childrenSnapshot.docs.isNotEmpty}");
+          print(
+              "🔍 DEBUG - Nombre d'enfants dans la sous-collection: ${childrenSnapshot.docs.length}");
+        }
+      }
+
+      // Vérifier aussi avec l'UID comme fallback
+      final structWithUidDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(user.uid)
+          .get();
+
+      print(
+          "🔍 DEBUG - Document structure avec UID existe: ${structWithUidDoc.exists}");
+      if (structWithUidDoc.exists) {
+        print("🔍 DEBUG - Données structure (UID): ${structWithUidDoc.data()}");
+      }
+    } catch (e) {
+      print("🚨 DEBUG - Erreur: $e");
+    }
+  }
+
   Future<void> _loadData() async {
     try {
       setState(() => isLoading = true);
+
+      // Obtenir l'email de l'utilisateur actuel d'abord
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Utilisateur non connecté');
+      }
+      currentUserEmail = user.email?.toLowerCase() ?? '';
+      print("👤 Email de l'utilisateur connecté: $currentUserEmail");
 
       // Obtenir l'ID de structure correct (pour MAM ou Assistante Maternelle)
       structureId = await _getStructureId();
@@ -105,27 +181,28 @@ class _MonthlyReportSelectionScreenState
 
       print("🔍 Chargement des données pour la structure: $structureId");
 
-      // Obtenir les données de la structure
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
+      // D'abord, déterminer le type de structure pour le filtrage
+      bool isMAMStructureTemp = false;
+      try {
+        // Vérifier si c'est un utilisateur MAM
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .get();
 
-      if (!structureDoc.exists) {
-        throw Exception('Structure non trouvée');
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data()!;
+          isMAMStructureTemp =
+              userData.containsKey('role') && userData['role'] == 'mamMember';
+        }
+      } catch (e) {
+        print("⚠️ Erreur lors de la vérification du type d'utilisateur: $e");
       }
 
-      final structureData = structureDoc.data();
-      structureName = structureData?['structureName'] ?? 'Ma Structure';
-
-      // Vérifier si c'est une MAM
-      isMAMStructure = structureData?['structureType'] == 'MAM';
-      print(
-          "🏢 Structure: $structureName, Type: ${structureData?['structureType']}, Est MAM: $isMAMStructure");
-
-      // Obtenir la liste des enfants
+      // Obtenir la liste des enfants avec le bon filtrage
       print("👶 Chargement des enfants...");
-      List<Map<String, dynamic>> allChildren = await _loadChildren(structureId);
+      List<Map<String, dynamic>> allChildren =
+          await _loadChildren(structureId, isMAMStructureTemp);
 
       if (allChildren.isEmpty) {
         print("⚠️ Aucun enfant trouvé dans la structure!");
@@ -137,8 +214,60 @@ class _MonthlyReportSelectionScreenState
         }
       }
 
+      // Obtenir les données de la structure avec gestion d'erreur améliorée
+      String structureNameLocal = 'Ma Structure'; // Valeur par défaut
+      bool isMAMStructureLocal = false;
+
+      try {
+        final structureDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .get();
+
+        if (structureDoc.exists) {
+          final structureData = structureDoc.data();
+          structureNameLocal =
+              structureData?['structureName'] ?? 'Ma Structure';
+          isMAMStructureLocal = structureData?['structureType'] == 'MAM';
+          print(
+              "🏢 Structure trouvée: $structureNameLocal, Type: ${structureData?['structureType']}, Est MAM: $isMAMStructureLocal");
+        } else {
+          print(
+              "⚠️ Document de structure non trouvé, utilisation de valeurs par défaut");
+          // Si nous sommes ici et que des enfants ont été trouvés, c'est probablement une MAM
+          // Essayons de déterminer si c'est une MAM basé sur la présence d'assignedMemberEmail
+          isMAMStructureLocal = allChildren.any((child) =>
+              child.containsKey('assignedMemberEmail') &&
+              child['assignedMemberEmail'] != null &&
+              child['assignedMemberEmail'].toString().isNotEmpty);
+
+          // Si c'est une MAM, essayons de récupérer le nom depuis les données utilisateur
+          if (isMAMStructureLocal) {
+            try {
+              final userDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUserEmail)
+                  .get();
+
+              if (userDoc.exists && userDoc.data() != null) {
+                structureNameLocal = userDoc.data()!['structureName'] ?? 'MAM';
+              }
+            } catch (e) {
+              print(
+                  "⚠️ Impossible de récupérer le nom de structure depuis les données utilisateur: $e");
+            }
+          }
+        }
+      } catch (e) {
+        print("⚠️ Erreur lors de la récupération des données de structure: $e");
+        // Continuons avec les valeurs par défaut
+        print("🔄 Utilisation des valeurs par défaut pour continuer");
+      }
+
       setState(() {
         children = allChildren;
+        structureName = structureNameLocal;
+        isMAMStructure = isMAMStructureLocal;
         isLoading = false;
 
         if (children.isNotEmpty) {
@@ -146,6 +275,8 @@ class _MonthlyReportSelectionScreenState
           selectedChildName = children[0]['firstName'];
         }
       });
+
+      print("🎉 Chargement terminé avec succès!");
     } catch (e) {
       print("🚨 Erreur lors du chargement des données: $e");
       setState(() => isLoading = false);
@@ -155,7 +286,8 @@ class _MonthlyReportSelectionScreenState
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadChildren(String structId) async {
+  Future<List<Map<String, dynamic>>> _loadChildren(
+      String structId, bool isMAMStructureTemp) async {
     try {
       final childrenSnapshot = await FirebaseFirestore.instance
           .collection('structures')
@@ -204,7 +336,7 @@ class _MonthlyReportSelectionScreenState
       // Liste filtrée selon le type de structure
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (isMAMStructure) {
+      if (isMAMStructureTemp) {
         print(
             "👨‍👧‍👦 Filtrage des enfants pour le membre MAM: $currentUserEmail");
         // Pour une MAM: filtrer par assignedMemberEmail

@@ -837,7 +837,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
-                    hintText: 'Laisser vide si aucun trajet',
+                    hintText: 'Ne pas remplir si aucun trajet effectué',
                     filled: true,
                     fillColor: secondaryColor,
                     border: OutlineInputBorder(

@@ -27,7 +27,7 @@ void main() async {
   // NOUVEAU : Forcer l'orientation portrait pour toute l'application
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown, // Permet la rotation 180° si souhaité
+    // Suppression de portraitDown pour éviter la rotation 180°
   ]);
 
   // Initialisation de Firebase avec les options spécifiques à la plateforme
@@ -42,8 +42,44 @@ void main() async {
   runApp(const PoppinsApp());
 }
 
-class PoppinsApp extends StatelessWidget {
+// MODIFICATION : Changement de StatelessWidget vers StatefulWidget
+class PoppinsApp extends StatefulWidget {
   const PoppinsApp({Key? key}) : super(key: key);
+
+  @override
+  State<PoppinsApp> createState() => _PoppinsAppState();
+}
+
+// NOUVEAU : State class avec WidgetsBindingObserver
+class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Forcer l'orientation au démarrage
+    _setPortraitOrientation();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Remettre en portrait quand l'app revient au premier plan
+      _setPortraitOrientation();
+    }
+  }
+
+  // NOUVEAU : Méthode pour forcer l'orientation portrait
+  void _setPortraitOrientation() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -233,26 +233,6 @@ class _PlanningHistoryScreenState extends State<PlanningHistoryScreen> {
 
       print("Found ${recurrentSnapshot.docs.length} recurrent gardes");
 
-      // 3. Also check the horaires_history collection for this date if it exists
-      try {
-        final historySnapshot = await _firestore
-            .collection('structures')
-            .doc(_structureId)
-            .collection('horaires_history')
-            .where('date',
-                isEqualTo: DateFormat('yyyy-MM-dd').format(selectedDateStart))
-            .get();
-
-        print("Found ${historySnapshot.docs.length} history records");
-
-        // Process history records if they exist
-        for (var doc in historySnapshot.docs) {
-          // Add code to process these records if needed
-        }
-      } catch (e) {
-        print("No history collection or error: $e");
-      }
-
       // Combine both types of gardes
       List<Garde> allGardes = [];
 
@@ -289,146 +269,222 @@ class _PlanningHistoryScreenState extends State<PlanningHistoryScreen> {
         ));
       }
 
-      // 4. ADDITIONAL: Try to find arrivals/departures data from other collections
+      // 3. Check the horaires_history collection for this date
       try {
-        // Look for documents that have exactTime for this date
-        final arrivalSnapshot = await _firestore
+        final historySnapshot = await _firestore
             .collection('structures')
             .doc(_structureId)
-            .collection('horaires')
+            .collection('horaires_history')
             .where('date',
                 isEqualTo: DateFormat('yyyy-MM-dd').format(selectedDateStart))
             .get();
 
-        print("Found ${arrivalSnapshot.docs.length} arrival records");
+        print("Found ${historySnapshot.docs.length} history records");
 
-        // Also look for matching actionType=arrivee/depart records
-        if (arrivalSnapshot.docs.isEmpty) {
-          final actionSnapshot = await _firestore
-              .collection('structures')
-              .doc(_structureId)
-              .collection('horaires')
-              .where('actionType', isEqualTo: 'arrivee')
-              .get();
+        // Regrouper les données par enfant
+        Map<String, Map<String, dynamic>> enfantsData = {};
 
-          for (var doc in actionSnapshot.docs) {
-            final data = doc.data();
-            // Check if date matches
-            final recordDate = data['date'];
-            if (recordDate is String) {
-              final parsedDate = DateTime.tryParse(recordDate);
-              if (parsedDate != null &&
-                  parsedDate.year == selectedDateStart.year &&
-                  parsedDate.month == selectedDateStart.month &&
-                  parsedDate.day == selectedDateStart.day) {
-                print("Found matching arrival record: ${data}");
+        // Process history records
+        for (var doc in historySnapshot.docs) {
+          final data = doc.data();
+          print("Processing history record: $data");
 
-                // Create a garde from this record
-                final childId = data['childId'] ?? '';
-                final heureDebut =
-                    data['heureDebut'] ?? data['arrive'] ?? '08:00';
-                final heureFin = data['heureFin'] ?? data['end'] ?? '17:00';
-                final membreId = data['membreId'] ?? '';
+          final childId = data['childId'] ?? '';
+          final actionType = data['actionType'] ?? '';
+          final userEmail =
+              data['userEmail'] ?? ''; // EMAIL du membre qui a fait l'action
 
-                if (childId.isNotEmpty) {
-                  allGardes.add(Garde(
-                    id: 'history_${doc.id}',
-                    enfantId: childId,
-                    membreId: membreId.isEmpty ? _membres.first.id : membreId,
-                    mamId: _structureId,
-                    jourSemaine: jourSemaine,
-                    heureDebut: heureDebut,
-                    heureFin: heureFin,
-                    recurrent: false,
-                    dateException: selectedDateStart,
-                  ));
+          if (childId.isNotEmpty) {
+            // Initialiser les données pour cet enfant si pas encore fait
+            if (!enfantsData.containsKey(childId)) {
+              enfantsData[childId] = {
+                'childId': childId,
+                'prenom': data['prenom'] ?? '',
+                'heureDebut': data['heureDebut'] ?? '08:00', // Heure planifiée
+                'heureFin': data['heureFin'] ?? '17:00', // Heure planifiée
+                'arriveeReelle': null,
+                'departReel': null,
+                'userEmail':
+                    userEmail, // Stocker l'email pour la correspondance
+              };
+            }
+
+            // Récupérer les heures réelles depuis les segments si disponibles
+            if (data['segments'] != null && data['segments'] is List) {
+              final segments = data['segments'] as List;
+              if (segments.isNotEmpty && segments[0] is Map) {
+                final segment = segments[0] as Map<String, dynamic>;
+
+                if (segment['arrivee'] != null) {
+                  enfantsData[childId]!['arriveeReelle'] = segment['arrivee'];
+                }
+                if (segment['depart'] != null) {
+                  enfantsData[childId]!['departReel'] = segment['depart'];
+                }
+              }
+            }
+
+            // Sinon, utiliser les heures de l'exactTime selon le type d'action
+            if (enfantsData[childId]!['arriveeReelle'] == null &&
+                actionType == 'arrivee') {
+              enfantsData[childId]!['arriveeReelle'] = data['heure'] ??
+                  data['exactTime']?.toString().split(' ').last ??
+                  null;
+            }
+            if (enfantsData[childId]!['departReel'] == null &&
+                actionType == 'depart') {
+              enfantsData[childId]!['departReel'] = data['heure'] ??
+                  data['exactTime']?.toString().split(' ').last ??
+                  null;
+            }
+
+            // Mettre à jour l'email si pas encore défini
+            if (enfantsData[childId]!['userEmail'].isEmpty &&
+                userEmail.isNotEmpty) {
+              enfantsData[childId]!['userEmail'] = userEmail;
+            }
+          }
+        }
+
+        // Créer les gardes à partir des données regroupées
+        for (var enfantData in enfantsData.values) {
+          final childId = enfantData['childId'];
+          final userEmail = enfantData['userEmail'];
+
+          // Trouver le membre correspondant à l'email
+          String membreId = '';
+
+          if (userEmail.isNotEmpty) {
+            // Chercher le membre par email
+            final membre = _membres.firstWhere(
+              (m) => m.email.toLowerCase() == userEmail.toLowerCase(),
+              orElse: () => Membre(
+                id: '',
+                nom: '',
+                prenom: '',
+                mamId: '',
+                role: '',
+                email: '',
+              ),
+            );
+
+            if (membre.id.isNotEmpty) {
+              membreId = membre.id;
+              print(
+                  "Found member ${membre.prenom} ${membre.nom} (${membre.id}) for email $userEmail");
+            }
+          }
+
+          // Si pas trouvé par email, essayer avec assignedTo de l'enfant
+          if (membreId.isEmpty) {
+            final enfant = _enfants.firstWhere(
+              (e) => e.id == childId,
+              orElse: () => Enfant(
+                id: '',
+                nom: '',
+                prenom: '',
+                dateNaissance: DateTime.now(),
+                membresIds: [],
+              ),
+            );
+
+            if (enfant.membresIds.isNotEmpty) {
+              // Les membresIds peuvent contenir des emails, essayons de faire la correspondance
+              for (String assignedId in enfant.membresIds) {
+                final membre = _membres.firstWhere(
+                  (m) =>
+                      m.id == assignedId ||
+                      m.email.toLowerCase() == assignedId.toLowerCase(),
+                  orElse: () => Membre(
+                      id: '',
+                      nom: '',
+                      prenom: '',
+                      mamId: '',
+                      role: '',
+                      email: ''),
+                );
+                if (membre.id.isNotEmpty) {
+                  membreId = membre.id;
+                  print(
+                      "Found member via assignedTo: ${membre.prenom} ${membre.nom} (${membre.id})");
+                  break;
                 }
               }
             }
           }
+
+          // Fallback au premier membre si toujours pas trouvé
+          if (membreId.isEmpty && _membres.isNotEmpty) {
+            membreId = _membres.first.id;
+            print("Fallback to first member: ${_membres.first.id}");
+          }
+
+          // Utiliser les heures réelles si disponibles, sinon les heures planifiées
+          final heureDebut = enfantsData[childId]!['arriveeReelle'] ??
+              enfantsData[childId]!['heureDebut'];
+          final heureFin = enfantsData[childId]!['departReel'] ??
+              enfantsData[childId]!['heureFin'];
+
+          allGardes.add(Garde(
+            id: 'history_${childId}',
+            enfantId: childId,
+            membreId: membreId,
+            mamId: _structureId,
+            jourSemaine: jourSemaine,
+            heureDebut: heureDebut,
+            heureFin: heureFin,
+            recurrent: false,
+            dateException: selectedDateStart,
+          ));
+
+          print(
+              "Added history garde for child: $childId assigned to member: $membreId (email: $userEmail) from $heureDebut to $heureFin (${enfantData['prenom']})");
         }
       } catch (e) {
-        print("Error retrieving arrival data: $e");
+        print("No history collection or error: $e");
       }
 
       // Check if we found any gardes
       if (allGardes.isEmpty) {
         print(
             "No gardes found for ${DateFormat('yyyy-MM-dd').format(selectedDateStart)}");
-
-        // As a last resort, try to directly fetch the document we saw in the screenshot
-        try {
-          final directSnapshot = await _firestore
-              .collection('structures')
-              .doc(_structureId)
-              .collection('horaires_history')
-              .doc('GtK8DkMqASk9iKtuN87Z')
-              .get();
-
-          if (directSnapshot.exists) {
-            final data = directSnapshot.data() ?? {};
-            print("Direct fetch result: $data");
-
-            // Check if this document is for our date
-            final docDate = data['date'];
-            if (docDate is String) {
-              final parsedDate = DateTime.tryParse(docDate);
-              if (parsedDate != null &&
-                  parsedDate.year == selectedDateStart.year &&
-                  parsedDate.month == selectedDateStart.month &&
-                  parsedDate.day == selectedDateStart.day) {
-                // Create a garde from this record
-                final childId = data['childId'] ?? '';
-                final heureDebut =
-                    data['heureDebut'] ?? data['arrive'] ?? '10:00';
-                final heureFin = data['heureFin'] ?? data['end'] ?? '16:15';
-                final membreId = data['membreId'] ?? '';
-
-                if (childId.isNotEmpty) {
-                  allGardes.add(Garde(
-                    id: 'direct_${directSnapshot.id}',
-                    enfantId: childId,
-                    membreId: membreId.isEmpty ? _membres.first.id : membreId,
-                    mamId: _structureId,
-                    jourSemaine: jourSemaine,
-                    heureDebut: heureDebut,
-                    heureFin: heureFin,
-                    recurrent: false,
-                    dateException: selectedDateStart,
-                  ));
-                }
-              }
-            }
-          }
-        } catch (e) {
-          print("Direct fetch failed: $e");
-        }
       }
 
-      // Merge gardes (prioritize exceptional over recurrent)
+      // Merge gardes (prioritize history over recurrent and exceptional)
       List<Garde> mergedGardes = [];
 
       // First add all recurrent gardes
       mergedGardes.addAll(allGardes.where((g) => g.recurrent));
 
-      // Then for each exceptional garde
-      for (var exceptGarde in allGardes.where((g) => !g.recurrent)) {
-        // Check if there's already a recurrent garde for this child and member
-        final index = mergedGardes.indexWhere((g) =>
-            g.recurrent &&
-            g.enfantId == exceptGarde.enfantId &&
-            g.membreId == exceptGarde.membreId);
+      // Then for each non-recurrent garde (exceptional and history)
+      for (var nonRecurrentGarde in allGardes.where((g) => !g.recurrent)) {
+        // Check if there's already a recurrent garde for this child
+        final index = mergedGardes.indexWhere(
+            (g) => g.recurrent && g.enfantId == nonRecurrentGarde.enfantId);
 
         if (index >= 0) {
-          // Replace the recurrent garde with the exceptional one
-          mergedGardes[index] = exceptGarde;
+          // Replace the recurrent garde with the non-recurrent one
+          mergedGardes[index] = nonRecurrentGarde;
         } else {
-          // Add the exceptional garde
-          mergedGardes.add(exceptGarde);
+          // Add the non-recurrent garde
+          mergedGardes.add(nonRecurrentGarde);
         }
       }
 
       print("Final merged gardes count: ${mergedGardes.length}");
+      for (var garde in mergedGardes) {
+        final membre = _membres.firstWhere((m) => m.id == garde.membreId,
+            orElse: () => Membre(
+                id: '',
+                nom: 'Inconnu',
+                prenom: 'Inconnu',
+                mamId: '',
+                role: '',
+                email: ''));
+        print(
+            "Final garde: ${garde.enfantId} assigned to member ${garde.membreId} (${membre.prenom} ${membre.nom}) from ${garde.heureDebut} to ${garde.heureFin}");
+      }
+
       setState(() => _gardesForSelectedDate = mergedGardes);
     } catch (e) {
       print("Error in _loadGardesForSelectedDate: $e");

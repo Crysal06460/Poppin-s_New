@@ -194,9 +194,6 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList();
 
       // NOUVEAU: Filtrer les enfants selon le type de structure et le rôle de l'utilisateur
-      // Dans home_screen.dart, remplacez le bloc de code pour le filtrage des enfants (lignes ~124-145)
-
-// NOUVEAU: Filtrer les enfants selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (fetchedStructureType == "MAM") {
@@ -223,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
             "👩‍👧‍👦 Assistante Maternelle individuelle: affichage de tous les enfants");
       }
 
-// Remplacer les logs de diagnostic pour ne plus mentionner le fondateur
+      // Remplacer les logs de diagnostic pour ne plus mentionner le fondateur
       if (fetchedStructureType == "MAM") {
         print(
             "🔍 DIAGNOSTIC - Type de structure: MAM, Utilisateur: $currentUserEmail");
@@ -270,8 +267,12 @@ class _HomeScreenState extends State<HomeScreen> {
       // Trouver les anniversaires à venir (uniquement parmi les enfants filtrés)
       _findUpcomingBirthdays(filteredChildren);
 
-      // Pour les MAM: vérifier s'il y a d'autres membres que le fondateur
-      if (structureType == "MAM") {
+      // NOUVELLE LOGIQUE HIÉRARCHIQUE POUR LES POPUPS
+      bool shouldShowPopup = false;
+      String popupType = "";
+
+      if (fetchedStructureType == "MAM") {
+        // Pour les MAM: vérifier d'abord s'il y a assez de membres
         final membersSnapshot = await FirebaseFirestore.instance
             .collection('structures')
             .doc(structureDocId)
@@ -282,22 +283,36 @@ class _HomeScreenState extends State<HomeScreen> {
         final bool hasNoMembers = membersSnapshot.docs.isEmpty;
         final bool hasOnlyOneMember = membersSnapshot.docs.length <= 1;
 
-        // Si c'est une MAM et qu'il n'y a que le fondateur, afficher le popup d'ajout de membres
         if (hasNoMembers || hasOnlyOneMember) {
+          // PRIORITÉ 1 : S'il n'y a qu'un seul membre, d'abord ajouter des membres
+          shouldShowPopup = true;
+          popupType = "addMAMMembers";
           print(
               "⚠️ MAM avec peu de membres, affichage du popup pour ajouter des membres...");
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showAddMAMMembersPopup();
-          });
+        } else if (!hasChildren) {
+          // PRIORITÉ 2 : S'il y a plusieurs membres mais pas d'enfants, ajouter des enfants
+          shouldShowPopup = true;
+          popupType = "addChild";
+          print(
+              "⚠️ MAM avec plusieurs membres mais aucun enfant trouvé, affichage du popup...");
+        }
+      } else {
+        // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants
+        if (!hasChildren) {
+          shouldShowPopup = true;
+          popupType = "addChild";
+          print("⚠️ Assistante maternelle sans enfant, affichage du popup...");
         }
       }
 
-// SÉPARATION DE LA CONDITION - Cette vérification doit être indépendante
-      if (!hasChildren) {
-        // Pour tous les cas: si aucun enfant, afficher le popup d'ajout d'enfant
-        print("⚠️ Aucun enfant trouvé, affichage du popup...");
+      // Afficher le popup approprié après le rendu
+      if (shouldShowPopup) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showAddChildPopup();
+          if (popupType == "addMAMMembers") {
+            _showAddMAMMembersPopup();
+          } else if (popupType == "addChild") {
+            _showAddChildPopup();
+          }
         });
       }
     } catch (e) {

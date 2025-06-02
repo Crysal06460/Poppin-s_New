@@ -658,37 +658,34 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // En-tête de la section historique
+                      // En-tête de la section historique
+                      // En-tête de la section historique
                       Row(
                         children: [
                           Expanded(
-                            flex: 3,
                             child: Text(
                               "Historique des températures",
                               style: TextStyle(
-                                fontSize: 16, // Taille réduite
+                                fontSize: 17,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
                             ),
                           ),
                           SizedBox(width: 8),
-                          Expanded(
-                            flex: 1,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: lightBlue,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                "${temperatureRecords.length} relevés",
-                                style: TextStyle(
-                                  fontSize: 12, // Taille réduite
-                                  fontWeight: FontWeight.w500,
-                                  color: primaryColor,
-                                ),
-                                textAlign: TextAlign.center,
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: lightBlue,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "${temperatureRecords.length} relevés",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: primaryColor,
                               ),
                             ),
                           ),
@@ -1062,19 +1059,21 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
               children: [
                 // En-tête de la section historique
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "Historique des températures",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                    Expanded(
+                      child: Text(
+                        "Historique des températures",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
+                    SizedBox(width: 8),
                     Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: lightBlue,
                         borderRadius: BorderRadius.circular(20),
@@ -1082,7 +1081,7 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                       child: Text(
                         "${temperatureRecords.length} relevés",
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: primaryColor,
                         ),

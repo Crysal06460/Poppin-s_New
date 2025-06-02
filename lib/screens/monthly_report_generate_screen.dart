@@ -48,14 +48,16 @@ class _MonthlyReportGenerateScreenState
     return "${input[0].toUpperCase()}${input.substring(1)}";
   }
 
+  String currentUserEmail = "";
+  String structureId = "";
+
   // Vérifier et créer les informations financières si nécessaires
   Future<void> _ensureFinancialInfoExists() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (structureId.isEmpty) return;
 
     final childDoc = await FirebaseFirestore.instance
         .collection('structures')
-        .doc(user.uid)
+        .doc(structureId) // ← Utiliser structureId au lieu de user.uid
         .collection('children')
         .doc(widget.reportParams['childId'])
         .get();
@@ -73,7 +75,7 @@ class _MonthlyReportGenerateScreenState
       // Créer des informations financières par défaut
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
           .collection('children')
           .doc(widget.reportParams['childId'])
           .update({
@@ -88,6 +90,46 @@ class _MonthlyReportGenerateScreenState
     }
   }
 
+  Future<String> _getStructureId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return "";
+
+      // Obtenir l'email de l'utilisateur actuel
+      currentUserEmail = user.email?.toLowerCase() ?? '';
+      print("👤 Email de l'utilisateur connecté: $currentUserEmail");
+
+      // Vérifier si l'utilisateur est un membre MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      print(
+          "👤 Vérification du document utilisateur: ${userDoc.exists ? 'existe' : 'n\'existe pas'}");
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        print("👤 Données utilisateur: $userData");
+      }
+
+      // Si c'est un membre MAM, obtenir l'ID de la structure associée
+      if (userDoc.exists &&
+          userDoc.data() != null &&
+          userDoc.data()!.containsKey('structureId')) {
+        String structId = userDoc.data()!['structureId'];
+        print("👤 Utilisateur MAM détecté avec structureId: $structId");
+        return structId;
+      }
+
+      // Par défaut, utiliser l'ID de l'utilisateur
+      print("👤 Utilisateur standard avec uid: ${user.uid}");
+      return user.uid;
+    } catch (e) {
+      print("🚨 Erreur dans _getStructureId: $e");
+      return "";
+    }
+  }
+
   Future<void> _loadData() async {
     try {
       setState(() => isLoading = true);
@@ -95,19 +137,32 @@ class _MonthlyReportGenerateScreenState
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
 
-      // Charger les données de la structure
+      // Obtenir l'ID de structure correct
+      structureId = await _getStructureId();
+      if (structureId.isEmpty) {
+        throw Exception('ID de structure non trouvé');
+      }
+
+      print("🔍 Chargement des données pour la structure: $structureId");
+
+      // Charger les données de la structure avec l'ID correct
       final structureDoc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
           .get();
 
-      if (!structureDoc.exists) throw Exception('Structure non trouvée');
-      structureData = structureDoc.data() ?? {};
+      if (!structureDoc.exists) {
+        print(
+            "⚠️ Document de structure non trouvé, utilisation de valeurs par défaut");
+        structureData = {'structureName': 'Ma Structure'};
+      } else {
+        structureData = structureDoc.data() ?? {};
+      }
 
-      // Charger les données de l'enfant
+      // Charger les données de l'enfant avec l'ID correct
       final childDoc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
           .collection('children')
           .doc(widget.reportParams['childId'])
           .get();
@@ -121,7 +176,7 @@ class _MonthlyReportGenerateScreenState
       // Recharger les données de l'enfant avec les infos financières
       final updatedChildDoc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
           .collection('children')
           .doc(widget.reportParams['childId'])
           .get();
@@ -146,8 +201,7 @@ class _MonthlyReportGenerateScreenState
   }
 
   Future<void> _prepareReportData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Utilisateur non connecté');
+    if (structureId.isEmpty) throw Exception('ID de structure non défini');
 
     final int year = widget.reportParams['year'];
     final int month = widget.reportParams['month'];
@@ -189,7 +243,7 @@ class _MonthlyReportGenerateScreenState
       // Vérifier s'il y a des données d'horaire pour ce jour
       final horaireSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
           .collection('horaires')
           .doc(dateKey)
           .get();

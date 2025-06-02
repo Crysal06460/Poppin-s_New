@@ -182,6 +182,25 @@ class _ParentStockScreenState extends State<ParentStockScreen>
     });
   }
 
+  // Méthode de debug pour afficher l'état des stocks
+  void _debugStockData() {
+    print("📦 [DEBUG] === État complet des enfants et stocks ===");
+    for (var child in _children) {
+      print("📦 [DEBUG] Enfant: ${child['firstName']}");
+      print("📦 [DEBUG] StockNeeds: ${child['stockNeeds']}");
+
+      Map<String, dynamic> stockNeeds = child['stockNeeds'];
+      List<String> activeNeeds = [];
+      stockNeeds.forEach((item, value) {
+        if (value == true) {
+          activeNeeds.add(item);
+        }
+      });
+      print("📦 [DEBUG] Besoins actifs détectés: $activeNeeds");
+      print("📦 [DEBUG] ---");
+    }
+  }
+
   Future<void> _refreshData() async {
     // Montrer un indicateur de chargement
     setState(() => _isLoading = true);
@@ -203,6 +222,8 @@ class _ParentStockScreenState extends State<ParentStockScreen>
       ),
     );
   }
+
+  // Dans parent_stock_screen.dart, remplacer la méthode _loadUserData par cette version corrigée :
 
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
@@ -248,11 +269,8 @@ class _ParentStockScreenState extends State<ParentStockScreen>
             if (childDoc.exists) {
               final data = childDoc.data()!;
 
-              // Initialiser un Map avec tous les articles possibles
-              Map<String, bool> stockNeeds = {};
-              for (var item in _stockItems) {
-                stockNeeds[item] = false;
-              }
+              // CORRECTION : Utiliser Map<String, dynamic> au lieu de Map<String, bool>
+              Map<String, dynamic> stockNeeds = {};
 
               try {
                 final stockDoc = await _firestore
@@ -267,15 +285,27 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                 if (stockDoc.exists) {
                   final stockData = stockDoc.data() as Map<String, dynamic>;
 
-                  // Mettre à jour les valeurs avec les données de Firestore
-                  stockData.forEach((key, value) {
-                    if (stockNeeds.containsKey(key)) {
-                      stockNeeds[key] = value ?? false;
-                    }
-                  });
+                  print(
+                      "📦 [DEBUG] Données brutes de Firestore pour ${data['firstName']}: $stockData");
+
+                  // CORRECTION : Copier directement les données sans filtrer par _stockItems
+                  stockNeeds = Map<String, dynamic>.from(stockData);
+
+                  print(
+                      "📦 [DEBUG] StockNeeds après traitement pour ${data['firstName']}: $stockNeeds");
+
+                  // Vérifier s'il y a des besoins
+                  bool hasAnyNeeds =
+                      stockNeeds.values.any((value) => value == true);
+                  print(
+                      "📦 [DEBUG] ${data['firstName']} a des besoins: $hasAnyNeeds");
+                } else {
+                  print(
+                      "📦 [DEBUG] Aucun document de stock trouvé pour ${data['firstName']}");
                 }
               } catch (e) {
-                print("Erreur lors du chargement des stocks: $e");
+                print(
+                    "❌ Erreur lors du chargement des stocks pour ${data['firstName']}: $e");
               }
 
               childrenData.add({
@@ -293,6 +323,9 @@ class _ParentStockScreenState extends State<ParentStockScreen>
           setState(() {
             _children = childrenData;
           });
+
+          // Ajouter le debug après setState
+          _debugStockData();
         }
       }
     } catch (e) {
@@ -318,17 +351,22 @@ class _ParentStockScreenState extends State<ParentStockScreen>
   // Récupère seulement la liste des articles nécessaires (sans catégories)
   Map<String, List<String>> _getNeededItemsByCategory(
       Map<String, dynamic> stockNeeds) {
-    // On crée simplement une liste d'articles, sans catégories multiples
     List<String> neededItems = [];
 
-    // Ajouter tous les articles nécessaires
+    // Ajouter tous les articles nécessaires avec vérification stricte
     stockNeeds.forEach((item, isNeeded) {
-      if (isNeeded == true) {
+      // Vérifier explicitement si la valeur est true
+      if (isNeeded == true || isNeeded.toString().toLowerCase() == 'true') {
         neededItems.add(item);
       }
     });
 
-    // Retourner un map avec une seule clé vide
+    // Debug pour voir ce qui est détecté
+    print(
+        "📦 [DEBUG] Articles détectés comme nécessaires dans _getNeededItemsByCategory: $neededItems");
+    print(
+        "📦 [DEBUG] Données stockNeeds complètes dans _getNeededItemsByCategory: $stockNeeds");
+
     return {'': neededItems};
   }
 
@@ -490,7 +528,16 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                           final child = _children[index];
                           final stockNeeds =
                               child['stockNeeds'] as Map<String, dynamic>;
-                          final hasNeeds = stockNeeds.values.contains(true);
+
+                          // Amélioration de la détection des besoins
+                          final hasNeeds = stockNeeds.values.any((value) =>
+                              value == true ||
+                              value.toString().toLowerCase() == 'true');
+
+                          print(
+                              "📦 [BUILD DEBUG] Enfant ${child['firstName']} - hasNeeds: $hasNeeds");
+                          print(
+                              "📦 [BUILD DEBUG] StockNeeds pour ${child['firstName']}: $stockNeeds");
 
                           // Récupérer les besoins par catégorie
                           final neededItemsByCategory = hasNeeds

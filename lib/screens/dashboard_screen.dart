@@ -15,6 +15,8 @@ import 'package:poppins_app/screens/planning_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
+import 'package:poppins_app/screens/child_history_detail_screen.dart';
+import 'package:poppins_app/screens/history_date_selection_screen.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -578,6 +580,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       MaterialPageRoute(
                         builder: (context) => ChildProfileDetailsScreen(
                           childId: child['id'],
+                          structureId: structId,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "ANNULER",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+// Ajouter cette méthode pour naviguer vers l'historique
+  void _showHistorySelection() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    // Obtenir l'ID de structure avant de naviguer
+                    String structId = await _getStructureId();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HistoryDateSelectionScreen(
+                          childId: child['id'],
+                          childName: child['firstName'],
                           structureId: structId,
                         ),
                       ),
@@ -1198,6 +1289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // Nouvelle méthode pour le contenu tablette
+  // Modifier la méthode _buildTabletContent pour inclure la section Historique
   Widget _buildTabletContent() {
     return LayoutBuilder(builder: (context, constraints) {
       final double maxWidth = constraints.maxWidth;
@@ -1300,6 +1392,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 maxWidth: maxWidth,
                               ),
                             ],
+                            SizedBox(height: maxHeight * 0.02),
+                            _buildSectionItem(
+                              title: "Historique",
+                              icon: Icons.history,
+                              imagePath:
+                                  'assets/images/Icone_Recaptitulatif.png', // Vous pouvez créer une icône spécifique
+                              index: 3,
+                              maxWidth: maxWidth,
+                            ),
                           ],
                         ),
                       ),
@@ -1459,7 +1560,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Nouvelle méthode pour obtenir le titre de la section
+  // Modifier la méthode _getSectionTitle pour inclure Historique
   String _getSectionTitle(int sectionIndex) {
     switch (sectionIndex) {
       case 0:
@@ -1468,12 +1569,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return "Enfants";
       case 2:
         return "Rapports";
+      case 3:
+        return "Historique";
       default:
         return "Actions";
     }
   }
 
-  // Nouvelle méthode pour construire les détails de section
+  // Modifier la méthode _buildSectionDetails pour inclure Historique
   Widget _buildSectionDetails(
       int sectionIndex, double maxWidth, double maxHeight) {
     switch (sectionIndex) {
@@ -1483,9 +1586,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return _buildChildrenActions(maxWidth, maxHeight);
       case 2:
         return _buildReportsActions(maxWidth, maxHeight);
+      case 3:
+        return _buildHistoryActions(maxWidth, maxHeight);
       default:
         return Container();
     }
+  }
+
+// Ajouter cette nouvelle méthode pour les actions d'historique
+  Widget _buildHistoryActions(double maxWidth, double maxHeight) {
+    return ListView(
+      children: [
+        _buildTabletActionItem(
+          icon: Icons.history,
+          title: "Consulter l'historique",
+          description: "Voir l'historique complet par enfant et par date",
+          onTap: _showHistorySelection,
+          maxWidth: maxWidth,
+        ),
+      ],
+    );
   }
 
   // Méthode pour les actions de structure
@@ -1680,6 +1800,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // Conserver la méthode _buildPhoneContent() (ne pas la modifier)
+  // Modifier la méthode _buildPhoneContent pour inclure la section Historique
   Widget _buildPhoneContent() {
     return SingleChildScrollView(
       child: Padding(
@@ -1785,7 +1906,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: Text(
                                 ((needFridgeTemperatureCheck ? 1 : 0) +
                                         (needFreezerTemperatureCheck &&
-                                                hasFreezer == true // ✅ CORRECT
+                                                hasFreezer == true
                                             ? 1
                                             : 0))
                                     .toString(),
@@ -1948,6 +2069,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
+
+            // Section Historique - NOUVELLE SECTION
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/Icone_Recaptitulatif.png', // Vous pouvez créer une icône spécifique
+                        width: 60,
+                        height: 60,
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.history,
+                          color: primaryColor,
+                          size: 60,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Historique",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.history,
+                    title: "Consulter l'historique",
+                    onTap: _showHistorySelection,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

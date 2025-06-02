@@ -200,7 +200,6 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     }
   }
 
-  // Valider et sauvegarder les membres
   Future<void> _saveMembers() async {
     // Vérifier que tous les champs sont remplis
     bool isValid = true;
@@ -364,9 +363,15 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
         // Ne pas bloquer le processus en cas d'erreur
       }
 
-      // Redirection vers la page d'accueil
+      // Afficher un message de succès au lieu de rediriger
       if (mounted) {
-        context.go('/home');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Membres sauvegardés avec succès !"),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       print("🚨 Erreur lors de la sauvegarde des membres: $e");
@@ -378,9 +383,23 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
           ),
         );
       }
-      setState(() {
-        _isLoading = false;
-      });
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+// Terminer l'ajout de membres et rediriger vers l'accueil
+  Future<void> _finishAndGoHome() async {
+    await _saveMembers();
+
+    // Attendre un petit délai pour que l'utilisateur voie le message de succès
+    await Future.delayed(Duration(seconds: 1));
+
+    // Redirection vers la page d'accueil
+    if (mounted) {
+      context.go('/home');
     }
   }
 
@@ -558,29 +577,55 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
           const SizedBox(height: 40),
 
           // Boutons d'action
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          Column(
             children: [
-              TextButton(
-                onPressed: () => context.go('/home'),
-                child: const Text(
-                  "PASSER",
-                  style: TextStyle(
-                      color: Colors.grey, fontWeight: FontWeight.bold),
+              // Bouton pour sauvegarder sans quitter
+              if (_members.length >
+                  1) // Afficher seulement s'il y a des membres ajoutés
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ElevatedButton(
+                    onPressed: _saveMembers,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text(
+                      "SAUVEGARDER",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ),
-              ),
-              ElevatedButton(
-                onPressed: _saveMembers,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF16A085),
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: const Text(
-                  "VALIDER",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+
+              // Boutons principaux
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    onPressed: () => context.go('/home'),
+                    child: const Text(
+                      "PASSER",
+                      style: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: _finishAndGoHome,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A085),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text(
+                      "TERMINER",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -934,61 +979,110 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
                         SizedBox(height: maxHeight * 0.02),
 
                         // Boutons d'action
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Column(
                           children: [
-                            TextButton(
-                              onPressed: () => context.go('/home'),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: maxWidth * 0.03,
-                                  vertical: maxHeight * 0.015,
-                                ),
-                              ),
-                              child: Text(
-                                "PASSER",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: maxWidth * 0.016,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF16A085)
-                                        .withOpacity(0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton(
-                                onPressed: _saveMembers,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF16A085),
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: maxWidth * 0.04,
-                                    vertical: maxHeight * 0.015,
-                                  ),
-                                  shape: RoundedRectangleBorder(
+                            // Bouton pour sauvegarder sans quitter
+                            if (_members.length >
+                                1) // Afficher seulement s'il y a des membres ajoutés
+                              Container(
+                                width: double.infinity,
+                                margin:
+                                    EdgeInsets.only(bottom: maxHeight * 0.015),
+                                child: Container(
+                                  decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.green.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                child: Text(
-                                  "VALIDER",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: maxWidth * 0.018,
-                                    letterSpacing: 0.5,
+                                  child: ElevatedButton(
+                                    onPressed: _saveMembers,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: maxWidth * 0.04,
+                                        vertical: maxHeight * 0.015,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "SAUVEGARDER",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: maxWidth * 0.018,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
+
+                            // Boutons principaux
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                TextButton(
+                                  onPressed: () => context.go('/home'),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: maxWidth * 0.03,
+                                      vertical: maxHeight * 0.015,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "PASSER",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: maxWidth * 0.016,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF16A085)
+                                            .withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _finishAndGoHome,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF16A085),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: maxWidth * 0.04,
+                                        vertical: maxHeight * 0.015,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "TERMINER",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: maxWidth * 0.018,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
