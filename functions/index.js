@@ -4,11 +4,212 @@ const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 
+// ===== IMPORTS POUR LES EMAILS AVEC MAILJET =====
+const Mailjet = require('node-mailjet');
+const fs = require('fs');
+const handlebars = require('handlebars');
+const path = require('path');
+
 // Initialiser Firebase Admin
 initializeApp();
 
 const db = getFirestore();
 const messaging = getMessaging();
+
+// ===== CONFIGURATION MAILJET =====
+const mailjet = Mailjet.apiConnect(
+  '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
+  '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
+);
+
+// ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
+exports.processEmailQueue = onDocumentCreated({
+    document: 'emailQueue/{emailId}',
+    region: 'europe-west1' // Même région que vos autres fonctions
+}, async (event) => {
+    const emailData = event.data.data();
+    const emailId = event.params.emailId;
+    
+    console.log(`📧 Traitement de l'email ${emailId}:`, JSON.stringify(emailData, null, 2));
+    
+    try {
+        // Vérifier que le statut est bien 'pending'
+        if (emailData.status !== 'pending') {
+            console.log(`📧 Email ${emailId} ignoré - statut: ${emailData.status}`);
+            return null;
+        }
+        
+        // Vérifier si toutes les données nécessaires sont présentes
+        if (!emailData.to || !emailData.templateData) {
+            console.error('❌ Données d\'email insuffisantes:', emailData);
+            await event.data.ref.update({
+                status: 'failed',
+                error: 'Données insuffisantes',
+                lastErrorAt: FieldValue.serverTimestamp()
+            });
+            return null;
+        }
+        
+        // Marquer comme 'processing'
+        await event.data.ref.update({
+            status: 'processing',
+            processingStartedAt: FieldValue.serverTimestamp()
+        });
+        
+        console.log(`📧 Début traitement email pour: ${emailData.to}`);
+        console.log(`📧 Template demandé: ${emailData.template}`);
+        
+        // Charger et compiler le template d'email
+        let templatePath = 'templates/parent-invitation.html'; // Template par défaut
+        if (emailData.template && typeof emailData.template === 'string') {
+            const requestedTemplate = `templates/${emailData.template}.html`;
+            try {
+                // Vérifier si le fichier existe
+                fs.accessSync(path.join(__dirname, requestedTemplate), fs.constants.R_OK);
+                templatePath = requestedTemplate;
+                console.log(`✅ Utilisation du template: ${templatePath}`);
+            } catch (e) {
+                console.warn(`⚠️ Template '${requestedTemplate}' non trouvé, utilisation du template par défaut`);
+                templatePath = 'templates/parent-invitation.html';
+            }
+        }
+
+        console.log(`📄 Chargement du template: ${templatePath}`);
+        const templateSource = fs.readFileSync(path.join(__dirname, templatePath), 'utf8');
+        console.log('✅ Template chargé avec succès');
+        
+        const compiledTemplate = handlebars.compile(templateSource);
+        
+        // Générer le contenu HTML avec les données du template
+        const htmlContent = compiledTemplate(emailData.templateData);
+        console.log('✅ Template compilé avec succès');
+        
+        // Préparer le message Mailjet
+        const mailjetMessage = {
+            From: {
+                Email: "noreply@poppin-s.app",
+                Name: "Les Lutins - Application Poppins"
+            },
+            To: [
+                {
+                    Email: emailData.to
+                }
+            ],
+            Subject: emailData.subject || 'Invitation à l\'application Poppins',
+            HTMLPart: htmlContent
+        };
+        
+        // Ajouter la pièce jointe PDF si elle existe
+        if (emailData.pdfAttachment && emailData.pdfFilename) {
+            console.log(`📎 Ajout pièce jointe PDF: ${emailData.pdfFilename}`);
+            mailjetMessage.Attachments = [
+                {
+                    ContentType: 'application/pdf',
+                    Filename: emailData.pdfFilename,
+                    Base64Content: emailData.pdfAttachment
+                }
+            ];
+        }
+        
+        // Envoyer l'email via Mailjet
+        console.log(`📧 Envoi email vers: ${emailData.to} via Mailjet...`);
+        
+        const request = mailjet.post('send', { version: 'v3.1' }).request({
+            Messages: [mailjetMessage]
+        });
+        
+        const result = await request;
+        
+        console.log(`✅ Email ${emailId} envoyé avec succès via Mailjet`);
+        console.log('📊 Réponse Mailjet:', JSON.stringify(result.body, null, 2));
+        
+        // Marquer comme 'sent'
+        await event.data.ref.update({
+            status: 'sent',
+            sentAt: FieldValue.serverTimestamp(),
+            messageId: result.body?.Messages?.[0]?.MessageID || 'unknown',
+            mailjetResponse: result.body
+        });
+        
+        console.log(`✅ Email ${emailId} marqué comme envoyé dans Firestore`);
+        
+    } catch (error) {
+        console.error(`❌ Erreur lors de l'envoi de l'email ${emailId}:`, error);
+        console.error('❌ Stack trace:', error.stack);
+        console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
+        
+        // Marquer comme 'failed' et incrémenter le retry count
+        const retryCount = (emailData.retryCount || 0) + 1;
+        const maxRetries = 3;
+        
+        await event.data.ref.update({
+            status: retryCount >= maxRetries ? 'failed' : 'pending',
+            retryCount: retryCount,
+            lastError: error.message,
+            lastErrorAt: FieldValue.serverTimestamp(),
+            errorStack: error.stack
+        });
+        
+        // Si on a atteint le max de tentatives, log l'erreur finale
+        if (retryCount >= maxRetries) {
+            console.error(`❌ Email ${emailId} définitivement échoué après ${maxRetries} tentatives`);
+        } else {
+            console.log(`🔄 Email ${emailId} remis en queue - tentative ${retryCount}/${maxRetries}`);
+        }
+    }
+    
+    return null;
+});
+
+// ===== NOUVELLE FONCTION : Retry des emails failed =====
+exports.retryFailedEmails = onSchedule({
+    schedule: 'every 2 hours',
+    region: 'europe-west1'
+}, async (event) => {
+    try {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        
+        console.log('🔄 Recherche des emails échoués à retry...');
+        
+        const failedEmails = await db
+            .collection('emailQueue')
+            .where('status', '==', 'failed')
+            .where('lastErrorAt', '<', twoHoursAgo)
+            .where('retryCount', '<', 3)
+            .limit(10)
+            .get();
+        
+        if (failedEmails.empty) {
+            console.log('✅ Aucun email échoué à retry');
+            return null;
+        }
+        
+        const batch = db.batch();
+        
+        failedEmails.docs.forEach(doc => {
+            console.log(`🔄 Remise en queue de l'email: ${doc.id}`);
+            batch.update(doc.ref, {
+                status: 'pending',
+                retryCount: 0,
+                lastError: null,
+                lastErrorAt: null,
+                errorStack: null
+            });
+        });
+        
+        await batch.commit();
+        console.log(`✅ ${failedEmails.size} emails remis en queue pour retry`);
+        
+    } catch (error) {
+        console.error('❌ Erreur lors du retry des emails:', error);
+    }
+    
+    return null;
+});
+
+// ==========================================
+// ===== VOS FONCTIONS EXISTANTES INTACTES =====
+// ==========================================
 
 // Fonction pour envoyer des notifications push
 exports.sendNotification = onDocumentCreated('notifications/{notificationId}', async (event) => {

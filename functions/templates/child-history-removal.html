@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Historique de {{childName}}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #D94350, #F2B705);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+            margin-bottom: 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .header .subtitle {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            background: #f9f9f9;
+            padding: 30px 20px;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .highlight {
+            background: #FFF3CD;
+            padding: 15px;
+            border-left: 4px solid #F2B705;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .highlight strong {
+            color: #D94350;
+        }
+        .assistant-notice {
+            background: #E3F2FD;
+            border: 2px solid #3D9DF2;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .assistant-notice h3 {
+            color: #3D9DF2;
+            margin-top: 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📋 Historique de {{childName}}</h1>
+        <div class="subtitle">Enfant retiré de la structure</div>
+    </div>
+    
+    <div class="content">
+        <div class="assistant-notice">
+            <h3>🏠 Pour l'assistante maternelle</h3>
+            <p><strong>{{firstName}} {{lastName}}</strong></p>
+            <p>Vous recevez cet email car l'enfant <strong>{{childName}}</strong> a été retiré de votre structure dans l'application Poppins.</p>
+        </div>
+        
+        <p>{{message}}</p>
+        
+        <div class="highlight">
+            <h3>📎 Document joint important</h3>
+            <p>Vous trouverez <strong>en pièce jointe</strong> un document PDF contenant l'historique complet et détaillé de <strong>{{childName}}</strong> durant toute sa prise en charge dans votre structure.</p>
+        </div>
+        
+        <p>Nous vous remercions pour votre engagement et vous souhaitons le meilleur pour la suite.</p>
+        
+        <p>Cordialement,<br>
+        <strong>L'équipe de {{structureName}}</strong><br>
+        <em>Application Poppins</em></p>
+    </div>
+    
+    <div class="footer">
+        <p>📧 Email envoyé automatiquement le {{currentDate}}</p>
+        <p>🔒 Toutes les données ont été supprimées conformément à notre politique de confidentialité</p>
+    </div>
+</body>
+</html>
