@@ -26,6 +26,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool isLoading = false;
   bool isAssistanteMaterCheck = true;
   bool isMAMCheck = false;
+  bool hasMinLength = false;
+  bool hasUppercase = false;
+  bool hasDigit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Écouter les changements du mot de passe pour la validation en temps réel
+    passwordController.addListener(_validatePassword);
+  }
+
+  @override
+  void dispose() {
+    passwordController.removeListener(_validatePassword);
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +79,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
       ),
     );
+  }
+
+  void _validatePassword() {
+    final password = passwordController.text;
+    setState(() {
+      hasMinLength = password.length >= 6;
+      hasUppercase = password.contains(RegExp(r'[A-Z]'));
+      hasDigit = password.contains(RegExp(r'[0-9]'));
+    });
   }
 
   // Version iPhone (garde le code original)
@@ -198,11 +226,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 decoration: InputDecoration(
                   labelText: "Mot de passe",
                   labelStyle: TextStyle(color: primaryBlue),
-                  helperText: "Minimum 6 caractères",
-                  helperStyle: TextStyle(
-                    color: primaryBlue.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16)),
                   focusedBorder: OutlineInputBorder(
@@ -212,6 +235,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
               ),
+
+              const SizedBox(height: 8),
+              _buildPasswordValidationIndicators(),
 
               const SizedBox(height: 16),
 
@@ -321,6 +347,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordValidationIndicators() {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: lightBlue.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: primaryBlue.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Exigences du mot de passe :",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: primaryBlue,
+            ),
+          ),
+          SizedBox(height: 6),
+          _buildPasswordRequirement("Au moins 6 caractères", hasMinLength),
+          _buildPasswordRequirement("Au moins une majuscule", hasUppercase),
+          _buildPasswordRequirement("Au moins un chiffre", hasDigit),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordRequirement(String requirement, bool isValid) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            isValid ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: isValid ? Colors.green : Colors.grey,
+          ),
+          SizedBox(width: 6),
+          Text(
+            requirement,
+            style: TextStyle(
+              fontSize: 11,
+              color: isValid ? Colors.green : Colors.grey.shade600,
+              fontWeight: isValid ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -672,12 +750,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _buildTabletTextField(
           controller: passwordController,
           label: "Mot de passe",
-          hint: "Minimum 6 caractères",
+          hint: "Min. 6 caractères, 1 majuscule, 1 chiffre",
           icon: Icons.lock_outline,
           isPassword: true,
           maxWidth: maxWidth,
           maxHeight: maxHeight,
         ),
+
+        SizedBox(height: maxHeight * 0.015),
+        _buildTabletPasswordValidationIndicators(maxWidth, maxHeight),
 
         SizedBox(height: maxHeight * 0.025),
 
@@ -723,6 +804,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildTabletPasswordValidationIndicators(
+      double maxWidth, double maxHeight) {
+    return Container(
+      padding: EdgeInsets.all(maxWidth * 0.02),
+      decoration: BoxDecoration(
+        color: lightBlue.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryBlue.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Exigences du mot de passe :",
+            style: TextStyle(
+              fontSize: maxWidth * 0.014,
+              fontWeight: FontWeight.bold,
+              color: primaryBlue,
+            ),
+          ),
+          SizedBox(height: maxHeight * 0.01),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "6+ caractères", hasMinLength, maxWidth)),
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "1 majuscule", hasUppercase, maxWidth)),
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "1 chiffre", hasDigit, maxWidth)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletPasswordRequirement(
+      String requirement, bool isValid, double maxWidth) {
+    return Row(
+      children: [
+        Icon(
+          isValid ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: maxWidth * 0.015,
+          color: isValid ? Colors.green : Colors.grey,
+        ),
+        SizedBox(width: maxWidth * 0.005),
+        Expanded(
+          child: Text(
+            requirement,
+            style: TextStyle(
+              fontSize: maxWidth * 0.012,
+              color: isValid ? Colors.green : Colors.grey.shade600,
+              fontWeight: isValid ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -940,9 +1084,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (passwordController.text.length < 6) {
+    if (!hasMinLength || !hasUppercase || !hasDigit) {
       setState(() {
-        errorMessage = "Le mot de passe doit contenir au moins 6 caractères";
+        errorMessage =
+            "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre";
       });
       return;
     }

@@ -110,19 +110,10 @@ final GoRouter router = GoRouter(
   ),
   routes: [
     // Écran d'accueil principal (premier écran)
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const WelcomeScreen(),
-    ),
+    GoRoute(path: '/', builder: (context, state) => const WelcomeScreen()),
     // Conserver l'ancienne route pour compatibilité
-    GoRoute(
-      path: '/signup',
-      builder: (context, state) => const SignupScreen(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
+    GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     // Nouvelles routes pour le système d'authentification
     GoRoute(
       path: '/invitation-code',
@@ -158,10 +149,7 @@ final GoRouter router = GoRouter(
         return SubscriptionConfirmedScreen(structureInfo: structureInfo);
       },
     ),
-    GoRoute(
-      path: '/admin',
-      builder: (context, state) => const AdminScreen(),
-    ),
+    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
     // Ajout de la route pour l'écran de tarification
     GoRoute(
       path: '/pricing',
@@ -211,10 +199,7 @@ final GoRouter router = GoRouter(
         return StructureInfoScreen(extraData: extraData);
       },
     ),
-    GoRoute(
-      path: '/home',
-      builder: (context, state) => HomeScreen(),
-    ),
+    GoRoute(path: '/home', builder: (context, state) => HomeScreen()),
     GoRoute(
       path: '/child-info',
       builder: (context, state) => ChildInfoScreen(),
@@ -241,8 +226,8 @@ final GoRouter router = GoRouter(
           print("⚠️ Erreur : Aucun ID d'enfant fourni pour parent-address");
           return Scaffold(
             body: Center(
-                child:
-                    Text("Erreur : Aucun ID d'enfant fourni pour l'adresse")),
+              child: Text("Erreur : Aucun ID d'enfant fourni pour l'adresse"),
+            ),
           );
         }
         print("✅ Chargement parent-address avec childId: $childId");
@@ -272,7 +257,8 @@ final GoRouter router = GoRouter(
           return Scaffold(
             body: Center(
               child: Text(
-                  "Erreur : Aucun ID d'enfant fourni pour le second parent"),
+                "Erreur : Aucun ID d'enfant fourni pour le second parent",
+              ),
             ),
           );
         }
@@ -301,7 +287,8 @@ final GoRouter router = GoRouter(
         final Map<String, dynamic> extraData =
             state.extra as Map<String, dynamic>? ?? {};
         final String childId = extraData['childId'] ?? '';
-        final String structureId = extraData['structureId'] ??
+        final String structureId =
+            extraData['structureId'] ??
             FirebaseAuth.instance.currentUser?.uid ??
             '';
 
@@ -324,7 +311,8 @@ final GoRouter router = GoRouter(
         }
 
         final String childId = extraData['childId'] ?? '';
-        final String structureId = extraData['structureId'] ??
+        final String structureId =
+            extraData['structureId'] ??
             FirebaseAuth.instance.currentUser?.uid ??
             '';
 
@@ -371,10 +359,7 @@ final GoRouter router = GoRouter(
         return ChildMealInfoScreen(childId: childId);
       },
     ),
-    GoRoute(
-      path: '/horaires',
-      builder: (context, state) => HorairesScreen(),
-    ),
+    GoRoute(path: '/horaires', builder: (context, state) => HorairesScreen()),
     // Nouvelle route pour la page test
     GoRoute(
       path: '/test-photo',
@@ -420,10 +405,7 @@ final GoRouter router = GoRouter(
       path: '/exchanges',
       builder: (context, state) => const ExchangesScreen(),
     ),
-    GoRoute(
-      path: '/stock',
-      builder: (context, state) => const StockScreen(),
-    ),
+    GoRoute(path: '/stock', builder: (context, state) => const StockScreen()),
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),
@@ -445,7 +427,8 @@ final GoRouter router = GoRouter(
         final String? childId = state.extra as String?;
         if (childId == null || childId.isEmpty) {
           print(
-              "⚠️ Erreur : Aucun ID d'enfant fourni pour child-financial-info");
+            "⚠️ Erreur : Aucun ID d'enfant fourni pour child-financial-info",
+          );
           return const Scaffold(
             body: Center(child: Text("Erreur : ID d'enfant manquant")),
           );
@@ -538,7 +521,7 @@ final GoRouter router = GoRouter(
       builder: (context, state) => SubscriptionUpgradeConfirmedScreen(
         upgradeInfo: state.extra as Map<String, dynamic>,
       ),
-    )
+    ),
   ],
 );
 

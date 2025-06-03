@@ -380,39 +380,89 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                         ? "Non renseigné"
                                         : "${_monthlySalaryController.text} €",
                                     maxWidth),
-                                SizedBox(
-                                    height: maxHeight *
-                                        0.03), // Augmenté de 0.02 à 0.03
+                                SizedBox(height: maxHeight * 0.03),
 
-// Frais d'entretien
+                                // Frais d'entretien
                                 _buildInfoRowTablet(
                                     "Frais d'entretien",
                                     _careExpensesController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_careExpensesController.text} €/jour",
                                     maxWidth),
-                                SizedBox(
-                                    height: maxHeight *
-                                        0.03), // Augmenté de 0.02 à 0.03
+                                SizedBox(height: maxHeight * 0.03),
 
-// Frais de repas
+                                // Frais de repas
                                 _buildInfoRowTablet(
                                     "Frais de repas",
                                     _mealExpensesController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_mealExpensesController.text} €/jour",
                                     maxWidth),
-                                SizedBox(
-                                    height: maxHeight *
-                                        0.03), // Augmenté de 0.02 à 0.03
+                                SizedBox(height: maxHeight * 0.03),
 
-// Frais kilométriques
+                                // Frais kilométriques
                                 _buildInfoRowTablet(
                                     "Frais km",
                                     _kmExpensesController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_kmExpensesController.text} €/km",
                                     maxWidth),
+
+                                SizedBox(height: maxHeight * 0.03),
+
+                                // Information sur l'invitation - déplacée ici
+                                Container(
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    color: primaryBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: primaryBlue.withOpacity(0.2)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.info_outline,
+                                            color: primaryBlue,
+                                            size: (maxWidth * 0.018)
+                                                .clamp(14.0, 20.0),
+                                          ),
+                                          SizedBox(
+                                              width: (maxWidth * 0.01)
+                                                  .clamp(6.0, 12.0)),
+                                          Flexible(
+                                            child: Text(
+                                              "Information importante",
+                                              style: TextStyle(
+                                                fontSize: (maxWidth * 0.016)
+                                                    .clamp(12.0, 18.0),
+                                                fontWeight: FontWeight.w600,
+                                                color: primaryBlue,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(
+                                          height: (maxHeight * 0.01)
+                                              .clamp(6.0, 12.0)),
+                                      Text(
+                                        "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
+                                        style: TextStyle(
+                                          color: primaryBlue,
+                                          fontSize: (maxWidth * 0.014)
+                                              .clamp(10.0, 16.0),
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -421,8 +471,6 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                         Expanded(
                           child: Container(
                             width: double.infinity,
-                            padding: EdgeInsets.all(
-                                (maxWidth * 0.02).clamp(12.0, 20.0)),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade50,
                               borderRadius: BorderRadius.circular(16),
@@ -641,40 +689,6 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                           ),
                         ),
                       ],
-
-                      SizedBox(height: maxHeight * 0.03),
-
-                      // Information sur l'invitation
-                      Container(
-                        padding:
-                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
-                        decoration: BoxDecoration(
-                          color: primaryBlue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: primaryBlue.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: primaryBlue,
-                                size: (maxWidth * 0.02).clamp(16.0, 24.0)),
-                            SizedBox(
-                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
-                            Expanded(
-                              child: Text(
-                                "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
-                                style: TextStyle(
-                                    color: primaryBlue,
-                                    fontSize:
-                                        (maxWidth * 0.016).clamp(12.0, 18.0)),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
 
                       SizedBox(height: maxHeight * 0.03),
 

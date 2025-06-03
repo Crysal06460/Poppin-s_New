@@ -22,6 +22,9 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
   bool isLoading = false;
   String errorMessage = '';
   bool _showPassword = false;
+  bool hasMinLength = false;
+  bool hasUppercase = false;
+  bool hasDigit = false;
 
   // Données d'invitation
   late String email;
@@ -37,11 +40,20 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
   static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
-
   @override
   void initState() {
     super.initState();
     _extractInvitationData();
+    // Écouter les changements du mot de passe pour la validation en temps réel
+    passwordController.addListener(_validatePassword);
+  }
+
+  @override
+  void dispose() {
+    passwordController.removeListener(_validatePassword);
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
   }
 
   void _extractInvitationData() {
@@ -92,6 +104,15 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           ? _buildTabletContent(context, screenSize, accentColor)
           : _buildPhoneContent(context, accentColor),
     );
+  }
+
+  void _validatePassword() {
+    final password = passwordController.text;
+    setState(() {
+      hasMinLength = password.length >= 6;
+      hasUppercase = password.contains(RegExp(r'[A-Z]'));
+      hasDigit = password.contains(RegExp(r'[0-9]'));
+    });
   }
 
   Widget _buildPhoneContent(BuildContext context, Color accentColor) {
@@ -208,7 +229,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
               decoration: InputDecoration(
                 labelText: "Mot de passe",
                 hintText: "Créez un mot de passe",
-                helperText: "Minimum 6 caractères",
+                helperText: "Min. 6 caractères, 1 majuscule, 1 chiffre",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -226,6 +247,8 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            _buildPasswordValidationIndicators(accentColor),
 
             const SizedBox(height: 20),
 
@@ -320,6 +343,58 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordValidationIndicators(Color accentColor) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: lightBlue.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accentColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Exigences du mot de passe :",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
+            ),
+          ),
+          SizedBox(height: 6),
+          _buildPasswordRequirement("Au moins 6 caractères", hasMinLength),
+          _buildPasswordRequirement("Au moins une majuscule", hasUppercase),
+          _buildPasswordRequirement("Au moins un chiffre", hasDigit),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordRequirement(String requirement, bool isValid) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            isValid ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: isValid ? Colors.green : Colors.grey,
+          ),
+          SizedBox(width: 6),
+          Text(
+            requirement,
+            style: TextStyle(
+              fontSize: 11,
+              color: isValid ? Colors.green : Colors.grey.shade600,
+              fontWeight: isValid ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -558,7 +633,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       decoration: InputDecoration(
                         labelText: "Mot de passe",
                         hintText: "Créez un mot de passe",
-                        helperText: "Minimum 6 caractères",
+                        helperText: "Min. 6 caractères, 1 majuscule, 1 chiffre",
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: maxWidth * 0.025,
                           vertical: maxHeight * 0.02,
@@ -616,6 +691,9 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       ),
                     ),
                   ),
+                  SizedBox(height: maxHeight * 0.015),
+                  _buildTabletPasswordValidationIndicators(
+                      maxWidth, maxHeight, accentColor),
 
                   SizedBox(height: maxHeight * 0.025),
 
@@ -798,6 +876,69 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
     );
   }
 
+  Widget _buildTabletPasswordValidationIndicators(
+      double maxWidth, double maxHeight, Color accentColor) {
+    return Container(
+      padding: EdgeInsets.all(maxWidth * 0.02),
+      decoration: BoxDecoration(
+        color: lightBlue.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentColor.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Exigences du mot de passe :",
+            style: TextStyle(
+              fontSize: maxWidth * 0.014,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
+            ),
+          ),
+          SizedBox(height: maxHeight * 0.01),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "6+ caractères", hasMinLength, maxWidth)),
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "1 majuscule", hasUppercase, maxWidth)),
+              Expanded(
+                  child: _buildTabletPasswordRequirement(
+                      "1 chiffre", hasDigit, maxWidth)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletPasswordRequirement(
+      String requirement, bool isValid, double maxWidth) {
+    return Row(
+      children: [
+        Icon(
+          isValid ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: maxWidth * 0.015,
+          color: isValid ? Colors.green : Colors.grey,
+        ),
+        SizedBox(width: maxWidth * 0.005),
+        Expanded(
+          child: Text(
+            requirement,
+            style: TextStyle(
+              fontSize: maxWidth * 0.012,
+              color: isValid ? Colors.green : Colors.grey.shade600,
+              fontWeight: isValid ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _createAccount() async {
     // Validation de base
     if (passwordController.text.isEmpty ||
@@ -815,9 +956,10 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
       return;
     }
 
-    if (passwordController.text.length < 6) {
+    if (!hasMinLength || !hasUppercase || !hasDigit) {
       setState(() {
-        errorMessage = "Le mot de passe doit contenir au moins 6 caractères";
+        errorMessage =
+            "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre";
       });
       return;
     }

@@ -85,7 +85,7 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: 'Poppins', // Nom mis à jour de l'application
+      title: "Poppin's", // Nom mis à jour de l'application
       scaffoldMessengerKey: scaffoldMessengerKey, // Ajout de la clé globale
 
       // Ajout des délégués de localisation

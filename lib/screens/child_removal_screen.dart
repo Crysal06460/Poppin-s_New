@@ -838,7 +838,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
         }
       }
 
-      // 2. Supprimer l'enfant des horaires
+      // 2. Supprimer l'enfant des horaires dans structures/{id}/horaires
       print("🗑️ Suppression des horaires...");
       final horairesRef = FirebaseFirestore.instance
           .collection('structures')
@@ -857,7 +857,40 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
         }
       }
 
-      // 3. Supprimer le document principal de l'enfant
+      // 3. NOUVEAU: Supprimer de horaires_history (collection racine)
+      print("🗑️ Suppression des horaires_history...");
+      final horaireHistorySnapshot = await FirebaseFirestore.instance
+          .collection('horaires_history')
+          .where('childId', isEqualTo: childId)
+          .get();
+
+      print(
+          "  - Trouvé ${horaireHistorySnapshot.docs.length} documents horaires_history");
+      for (var doc in horaireHistorySnapshot.docs) {
+        batch.delete(doc.reference);
+        print("    * Suppression horaires_history: ${doc.id}");
+      }
+
+      // 4. NOUVEAU: Supprimer aussi de structures/{id}/horaires_history si elle existe
+      try {
+        final structureHoraireHistorySnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('horaires_history')
+            .where('childId', isEqualTo: childId)
+            .get();
+
+        print(
+            "  - Trouvé ${structureHoraireHistorySnapshot.docs.length} documents structures/horaires_history");
+        for (var doc in structureHoraireHistorySnapshot.docs) {
+          batch.delete(doc.reference);
+          print("    * Suppression structures/horaires_history: ${doc.id}");
+        }
+      } catch (e) {
+        print("Info: Pas de collection horaires_history dans la structure: $e");
+      }
+
+      // 5. Supprimer le document principal de l'enfant
       print("🗑️ Suppression du document principal de l'enfant...");
       final childRef = FirebaseFirestore.instance
           .collection('structures')
@@ -867,7 +900,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
 
       batch.delete(childRef);
 
-      // 4. Exécuter toutes les suppressions
+      // 6. Exécuter toutes les suppressions
       print("🗑️ Exécution du batch de suppression...");
       await batch.commit();
 
@@ -979,14 +1012,37 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       }
     }
 
-    // Horaires dans collection séparée
-    final horaireSnapshot = await FirebaseFirestore.instance
+    // CORRECTION: Supprimer aussi dans horaires_history (collection racine)
+    final horaireHistorySnapshot = await FirebaseFirestore.instance
         .collection('horaires_history')
         .where('childId', isEqualTo: childId)
         .get();
 
-    for (var doc in horaireSnapshot.docs) {
+    print(
+        "🗑️ Suppression horaires_history: ${horaireHistorySnapshot.docs.length} documents");
+    for (var doc in horaireHistorySnapshot.docs) {
       batch.delete(doc.reference);
+      print("  - Suppression horaires_history doc: ${doc.id}");
+    }
+
+    // CORRECTION: Supprimer aussi dans structures/{id}/horaires_history si elle existe
+    try {
+      final structureHoraireHistorySnapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('horaires_history')
+          .where('childId', isEqualTo: childId)
+          .get();
+
+      print(
+          "🗑️ Suppression structures/horaires_history: ${structureHoraireHistorySnapshot.docs.length} documents");
+      for (var doc in structureHoraireHistorySnapshot.docs) {
+        batch.delete(doc.reference);
+        print("  - Suppression structures/horaires_history doc: ${doc.id}");
+      }
+    } catch (e) {
+      print(
+          "Info: Pas de collection horaires_history dans la structure (normal): $e");
     }
 
     // L'enfant lui-même
@@ -997,6 +1053,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
         .doc(childId));
 
     await batch.commit();
+    print("✅ Suppression complète terminée pour l'enfant $childId");
   }
 
   // POPUP D'AVERTISSEMENT RENFORCÉ

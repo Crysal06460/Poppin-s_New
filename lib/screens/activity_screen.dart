@@ -52,14 +52,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
     "Lecture",
     "Jeux",
     "Danse",
-    "Autre"
+    "Autre",
   ];
 
   List<String> customActivityTypes = [];
 
   // Combinaison des activités standards et personnalisées
-  List<String> get activityTypes =>
-      [...standardActivityTypes, ...customActivityTypes];
+  List<String> get activityTypes => [
+    ...standardActivityTypes,
+    ...customActivityTypes,
+  ];
 
   // Liste des durées disponibles
   final List<String> durations = [
@@ -70,7 +72,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     "1 heure 15",
     "1 heure 30",
     "1 heure 45",
-    "2 heures"
+    "2 heures",
   ];
 
   int _getParticipationLevel(String level) {
@@ -136,7 +138,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Future<void> _selectActivityTime(
-      StateSetter setState, Function(String) onTimeSelected) async {
+    StateSetter setState,
+    Function(String) onTimeSelected,
+  ) async {
     // Obtenir l'heure actuelle ou celle déjà saisie
     TimeOfDay initialTime;
     if (_activityTime.isNotEmpty) {
@@ -163,18 +167,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
               dialHandColor: primaryColor,
               dialBackgroundColor: lightBlue.withOpacity(0.2),
               // Fix pour le rectangle bleu
-              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
-                  states.contains(MaterialState.selected)
-                      ? primaryColor.withOpacity(0.15)
-                      : Colors.transparent),
+              hourMinuteColor: MaterialStateColor.resolveWith(
+                (states) => states.contains(MaterialState.selected)
+                    ? primaryColor.withOpacity(0.15)
+                    : Colors.transparent,
+              ),
               // Forme pour les conteneurs heure/minute
               hourMinuteShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: primaryColor,
-              ),
+              style: TextButton.styleFrom(foregroundColor: primaryColor),
             ),
           ),
           child: child!,
@@ -211,8 +215,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .get();
 
       if (customActivitiesDoc.exists) {
-        final items =
-            List<String>.from(customActivitiesDoc.data()?['items'] ?? []);
+        final items = List<String>.from(
+          customActivitiesDoc.data()?['items'] ?? [],
+        );
 
         setState(() {
           customActivityTypes = items;
@@ -248,9 +253,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .collection('settings')
           .doc('customActivityTypes')
           .set({
-        'items': customActivityTypes,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'items': customActivityTypes,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -276,7 +281,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
-// Fonction modifiée pour le dialogue d'ajout d'activité personnalisée
+  // Fonction modifiée pour le dialogue d'ajout d'activité personnalisée
   void _showAddCustomActivityDialogFromActivityPopup(String childId) {
     newActivityController.text = '';
 
@@ -307,10 +312,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 // Réafficher le popup d'ajout d'activité
                 _showAddActivityPopup(childId);
               },
-              child: Text(
-                'ANNULER',
-                style: TextStyle(color: Colors.grey),
-              ),
+              child: Text('ANNULER', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -327,10 +329,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Text(
-                'AJOUTER',
-                style: TextStyle(color: Colors.white),
-              ),
+              child: Text('AJOUTER', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -358,9 +357,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .collection('settings')
           .doc('customActivityTypes')
           .set({
-        'items': customActivityTypes,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'items': customActivityTypes,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -409,13 +408,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Activités: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+            "🔄 Activités: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId",
+          );
         }
       }
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
-      final capitalizedWeekday = todayWeekday[0].toUpperCase() +
+      final capitalizedWeekday =
+          todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
       // Récupérer la structure pour déterminer le type
@@ -434,7 +435,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       final String structureType = structureSnapshot.exists
           ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
+                "AssistanteMaternelle")
           : "AssistanteMaternelle";
 
       // Récupérer tous les enfants de la structure
@@ -445,8 +446,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .get();
 
       // Liste complète de tous les enfants
-      List<Map<String, dynamic>> allChildren =
-          snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+      List<Map<String, dynamic>> allChildren = snapshot.docs
+          .map((doc) => {...doc.data(), 'id': doc.id})
+          .toList();
 
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
@@ -460,19 +462,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
         }).toList();
 
         print(
-            "👨‍👧‍👦 Activités: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          "👨‍👧‍👦 Activités: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)",
+        );
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
         print(
-            "👩‍👧‍👦 Activités: Assistante Maternelle - affichage de tous les enfants");
+          "👩‍👧‍👦 Activités: Assistante Maternelle - affichage de tous les enfants",
+        );
       }
 
       // Diagnostic des enfants filtrés
       print(
-          "🔍 DIAGNOSTIC ACTIVITÉS - Type de structure: $structureType, Utilisateur: $currentUserEmail");
+        "🔍 DIAGNOSTIC ACTIVITÉS - Type de structure: $structureType, Utilisateur: $currentUserEmail",
+      );
       print(
-          "🔍 DIAGNOSTIC ACTIVITÉS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
+        "🔍 DIAGNOSTIC ACTIVITÉS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}",
+      );
 
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       List<Map<String, dynamic>> tempEnfants = [];
@@ -529,8 +535,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
             color: primaryColor.withOpacity(0.2),
             borderRadius: BorderRadius.circular(4),
           ),
-          child:
-              Icon(_getActivityTypeIcon(type), color: primaryColor, size: 20),
+          child: Icon(
+            _getActivityTypeIcon(type),
+            color: primaryColor,
+            size: 20,
+          ),
         ),
         SizedBox(width: 8),
         Text(
@@ -555,16 +564,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(
-            horizontal:
-                isTabletDevice ? MediaQuery.of(context).size.width * 0.25 : 20,
+            horizontal: isTabletDevice
+                ? MediaQuery.of(context).size.width * 0.25
+                : 20,
             vertical: 20,
           ),
           child: Container(
             width: double.infinity,
-            constraints: BoxConstraints(
-              maxWidth: 500,
-              minWidth: 250,
-            ),
+            constraints: BoxConstraints(maxWidth: 500, minWidth: 250),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
@@ -587,10 +594,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          primaryColor,
-                          primaryColor.withOpacity(0.85),
-                        ],
+                        colors: [primaryColor, primaryColor.withOpacity(0.85)],
                       ),
                       borderRadius: BorderRadius.vertical(
                         top: Radius.circular(24),
@@ -701,9 +705,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   activityData['participationLevel'] ?? 0,
                                   (index) => Padding(
                                     padding: EdgeInsets.only(
-                                      right: index <
-                                              (activityData[
-                                                          'participationLevel'] ??
+                                      right:
+                                          index <
+                                              (activityData['participationLevel'] ??
                                                       0) -
                                                   1
                                           ? 4
@@ -831,10 +835,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                'ANNULER',
-                style: TextStyle(color: Colors.grey),
-              ),
+              child: Text('ANNULER', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -849,10 +850,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Text(
-                'AJOUTER',
-                style: TextStyle(color: Colors.white),
-              ),
+              child: Text('AJOUTER', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -878,10 +876,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ? Center(
                         child: Text(
                           'Aucune activité personnalisée',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       )
                     : ListView.builder(
@@ -891,12 +886,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           return ListTile(
                             title: Text(customActivityTypes[index]),
                             trailing: IconButton(
-                              icon:
-                                  Icon(Icons.delete_outline, color: Colors.red),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
                               onPressed: () {
                                 Navigator.pop(context);
                                 _removeCustomActivity(
-                                    customActivityTypes[index]);
+                                  customActivityTypes[index],
+                                );
                               },
                             ),
                           );
@@ -906,10 +904,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'FERMER',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: Text('FERMER', style: TextStyle(color: Colors.grey)),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -922,10 +917,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
-                    'AJOUTER',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  child: Text('AJOUTER', style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -967,7 +959,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
               // Largeur adaptée pour iPad
               insetPadding: isTabletDevice
                   ? EdgeInsets.symmetric(
-                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                      horizontal: MediaQuery.of(context).size.width * 0.25,
+                    )
                   : EdgeInsets.symmetric(horizontal: 20),
               child: SingleChildScrollView(
                 // Ajout d'un SingleChildScrollView englobant pour éviter le débordement
@@ -1014,9 +1007,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         child: Row(
                           children: [
                             Container(
-                              padding: EdgeInsets.all(isTabletDevice
-                                  ? 12
-                                  : 10), // Plus petit sur les petits écrans
+                              padding: EdgeInsets.all(
+                                isTabletDevice ? 12 : 10,
+                              ), // Plus petit sur les petits écrans
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
@@ -1058,9 +1051,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                       // Contenu du formulaire avec padding
                       Padding(
-                        padding: EdgeInsets.all(isTabletDevice
-                            ? 24
-                            : 16), // Réduit sur les petits écrans
+                        padding: EdgeInsets.all(
+                          isTabletDevice ? 24 : 16,
+                        ), // Réduit sur les petits écrans
                         child: Column(
                           mainAxisSize:
                               MainAxisSize.min, // Assure une taille minimale
@@ -1069,9 +1062,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             // Section Heure de l'activité
                             Container(
                               margin: EdgeInsets.only(
-                                  bottom: isTabletDevice
-                                      ? 24
-                                      : 16), // Moins d'espace vertical
+                                bottom: isTabletDevice ? 24 : 16,
+                              ), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1085,20 +1077,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   InkWell(
-                                    onTap: () =>
-                                        _selectActivityTime(setState, (time) {
+                                    onTap: () => _selectActivityTime(setState, (
+                                      time,
+                                    ) {
                                       localActivityTime =
                                           time; // Utiliser localActivityTime, pas localSiesteTime
                                       errorMessage = null;
                                     }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
-                                          vertical: 16, horizontal: 20),
+                                        vertical: 16,
+                                        horizontal: 20,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: lightBlue,
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: localActivityTime
+                                          color:
+                                              localActivityTime
                                                   .isEmpty // Utiliser localActivityTime
                                               ? Colors.transparent
                                               : primaryColor.withOpacity(0.5),
@@ -1115,13 +1111,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                                 ? 'Choisir l\'heure'
                                                 : localActivityTime, // Utiliser localActivityTime
                                             style: TextStyle(
-                                              fontSize:
-                                                  isTabletDevice ? 18 : 16,
-                                              color: localActivityTime
+                                              fontSize: isTabletDevice
+                                                  ? 18
+                                                  : 16,
+                                              color:
+                                                  localActivityTime
                                                       .isEmpty // Utiliser localActivityTime
                                                   ? Colors.grey.shade600
                                                   : primaryColor,
-                                              fontWeight: localActivityTime
+                                              fontWeight:
+                                                  localActivityTime
                                                       .isEmpty // Utiliser localActivityTime
                                                   ? FontWeight.normal
                                                   : FontWeight.w600,
@@ -1129,8 +1128,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                           ),
                                           Icon(
                                             Icons.access_time_rounded,
-                                            color:
-                                                primaryColor.withOpacity(0.7),
+                                            color: primaryColor.withOpacity(
+                                              0.7,
+                                            ),
                                             size: isTabletDevice ? 24 : 20,
                                           ),
                                         ],
@@ -1144,9 +1144,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             // Section Type d'activité
                             Container(
                               margin: EdgeInsets.only(
-                                  bottom: isTabletDevice
-                                      ? 24
-                                      : 16), // Moins d'espace vertical
+                                bottom: isTabletDevice ? 24 : 16,
+                              ), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1160,8 +1159,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   Container(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: lightBlue.withOpacity(0.5),
                                       borderRadius: BorderRadius.circular(16),
@@ -1171,8 +1171,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       ),
                                     ),
                                     child: DropdownButton<String>(
-                                      value: (organizedActivityTypes.contains(
-                                                  localActivityType) &&
+                                      value:
+                                          (organizedActivityTypes.contains(
+                                                localActivityType,
+                                              ) &&
                                               localActivityType !=
                                                   "_separator_")
                                           ? localActivityType
@@ -1184,8 +1186,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         Icons.arrow_drop_down,
                                         color: primaryColor,
                                       ),
-                                      items: organizedActivityTypes
-                                          .map((String value) {
+                                      items: organizedActivityTypes.map((
+                                        String value,
+                                      ) {
                                         if (value == "_separator_") {
                                           // Séparateur entre activités personnalisées et standards
                                           return DropdownMenuItem<String>(
@@ -1194,20 +1197,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                               height: 1,
                                               color: Colors.grey.shade300,
                                               margin: EdgeInsets.symmetric(
-                                                  vertical: 4),
+                                                vertical: 4,
+                                              ),
                                             ),
                                           );
-                                        } else if (customActivityTypes
-                                            .contains(value)) {
+                                        } else if (customActivityTypes.contains(
+                                          value,
+                                        )) {
                                           // Style spécial pour les activités personnalisées
                                           return DropdownMenuItem<String>(
                                             value: value,
                                             child: Container(
                                               padding: EdgeInsets.symmetric(
-                                                  vertical: 10),
+                                                vertical: 10,
+                                              ),
                                               decoration: BoxDecoration(
-                                                color: primaryColor
-                                                    .withOpacity(0.1),
+                                                color: primaryColor.withOpacity(
+                                                  0.1,
+                                                ),
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
@@ -1242,12 +1249,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                             value: value,
                                             child: Padding(
                                               padding: EdgeInsets.symmetric(
-                                                  vertical: 8),
+                                                vertical: 8,
+                                              ),
                                               child: Text(
                                                 value,
                                                 style: TextStyle(
-                                                  fontSize:
-                                                      isTabletDevice ? 16 : 14,
+                                                  fontSize: isTabletDevice
+                                                      ? 16
+                                                      : 14,
                                                   color: Colors.grey.shade800,
                                                 ),
                                               ),
@@ -1277,12 +1286,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     child: TextButton.icon(
                                       onPressed: () {
                                         Navigator.pop(
-                                            context); // Ferme le popup actuel
+                                          context,
+                                        ); // Ferme le popup actuel
                                         _showAddCustomActivityDialogFromActivityPopup(
-                                            childId);
+                                          childId,
+                                        );
                                       },
-                                      icon: Icon(Icons.add_circle,
-                                          color: primaryColor),
+                                      icon: Icon(
+                                        Icons.add_circle,
+                                        color: primaryColor,
+                                      ),
                                       label: Text(
                                         "Ajouter une activité personnalisée",
                                         style: TextStyle(
@@ -1292,8 +1305,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         ),
                                       ),
                                       style: TextButton.styleFrom(
-                                        padding:
-                                            EdgeInsets.symmetric(vertical: 8),
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
                                         alignment: Alignment.centerLeft,
                                       ),
                                     ),
@@ -1305,9 +1319,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             // Section Durée de l'activité
                             Container(
                               margin: EdgeInsets.only(
-                                  bottom: isTabletDevice
-                                      ? 24
-                                      : 16), // Moins d'espace vertical
+                                bottom: isTabletDevice ? 24 : 16,
+                              ), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1321,8 +1334,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ),
                                   SizedBox(height: 12),
                                   Container(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: lightBlue.withOpacity(0.5),
                                       borderRadius: BorderRadius.circular(16),
@@ -1345,12 +1359,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                           value: value,
                                           child: Padding(
                                             padding: EdgeInsets.symmetric(
-                                                vertical: 8),
+                                              vertical: 8,
+                                            ),
                                             child: Text(
                                               value,
                                               style: TextStyle(
-                                                fontSize:
-                                                    isTabletDevice ? 16 : 14,
+                                                fontSize: isTabletDevice
+                                                    ? 16
+                                                    : 14,
                                                 color: Colors.grey.shade800,
                                               ),
                                             ),
@@ -1376,9 +1392,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             // Section Participation
                             Container(
                               margin: EdgeInsets.only(
-                                  bottom: isTabletDevice
-                                      ? 24
-                                      : 16), // Moins d'espace vertical
+                                bottom: isTabletDevice ? 24 : 16,
+                              ), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1458,9 +1473,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             // Section Observations
                             Container(
                               margin: EdgeInsets.only(
-                                  bottom: isTabletDevice
-                                      ? 24
-                                      : 16), // Moins d'espace vertical
+                                bottom: isTabletDevice ? 24 : 16,
+                              ), // Moins d'espace vertical
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1491,22 +1505,30 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         hintText:
                                             "Précisions sur l'activité...",
                                         hintStyle: TextStyle(
-                                            color: Colors.grey.shade400),
+                                          color: Colors.grey.shade400,
+                                        ),
                                         border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: BorderSide(
-                                              color: Colors.grey.shade200,
-                                              width: 1),
+                                            color: Colors.grey.shade200,
+                                            width: 1,
+                                          ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: BorderSide(
-                                              color: primaryColor, width: 2),
+                                            color: primaryColor,
+                                            width: 2,
+                                          ),
                                         ),
                                         contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 16),
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
                                       ),
                                       maxLines: 3,
                                       style: TextStyle(
@@ -1529,8 +1551,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.red.shade50,
                                     borderRadius: BorderRadius.circular(12),
-                                    border:
-                                        Border.all(color: Colors.red.shade200),
+                                    border: Border.all(
+                                      color: Colors.red.shade200,
+                                    ),
                                   ),
                                   child: Text(
                                     errorMessage!,
@@ -1554,13 +1577,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   },
                                   style: OutlinedButton.styleFrom(
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: isTabletDevice ? 24 : 16,
-                                        vertical: isTabletDevice ? 16 : 12),
+                                      horizontal: isTabletDevice ? 24 : 16,
+                                      vertical: isTabletDevice ? 16 : 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
-                                    side:
-                                        BorderSide(color: Colors.grey.shade300),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
                                   ),
                                   child: Text(
                                     "ANNULER",
@@ -1605,8 +1630,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     backgroundColor: primaryColor,
                                     elevation: 2,
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: isTabletDevice ? 32 : 24,
-                                        vertical: isTabletDevice ? 16 : 12),
+                                      horizontal: isTabletDevice ? 32 : 24,
+                                      vertical: isTabletDevice ? 16 : 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -1636,7 +1662,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-// Nouveau bouton de participation moderne
+  // Nouveau bouton de participation moderne
   Widget _buildParticipationButtonModern(
     String level,
     String selectedLevel,
@@ -1706,11 +1732,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: iconColor,
-              size: isTablet ? 20 : 18,
-            ),
+            Icon(icon, color: iconColor, size: isTablet ? 20 : 18),
             SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -1741,8 +1763,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color:
-              isSelected ? primaryColor.withOpacity(0.2) : Colors.grey.shade200,
+          color: isSelected
+              ? primaryColor.withOpacity(0.2)
+              : Colors.grey.shade200,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? primaryColor : Colors.transparent,
@@ -1862,7 +1885,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ],
                   ),
                   child: Center(
-                    child: enfant['photoUrl'] != null &&
+                    child:
+                        enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
                         ? ClipOval(
                             child: Image.network(
@@ -1872,13 +1896,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
+                                    enfant['prenom'][0].toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                             ),
                           )
                         : Text(
@@ -1925,23 +1949,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('structures')
-                .doc(enfant['structureId'] ??
-                    FirebaseAuth.instance.currentUser?.uid)
+                .doc(
+                  enfant['structureId'] ??
+                      FirebaseAuth.instance.currentUser?.uid,
+                )
                 .collection('children')
                 .doc(enfant['id'])
                 .collection('activites')
-                .where('date',
-                    isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
-                    ))
-                .where('date',
-                    isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
-                    ).add(Duration(days: 1)))
+                .where(
+                  'date',
+                  isGreaterThanOrEqualTo: DateTime(
+                    DateTime.now().year,
+                    DateTime.now().month,
+                    DateTime.now().day,
+                  ),
+                )
+                .where(
+                  'date',
+                  isLessThan: DateTime(
+                    DateTime.now().year,
+                    DateTime.now().month,
+                    DateTime.now().day,
+                  ).add(Duration(days: 1)),
+                )
                 .orderBy('date', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
@@ -1982,13 +2012,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   return GestureDetector(
                     onTap: () => _showActivityDetailsPopup(activityData),
                     child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: primaryColor.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: primaryColor.withOpacity(0.1)),
+                        border: Border.all(
+                          color: primaryColor.withOpacity(0.1),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -2082,13 +2115,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                   )
                 : enfants.isEmpty
-                    ? _buildEmptyState()
-                    : isTabletDevice
-                        ? _buildTabletLayout() // Layout adapté pour iPad
-                        : ListView.builder(
-                            itemCount: enfants.length,
-                            itemBuilder: _buildEnfantCard,
-                          ),
+                ? _buildEmptyState()
+                : isTabletDevice
+                ? _buildTabletLayout() // Layout adapté pour iPad
+                : ListView.builder(
+                    itemCount: enfants.length,
+                    itemBuilder: _buildEnfantCard,
+                  ),
           ),
         ],
       ),
@@ -2102,7 +2135,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-// Nouveau layout pour iPad - affiche les enfants dans une grille
+  // Nouveau layout pour iPad - affiche les enfants dans une grille
   Widget _buildTabletLayout() {
     return GridView.builder(
       padding: EdgeInsets.all(16),
@@ -2118,7 +2151,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-// Carte enfant adaptée pour iPad
+  // Carte enfant adaptée pour iPad
   // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
@@ -2162,7 +2195,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: ClipOval(
-                    child: enfant['photoUrl'] != null &&
+                    child:
+                        enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
                         ? Image.network(
                             enfant['photoUrl'],
@@ -2236,23 +2270,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('structures')
-                  .doc(enfant['structureId'] ??
-                      FirebaseAuth.instance.currentUser?.uid)
+                  .doc(
+                    enfant['structureId'] ??
+                        FirebaseAuth.instance.currentUser?.uid,
+                  )
                   .collection('children')
                   .doc(enfant['id'])
                   .collection('activites')
-                  .where('date',
-                      isGreaterThanOrEqualTo: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ))
-                  .where('date',
-                      isLessThan: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      ).add(Duration(days: 1)))
+                  .where(
+                    'date',
+                    isGreaterThanOrEqualTo: DateTime(
+                      DateTime.now().year,
+                      DateTime.now().month,
+                      DateTime.now().day,
+                    ),
+                  )
+                  .where(
+                    'date',
+                    isLessThan: DateTime(
+                      DateTime.now().year,
+                      DateTime.now().month,
+                      DateTime.now().day,
+                    ).add(Duration(days: 1)),
+                  )
                   .orderBy('date', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -2293,18 +2333,22 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   itemCount: snapshot.data!.docs.length,
                   separatorBuilder: (context, index) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final activityData = snapshot.data!.docs[index].data()
-                        as Map<String, dynamic>;
+                    final activityData =
+                        snapshot.data!.docs[index].data()
+                            as Map<String, dynamic>;
                     return GestureDetector(
                       onTap: () => _showActivityDetailsPopup(activityData),
                       child: Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         decoration: BoxDecoration(
                           color: primaryColor.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: primaryColor.withOpacity(0.1)),
+                          border: Border.all(
+                            color: primaryColor.withOpacity(0.1),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -2392,10 +2436,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            primaryColor,
-            primaryColor.withOpacity(0.85),
-          ],
+          colors: [primaryColor, primaryColor.withOpacity(0.85)],
         ),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
@@ -2413,11 +2454,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
         child: Padding(
           // Plus de padding vertical pour iPad
           padding: EdgeInsets.fromLTRB(
-              16,
-              isTabletDevice ? 24 : 16, // Augmenté pour iPad
-              16,
-              isTabletDevice ? 28 : 20 // Augmenté pour iPad
-              ),
+            16,
+            isTabletDevice ? 24 : 16, // Augmenté pour iPad
+            16,
+            isTabletDevice ? 28 : 20, // Augmenté pour iPad
+          ),
           child: Column(
             children: [
               // Première ligne: nom structure et date
@@ -2428,8 +2469,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     child: Text(
                       structureName,
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
+                        fontSize: isTabletDevice
+                            ? 28
+                            : 24, // Plus grand pour iPad
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -2438,8 +2480,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ),
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal:
-                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
+                      horizontal: isTabletDevice
+                          ? 16
+                          : 12, // Plus grand pour iPad
                       vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
                     ),
                     decoration: BoxDecoration(
@@ -2449,8 +2492,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     child: Text(
                       DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
+                        fontSize: isTabletDevice
+                            ? 16
+                            : 14, // Plus grand pour iPad
                         color: Colors.white.withOpacity(0.95),
                         fontWeight: FontWeight.w500,
                       ),
@@ -2459,7 +2503,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ],
               ),
               SizedBox(
-                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
+                height: isTabletDevice ? 22 : 15,
+              ), // Plus d'espace pour iPad
               // Icône et titre de la page
               Container(
                 padding: EdgeInsets.symmetric(
@@ -2468,9 +2513,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ),
                 decoration: BoxDecoration(
                   border: Border.all(
-                      color: Colors.white,
-                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                      ),
+                    color: Colors.white,
+                    width: isTabletDevice ? 2.5 : 2, // Plus épais pour iPad
+                  ),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -2487,13 +2532,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       ),
                     ),
                     SizedBox(
-                        width:
-                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
+                      width: isTabletDevice ? 12 : 8,
+                    ), // Plus d'espace pour iPad
                     Text(
                       'Activités',
                       style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
+                        fontSize: isTabletDevice
+                            ? 24
+                            : 20, // Plus grand pour iPad
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),

@@ -34,7 +34,7 @@ class _SubscriptionConfirmedScreenState
     _saveSubscriptionInfo();
   }
 
-  // Fonction pour sauvegarder les informations d'abonnement
+  // FONCTION MODIFIÉE : Sauvegarder les informations d'abonnement avec les prix
   Future<void> _saveSubscriptionInfo() async {
     try {
       setState(() {
@@ -45,6 +45,13 @@ class _SubscriptionConfirmedScreenState
           widget.structureInfo['structureType'] ?? 'assistante_maternelle';
       final String structureId = widget.structureInfo['structureId'] ?? '';
       final int memberCount = widget.structureInfo['memberCount'] ?? 1;
+
+      // NOUVELLES DONNÉES : Récupérer les informations de prix
+      final double priceAmount = widget.structureInfo['priceAmount'] ?? 0.0;
+      final String priceDisplay = widget.structureInfo['priceDisplay'] ?? '';
+      final String currency = widget.structureInfo['currency'] ?? 'EUR';
+      final String billingPeriod =
+          widget.structureInfo['billingPeriod'] ?? 'monthly';
 
       // Obtenir l'utilisateur courant
       final User? currentUser = FirebaseAuth.instance.currentUser;
@@ -59,10 +66,16 @@ class _SubscriptionConfirmedScreenState
         'createdAt': FieldValue.serverTimestamp(),
         'trialEndsAt':
             Timestamp.fromDate(DateTime.now().add(Duration(days: 7))),
+        // NOUVELLES DONNÉES DE PRIX AJOUTÉES
+        'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
+        'priceDisplay': priceDisplay, // Prix formaté (ex: "22 € / mois")
+        'currency': currency, // Devise (ex: "EUR")
+        'billingPeriod': billingPeriod, // Période (ex: "monthly")
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       print(
-          "✅ Abonnement enregistré dans Firestore: type=$structureType, membres=$memberCount");
+          "✅ Abonnement enregistré dans Firestore: type=$structureType, membres=$memberCount, prix=$priceAmount $currency");
 
       // 2. Mettre à jour le document principal de la structure avec le maxMemberCount
       await FirebaseFirestore.instance
@@ -72,9 +85,13 @@ class _SubscriptionConfirmedScreenState
         'maxMemberCount': memberCount,
         'subscriptionActive': true,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+        // OPTIONNEL : Ajouter aussi les infos de prix dans la structure
+        'currentPriceAmount': priceAmount,
+        'currentPriceDisplay': priceDisplay,
       });
 
-      print("✅ Structure mise à jour avec maxMemberCount=$memberCount");
+      print(
+          "✅ Structure mise à jour avec maxMemberCount=$memberCount et prix=$priceAmount");
 
       setState(() {
         _isSaving = false;
@@ -87,7 +104,31 @@ class _SubscriptionConfirmedScreenState
     }
   }
 
-  // Remplacer la méthode build existante par celle-ci
+  // MÉTHODE MODIFIÉE : Calculer le prix pour l'affichage (si les données ne sont pas passées)
+  String _getPrice(String structureType, int memberCount) {
+    // Vérifier d'abord si le prix formaté est disponible dans les données
+    if (widget.structureInfo['priceDisplay'] != null &&
+        widget.structureInfo['priceDisplay'].toString().isNotEmpty) {
+      return widget.structureInfo['priceDisplay'];
+    }
+
+    // Sinon, calculer le prix comme avant (fallback)
+    final bool isMam = structureType == 'MAM';
+    if (isMam) {
+      switch (memberCount) {
+        case 2:
+          return '22 € / mois';
+        case 3:
+          return '32 € / mois';
+        case 4:
+          return '40 € / mois';
+        default:
+          return '22 € / mois';
+      }
+    } else {
+      return '12 € / mois';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,25 +151,8 @@ class _SubscriptionConfirmedScreenState
       'MAM': 'Maison d\'Assistantes Maternelles',
     };
 
-    // Déterminer le prix selon le type et le nombre de membres
-    String price;
-    if (isMam) {
-      switch (memberCount) {
-        case 2:
-          price = '22 € / mois';
-          break;
-        case 3:
-          price = '32 € / mois';
-          break;
-        case 4:
-          price = '40 € / mois';
-          break;
-        default:
-          price = '22 € / mois';
-      }
-    } else {
-      price = '12 € / mois';
-    }
+    // MODIFICATION : Utiliser la nouvelle méthode pour obtenir le prix
+    String price = _getPrice(structureType, memberCount);
 
     // Obtenir le nom d'affichage
     String displayName = structureDisplayNames[structureType] ?? "Structure";
@@ -161,7 +185,7 @@ class _SubscriptionConfirmedScreenState
     );
   }
 
-// Méthode pour la version iPhone (garder exactement comme avant)
+  // Méthode pour la version iPhone (garder exactement comme avant)
   Widget _buildPhoneContent(Color primaryColor, String displayName,
       String price, int memberCount, bool isMam) {
     return SafeArea(

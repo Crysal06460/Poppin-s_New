@@ -44,6 +44,8 @@ dependencies:
   shared_preferences: ^2.2.0
   in_app_purchase: ^3.1.5
   flutter_app_badger: ^1.5.0
+  image_gallery_saver: ^2.0.3
+  
   
   # Ajouts pour le support d'email
   mailer: ^6.0.1
@@ -93,3 +95,5 @@ flutter:
     - assets/images/maison_icon.png
     - assets/images/Icone_Structure.png
     - assets/images/parapluie.png
+    - assets/images/gateau-danniversaire.png
+    - assets/images/app_icon.png

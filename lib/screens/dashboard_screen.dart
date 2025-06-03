@@ -17,6 +17,8 @@ import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
 import 'package:poppins_app/screens/child_history_detail_screen.dart';
 import 'package:poppins_app/screens/history_date_selection_screen.dart';
+import '../services/photo_cleanup_service.dart';
+import '../screens/admin_cleanup_screen.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -41,6 +43,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool? hasFreezer;
   int _abacusClickCount = 0;
   int _selectedSection = 0;
+  bool? hasAssmatFridge; // null = pas encore défini, true = oui, false = non
+  bool? hasAssmatFreezer; // null = pas encore défini, true = oui, false = non
+  bool showAssmatFridgeChoice = false;
+  bool showAssmatFreezerChoice = false;
+  bool needAssmatFridgeTemperatureCheck = false;
+  bool needAssmatFreezerTemperatureCheck = false;
 
   // Définition des couleurs de la palette
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -66,12 +74,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     currentMemberCount = 1;
     needFridgeTemperatureCheck = false;
     needFreezerTemperatureCheck = false; // NOUVEAU
+    hasAssmatFridge = null;
+    hasAssmatFreezer = null;
+    needAssmatFridgeTemperatureCheck = false;
+    needAssmatFreezerTemperatureCheck = false;
 
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadData();
       _checkMonthlyTableEnabled();
       _checkIfMAMStructure();
     });
+  }
+
+  void _showPhotoAdministration() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminCleanupScreen(),
+      ),
+    );
   }
 
   // Ajout de la méthode pour gérer le fonctionnement de la MAM
@@ -313,23 +334,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         print("Type de structure trouvé: $structureType, isMAM = $isMam");
 
-        // Si c'est une MAM, récupérer les informations sur les membres
-        int maxMembers = 1; // Par défaut (pour AssistanteMaternelle)
-        int currentMembers = 1; // Par défaut
-        bool? structureHasFreezer; // ✅ CORRECT - nullable
-
         if (isMam) {
-          // Récupérer le nombre max de membres de l'abonnement
+          // Code existant pour MAM
+          int maxMembers = 1;
+          int currentMembers = 1;
+          bool? structureHasFreezer;
+
           if (data.containsKey('maxMemberCount')) {
             maxMembers = data['maxMemberCount'] ?? 3;
           } else if (data.containsKey('subscription') &&
               data['subscription'] != null) {
             maxMembers = data['subscription']['maxMembers'] ?? 3;
           } else {
-            maxMembers = 3; // Valeur par défaut pour une MAM
+            maxMembers = 3;
           }
 
-          // Compter le nombre actuel de membres
           final membersSnapshot = await FirebaseFirestore.instance
               .collection('structures')
               .doc(structureId)
@@ -338,41 +357,517 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           currentMembers = membersSnapshot.docs.length;
 
-          // Vérifier si la structure a un congélateur
           if (data.containsKey('hasFreezer')) {
             structureHasFreezer = data['hasFreezer'] as bool;
           } else {
-            structureHasFreezer = null; // Première fois, pas encore configuré
+            structureHasFreezer = null;
           }
 
           print(
               "MAM détectée: $currentMembers/$maxMembers membres, congélateur: $structureHasFreezer");
 
-          // Si c'est une MAM, vérifier l'état des températures
           _checkFridgeTemperatureStatus(structureId);
           if (structureHasFreezer == true) {
             _checkFreezerTemperatureStatus(structureId);
           }
-        } else {
-          print(
-              "AssistanteMaternelle détectée, pas d'affichage des options MAM");
-        }
 
-        // Mettre à jour l'état
-        setState(() {
-          isMAMStructure = isMam;
-          maxMemberCount = maxMembers;
-          currentMemberCount = currentMembers;
-          hasFreezer = structureHasFreezer;
-        });
+          setState(() {
+            isMAMStructure = isMam;
+            maxMemberCount = maxMembers;
+            currentMemberCount = currentMembers;
+            hasFreezer = structureHasFreezer;
+          });
+        } else {
+          // NOUVEAU CODE pour Assistante Maternelle
+          print("AssistanteMaternelle détectée, vérification des équipements");
+
+          bool? assmatFridge;
+          bool? assmatFreezer;
+
+          // Vérifier si l'assistante maternelle a un frigo
+          if (data.containsKey('hasAssmatFridge')) {
+            assmatFridge = data['hasAssmatFridge'] as bool;
+          } else {
+            assmatFridge = null; // Première fois, pas encore configuré
+          }
+
+          // Vérifier si l'assistante maternelle a un congélateur
+          if (data.containsKey('hasAssmatFreezer')) {
+            assmatFreezer = data['hasAssmatFreezer'] as bool;
+          } else {
+            assmatFreezer = null; // Première fois, pas encore configuré
+          }
+
+          print(
+              "Assistante Maternelle - Frigo: $assmatFridge, Congélateur: $assmatFreezer");
+
+          // Vérifier les températures si les équipements sont configurés
+          if (assmatFridge == true) {
+            _checkAssmatFridgeTemperatureStatus(structureId);
+          }
+          if (assmatFreezer == true) {
+            _checkAssmatFreezerTemperatureStatus(structureId);
+          }
+
+          setState(() {
+            isMAMStructure = isMam;
+            hasAssmatFridge = assmatFridge;
+            hasAssmatFreezer = assmatFreezer;
+            showAssmatFridgeChoice = assmatFridge == null;
+            showAssmatFreezerChoice = assmatFreezer == null;
+          });
+        }
       }
     } catch (e) {
       print("Erreur lors de la vérification si MAM: $e");
-      // En cas d'erreur, ne pas afficher les options MAM
       setState(() {
         isMAMStructure = false;
       });
     }
+  }
+
+  Future<void> _checkAssmatFridgeTemperatureStatus(String structureId) async {
+    try {
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('fridgeTemperatures')
+          .where('timestamp',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .limit(1)
+          .get();
+
+      setState(() {
+        needAssmatFridgeTemperatureCheck = snapshot.docs.isEmpty;
+      });
+
+      print(
+          "Vérification température frigo Assistante Maternelle: ${needAssmatFridgeTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
+    } catch (e) {
+      print(
+          "Erreur lors de la vérification du statut de température du frigo AssistanteMaternelle: $e");
+    }
+  }
+
+  Future<void> _checkAssmatFreezerTemperatureStatus(String structureId) async {
+    try {
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('freezerTemperatures')
+          .where('timestamp',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .limit(1)
+          .get();
+
+      setState(() {
+        needAssmatFreezerTemperatureCheck = snapshot.docs.isEmpty;
+      });
+
+      print(
+          "Vérification température congélateur Assistante Maternelle: ${needAssmatFreezerTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
+    } catch (e) {
+      print(
+          "Erreur lors de la vérification du statut de température du congélateur AssistanteMaternelle: $e");
+    }
+  }
+
+  // NOUVELLES MÉTHODES pour sauvegarder les préférences Assistante Maternelle
+  Future<void> _saveAssmatFridgePreference(bool hasFridgeChoice) async {
+    try {
+      final structureId = await _getStructureId();
+      if (structureId.isEmpty) return;
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .update({'hasAssmatFridge': hasFridgeChoice});
+
+      setState(() {
+        hasAssmatFridge = hasFridgeChoice;
+        showAssmatFridgeChoice = false;
+      });
+
+      if (hasFridgeChoice) {
+        await _checkAssmatFridgeTemperatureStatus(structureId);
+      }
+    } catch (e) {
+      print(
+          "Erreur lors de la sauvegarde de la préférence frigo AssistanteMaternelle: $e");
+    }
+  }
+
+  Future<void> _saveAssmatFreezerPreference(bool hasFreezerChoice) async {
+    try {
+      final structureId = await _getStructureId();
+      if (structureId.isEmpty) return;
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .update({'hasAssmatFreezer': hasFreezerChoice});
+
+      setState(() {
+        hasAssmatFreezer = hasFreezerChoice;
+        showAssmatFreezerChoice = false;
+      });
+
+      if (hasFreezerChoice) {
+        await _checkAssmatFreezerTemperatureStatus(structureId);
+      }
+    } catch (e) {
+      print(
+          "Erreur lors de la sauvegarde de la préférence congélateur AssistanteMaternelle: $e");
+    }
+  }
+
+  // NOUVEAU WIDGET pour le choix des équipements Assistante Maternelle
+  Widget _buildAssmatEquipmentChoiceDialog() {
+    if (!showAssmatFridgeChoice && !showAssmatFreezerChoice) {
+      return SizedBox.shrink();
+    }
+
+    return Container(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.kitchen,
+                  size: 64,
+                  color: primaryColor,
+                ),
+                SizedBox(height: 20),
+                Text(
+                  "Configuration des équipements",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+
+                // Choix du frigo si nécessaire
+                if (showAssmatFridgeChoice) ...[
+                  Text(
+                    "Avez-vous un réfrigérateur dans votre structure ?",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _saveAssmatFridgePreference(false),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Text(
+                                "NON",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _saveAssmatFridgePreference(true),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    primaryColor,
+                                    primaryColor.withOpacity(0.8)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                "OUI",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // Choix du congélateur si nécessaire
+                if (showAssmatFreezerChoice) ...[
+                  if (showAssmatFridgeChoice) SizedBox(height: 32),
+                  Text(
+                    "Avez-vous un congélateur dans votre structure ?",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _saveAssmatFreezerPreference(false),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Text(
+                                "NON",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _saveAssmatFreezerPreference(true),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    primaryColor,
+                                    primaryColor.withOpacity(0.8)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                "OUI",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NOUVELLE MÉTHODE pour le fonctionnement quotidien Assistante Maternelle
+  void _showAssmatDailyFunctioning() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text("Fonctionnement quotidien", textAlign: TextAlign.center),
+          content: Container(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Frigo - Affiché seulement si configuré ET la structure en a un
+                if (hasAssmatFridge == true)
+                  ListTile(
+                    leading: Icon(Icons.thermostat,
+                        color: needAssmatFridgeTemperatureCheck
+                            ? Colors.red
+                            : primaryColor),
+                    title: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          "Température frigo",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: needAssmatFridgeTemperatureCheck
+                                ? Colors.red
+                                : Colors.black87,
+                          ),
+                        ),
+                        if (needAssmatFridgeTemperatureCheck)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              "À relever aujourd'hui",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navigateToFridgeTemperature();
+                    },
+                  ),
+
+                // Congélateur - Affiché seulement si configuré ET la structure en a un
+                if (hasAssmatFreezer == true)
+                  ListTile(
+                    leading: Icon(Icons.kitchen,
+                        color: needAssmatFreezerTemperatureCheck
+                            ? Colors.red
+                            : primaryColor),
+                    title: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          "Température congélateur",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: needAssmatFreezerTemperatureCheck
+                                ? Colors.red
+                                : Colors.black87,
+                          ),
+                        ),
+                        if (needAssmatFreezerTemperatureCheck)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              "À relever aujourd'hui",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _navigateToFreezerTemperature();
+                    },
+                  ),
+
+                // Planning enfant - TOUJOURS affiché pour Assistante Maternelle
+                ListTile(
+                  leading: Icon(Icons.calendar_month, color: primaryColor),
+                  title: Text(
+                    "Planning enfant",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PlanningScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "ANNULER",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _checkFreezerTemperatureStatus(String structureId) async {
@@ -1610,11 +2105,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Méthode pour les actions de structure
   Widget _buildStructureActions(double maxWidth, double maxHeight) {
-    // Calculer le nombre de notifications pour le badge "Fonctionnement de la MAM"
+    // Calculer le nombre de notifications
     int notificationCount = 0;
-    if (needFridgeTemperatureCheck) notificationCount++;
-// Badge congélateur seulement si configuré ET nécessaire
-    if (needFreezerTemperatureCheck && hasFreezer == true) notificationCount++;
+
+    if (isMAMStructure) {
+      // Code existant pour MAM
+      if (needFridgeTemperatureCheck) notificationCount++;
+      if (needFreezerTemperatureCheck && hasFreezer == true)
+        notificationCount++;
+    } else {
+      // NOUVEAU pour Assistante Maternelle
+      if (needAssmatFridgeTemperatureCheck && hasAssmatFridge == true)
+        notificationCount++;
+      if (needAssmatFreezerTemperatureCheck && hasAssmatFreezer == true)
+        notificationCount++;
+    }
 
     String? functioningBadge;
     if (notificationCount > 0) {
@@ -1645,6 +2150,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: "Fonctionnement de la MAM",
             description: "Température frigo, congélateur, planning ménage...",
             onTap: _showMAMFunctioning,
+            maxWidth: maxWidth,
+            badge: functioningBadge,
+          ),
+        ] else ...[
+          // NOUVEAU pour Assistante Maternelle
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.settings,
+            title: "Fonctionnement quotidien",
+            description: "Température frigo, congélateur, planning enfant...",
+            onTap: _showAssmatDailyFunctioning,
             maxWidth: maxWidth,
             badge: functioningBadge,
           ),
@@ -1686,6 +2202,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: "Retrait d'enfant",
           description: "Gérer le départ d'un enfant",
           onTap: _showChildRemoval,
+          maxWidth: maxWidth,
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.admin_panel_settings,
+          title: "Administration des photos",
+          description: "Nettoyage et statistiques des photos",
+          onTap: _showPhotoAdministration,
           maxWidth: maxWidth,
         ),
       ],
@@ -1799,8 +2323,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Conserver la méthode _buildPhoneContent() (ne pas la modifier)
-  // Modifier la méthode _buildPhoneContent pour inclure la section Historique
   Widget _buildPhoneContent() {
     return SingleChildScrollView(
       child: Padding(
@@ -1882,13 +2404,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: "Modifier les coordonnées",
                     onTap: () => context.go('/structure-management'),
                   ),
-                  if (isMAMStructure)
+                  if (isMAMStructure) ...[
                     _buildActionItem(
                       icon: Icons.people,
                       title: "Modifier les membres",
                       onTap: _showMemberManagement,
                     ),
-                  if (isMAMStructure)
                     _buildActionItem(
                       icon: Icons.settings,
                       title: "Fonctionnement de la MAM",
@@ -1919,6 +2440,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             )
                           : null,
                     ),
+                  ] else ...[
+                    // NOUVEAU pour Assistante Maternelle
+                    _buildActionItem(
+                      icon: Icons.settings,
+                      title: "Fonctionnement quotidien",
+                      onTap: _showAssmatDailyFunctioning,
+                      badge: ((needAssmatFridgeTemperatureCheck &&
+                                  hasAssmatFridge == true) ||
+                              (needAssmatFreezerTemperatureCheck &&
+                                  hasAssmatFreezer == true))
+                          ? Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                ((needAssmatFridgeTemperatureCheck &&
+                                                hasAssmatFridge == true
+                                            ? 1
+                                            : 0) +
+                                        (needAssmatFreezerTemperatureCheck &&
+                                                hasAssmatFreezer == true
+                                            ? 1
+                                            : 0))
+                                    .toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2012,6 +2570,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: "Retrait d'enfant",
                     onTap: _showChildRemoval,
                   ),
+                  _buildActionItem(
+                    icon: Icons.admin_panel_settings,
+                    title: "Administration des photos",
+                    onTap: _showPhotoAdministration,
+                  ),
                 ],
               ),
             ),
@@ -2070,7 +2633,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
 
-            // Section Historique - NOUVELLE SECTION
+            // Section Historique
             Container(
               margin: EdgeInsets.only(bottom: 16),
               padding: EdgeInsets.all(16),
@@ -2091,7 +2654,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Recaptitulatif.png', // Vous pouvez créer une icône spécifique
+                        'assets/images/Icone_Recaptitulatif.png',
                         width: 60,
                         height: 60,
                         errorBuilder: (context, error, stackTrace) => Icon(
@@ -2135,6 +2698,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.white,
         body: Center(
           child: CircularProgressIndicator(color: primaryColor),
+        ),
+      );
+    }
+
+    // NOUVEAU: Vérifier s'il faut afficher les dialogues de choix pour Assistante Maternelle
+    if (!isMAMStructure &&
+        (showAssmatFridgeChoice || showAssmatFreezerChoice)) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            // En-tête identique
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft:
+                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
+                  bottomRight:
+                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.3),
+                    offset: const Offset(0, 4),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Configuration",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        structureName,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Contenu avec dialogue de choix
+            Expanded(
+              child: _buildAssmatEquipmentChoiceDialog(),
+            ),
+          ],
         ),
       );
     }

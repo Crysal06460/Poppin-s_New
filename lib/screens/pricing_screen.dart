@@ -23,7 +23,32 @@ class _PricingScreenState extends State<PricingScreen> {
 
   // Nombre de membres MAM (valeur par défaut)
   int _mamMembersCount = 2;
-// Version téléphone - garde le design original
+
+  // NOUVELLE MÉTHODE : Calculer le prix en euros (nombre uniquement)
+  double _calculatePrice(bool isMam, int memberCount) {
+    if (isMam) {
+      switch (memberCount) {
+        case 2:
+          return 22.0;
+        case 3:
+          return 32.0;
+        case 4:
+          return 40.0;
+        default:
+          return 22.0;
+      }
+    } else {
+      return 12.0;
+    }
+  }
+
+  // NOUVELLE MÉTHODE : Obtenir le prix formaté pour l'affichage
+  String _getFormattedPrice(bool isMam, int memberCount) {
+    double price = _calculatePrice(isMam, memberCount);
+    return '${price.toInt()} € / mois';
+  }
+
+  // Version téléphone - garde le design original
   Widget _buildPhoneContent(Color primaryColor, String displayName,
       String price, List<String> featuresList, bool isMam) {
     return Column(
@@ -56,7 +81,7 @@ class _PricingScreenState extends State<PricingScreen> {
                   ],
                 ),
                 child: Image.asset(
-                  'assets/images/logo.png',
+                  'assets/images/parapluie.png',
                   height: 70,
                 ),
               ),
@@ -235,7 +260,7 @@ class _PricingScreenState extends State<PricingScreen> {
           ),
         ),
 
-        // Bouton d'action fixe en bas
+        // BOUTON MODIFIÉ : Ajouter les informations de prix
         Container(
           padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
@@ -259,10 +284,22 @@ class _PricingScreenState extends State<PricingScreen> {
                 final String structureId =
                     widget.structureInfo['structureId'] ?? '';
 
+                // Calculer le prix basé sur la sélection actuelle
+                final double priceAmount =
+                    _calculatePrice(isMam, _mamMembersCount);
+                final String priceDisplay =
+                    _getFormattedPrice(isMam, _mamMembersCount);
+
                 context.go('/subscription-confirmed', extra: {
                   'structureType': structureType,
                   'structureId': structureId,
                   'memberCount': isMam ? _mamMembersCount : 1,
+                  // NOUVELLES DONNÉES DE PRIX
+                  'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
+                  'priceDisplay':
+                      priceDisplay, // Prix formaté (ex: "22 € / mois")
+                  'currency': 'EUR', // Devise
+                  'billingPeriod': 'monthly', // Période de facturation
                 });
               },
               style: ElevatedButton.styleFrom(
@@ -307,27 +344,8 @@ class _PricingScreenState extends State<PricingScreen> {
       'MAM': 'Maison d\'Assistantes Maternelles',
     };
 
-    // Tarifs selon le type de structure
-    String price;
-    if (isMam) {
-      // Prix selon le nombre de membres pour une MAM
-      switch (_mamMembersCount) {
-        case 2:
-          price = '22 € / mois';
-          break;
-        case 3:
-          price = '32 € / mois';
-          break;
-        case 4:
-          price = '40 € / mois';
-          break;
-        default:
-          price = '22 € / mois';
-      }
-    } else {
-      // Prix fixe pour une assistante maternelle
-      price = '12 € / mois';
-    }
+    // TARIFS MODIFIÉS : Utiliser la nouvelle méthode
+    String price = _getFormattedPrice(isMam, _mamMembersCount);
 
     // Mapping des caractéristiques selon le type
     Map<String, List<String>> features = {
@@ -380,7 +398,8 @@ class _PricingScreenState extends State<PricingScreen> {
               primaryColor, displayName, price, featuresList, isMam),
     );
   }
-// AJOUTEZ CES MÉTHODES DANS VOTRE CLASSE _PricingScreenState
+
+  // AJOUTEZ CES MÉTHODES DANS VOTRE CLASSE _PricingScreenState
 
   Widget _buildTabletContent(Color primaryColor, String displayName,
       String price, List<String> featuresList, bool isMam, Size screenSize) {
@@ -446,7 +465,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                 ],
                               ),
                               child: Image.asset(
-                                'assets/images/logo.png',
+                                'assets/images/parapluie.png',
                                 fit: BoxFit.contain,
                               ),
                             ),
@@ -625,7 +644,8 @@ class _PricingScreenState extends State<PricingScreen> {
               SizedBox(height: maxHeight * 0.04),
 
               // Bouton d'action adaptatif pour iPad
-              _buildTabletActionButton(primaryColor, maxWidth, maxHeight),
+              _buildTabletActionButton(
+                  primaryColor, maxWidth, maxHeight, isMam),
             ],
           ),
         );
@@ -808,9 +828,9 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-  // Bouton d'action adapté pour tablette
+  // BOUTON MODIFIÉ : Ajouter le paramètre isMam et les informations de prix
   Widget _buildTabletActionButton(
-      Color primaryColor, double maxWidth, double maxHeight) {
+      Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
     return Container(
       width: maxWidth * 0.4, // 40% de la largeur de l'écran
       height: maxHeight * 0.08, // 8% de la hauteur de l'écran
@@ -829,12 +849,21 @@ class _PricingScreenState extends State<PricingScreen> {
           final String structureType =
               widget.structureInfo['structureType'] ?? 'assistante_maternelle';
           final String structureId = widget.structureInfo['structureId'] ?? '';
-          final bool isMam = structureType == 'MAM';
+
+          // Calculer le prix basé sur la sélection actuelle
+          final double priceAmount = _calculatePrice(isMam, _mamMembersCount);
+          final String priceDisplay =
+              _getFormattedPrice(isMam, _mamMembersCount);
 
           context.go('/subscription-confirmed', extra: {
             'structureType': structureType,
             'structureId': structureId,
             'memberCount': isMam ? _mamMembersCount : 1,
+            // NOUVELLES DONNÉES DE PRIX
+            'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
+            'priceDisplay': priceDisplay, // Prix formaté (ex: "22 € / mois")
+            'currency': 'EUR', // Devise
+            'billingPeriod': 'monthly', // Période de facturation
           });
         },
         style: ElevatedButton.styleFrom(

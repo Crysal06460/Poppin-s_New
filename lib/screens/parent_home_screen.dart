@@ -10,6 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import '../services/photo_cleanup_service.dart';
 
 class ParentHomeScreen extends StatefulWidget {
   const ParentHomeScreen({Key? key}) : super(key: key);
@@ -22,7 +29,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     with WidgetsBindingObserver {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
+  DateTime _selectedPhotoDate = DateTime.now();
+  bool _showingPhotoHistory = false;
+  List<Map<String, dynamic>> _pastPhotos = [];
+  bool _loadingPhotoHistory = false;
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -76,10 +86,21 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadUserData();
+      // Déclencher le nettoyage automatique des photos anciennes
+      _performPhotoCleanup();
     });
 
     _checkStockBadge();
     _checkMessageBadge();
+  }
+
+  Future<void> _performPhotoCleanup() async {
+    try {
+      await PhotoCleanupService.checkAndCleanupPhotos();
+    } catch (e) {
+      print("Erreur lors du nettoyage automatique des photos: $e");
+      // Ne pas montrer d'erreur à l'utilisateur car c'est un processus en arrière-plan
+    }
   }
 
   // Remplacer la méthode _checkMessageBadge actuelle par celle-ci
@@ -185,17 +206,377 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   }
 
   // Conservez UNIQUEMENT cette version de la méthode et supprimez l'autre
+  void _showPhotoHistory() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.8,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, controller) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Column(
+                    children: [
+                      // Barre de drag
+                      Container(
+                        width: 40,
+                        height: 5,
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
+                      ),
+
+                      // En-tête
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: primaryBlue.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.photo_library,
+                                color: primaryBlue,
+                                size: 24,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                "Photos passées",
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () =>
+                                  _showPhotoDatePicker(setModalState),
+                              icon: Icon(Icons.calendar_today, size: 18),
+                              label: Text(
+                                _showingPhotoHistory
+                                    ? DateFormat('dd MMM', 'fr_FR')
+                                        .format(_selectedPhotoDate)
+                                    : "Choisir une date",
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              style: TextButton.styleFrom(
+                                backgroundColor: primaryBlue.withOpacity(0.1),
+                                foregroundColor: primaryBlue,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Contenu
+                      Expanded(
+                        child: _loadingPhotoHistory
+                            ? Center(child: CircularProgressIndicator())
+                            : !_showingPhotoHistory
+                                ? _buildPhotoHistoryPrompt()
+                                : _pastPhotos.isEmpty
+                                    ? _buildNoPhotosFound()
+                                    : _buildPhotoGrid(controller),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showPhotoDatePicker(StateSetter setModalState) async {
+    final DateTime now = DateTime.now();
+    final DateTime firstDate = now.subtract(Duration(days: 9));
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _showingPhotoHistory
+          ? _selectedPhotoDate
+          : now.subtract(Duration(days: 1)),
+      firstDate: firstDate,
+      lastDate: now.subtract(Duration(days: 1)),
+      locale: Locale('fr', 'FR'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: primaryBlue,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setModalState(() {
+        _selectedPhotoDate = picked;
+        _showingPhotoHistory = true;
+        _loadingPhotoHistory = true;
+      });
+
+      await _loadPhotoHistory(picked);
+
+      setModalState(() {
+        _loadingPhotoHistory = false;
+      });
+    }
+  }
+
+// Méthode pour charger l'historique des photos
+  Future<void> _loadPhotoHistory(DateTime date) async {
+    try {
+      if (_selectedChild == null) return;
+
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+      final photosSnapshot = await _firestore
+          .collection('structures')
+          .doc(_selectedChild!['structureId'])
+          .collection('children')
+          .doc(_selectedChild!['id'])
+          .collection('medias')
+          .where('date', isGreaterThanOrEqualTo: startOfDay)
+          .where('date', isLessThan: endOfDay.add(Duration(days: 1)))
+          .orderBy('date', descending: true)
+          .get();
+
+      _pastPhotos = photosSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          ...data,
+          'id': doc.id,
+        };
+      }).toList();
+    } catch (e) {
+      print("Erreur lors du chargement de l'historique des photos: $e");
+      _pastPhotos = [];
+    }
+  }
+
+// Widget pour l'invite de sélection de date
+  Widget _buildPhotoHistoryPrompt() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 80,
+              color: Colors.grey.shade300,
+            ),
+            SizedBox(height: 24),
+            Text(
+              "Explorez les souvenirs",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              "Choisissez une date pour voir les photos des 10 derniers jours",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade500,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Widget quand aucune photo n'est trouvée
+  Widget _buildNoPhotosFound() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_camera_outlined,
+              size: 60,
+              color: Colors.grey.shade300,
+            ),
+            SizedBox(height: 16),
+            Text(
+              "Aucune photo trouvée",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "pour le ${DateFormat('dd MMMM yyyy', 'fr_FR').format(_selectedPhotoDate)}",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Widget pour la grille de photos
+  Widget _buildPhotoGrid(ScrollController controller) {
+    return GridView.builder(
+      controller: controller,
+      padding: EdgeInsets.all(20),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.9,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: _pastPhotos.length,
+      itemBuilder: (context, index) {
+        final photo = _pastPhotos[index];
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).pop(); // Fermer la modal
+            _openPhotoViewer(photo['url'], photo['description'] ?? '');
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Heure
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.1),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: Text(
+                    photo['heure'] ?? 'Heure inconnue',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: primaryBlue,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+
+                // Photo
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        photo['url'],
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(primaryBlue),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey.shade200,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image,
+                                  color: Colors.grey.shade400),
+                              SizedBox(height: 4),
+                              Text(
+                                'Erreur',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _checkStockBadge() async {
     try {
+      // Forcer une vérification complète depuis Firestore
       final shouldShow = await StockBadgeUtil.shouldShowBadge();
       if (mounted) {
         setState(() {
           _showStockBadge = shouldShow;
         });
       }
+      print('📦 Badge stock état: $shouldShow');
     } catch (e) {
       print('❌ Erreur lors de la vérification des besoins de stock: $e');
+      if (mounted) {
+        setState(() {
+          _showStockBadge = false;
+        });
+      }
     }
   }
 
@@ -244,6 +625,23 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       'hour': [],
       'transmission': [],
     };
+  }
+
+  void _openPhotoViewer(String imageUrl, String? description) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            PhotoViewerScreen(
+          imageUrl: imageUrl,
+          description: description,
+          childName: _selectedChild?['firstName'],
+          photoDate: DateTime.now(),
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   Future<void> _refreshData() async {
@@ -1038,13 +1436,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
               size: iconSize,
             ),
           ),
-          SizedBox(height: 4), // Réduire l'espacement vertical
+          SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: screenWidth < 360
-                  ? 10
-                  : 12, // Police plus petite sur petit écran
+              fontSize: screenWidth < 360 ? 10 : 12,
               color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
@@ -1470,6 +1866,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         "Sorties",
                                         Icons.directions_bus,
                                         () => _showActualiteDetails("sortie"),
+                                      ),
+                                      _buildHeaderIcon(
+                                        "Photos",
+                                        Icons.photo_library,
+                                        () => _showPhotoHistory(),
                                       ),
                                     ],
                                   ),
@@ -2130,38 +2531,66 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                     ),
 
                   // Affichage des photos (si présentes)
-                  // Affichage des photos (si présentes)
                   if (event['type'] == 'photo' && event['url'] != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 10.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          event['url'],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 180,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            height: 100,
-                            width: double.infinity,
-                            color: Colors.grey[200],
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.broken_image_outlined,
-                                    color: Colors.grey[400], size: 32),
-                                SizedBox(height: 8),
-                                Text(
-                                  "Impossible de charger l'image",
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 12,
+                      child: GestureDetector(
+                        onTap: () =>
+                            _openPhotoViewer(event['url'], event['details']),
+                        child: Stack(
+                          children: [
+                            Hero(
+                              tag: 'photo_${event['url']}',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  event['url'],
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: 180,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                    height: 100,
+                                    width: double.infinity,
+                                    color: Colors.grey[200],
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.broken_image_outlined,
+                                            color: Colors.grey[400], size: 32),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          "Impossible de charger l'image",
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                            // Overlay pour indiquer qu'on peut appuyer
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  Icons.fullscreen,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -2170,6 +2599,301 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// À ajouter après la fermeture de la classe _ParentHomeScreenState
+class PhotoViewerScreen extends StatefulWidget {
+  final String imageUrl;
+  final String? description;
+  final String? childName;
+  final DateTime? photoDate;
+
+  const PhotoViewerScreen({
+    Key? key,
+    required this.imageUrl,
+    this.description,
+    this.childName,
+    this.photoDate,
+  }) : super(key: key);
+
+  @override
+  _PhotoViewerScreenState createState() => _PhotoViewerScreenState();
+}
+
+class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
+  bool _isLoading = false;
+
+  Future<void> _saveImage() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.get(Uri.parse(widget.imageUrl));
+      if (response.statusCode == 200) {
+        final result = await ImageGallerySaver.saveImage(
+          Uint8List.fromList(response.bodyBytes),
+          quality: 100,
+          name:
+              "photo_${widget.childName}_${DateTime.now().millisecondsSinceEpoch}",
+        );
+
+        if (result['isSuccess']) {
+          _showSuccessSnackBar('Photo sauvegardée dans la galerie');
+        } else {
+          _showErrorSnackBar('Erreur lors de la sauvegarde');
+        }
+      }
+    } catch (e) {
+      _showErrorSnackBar('Erreur lors du téléchargement: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _shareImage() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.get(Uri.parse(widget.imageUrl));
+      if (response.statusCode == 200) {
+        final tempDir = await getTemporaryDirectory();
+        final fileName =
+            'photo_${widget.childName}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(response.bodyBytes);
+
+        final shareText = widget.description != null &&
+                widget.description!.isNotEmpty
+            ? '📸 Photo de ${widget.childName ?? "mon enfant"}\n${widget.description}'
+            : '📸 Photo de ${widget.childName ?? "mon enfant"}';
+
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: shareText,
+        );
+      }
+    } catch (e) {
+      _showErrorSnackBar('Erreur lors du partage: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error, color: Colors.white),
+            SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return DateFormat('EEEE d MMMM yyyy à HH:mm', 'fr_FR').format(date);
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return Expanded(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: ElevatedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 20),
+          label: Text(label),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white.withOpacity(0.2),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black.withOpacity(0.5),
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: widget.childName != null
+            ? Text(
+                'Photo de ${widget.childName}',
+                style: TextStyle(color: Colors.white),
+              )
+            : null,
+        actions: [
+          if (_isLoading)
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+            )
+          else ...[
+            IconButton(
+              icon: Icon(Icons.share, color: Colors.white),
+              onPressed: _shareImage,
+              tooltip: 'Partager',
+            ),
+            IconButton(
+              icon: Icon(Icons.download, color: Colors.white),
+              onPressed: _saveImage,
+              tooltip: 'Sauvegarder',
+            ),
+          ],
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                boundaryMargin: EdgeInsets.all(20),
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Hero(
+                  tag: 'photo_${widget.imageUrl}',
+                  child: Image.network(
+                    widget.imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      padding: EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white54,
+                            size: 64,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Impossible de charger l\'image',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (widget.description != null && widget.description!.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.photoDate != null)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '📅 ${_formatDate(widget.photoDate!)}',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  Text(
+                    widget.description!,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        color: Colors.black.withOpacity(0.8),
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: SafeArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildActionButton(
+                icon: Icons.download_rounded,
+                label: 'Sauvegarder',
+                onPressed: _isLoading ? null : _saveImage,
+              ),
+              _buildActionButton(
+                icon: Icons.share_rounded,
+                label: 'Partager',
+                onPressed: _isLoading ? null : _shareImage,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

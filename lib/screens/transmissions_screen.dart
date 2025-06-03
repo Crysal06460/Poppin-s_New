@@ -34,13 +34,10 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
   final TextEditingController _transmissionController = TextEditingController();
   final List<String> _transmissionCategories = [
-    'Général',
     'Santé',
-    'Objets',
-    'Comportement',
-    'Autre',
+    'Autres',
   ];
-  String _selectedCategory = 'Général';
+  String _selectedCategory = 'Santé';
 
   @override
   void initState() {
@@ -169,12 +166,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     switch (category) {
       case 'Santé':
         return Icons.medical_services_outlined;
-      case 'Objets':
-        return Icons.inventory_2_outlined;
-      case 'Comportement':
-        return Icons.psychology_outlined;
-      case 'Général':
-        return Icons.info_outline;
+      case 'Autres':
+        return Icons.category_outlined;
       default:
         return Icons.category_outlined;
     }

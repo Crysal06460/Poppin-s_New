@@ -381,40 +381,62 @@ class _HomeScreenState extends State<HomeScreen> {
     context.go('/add-mam-members');
   }
 
+  // Remplacez la méthode _findUpcomingBirthdays dans home_screen.dart
+
+  // Remplacez la méthode _findUpcomingBirthdays dans home_screen.dart
+
   void _findUpcomingBirthdays(List<Map<String, dynamic>> allChildren) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayFormatted = DateFormat('yyyy-MM-dd').format(today);
 
+    print("🎂 DEBUG: Date d'aujourd'hui: $todayFormatted");
+    print("🎂 DEBUG: Nombre d'enfants à vérifier: ${allChildren.length}");
+
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final lastShownDate = prefs.getString(_birthdayAlertShownKey) ?? '';
 
     final bool alreadyShownToday = lastShownDate == todayFormatted;
+    print("🎂 DEBUG: Popup déjà affiché aujourd'hui? $alreadyShownToday");
 
     List<Map<String, dynamic>> birthdayChildren = [];
     List<Map<String, dynamic>> todayBirthdayChildren = [];
 
     for (var child in allChildren) {
-      if (child['birthdate'] == null) continue;
+      if (child['birthdate'] == null) {
+        print("🎂 DEBUG: ${child['firstName']} - pas de date de naissance");
+        continue;
+      }
 
       try {
-        // Améliorer la gestion du format de date ISO
-        DateTime birthdate;
         final birthdateStr = child['birthdate'];
+        print(
+            "🎂 DEBUG: ${child['firstName']} - birthdate brut: $birthdateStr");
 
-        // Pour corriger le format de date ISO
+        DateTime birthdate;
+
+        // Améliorer la gestion du format de date ISO
         if (birthdateStr is String) {
           // Gérer explicitement le format ISO des dates Firebase
-          birthdate = DateTime.parse(birthdateStr.split('T')[0]);
+          // Format attendu: "2025-06-02T00:00:00.000" ou "2025-06-02"
+          String dateOnly = birthdateStr.split('T')[0];
+          print("🎂 DEBUG: ${child['firstName']} - date extraite: $dateOnly");
+          birthdate = DateTime.parse(dateOnly);
         } else {
           print(
               "⚠️ Format de date non reconnu pour ${child['firstName']}: $birthdateStr");
           continue;
         }
 
+        print(
+            "🎂 DEBUG: ${child['firstName']} - date de naissance parsée: ${DateFormat('yyyy-MM-dd').format(birthdate)}");
+
         // Vérifier si c'est aujourd'hui (même jour et même mois)
         bool isToday =
             today.day == birthdate.day && today.month == birthdate.month;
+
+        print(
+            "🎂 DEBUG: ${child['firstName']} - aujourd'hui: ${today.day}/${today.month}, naissance: ${birthdate.day}/${birthdate.month}, c'est aujourd'hui? $isToday");
 
         if (isToday) {
           print(
@@ -442,22 +464,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        print(
-            "🗓️ Prochain anniversaire calculé pour ${child['firstName']}: ${nextBirthday.toString()}");
-
-        // MÉTHODE PRÉCISE: Calculer les jours exacts entre aujourd'hui et l'anniversaire
-        int daysUntilBirthday = 0;
-
-        // Cloner la date actuelle pour itération
-        DateTime currentDate = DateTime(today.year, today.month, today.day);
-
-        // Compter chaque jour jusqu'à l'anniversaire
-        while (currentDate.year != nextBirthday.year ||
-            currentDate.month != nextBirthday.month ||
-            currentDate.day != nextBirthday.day) {
-          daysUntilBirthday++;
-          currentDate = currentDate.add(Duration(days: 1));
-        }
+        // Calculer les jours exacts entre aujourd'hui et l'anniversaire
+        int daysUntilBirthday = nextBirthday.difference(today).inDays;
 
         print(
             "⏱️ Jours restants jusqu'à l'anniversaire de ${child['firstName']}: $daysUntilBirthday");
@@ -486,21 +494,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       upcomingBirthdays = birthdayChildren;
-
-      if (todayBirthdayChildren.isNotEmpty &&
-          !alreadyShownToday &&
-          !_hasShownBirthdayAlert) {
-        print(
-            "🎉 Affichage de l'alerte d'anniversaire (première fois aujourd'hui)!");
-
-        _hasShownBirthdayAlert = true;
-        prefs.setString(_birthdayAlertShownKey, todayFormatted);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showBirthdayAlert(todayBirthdayChildren);
-        });
-      }
     });
+
+    // Afficher le popup UNIQUEMENT si :
+    // 1. Il y a des anniversaires aujourd'hui
+    // 2. Le popup n'a pas déjà été affiché aujourd'hui
+    // 3. Le flag de session n'est pas encore défini
+    if (todayBirthdayChildren.isNotEmpty &&
+        !alreadyShownToday &&
+        !_hasShownBirthdayAlert) {
+      print(
+          "🎉 ANNIVERSAIRE DÉTECTÉ - Affichage du popup (première fois aujourd'hui)!");
+
+      // Marquer comme affiché pour cette session
+      _hasShownBirthdayAlert = true;
+
+      // Enregistrer la date pour éviter les répétitions aujourd'hui
+      prefs.setString(_birthdayAlertShownKey, todayFormatted);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showBirthdayAlert(todayBirthdayChildren);
+      });
+    } else {
+      if (todayBirthdayChildren.isNotEmpty && alreadyShownToday) {
+        print("🔕 Anniversaire aujourd'hui mais popup déjà affiché");
+      } else if (todayBirthdayChildren.isNotEmpty && _hasShownBirthdayAlert) {
+        print(
+            "🔕 Anniversaire aujourd'hui mais popup déjà affiché cette session");
+      } else {
+        print("🔍 Aucun anniversaire aujourd'hui détecté");
+      }
+    }
   }
 
   void _showBirthdayAlert(List<Map<String, dynamic>> birthdayChildren) {
@@ -583,7 +607,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: screenSize.height *
                                 0.15, // 15% de la hauteur de l'écran
                             child: Image.asset(
-                              'assets/images/birthday_img.png',
+                              'assets/images/gateau-danniversaire.png',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
                                   Icon(Icons.cake,

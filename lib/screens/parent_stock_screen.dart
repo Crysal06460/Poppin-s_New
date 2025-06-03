@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/message_badge_util.dart';
+import '../utils/stock_badge_util.dart';
 
 class ParentStockScreen extends StatefulWidget {
   const ParentStockScreen({Key? key}) : super(key: key);
@@ -32,6 +33,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
   String _parentFirstName = "";
   String _structureId = "";
   bool _showMessageBadge = false;
+  bool _showStockBadge = false;
 
   // Variable pour suivre si l'application était en arrière-plan
   bool _wasInBackground = false;
@@ -107,6 +109,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
       _loadUserData();
     });
     _checkMessageBadge();
+    _checkStockBadge(); // ← AJOUTER CETTE LIGNE
   }
 
   // Cette méthode est appelée lorsque l'état de l'application change
@@ -210,6 +213,9 @@ class _ParentStockScreenState extends State<ParentStockScreen>
 
     // Vérifier s'il y a des messages non lus
     await _checkMessageBadge();
+
+    // Vérifier s'il y a des besoins en stock
+    await _checkStockBadge(); // ← AJOUTER CETTE LIGNE
 
     setState(() => _isLoading = false);
 
@@ -871,21 +877,83 @@ class _ParentStockScreenState extends State<ParentStockScreen>
             label: "Messages",
           ),
           BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Stock.png',
-              width: 60,
-              height: 60,
+            icon: Stack(
+              // ← MODIFIER CETTE PARTIE
+              children: [
+                Image.asset(
+                  'assets/images/Icone_Stock.png',
+                  width: 60,
+                  height: 60,
+                ),
+                if (_showStockBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            activeIcon: Image.asset(
-              'assets/images/Icone_Stock.png',
-              width: 60,
-              height: 60,
+            activeIcon: Stack(
+              // ← AJOUTER CETTE PARTIE
+              children: [
+                Image.asset(
+                  'assets/images/Icone_Stock.png',
+                  width: 60,
+                  height: 60,
+                ),
+                if (_showStockBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             label: "Stocks",
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _checkStockBadge() async {
+    try {
+      // Forcer une vérification complète depuis Firestore
+      final shouldShow = await StockBadgeUtil.shouldShowBadge();
+      if (mounted) {
+        setState(() {
+          _showStockBadge = shouldShow;
+        });
+      }
+      print('📦 Badge stock état dans parent_stock_screen: $shouldShow');
+    } catch (e) {
+      print('❌ Erreur lors de la vérification des besoins de stock: $e');
+      if (mounted) {
+        setState(() {
+          _showStockBadge = false;
+        });
+      }
+    }
   }
 
   Widget _buildEmptyState() {
