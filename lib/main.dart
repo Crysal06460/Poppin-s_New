@@ -4,11 +4,15 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
 import 'firebase_options.dart';
 import 'routes.dart';
 
 // 🔥 NOUVEL IMPORT POUR LES NOTIFICATIONS
 import 'services/notification_service.dart';
+
+// 🛒 NOUVEAU : Import pour les achats intégrés
+import 'services/subscription_service.dart';
 
 // Clé globale pour le ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
@@ -38,8 +42,30 @@ void main() async {
   // 🔥 INITIALISER LES NOTIFICATIONS (NOUVEAU)
   await NotificationService.initialize();
 
+  // 🛒 NOUVEAU : Initialiser les achats intégrés
+  await _initializeInAppPurchases();
+
   // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());
+}
+
+// 🛒 NOUVELLE FONCTION : Initialisation des achats intégrés
+Future<void> _initializeInAppPurchases() async {
+  try {
+    // Vérifier si les achats intégrés sont disponibles
+    final bool available = await InAppPurchase.instance.isAvailable();
+    if (!available) {
+      print('⚠️ Achats intégrés non disponibles sur cet appareil');
+      return;
+    }
+
+    // Démarrer l'écoute des mises à jour d'achat
+    await SubscriptionService.handlePurchaseUpdates();
+
+    print('✅ Achats intégrés initialisés avec succès');
+  } catch (e) {
+    print('❌ Erreur lors de l\'initialisation des achats intégrés: $e');
+  }
 }
 
 // MODIFICATION : Changement de StatelessWidget vers StatefulWidget

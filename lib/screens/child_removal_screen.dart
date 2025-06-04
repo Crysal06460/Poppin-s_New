@@ -1305,8 +1305,9 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
           ),
 
           // Contenu principal avec avertissements renforcés
+// Contenu principal avec avertissements renforcés
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1408,7 +1409,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                       ],
                     ),
                   ),
-                  Spacer(),
+                  SizedBox(height: 40), // Plus d'espace avant le bouton
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -1440,6 +1441,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  SizedBox(height: 40), // Espace en bas pour le scroll
                 ],
               ),
             ),

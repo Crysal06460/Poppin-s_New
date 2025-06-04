@@ -102,127 +102,196 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Gestion des photos"),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Statistiques",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 16),
-                          _buildStatRow("Photos totales",
-                              "${_stats['totalPhotos'] ?? 0}"),
-                          _buildStatRow("Photos anciennes",
-                              "${_stats['oldPhotos'] ?? 0}"),
-                          _buildStatRow("Rétention",
-                              "${_stats['retentionDays'] ?? 0} jours"),
-                          if (_lastCleanup != null)
-                            _buildStatRow(
-                                "Dernier nettoyage",
-                                DateFormat('dd/MM/yyyy à HH:mm')
-                                    .format(_lastCleanup!))
-                          else
-                            _buildStatRow(
-                                "Dernier nettoyage", "Jamais effectué"),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Actions",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _forceCleanup,
-                              icon: Icon(Icons.delete_sweep),
-                              label: Text("Forcer le nettoyage"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: _loadData,
-                              icon: Icon(Icons.refresh),
-                              label: Text("Actualiser les données"),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  Card(
-                    color: Colors.orange.shade50,
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline, color: Colors.orange),
-                              SizedBox(width: 8),
-                              Text(
-                                "Informations",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orange.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            "• Le nettoyage automatique s'exécute une fois par jour\n"
-                            "• Les photos sont conservées pendant ${PhotoCleanupService.getRetentionDays()} jours\n"
-                            "• La suppression concerne uniquement les photos\n",
-                            style: TextStyle(color: Colors.orange.shade700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // En-tête avec fond de couleur - Identique aux autres écrans
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.blue,
+                  Colors.blue.withOpacity(0.85),
                 ],
               ),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  offset: const Offset(0, 4),
+                  blurRadius: 8,
+                ),
+              ],
             ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Row(
+                  children: [
+                    // Bouton retour avec meilleur contraste
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    // Titre avec meilleur style
+                    Expanded(
+                      child: Text(
+                        "Gestion des photos",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Contenu principal
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: Colors.blue))
+                : Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Statistiques",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                _buildStatRow("Photos totales",
+                                    "${_stats['totalPhotos'] ?? 0}"),
+                                _buildStatRow("Photos anciennes",
+                                    "${_stats['oldPhotos'] ?? 0}"),
+                                _buildStatRow("Rétention",
+                                    "${_stats['retentionDays'] ?? 0} jours"),
+                                if (_lastCleanup != null)
+                                  _buildStatRow(
+                                      "Dernier nettoyage",
+                                      DateFormat('dd/MM/yyyy à HH:mm')
+                                          .format(_lastCleanup!))
+                                else
+                                  _buildStatRow(
+                                      "Dernier nettoyage", "Jamais effectué"),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Actions",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _forceCleanup,
+                                    icon: Icon(Icons.delete_sweep),
+                                    label: Text("Forcer le nettoyage"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _loadData,
+                                    icon: Icon(Icons.refresh),
+                                    label: Text("Actualiser les données"),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        Card(
+                          color: Colors.orange.shade50,
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        color: Colors.orange),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Informations",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  "• Le nettoyage automatique s'exécute une fois par jour\n"
+                                  "• Les photos sont conservées pendant ${PhotoCleanupService.getRetentionDays()} jours\n"
+                                  "• La suppression concerne uniquement les photos\n",
+                                  style:
+                                      TextStyle(color: Colors.orange.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 

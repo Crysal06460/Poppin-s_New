@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../services/subscription_service.dart';
 
 class PricingScreen extends StatefulWidget {
   final Map<String, dynamic> structureInfo;
@@ -29,25 +30,33 @@ class _PricingScreenState extends State<PricingScreen> {
     if (isMam) {
       switch (memberCount) {
         case 2:
-          return 22.0;
+          return 24.99;
         case 3:
-          return 32.0;
+          return 34.99;
         case 4:
-          return 40.0;
+          return 44.99;
         default:
-          return 22.0;
+          return 24.99;
       }
     } else {
-      return 12.0;
+      return 12.99;
     }
   }
 
-  // NOUVELLE MÉTHODE : Obtenir le prix formaté pour l'affichage
+  // MÉTHODE MODIFIÉE : Obtenir le prix formaté pour l'affichage
   String _getFormattedPrice(bool isMam, int memberCount) {
     double price = _calculatePrice(isMam, memberCount);
-    return '${price.toInt()} € / mois';
+    // Enlever .toInt() pour garder les décimales
+    if (price == price.roundToDouble()) {
+      // Si le prix est un nombre entier (comme 32.0), afficher sans décimales
+      return '${price.toInt()} € / mois';
+    } else {
+      // Si le prix a des décimales (comme 24.99), les afficher
+      return '${price.toStringAsFixed(2)} € / mois';
+    }
   }
 
+  // Version téléphone - garde le design original
   // Version téléphone - garde le design original
   Widget _buildPhoneContent(Color primaryColor, String displayName,
       String price, List<String> featuresList, bool isMam) {
@@ -260,7 +269,7 @@ class _PricingScreenState extends State<PricingScreen> {
           ),
         ),
 
-        // BOUTON MODIFIÉ : Ajouter les informations de prix
+        // BOUTON CORRIGÉ : Logique d'achat App Store
         Container(
           padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
@@ -277,7 +286,7 @@ class _PricingScreenState extends State<PricingScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final String structureType =
                     widget.structureInfo['structureType'] ??
                         'assistante_maternelle';
@@ -290,17 +299,68 @@ class _PricingScreenState extends State<PricingScreen> {
                 final String priceDisplay =
                     _getFormattedPrice(isMam, _mamMembersCount);
 
-                context.go('/subscription-confirmed', extra: {
-                  'structureType': structureType,
-                  'structureId': structureId,
-                  'memberCount': isMam ? _mamMembersCount : 1,
-                  // NOUVELLES DONNÉES DE PRIX
-                  'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
-                  'priceDisplay':
-                      priceDisplay, // Prix formaté (ex: "22 € / mois")
-                  'currency': 'EUR', // Devise
-                  'billingPeriod': 'monthly', // Période de facturation
-                });
+                // Obtenir l'ID du produit pour l'abonnement
+                final String productId = SubscriptionService.getProductId(
+                    structureType, _mamMembersCount);
+
+                print('🛒 Tentative d\'achat du produit: $productId');
+
+                // Afficher un indicateur de chargement
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => AlertDialog(
+                    content: Row(
+                      children: [
+                        CircularProgressIndicator(color: primaryColor),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            'Redirection vers l\'App Store...',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+
+                try {
+                  // Lancer l'achat (ceci ouvrira l'App Store)
+                  final bool success =
+                      await SubscriptionService.purchaseSubscription(productId);
+
+                  // Fermer le dialog de chargement
+                  if (Navigator.canPop(context)) {
+                    Navigator.of(context).pop();
+                  }
+
+                  if (success) {
+                    // L'utilisateur a confirmé l'achat dans l'App Store
+                    // Rediriger vers la confirmation
+                    context.go('/subscription-confirmed', extra: {
+                      'structureType': structureType,
+                      'structureId': structureId,
+                      'memberCount': isMam ? _mamMembersCount : 1,
+                      'priceAmount': priceAmount,
+                      'priceDisplay': priceDisplay,
+                      'currency': 'EUR',
+                      'billingPeriod': 'monthly',
+                      'productId': productId,
+                    });
+                  } else {
+                    // L'utilisateur a annulé ou erreur
+                    _showErrorMessage('Achat annulé ou échoué');
+                  }
+                } catch (e) {
+                  // Fermer le dialog et afficher l'erreur
+                  if (Navigator.canPop(context)) {
+                    Navigator.of(context).pop();
+                  }
+
+                  print('❌ Erreur lors de l\'achat: $e');
+                  _showErrorMessage('Erreur lors de l\'achat: ${e.toString()}');
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
@@ -829,6 +889,7 @@ class _PricingScreenState extends State<PricingScreen> {
   }
 
   // BOUTON MODIFIÉ : Ajouter le paramètre isMam et les informations de prix
+  // BOUTON CORRIGÉ : Ajouter le paramètre isMam et les informations de prix
   Widget _buildTabletActionButton(
       Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
     return Container(
@@ -845,7 +906,7 @@ class _PricingScreenState extends State<PricingScreen> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: () {
+        onPressed: () async {
           final String structureType =
               widget.structureInfo['structureType'] ?? 'assistante_maternelle';
           final String structureId = widget.structureInfo['structureId'] ?? '';
@@ -855,16 +916,68 @@ class _PricingScreenState extends State<PricingScreen> {
           final String priceDisplay =
               _getFormattedPrice(isMam, _mamMembersCount);
 
-          context.go('/subscription-confirmed', extra: {
-            'structureType': structureType,
-            'structureId': structureId,
-            'memberCount': isMam ? _mamMembersCount : 1,
-            // NOUVELLES DONNÉES DE PRIX
-            'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
-            'priceDisplay': priceDisplay, // Prix formaté (ex: "22 € / mois")
-            'currency': 'EUR', // Devise
-            'billingPeriod': 'monthly', // Période de facturation
-          });
+          // Obtenir l'ID du produit pour l'abonnement
+          final String productId =
+              SubscriptionService.getProductId(structureType, _mamMembersCount);
+
+          print('🛒 Tentative d\'achat du produit: $productId');
+
+          // Afficher un indicateur de chargement
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(color: primaryColor),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Redirection vers l\'App Store...',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          try {
+            // Lancer l'achat (ceci ouvrira l'App Store)
+            final bool success =
+                await SubscriptionService.purchaseSubscription(productId);
+
+            // Fermer le dialog de chargement
+            if (Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            }
+
+            if (success) {
+              // L'utilisateur a confirmé l'achat dans l'App Store
+              // Rediriger vers la confirmation
+              context.go('/subscription-confirmed', extra: {
+                'structureType': structureType,
+                'structureId': structureId,
+                'memberCount': isMam ? _mamMembersCount : 1,
+                'priceAmount': priceAmount,
+                'priceDisplay': priceDisplay,
+                'currency': 'EUR',
+                'billingPeriod': 'monthly',
+                'productId': productId,
+              });
+            } else {
+              // L'utilisateur a annulé ou erreur
+              _showErrorMessage('Achat annulé ou échoué');
+            }
+          } catch (e) {
+            // Fermer le dialog et afficher l'erreur
+            if (Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            }
+
+            print('❌ Erreur lors de l\'achat: $e');
+            _showErrorMessage('Erreur lors de l\'achat: ${e.toString()}');
+          }
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
@@ -938,6 +1051,16 @@ class _PricingScreenState extends State<PricingScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 4),
       ),
     );
   }
