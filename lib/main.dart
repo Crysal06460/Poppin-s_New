@@ -45,6 +45,9 @@ void main() async {
   // 🛒 NOUVEAU : Initialiser les achats intégrés
   await _initializeInAppPurchases();
 
+  // 🛒 AJOUT : Initialiser le SubscriptionService
+  await SubscriptionService.initialize();
+
   // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());
 }

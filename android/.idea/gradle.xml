@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
@@ -19,13 +20,17 @@
         <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
+            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/app_badge_plus-1.2.3/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/cloud_firestore-5.6.6/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/file_picker-10.1.2/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/firebase_auth-5.5.2/android" />
-            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/firebase_core-3.13.0/android" />
+            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/firebase_core-3.13.1/android" />
+            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/firebase_messaging-15.2.6/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/firebase_storage-12.4.5/android" />
+            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/flutter_local_notifications-17.2.4/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/flutter_pdfview-1.4.0+1/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.28/android" />
+            <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/gal-2.3.1/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/image_picker_android-0.8.12+23/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/in_app_purchase_android-0.4.0+1/android" />
             <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/path_provider_android-2.2.17/android" />

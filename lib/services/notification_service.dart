@@ -2,22 +2,72 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:app_badge_plus/app_badge_plus.dart';
+import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_app_badger/flutter_app_badger.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  static bool _isInitialized = false;
 
-  // Dans notification_service.dart, remplacez le début de la méthode initialize() :
-
+  /// Initialise le service de notifications
   static Future<void> initialize() async {
+    if (_isInitialized) return;
+
     try {
       print('🔔 Initialisation du service de notifications...');
 
-      // 1. 🔥 NOUVEAU : Demander les permissions avec gestion améliorée
+      // 1. Configuration des notifications locales
+      await _initializeLocalNotifications();
+
+      // 2. Configuration Firebase commune
+      await _initializeFirebase();
+
+      _isInitialized = true;
+      print('✅ Service de notifications initialisé avec succès');
+    } catch (e) {
+      print('❌ Erreur lors de l\'initialisation des notifications: $e');
+      _isInitialized = true;
+    }
+  }
+
+  /// Initialisation des notifications locales (iOS + Android)
+  static Future<void> _initializeLocalNotifications() async {
+    print('📱 Initialisation Flutter Local Notifications (iOS + Android)...');
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+      onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
+    );
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await _localNotifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
+    );
+
+    print('✅ Flutter Local Notifications initialisé');
+  }
+
+  /// Initialisation Firebase commune
+  static Future<void> _initializeFirebase() async {
+    print('🔥 Initialisation Firebase...');
+
+    try {
+      // Demander les permissions Firebase
       NotificationSettings settings = await _messaging.requestPermission(
         alert: true,
         badge: true,
@@ -30,43 +80,17 @@ class NotificationService {
 
       print('🔔 Permissions accordées: ${settings.authorizationStatus}');
 
-      // 🔥 CORRECTION : Accepter aussi 'provisional' et 'notDetermined' sur iOS
-      bool permissionsOk =
-          settings.authorizationStatus == AuthorizationStatus.authorized ||
-              settings.authorizationStatus == AuthorizationStatus.provisional;
-
-      // Sur iOS, parfois les permissions restent 'notDetermined' mais fonctionnent quand même
-      if (Platform.isIOS &&
-          settings.authorizationStatus == AuthorizationStatus.notDetermined) {
-        print('⚠️ Permissions iOS notDetermined, tentative de continuation...');
-        permissionsOk = true; // Essayer quand même sur iOS
-      }
-
-      if (!permissionsOk &&
-          settings.authorizationStatus == AuthorizationStatus.denied) {
-        print('❌ Permissions notifications refusées définitivement');
-        print('⚠️ L\'app continue sans notifications push');
-        await _setupLocalNotificationsOnly();
-        return;
-      }
-
-      // 2. Configuration spéciale iOS avec APNS
+      // Configuration spéciale iOS avec APNS
       if (Platform.isIOS) {
-        print('📱 Configuration iOS avec APNS...');
-
-        // 🔥 NOUVEAU : Attendre un peu plus longtemps pour iOS
         await Future.delayed(Duration(seconds: 1));
-
-        // Attendre que le token APNS soit disponible
         String? apnsToken = await _messaging.getAPNSToken();
         int retryCount = 0;
-        const maxRetries = 8; // Augmenté de 5 à 8
+        const maxRetries = 8;
 
         while (apnsToken == null && retryCount < maxRetries) {
           print(
               '⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
-          await Future.delayed(
-              Duration(seconds: 3)); // Augmenté de 2 à 3 secondes
+          await Future.delayed(Duration(seconds: 3));
           apnsToken = await _messaging.getAPNSToken();
           retryCount++;
         }
@@ -77,86 +101,51 @@ class NotificationService {
           print(
               '❌ Impossible d\'obtenir le token APNS après $maxRetries tentatives');
           print('⚠️ L\'app continue sans notifications push');
-          await _setupLocalNotificationsOnly();
           return;
         }
       }
 
-      // 3. Configuration des notifications locales
-      const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-
-      const DarwinInitializationSettings initializationSettingsIOS =
-          DarwinInitializationSettings(
-        requestAlertPermission: true, // 🔥 CHANGÉ : Redemander ici aussi
-        requestBadgePermission: true, // 🔥 CHANGÉ : Redemander ici aussi
-        requestSoundPermission: true, // 🔥 CHANGÉ : Redemander ici aussi
-        onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
-      );
-
-      const InitializationSettings initializationSettings =
-          InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsIOS,
-      );
-
-      await _localNotifications.initialize(
-        initializationSettings,
-        onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
-      );
-
-      // 4. 🔥 AMÉLIORÉ : Récupérer le token FCM avec gestion d'erreur SSL
-      print('🔄 Récupération du token FCM...');
-      String? token;
-
+      // Récupérer le token FCM
       try {
-        // Attendre un peu avant de demander le token FCM
         await Future.delayed(Duration(seconds: 2));
-        token = await _messaging.getToken();
+        String? token = await _messaging.getToken();
+
+        if (token != null) {
+          print('🔥 TOKEN FCM OBTENU: ${token.substring(0, 50)}...');
+          await _saveTokenToFirestore(token);
+        } else {
+          print('❌ Token FCM non disponible');
+          print('⚠️ L\'app continue sans notifications push');
+          return;
+        }
       } catch (e) {
         if (e.toString().contains('SSL error') ||
             e.toString().contains('-1200')) {
           print('⚠️ Erreur SSL détectée, tentative de récupération...');
-
-          // Attendre plus longtemps et réessayer
           await Future.delayed(Duration(seconds: 5));
 
           try {
-            token = await _messaging.getToken();
-            print('✅ Token FCM récupéré après retry');
+            String? token = await _messaging.getToken();
+            if (token != null) {
+              print('✅ Token FCM récupéré après retry');
+              await _saveTokenToFirestore(token);
+            }
           } catch (e2) {
             print('❌ Échec retry token FCM: $e2');
             print('⚠️ L\'app continue sans notifications push');
-
-            // Continuer avec les notifications locales uniquement
-            await _setupLocalNotificationsOnly();
             return;
           }
         } else {
-          print('❌ Erreur non-SSL lors récupération token: $e');
+          print('❌ Erreur token FCM: $e');
           print('⚠️ L\'app continue sans notifications push');
-          await _setupLocalNotificationsOnly();
           return;
         }
       }
 
-      if (token != null) {
-        print('🔥 TOKEN FCM OBTENU: ${token.substring(0, 50)}...');
-        await _saveTokenToFirestore(token);
-      } else {
-        print('❌ Token FCM non disponible');
-        print('⚠️ L\'app continue sans notifications push');
-        await _setupLocalNotificationsOnly();
-        return;
-      }
-
-      // 5. Écouter les messages en foreground
+      // Configurer les listeners Firebase
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-      // 6. Écouter les clics sur notifications
       FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageClick);
 
-      // 7. Gérer les messages reçus quand l'app était fermée
       try {
         RemoteMessage? initialMessage = await _messaging.getInitialMessage();
         if (initialMessage != null) {
@@ -166,142 +155,87 @@ class NotificationService {
         print('⚠️ Erreur getInitialMessage: $e');
       }
 
-      // 8. Écouter les changements de token
       _messaging.onTokenRefresh.listen((String token) {
         print('🔄 Token FCM mis à jour: ${token.substring(0, 50)}...');
         _saveTokenToFirestore(token);
       });
 
-      print('✅ Service de notifications initialisé avec succès');
+      print('✅ Firebase configuré avec succès');
     } catch (e) {
-      print('❌ Erreur lors de l\'initialisation des notifications: $e');
-
-      // Si c'est une erreur SSL ou permissions, continuer sans crash
-      if (e.toString().contains('SSL error') ||
-          e.toString().contains('-1200') ||
-          e.toString().contains('permission')) {
-        print('⚠️ L\'app continue sans notifications push à cause de: $e');
-        await _setupLocalNotificationsOnly();
-        return;
-      }
-
-      // Pour les autres erreurs, ne pas crasher non plus
-      print('⚠️ L\'app continue malgré l\'erreur: $e');
-      await _setupLocalNotificationsOnly();
+      print('❌ Erreur Firebase: $e');
+      print('⚠️ L\'app continue sans notifications push');
     }
   }
 
-// 🔥 NOUVELLE MÉTHODE : Configuration notifications locales uniquement
-  static Future<void> _setupLocalNotificationsOnly() async {
-    try {
-      print('🔧 Configuration notifications locales uniquement...');
-
-      const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-
-      const DarwinInitializationSettings initializationSettingsIOS =
-          DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-        onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
-      );
-
-      const InitializationSettings initializationSettings =
-          InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsIOS,
-      );
-
-      await _localNotifications.initialize(
-        initializationSettings,
-        onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
-      );
-
-      print('✅ Notifications locales configurées (sans push)');
-    } catch (e) {
-      print('❌ Erreur configuration notifications locales: $e');
-    }
-  }
-
+  /// Effacer le badge de notification
   static Future<void> clearBadge() async {
     try {
       print('🔧 Début clearBadge...');
 
-      // Réinitialiser le badge avec flutter_app_badger
-      await FlutterAppBadger.removeBadge();
-      print('✅ FlutterAppBadger.removeBadge() terminé');
+      // Badge unifié avec app_badge_plus
+      await AppBadgePlus.updateBadge(0);
+      print('✅ Badge réinitialisé');
 
-      // Force à 0 explicitement
-      await FlutterAppBadger.updateBadgeCount(0);
-      print('✅ FlutterAppBadger.updateBadgeCount(0) terminé');
-
-      // Annuler toutes les notifications locales
+      // Annuler toutes les notifications
       await _localNotifications.cancelAll();
-      print('✅ _localNotifications.cancelAll() terminé');
-
-      print('✅ Badge réinitialisé complètement');
+      print('✅ Toutes les notifications annulées');
     } catch (e) {
       print('❌ Erreur réinitialisation badge: $e');
     }
   }
 
-// Méthode pour définir le nombre du badge
+  /// Définir le badge de notification
   static Future<void> setBadgeCount(int count) async {
     try {
-      if (count > 0) {
-        await FlutterAppBadger.updateBadgeCount(count);
-      } else {
-        await FlutterAppBadger.removeBadge();
-      }
+      await AppBadgePlus.updateBadge(count);
       print('✅ Badge mis à jour: $count');
     } catch (e) {
       print('❌ Erreur mise à jour badge: $e');
     }
   }
 
-// Méthode pour vérifier si les badges sont supportés
+  /// Vérifier si les badges sont supportés
   static Future<bool> isBadgeSupported() async {
-    return await FlutterAppBadger.isAppBadgeSupported();
+    try {
+      return await AppBadgePlus.isSupported();
+    } catch (e) {
+      print('❌ Erreur vérification support badge: $e');
+      return false;
+    }
   }
 
-  // Callback pour les notifications locales iOS (anciennes versions)
-  static void _onDidReceiveLocalNotification(
-      int id, String? title, String? body, String? payload) {
-    print('📱 Notification locale reçue: $title - $body');
-  }
-
-  // Callback pour les réponses aux notifications
-  static void _onDidReceiveNotificationResponse(NotificationResponse response) {
-    print('🔔 Réponse notification: ${response.payload}');
-    // Ici vous pouvez naviguer vers l'écran approprié
-  }
-
-  // Sauvegarder le token FCM dans Firestore
+  /// Sauvegarder le token FCM dans Firestore
   static Future<void> _saveTokenToFirestore(String token) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // CORRECTION: Utiliser set avec merge pour créer le document s'il n'existe pas
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.email?.toLowerCase())
-            .update({
-          'fcmToken': token,
-          'lastTokenUpdate': FieldValue.serverTimestamp(),
-          'platform': Platform.isIOS ? 'ios' : 'android',
-        });
+            .set(
+                {
+              'fcmToken': token,
+              'lastTokenUpdate': FieldValue.serverTimestamp(),
+              'platform': Platform.isIOS ? 'ios' : 'android',
+            },
+                SetOptions(
+                    merge:
+                        true)); // ✅ merge: true crée le document s'il n'existe pas
+
         print('✅ Token FCM sauvegardé pour ${user.email}');
+      } else {
+        print('⚠️ Aucun utilisateur connecté pour sauvegarder le token FCM');
       }
     } catch (e) {
       print('❌ Erreur sauvegarde token: $e');
     }
   }
 
-  // Gérer les messages en foreground
+  /// Gérer les messages en foreground
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
     print('📨 Message reçu en foreground: ${message.notification?.title}');
 
-    // Afficher notification locale
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'messages_channel',
@@ -333,14 +267,14 @@ class NotificationService {
     );
   }
 
-  // Gérer les clics sur notifications
+  /// Gérer les clics sur notifications
   static void _handleMessageClick(RemoteMessage message) {
     print('🔔 Notification cliquée: ${message.data}');
     // Ici vous pouvez naviguer vers l'écran approprié
     // Exemple: NavigationService.navigateToMessages(message.data['childId']);
   }
 
-  // Envoyer une notification à un utilisateur spécifique
+  /// Envoyer une notification à un utilisateur spécifique
   static Future<void> sendNotificationToUser({
     required String recipientUserId,
     required String title,
@@ -350,7 +284,6 @@ class NotificationService {
     try {
       print('📤 Envoi notification vers: $recipientUserId');
 
-      // Créer le document dans Firestore pour déclencher la Cloud Function
       await FirebaseFirestore.instance.collection('notifications').add({
         'recipientUserId': recipientUserId,
         'title': title,
@@ -367,7 +300,7 @@ class NotificationService {
     }
   }
 
-  // Méthode pour tester les notifications
+  /// Méthode pour tester les notifications
   static Future<void> testNotification() async {
     try {
       const AndroidNotificationDetails androidDetails =
@@ -377,6 +310,7 @@ class NotificationService {
         channelDescription: 'Notifications de test',
         importance: Importance.high,
         priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
       );
 
       const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -401,5 +335,24 @@ class NotificationService {
     } catch (e) {
       print('❌ Erreur test notification: $e');
     }
+  }
+
+  // === CALLBACKS (iOS + Android) ===
+
+  static void _onDidReceiveLocalNotification(
+      int id, String? title, String? body, String? payload) {
+    print('📱 Notification locale reçue: $title - $body');
+  }
+
+  static void _onDidReceiveNotificationResponse(NotificationResponse response) {
+    print('🔔 Réponse notification: ${response.payload}');
+  }
+
+  /// Handler global pour les messages Firebase en arrière-plan
+  @pragma('vm:entry-point')
+  static Future<void> firebaseMessagingBackgroundHandler(
+      RemoteMessage message) async {
+    print(
+        '📱 Message Firebase en arrière-plan: ${message.notification?.title}');
   }
 }

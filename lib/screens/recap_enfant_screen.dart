@@ -214,6 +214,29 @@ class _RecapScreenState extends State<RecapScreen> {
     }
   }
 
+  String _getCategoryDisplayName(String category, int count) {
+    switch (category) {
+      case 'repas':
+        return count <= 1 ? 'Repas' : 'Repas'; // Invariable
+      case 'activites':
+        return count <= 1 ? 'Activité' : 'Activités';
+      case 'siestes':
+        return count <= 1 ? 'Sieste' : 'Siestes';
+      case 'changes':
+        return count <= 1 ? 'Change' : 'Changes';
+      case 'sante':
+        return count <= 1 ? 'Santé' : 'Santé'; // Invariable
+      case 'horaires':
+        return count <= 1 ? 'Horaire' : 'Horaires';
+      case 'photos':
+        return count <= 1 ? 'Photo' : 'Photos';
+      case 'transmissions':
+        return count <= 1 ? 'Transmission' : 'Transmissions';
+      default:
+        return category;
+    }
+  }
+
   Future<void> _loadChildRecapData(String childId, String structureId) async {
     try {
       final today = DateTime.now();
@@ -772,7 +795,7 @@ class _RecapScreenState extends State<RecapScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Récapitulatif pour ${enfant['prenom']}",
+                              "Récapitulatif - ${enfant['prenom']}",
                               style: TextStyle(
                                 fontSize: isTabletDevice ? 24 : 18,
                                 fontWeight: FontWeight.bold,
@@ -845,6 +868,15 @@ class _RecapScreenState extends State<RecapScreen> {
     );
   }
 
+  String _getHoraireDisplayText(String? type, String? details) {
+    if (type == 'arrivee' || details == 'arrivee' || details == 'Arrivee') {
+      return 'Arrivée';
+    } else if (type == 'depart' || details == 'depart' || details == 'Depart') {
+      return 'Départ';
+    }
+    return details ?? '';
+  }
+
   Widget _buildRecapSection(
       String category, List<Map<String, dynamic>> items, bool isTablet) {
     if (items.isEmpty) return Container();
@@ -883,8 +915,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 ),
                 SizedBox(width: 12),
                 Text(
-                  category.substring(0, 1).toUpperCase() +
-                      category.substring(1),
+                  _getCategoryDisplayName(category, items.length),
                   style: TextStyle(
                     fontSize: isTablet ? 20 : 18,
                     fontWeight: FontWeight.bold,
@@ -944,7 +975,10 @@ class _RecapScreenState extends State<RecapScreen> {
                 title: Text(
                   category == 'photos'
                       ? '1 photo'
-                      : (item['type'] ?? item['details'] ?? ''),
+                      : category == 'horaires'
+                          ? _getHoraireDisplayText(
+                              item['type'], item['details'])
+                          : (item['type'] ?? item['details'] ?? ''),
                   style: TextStyle(
                     fontSize: isTablet ? 16 : 14,
                     fontWeight: FontWeight.bold,
@@ -1142,7 +1176,7 @@ class _RecapScreenState extends State<RecapScreen> {
                           ),
                           SizedBox(width: 4),
                           Text(
-                            "${count} ${category.substring(0, 1).toUpperCase() + category.substring(1)}",
+                            "${count} ${_getCategoryDisplayName(category, count)}",
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1365,7 +1399,7 @@ class _RecapScreenState extends State<RecapScreen> {
                               SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  "${count} ${category.substring(0, 1).toUpperCase() + category.substring(1)}",
+                                  "${count} ${_getCategoryDisplayName(category, count)}",
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,

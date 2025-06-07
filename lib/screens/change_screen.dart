@@ -632,7 +632,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter un change pour ${enfant['prenom']}",
+                                    "Ajouter un change - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -738,7 +738,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Type de change",
+                                    "Propreté",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -806,14 +806,6 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    "État du change",
-                                    style: TextStyle(
-                                      fontSize: isTabletDevice ? 18 : 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade800,
-                                    ),
-                                  ),
                                   SizedBox(height: 12),
                                   Row(
                                     children: [

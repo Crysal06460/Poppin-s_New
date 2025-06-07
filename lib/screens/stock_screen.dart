@@ -44,7 +44,7 @@ class _StockScreenState extends State<StockScreen> {
       'Liniment',
       'Eau nettoyante',
       'Coton',
-      'Lingette',
+      'Lingettes',
       'Mouchoirs'
     ],
     'Alimentation': [
@@ -53,12 +53,12 @@ class _StockScreenState extends State<StockScreen> {
       'Petits pots',
       'Biberons',
       'Gourde',
-      'Tétine biberon'
+      'Tétine de biberon'
     ],
     'Santé': [
       'Crème de change',
       'Doliprane',
-      'Serum physiologique',
+      'Sérum physiologique',
       'Thermomètre'
     ],
     'Change': [
@@ -66,11 +66,11 @@ class _StockScreenState extends State<StockScreen> {
       'Body',
       'Pantalon',
       'Sweat',
-      'Teeshirt',
+      'T-shirt',
       'Short',
-      'Chaussette',
-      'Chausson',
-      'Bavoirs'
+      'Chaussettes',
+      'Chaussons',
+      'Bavoir'
     ],
     'Sommeil': ['Turbulette', 'Doudou', 'Tétine'],
     'Sortie': [
@@ -78,15 +78,14 @@ class _StockScreenState extends State<StockScreen> {
       'Bonnet',
       'Gants',
       'Casquette',
-      'Lunette de soleil',
+      'Lunettes de soleil',
       'Bottes de pluie',
-      'Kway'
+      'K-way'
     ],
     'Personnalisés':
         [], // Cette catégorie contiendra les articles personnalisés de la MAM
   };
 
-  // Liste plate de tous les articles pour compatibilité avec le code existant
   List<String> stockItems = [];
 
   // Garde en mémoire quelles catégories sont développées
@@ -655,7 +654,7 @@ class _StockScreenState extends State<StockScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Besoins en stock pour ${enfant['prenom']}",
+                                    "Gestion des stocks - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -684,14 +683,6 @@ class _StockScreenState extends State<StockScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Cochez ce qui va bientôt manquer :",
-                              style: TextStyle(
-                                fontSize: isTabletDevice ? 18 : 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade800,
-                              ),
-                            ),
                             SizedBox(height: 16),
 
                             // Liste des catégories

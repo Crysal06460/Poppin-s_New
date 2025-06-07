@@ -591,6 +591,71 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     }
   }
 
+  Future<String> _getParentsNames(String childId, String structureId) async {
+    try {
+      print(
+          "🔍 Recherche des parents pour l'enfant: $childId dans structure: $structureId");
+
+      // Récupérer le document enfant qui contient les infos des parents
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) {
+        print("❌ Document enfant non trouvé");
+        return "Discussion avec les parents";
+      }
+
+      final childData = childDoc.data()!;
+      print("📝 Données enfant récupérées: $childData");
+
+      List<String> parentsNames = [];
+
+      // Récupérer le prénom du parent1
+      final parent1Data = childData['parent1'] as Map<String, dynamic>?;
+      if (parent1Data != null) {
+        final parent1FirstName =
+            parent1Data['firstName']?.toString().trim() ?? '';
+        print("👤 Parent1 firstName: '$parent1FirstName'");
+        if (parent1FirstName.isNotEmpty) {
+          parentsNames.add(parent1FirstName);
+        }
+      }
+
+      // Récupérer le prénom du parent2 (s'il existe)
+      final parent2Data = childData['parent2'] as Map<String, dynamic>?;
+      if (parent2Data != null) {
+        final parent2FirstName =
+            parent2Data['firstName']?.toString().trim() ?? '';
+        print("👤 Parent2 firstName: '$parent2FirstName'");
+        if (parent2FirstName.isNotEmpty) {
+          parentsNames.add(parent2FirstName);
+        }
+      }
+
+      print("📋 Liste des prénoms trouvés: $parentsNames");
+
+      if (parentsNames.isEmpty) {
+        print("⚠️ Aucun prénom valide trouvé");
+        return "Discussion avec les parents";
+      } else if (parentsNames.length == 1) {
+        final result = "Discussion avec ${parentsNames[0]}";
+        print("✅ Résultat final (1 parent): $result");
+        return result;
+      } else {
+        final result = "Discussion avec ${parentsNames.join(' et ')}";
+        print("✅ Résultat final (${parentsNames.length} parents): $result");
+        return result;
+      }
+    } catch (e) {
+      print('❌ Erreur récupération noms parents: $e');
+      return "Discussion avec les parents";
+    }
+  }
+
   // 🔥 NOUVELLE MÉTHODE : Comme _notifyAssistanteMaternel dans parent_messages_screen
   Future<void> _notifyParent(String childId, String structureId) async {
     try {
@@ -1147,6 +1212,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
             child: Column(
               children: [
                 // Header
+                // Header
                 Container(
                   padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
                   decoration: BoxDecoration(
@@ -1179,29 +1245,34 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                       ),
                       SizedBox(width: isTabletDevice ? 20 : 16),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Discussion avec ${enfant['prenom']}",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isTabletDevice ? 22 : 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              "Parent",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: isTabletDevice ? 16 : 14,
-                              ),
-                            ),
-                          ],
+                        child: FutureBuilder<String>(
+                          future: _getParentsNames(
+                              enfant['id'], enfant['structureId'] ?? ''),
+                          builder: (context, snapshot) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  snapshot.data ??
+                                      "Discussion avec les parents",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isTabletDevice ? 22 : 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  "Enfant : ${enfant['prenom']}",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: isTabletDevice ? 16 : 14,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
-                      // 🧪 BOUTON TEST AJOUTÉ
-
                       SizedBox(width: 8),
                       IconButton(
                         icon: Icon(
@@ -1574,17 +1645,23 @@ class _ExchangesScreenState extends State<ExchangesScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
-                    ),
+                  FutureBuilder<String>(
+                    future: _getParentsNames(
+                        enfant['id'], enfant['structureId'] ?? ''),
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? "Discussion avec les parents",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isBoy ? primaryBlue : primaryRed,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Discussion avec le parent",
+                    "Enfant : ${enfant['prenom']}",
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade600,
@@ -1663,8 +1740,6 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     );
   }
 
-  // État vide (aucun enfant)
-  // État vide (aucun enfant)
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -1757,156 +1832,218 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     final isBoy = enfant['genre'] == 'Garçon';
     final avatarColor = isBoy ? primaryBlue : primaryRed;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // En-tête avec gradient et infos enfant
-              Container(
-                decoration: BoxDecoration(
-                  color: avatarColor,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Avatar avec photo de l'enfant
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: Center(
-                        child: enfant['photoUrl'] != null &&
-                                enfant['photoUrl'].isNotEmpty
-                            ? ClipOval(
-                                child: Image.network(
-                                  enfant['photoUrl'],
-                                  width: 55,
-                                  height: 55,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Text(
-                                    enfant['prenom'][0].toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: avatarColor,
+    return GestureDetector(
+      onTap: () => _showChatPopup(enfant),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // En-tête avec gradient et infos enfant
+                Container(
+                  decoration: BoxDecoration(
+                    color: avatarColor,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Avatar avec photo de l'enfant
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: Center(
+                          child: enfant['photoUrl'] != null &&
+                                  enfant['photoUrl'].isNotEmpty
+                              ? ClipOval(
+                                  child: Image.network(
+                                    enfant['photoUrl'],
+                                    width: 55,
+                                    height: 55,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) => Text(
+                                      enfant['prenom'][0].toUpperCase(),
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: avatarColor,
+                                      ),
                                     ),
                                   ),
+                                )
+                              : Text(
+                                  enfant['prenom'][0].toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: avatarColor,
+                                  ),
                                 ),
-                              )
-                            : Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: avatarColor,
-                                ),
-                              ),
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        enfant['prenom'],
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Zone centrale avec "Aucun message" ou dernier message
-              Expanded(
-                child: Center(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('exchanges')
-                        .where('childId', isEqualTo: enfant['id'])
-                        .where('nonLu', isEqualTo: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final nonLuCount = snapshot.data?.docs.length ?? 0;
-                      if (nonLuCount > 0) {
-                        return Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: primaryRed,
-                                  shape: BoxShape.circle,
-                                  border:
-                                      Border.all(color: Colors.white, width: 2),
-                                ),
-                                child: Text(
-                                  nonLuCount.toString(),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: FutureBuilder<String>(
+                          future: _getParentsNames(
+                              enfant['id'], enfant['structureId'] ?? ''),
+                          builder: (context, snapshot) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  snapshot.data ??
+                                      "Discussion avec les parents",
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                margin: EdgeInsets.only(top: 2),
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: primaryRed.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  "Messages non lus",
-                                  style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  "Enfant : ${enfant['prenom']}",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white70,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      } else {
-                        return SizedBox.shrink();
-                      }
-                    },
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
 
-          // Bouton + pour ouvrir la discussion
-          Positioned(
-            top: 16,
-            right: 16,
-            child: GestureDetector(
-              onTap: () => _showChatPopup(enfant),
+                // Zone centrale avec dernier message ou état vide
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('exchanges')
+                          .where('childId', isEqualTo: enfant['id'])
+                          .orderBy('timestamp', descending: true)
+                          .limit(1)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Aucun message",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final lastMessage = snapshot.data!.docs.first.data()
+                            as Map<String, dynamic>;
+                        final isFile = lastMessage['type'] == 'file';
+                        final timestamp =
+                            lastMessage['timestamp'] as Timestamp?;
+                        final formattedTime = timestamp != null
+                            ? DateFormat('HH:mm').format(timestamp.toDate())
+                            : '';
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    isFile
+                                        ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
+                                        : lastMessage['content'] != null
+                                            ? (lastMessage['content']
+                                                        .toString()
+                                                        .length >
+                                                    40
+                                                ? "${lastMessage['content'].toString().substring(0, 40)}..."
+                                                : lastMessage['content']
+                                                    .toString())
+                                            : "",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: lastMessage['nonLu'] == true
+                                          ? Colors.black87
+                                          : Colors.grey.shade600,
+                                      fontWeight: lastMessage['nonLu'] == true
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  if (formattedTime.isNotEmpty) ...[
+                                    SizedBox(height: 4),
+                                    Text(
+                                      formattedTime,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Bouton + pour ouvrir la discussion
+            Positioned(
+              top: 16,
+              right: 16,
               child: Container(
                 width: 36,
                 height: 36,
@@ -1928,44 +2065,66 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                 ),
               ),
             ),
-          ),
 
-          // Indicateur de messages non lus
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('exchanges')
-                .where('childId', isEqualTo: enfant['id'])
-                .where('nonLu', isEqualTo: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final nonLuCount = snapshot.data?.docs.length ?? 0;
-              if (nonLuCount > 0) {
-                return Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: primaryRed,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+            // Indicateur de messages non lus
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('exchanges')
+                  .where('childId', isEqualTo: enfant['id'])
+                  .where('nonLu', isEqualTo: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final nonLuCount = snapshot.data?.docs.length ?? 0;
+                if (nonLuCount > 0) {
+                  return Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: primaryRed,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Text(
+                            nonLuCount.toString(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          margin: EdgeInsets.only(top: 2),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: primaryRed.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "Messages non lus",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      nonLuCount.toString(),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                );
-              } else {
-                return SizedBox.shrink();
-              }
-            },
-          ),
-        ],
+                  );
+                } else {
+                  return SizedBox.shrink();
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

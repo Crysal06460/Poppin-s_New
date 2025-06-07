@@ -35,23 +35,13 @@ class _SiesteScreenState extends State<SiesteScreen> {
   Color primaryColor = Color(0xFF3D9DF2); // primaryBlue
   Color secondaryColor = Color(0xFFDFE9F2); // lightBlue
 
-  String _siesteDuration = "1 heure";
+  int _siesteHours = 1;
+  int _siesteMinutes = 0;
+  TextEditingController _durationController =
+      TextEditingController(text: "1h 00min");
   String _sleepQuality = "Bien dormi";
   TextEditingController _observationsController = TextEditingController();
   String _siesteTime = "";
-
-  final List<String> durations = [
-    "15 minutes",
-    "30 minutes",
-    "45 minutes",
-    "1 heure",
-    "1 heure 15",
-    "1 heure 30",
-    "1 heure 45",
-    "2 heures",
-    "2 heures 15",
-    "2 heures 30"
-  ];
 
   final List<Map<String, dynamic>> qualityLevels = [
     {"label": "Pas dormi", "stars": 1},
@@ -63,6 +53,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
   @override
   void dispose() {
     _observationsController.dispose();
+    _durationController.dispose(); // Ajouter cette ligne
     super.dispose();
   }
 
@@ -127,6 +118,276 @@ class _SiesteScreenState extends State<SiesteScreen> {
         onTimeSelected(timeString);
       });
     }
+  }
+
+  void _showDurationPicker(StateSetter setState) {
+    final bool isTabletDevice = isTablet(context);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        int tempHours = _siesteHours;
+        int tempMinutes = _siesteMinutes;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              height: isTabletDevice ? 400 : 350,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: EdgeInsets.only(top: 12),
+                    width: 50,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+
+                  // Titre
+                  Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
+                      "Durée de la sieste",
+                      style: TextStyle(
+                        fontSize: isTabletDevice ? 22 : 20,
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                  ),
+
+                  // Sélecteurs de durée
+                  Expanded(
+                    child: Row(
+                      children: [
+                        // Sélecteur d'heures
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text(
+                                "Heures",
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 18 : 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              SizedBox(height: 12),
+                              Expanded(
+                                child: ListWheelScrollView.useDelegate(
+                                  itemExtent: isTabletDevice ? 60 : 50,
+                                  perspective: 0.005,
+                                  diameterRatio: 1.2,
+                                  physics: FixedExtentScrollPhysics(),
+                                  onSelectedItemChanged: (index) {
+                                    setModalState(() {
+                                      tempHours = index;
+                                    });
+                                  },
+                                  controller: FixedExtentScrollController(
+                                    initialItem: tempHours,
+                                  ),
+                                  childDelegate: ListWheelChildBuilderDelegate(
+                                    builder: (context, index) {
+                                      return Container(
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: index == tempHours
+                                              ? primaryColor.withOpacity(0.1)
+                                              : Colors.transparent,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          "$index h",
+                                          style: TextStyle(
+                                            fontSize: isTabletDevice ? 24 : 20,
+                                            fontWeight: index == tempHours
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                            color: index == tempHours
+                                                ? primaryColor
+                                                : Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    childCount: 5, // 0 à 4 heures
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Séparateur
+                        Container(
+                          width: 2,
+                          height: 100,
+                          color: Colors.grey.shade200,
+                          margin: EdgeInsets.symmetric(horizontal: 20),
+                        ),
+
+                        // Sélecteur de minutes
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text(
+                                "Minutes",
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 18 : 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              SizedBox(height: 12),
+                              Expanded(
+                                child: ListWheelScrollView.useDelegate(
+                                  itemExtent: isTabletDevice ? 60 : 50,
+                                  perspective: 0.005,
+                                  diameterRatio: 1.2,
+                                  physics: FixedExtentScrollPhysics(),
+                                  onSelectedItemChanged: (index) {
+                                    setModalState(() {
+                                      tempMinutes =
+                                          index * 5; // Incréments de 5 minutes
+                                    });
+                                  },
+                                  controller: FixedExtentScrollController(
+                                    initialItem: tempMinutes ~/ 5,
+                                  ),
+                                  childDelegate: ListWheelChildBuilderDelegate(
+                                    builder: (context, index) {
+                                      int minutes = index * 5;
+                                      return Container(
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: minutes == tempMinutes
+                                              ? primaryColor.withOpacity(0.1)
+                                              : Colors.transparent,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          "${minutes.toString().padLeft(2, '0')} min",
+                                          style: TextStyle(
+                                            fontSize: isTabletDevice ? 24 : 20,
+                                            fontWeight: minutes == tempMinutes
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                            color: minutes == tempMinutes
+                                                ? primaryColor
+                                                : Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    childCount:
+                                        12, // 0 à 55 minutes par pas de 5
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Boutons d'action
+                  Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            child: Text(
+                              "ANNULER",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 16 : 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _siesteHours = tempHours;
+                                _siesteMinutes = tempMinutes;
+                                _updateDurationDisplay();
+                              });
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Text(
+                              "CONFIRMER",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 16 : 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _updateDurationDisplay() {
+    String duration = "";
+    if (_siesteHours > 0) {
+      duration += "${_siesteHours}h";
+    }
+    if (_siesteMinutes > 0) {
+      if (duration.isNotEmpty) duration += " ";
+      duration += "${_siesteMinutes.toString().padLeft(2, '0')}min";
+    }
+    if (duration.isEmpty) {
+      duration = "0min";
+    }
+    _durationController.text = duration;
   }
 
   Future<void> _loadEnfantsDuJour() async {
@@ -599,7 +860,6 @@ class _SiesteScreenState extends State<SiesteScreen> {
   void _showAddSiestePopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String localSiesteTime = _siesteTime;
-    String localSiesteDuration = _siesteDuration;
     String localSleepQuality = _sleepQuality;
     String? errorMessage;
 
@@ -678,7 +938,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter une sieste pour ${enfant['prenom']}",
+                                    "Ajouter une sieste - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -785,7 +1045,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Comment était la sieste de ${enfant['prenom']} ?",
+                                    "Comment a dormi ${enfant['prenom']} ?",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -857,6 +1117,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                             ),
 
                             // Section Durée de la sieste
+                            // Section Durée de la sieste
                             Container(
                               margin: EdgeInsets.only(
                                   bottom: isTabletDevice ? 24 : 16),
@@ -872,52 +1133,39 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     ),
                                   ),
                                   SizedBox(height: 12),
-                                  Container(
-                                    padding:
-                                        EdgeInsets.symmetric(horizontal: 16),
-                                    decoration: BoxDecoration(
-                                      color: lightBlue.withOpacity(0.5),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: Colors.grey.shade300,
-                                        width: 1,
+                                  InkWell(
+                                    onTap: () => _showDurationPicker(setState),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 16, horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: lightBlue.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
                                       ),
-                                    ),
-                                    child: DropdownButton<String>(
-                                      value: localSiesteDuration,
-                                      isExpanded: true,
-                                      underline: Container(),
-                                      iconSize: isTabletDevice ? 28 : 24,
-                                      icon: Icon(
-                                        Icons.arrow_drop_down,
-                                        color: primaryColor,
-                                      ),
-                                      items: durations.map((String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Padding(
-                                            padding: EdgeInsets.symmetric(
-                                                vertical: 8),
-                                            child: Text(
-                                              value,
-                                              style: TextStyle(
-                                                fontSize:
-                                                    isTabletDevice ? 16 : 14,
-                                                color: Colors.grey.shade800,
-                                              ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _durationController.text,
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: primaryColor,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (newValue) {
-                                        setState(() {
-                                          localSiesteDuration = newValue!;
-                                        });
-                                      },
-                                      dropdownColor: Colors.white,
-                                      style: TextStyle(
-                                        fontSize: isTabletDevice ? 16 : 14,
-                                        color: Colors.black87,
+                                          Icon(
+                                            Icons.timer_outlined,
+                                            color:
+                                                primaryColor.withOpacity(0.7),
+                                            size: isTabletDevice ? 24 : 20,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -1057,7 +1305,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
                                     // Si tout est validé, ajouter la sieste
                                     _siesteTime = localSiesteTime;
-                                    _siesteDuration = localSiesteDuration;
+                                    _sleepQuality = localSleepQuality;
                                     _sleepQuality = localSleepQuality;
 
                                     // Ajouter la sieste dans Firebase
@@ -1162,7 +1410,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
       DocumentReference siesteRef = FirebaseFirestore.instance
           .collection('structures')
-          .doc(structureId) // Utiliser l'ID de structure correct
+          .doc(structureId)
           .collection('children')
           .doc(childId)
           .collection('siestes')
@@ -1171,7 +1419,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
       final siesteData = {
         'heure': _siesteTime,
         'date': DateTime.now(),
-        'duration': _siesteDuration,
+        'duration': _durationController.text, // Utiliser le nouveau format
         'qualite': _sleepQuality,
         'moonCount': _getMoonCountFromQuality(_sleepQuality),
         'observations': _observationsController.text,
@@ -1181,7 +1429,9 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
       setState(() {
         _siesteTime = '';
-        _siesteDuration = '1 heure';
+        _siesteHours = 1; // Réinitialiser
+        _siesteMinutes = 0; // Réinitialiser
+        _updateDurationDisplay(); // Mettre à jour l'affichage
         _sleepQuality = 'Bien dormi';
         _observationsController.clear();
       });

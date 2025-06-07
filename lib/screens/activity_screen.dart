@@ -29,18 +29,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
   TextEditingController newActivityController = TextEditingController();
 
   // Couleurs officielles de l'application
-  static const Color primaryRed = Color(0xFFD94350); // #D94350
-  static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
-  static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
-  static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+  static const Color primaryRed = Color(0xFFD94350);
+  static const Color primaryBlue = Color(0xFF3D9DF2);
+  static const Color lightBlue = Color(0xFFDFE9F2);
+  static const Color brightCyan = Color(0xFF05C7F2);
+  static const Color primaryYellow = Color(0xFFF2B705);
 
-  // Utilisation des couleurs officielles
-  Color primaryColor = Color(0xFF3D9DF2); // primaryBlue par défaut
-  Color secondaryColor = Color(0xFFDFE9F2); // lightBlue par défaut
+  Color primaryColor = Color(0xFF3D9DF2);
+  Color secondaryColor = Color(0xFFDFE9F2);
 
   String _activityType = "Musique";
-  String _activityDuration = "1 heure";
+  String _activityAttitude =
+      "Curieux"; // CHANGÉ : _activityDuration par _activityAttitude
   String _participationLevel = "Bien participé";
   String _activityTime = "";
 
@@ -59,21 +59,31 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   // Combinaison des activités standards et personnalisées
   List<String> get activityTypes => [
-    ...standardActivityTypes,
-    ...customActivityTypes,
-  ];
+        ...standardActivityTypes,
+        ...customActivityTypes,
+      ];
 
-  // Liste des durées disponibles
-  final List<String> durations = [
-    "15 minutes",
-    "30 minutes",
-    "45 minutes",
-    "1 heure",
-    "1 heure 15",
-    "1 heure 30",
-    "1 heure 45",
-    "2 heures",
+  // NOUVELLE LISTE : Liste des attitudes disponibles
+  final List<String> attitudes = [
+    "Curieux",
+    "Attentif",
+    "Hésitant",
+    "Enjoué",
   ];
+  IconData _getAttitudeIcon(String attitude) {
+    switch (attitude.toLowerCase()) {
+      case 'curieux':
+        return Icons.search;
+      case 'attentif':
+        return Icons.visibility;
+      case 'hésitant':
+        return Icons.help_outline;
+      case 'enjoué':
+        return Icons.sentiment_very_satisfied;
+      default:
+        return Icons.sentiment_neutral;
+    }
+  }
 
   int _getParticipationLevel(String level) {
     switch (level) {
@@ -253,9 +263,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .collection('settings')
           .doc('customActivityTypes')
           .set({
-            'items': customActivityTypes,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        'items': customActivityTypes,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -357,9 +367,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .collection('settings')
           .doc('customActivityTypes')
           .set({
-            'items': customActivityTypes,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        'items': customActivityTypes,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -415,8 +425,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
-      final capitalizedWeekday =
-          todayWeekday[0].toUpperCase() +
+      final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
       // Récupérer la structure pour déterminer le type
@@ -435,7 +444,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       final String structureType = structureSnapshot.exists
           ? (structureSnapshot.data()?['structureType'] ??
-                "AssistanteMaternelle")
+              "AssistanteMaternelle")
           : "AssistanteMaternelle";
 
       // Récupérer tous les enfants de la structure
@@ -446,9 +455,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .get();
 
       // Liste complète de tous les enfants
-      List<Map<String, dynamic>> allChildren = snapshot.docs
-          .map((doc) => {...doc.data(), 'id': doc.id})
-          .toList();
+      List<Map<String, dynamic>> allChildren =
+          snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
 
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
@@ -564,9 +572,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(
-            horizontal: isTabletDevice
-                ? MediaQuery.of(context).size.width * 0.25
-                : 20,
+            horizontal:
+                isTabletDevice ? MediaQuery.of(context).size.width * 0.25 : 20,
             vertical: 20,
           ),
           child: Container(
@@ -651,7 +658,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Type d'activité
+                        // Type d'activité avec attitude
                         Container(
                           width: double.infinity,
                           padding: EdgeInsets.all(16),
@@ -676,8 +683,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 ),
                               ),
                               Spacer(),
+                              Icon(
+                                _getAttitudeIcon(
+                                    activityData['attitude'] ?? 'Curieux'),
+                                color: primaryColor,
+                                size: isTabletDevice ? 22 : 18,
+                              ),
+                              SizedBox(width: 8),
                               Text(
-                                "Durée: ${activityData['duration']}",
+                                "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}",
                                 style: TextStyle(
                                   fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w600,
@@ -690,12 +704,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                         SizedBox(height: 16),
 
-                        // Participation - CHANGÉ DE JAUNE À BLEU CLAIR
+                        // Participation
                         Container(
                           width: double.infinity,
                           padding: EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: lightBlue, // Fond bleu à la place du jaune
+                            color: lightBlue,
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -705,9 +719,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   activityData['participationLevel'] ?? 0,
                                   (index) => Padding(
                                     padding: EdgeInsets.only(
-                                      right:
-                                          index <
-                                              (activityData['participationLevel'] ??
+                                      right: index <
+                                              (activityData[
+                                                          'participationLevel'] ??
                                                       0) -
                                                   1
                                           ? 4
@@ -715,8 +729,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     ),
                                     child: Icon(
                                       Icons.star,
-                                      color:
-                                          primaryYellow, // Étoiles restent jaunes
+                                      color: primaryYellow,
                                       size: isTabletDevice ? 22 : 20,
                                     ),
                                   ),
@@ -728,8 +741,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 style: TextStyle(
                                   fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w500,
-                                  color:
-                                      primaryColor, // Texte en bleu comme le fond
+                                  color: primaryColor,
                                 ),
                               ),
                             ],
@@ -787,7 +799,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               ),
                             ),
                             child: Text(
-                              "FERMER", // Texte en majuscule comme sur la page Repas
+                              "FERMER",
                               style: TextStyle(
                                 fontSize: isTabletDevice ? 16 : 14,
                                 fontWeight: FontWeight.w600,
@@ -931,19 +943,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String localActivityTime = _activityTime;
     String localActivityType = _activityType;
-    String localActivityDuration = _activityDuration;
+    String localActivityAttitude =
+        _activityAttitude; // CHANGÉ : localActivityDuration par localActivityAttitude
     String localParticipationLevel = _participationLevel;
     String? errorMessage;
 
     // Réorganiser les types d'activités pour placer les activités personnalisées en haut
     List<String> organizedActivityTypes = [
       ...customActivityTypes,
-      // Séparateur si des activités personnalisées existent
       if (customActivityTypes.isNotEmpty) "_separator_",
       ...standardActivityTypes,
     ];
 
-    // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
 
     showDialog(
@@ -956,14 +967,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              // Largeur adaptée pour iPad
               insetPadding: isTabletDevice
                   ? EdgeInsets.symmetric(
                       horizontal: MediaQuery.of(context).size.width * 0.25,
                     )
                   : EdgeInsets.symmetric(horizontal: 20),
               child: SingleChildScrollView(
-                // Ajout d'un SingleChildScrollView englobant pour éviter le débordement
                 child: Container(
                   padding: EdgeInsets.all(0),
                   decoration: BoxDecoration(
@@ -978,8 +987,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ],
                   ),
                   child: Column(
-                    mainAxisSize:
-                        MainAxisSize.min, // Assure une taille minimale
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // En-tête avec dégradé
@@ -1000,16 +1008,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         ),
                         padding: EdgeInsets.symmetric(
                           horizontal: 20,
-                          vertical: isTabletDevice
-                              ? 20
-                              : 16, // Moins d'espace vertical sur les petits écrans
+                          vertical: isTabletDevice ? 20 : 16,
                         ),
                         child: Row(
                           children: [
                             Container(
                               padding: EdgeInsets.all(
                                 isTabletDevice ? 12 : 10,
-                              ), // Plus petit sur les petits écrans
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
@@ -1026,7 +1032,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter une activité pour ${enfant['prenom']}",
+                                    "Ajouter une activité - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -1053,17 +1059,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       Padding(
                         padding: EdgeInsets.all(
                           isTabletDevice ? 24 : 16,
-                        ), // Réduit sur les petits écrans
+                        ),
                         child: Column(
-                          mainAxisSize:
-                              MainAxisSize.min, // Assure une taille minimale
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Section Heure de l'activité
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
-                              ), // Moins d'espace vertical
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1080,8 +1085,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     onTap: () => _selectActivityTime(setState, (
                                       time,
                                     ) {
-                                      localActivityTime =
-                                          time; // Utiliser localActivityTime, pas localSiesteTime
+                                      localActivityTime = time;
                                       errorMessage = null;
                                     }),
                                     child: Container(
@@ -1093,9 +1097,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         color: lightBlue,
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color:
-                                              localActivityTime
-                                                  .isEmpty // Utiliser localActivityTime
+                                          color: localActivityTime.isEmpty
                                               ? Colors.transparent
                                               : primaryColor.withOpacity(0.5),
                                           width: 1.5,
@@ -1106,24 +1108,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                             MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
-                                            localActivityTime
-                                                    .isEmpty // Utiliser localActivityTime
+                                            localActivityTime.isEmpty
                                                 ? 'Choisir l\'heure'
-                                                : localActivityTime, // Utiliser localActivityTime
+                                                : localActivityTime,
                                             style: TextStyle(
-                                              fontSize: isTabletDevice
-                                                  ? 18
-                                                  : 16,
-                                              color:
-                                                  localActivityTime
-                                                      .isEmpty // Utiliser localActivityTime
+                                              fontSize:
+                                                  isTabletDevice ? 18 : 16,
+                                              color: localActivityTime.isEmpty
                                                   ? Colors.grey.shade600
                                                   : primaryColor,
                                               fontWeight:
-                                                  localActivityTime
-                                                      .isEmpty // Utiliser localActivityTime
-                                                  ? FontWeight.normal
-                                                  : FontWeight.w600,
+                                                  localActivityTime.isEmpty
+                                                      ? FontWeight.normal
+                                                      : FontWeight.w600,
                                             ),
                                           ),
                                           Icon(
@@ -1145,12 +1142,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
-                              ), // Moins d'espace vertical
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Quelle était l'activité",
+                                    "Qu'elle était l'activité",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -1171,8 +1168,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       ),
                                     ),
                                     child: DropdownButton<String>(
-                                      value:
-                                          (organizedActivityTypes.contains(
+                                      value: (organizedActivityTypes.contains(
                                                 localActivityType,
                                               ) &&
                                               localActivityType !=
@@ -1190,7 +1186,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         String value,
                                       ) {
                                         if (value == "_separator_") {
-                                          // Séparateur entre activités personnalisées et standards
                                           return DropdownMenuItem<String>(
                                             enabled: false,
                                             child: Container(
@@ -1204,7 +1199,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         } else if (customActivityTypes.contains(
                                           value,
                                         )) {
-                                          // Style spécial pour les activités personnalisées
                                           return DropdownMenuItem<String>(
                                             value: value,
                                             child: Container(
@@ -1244,7 +1238,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                             ),
                                           );
                                         } else {
-                                          // Style standard pour les activités standards
                                           return DropdownMenuItem<String>(
                                             value: value,
                                             child: Padding(
@@ -1254,9 +1247,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                               child: Text(
                                                 value,
                                                 style: TextStyle(
-                                                  fontSize: isTabletDevice
-                                                      ? 16
-                                                      : 14,
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
                                                   color: Colors.grey.shade800,
                                                 ),
                                               ),
@@ -1285,9 +1277,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     padding: EdgeInsets.only(top: 8, left: 8),
                                     child: TextButton.icon(
                                       onPressed: () {
-                                        Navigator.pop(
-                                          context,
-                                        ); // Ferme le popup actuel
+                                        Navigator.pop(context);
                                         _showAddCustomActivityDialogFromActivityPopup(
                                           childId,
                                         );
@@ -1316,16 +1306,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               ),
                             ),
 
-                            // Section Durée de l'activité
+                            // NOUVELLE SECTION : Attitude de l'enfant
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
-                              ), // Moins d'espace vertical
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Combien de temps a duré l'activité",
+                                    "Qu'elle était l'attitude ?",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -1346,7 +1336,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       ),
                                     ),
                                     child: DropdownButton<String>(
-                                      value: localActivityDuration,
+                                      value: localActivityAttitude,
                                       isExpanded: true,
                                       underline: Container(),
                                       iconSize: isTabletDevice ? 28 : 24,
@@ -1354,28 +1344,39 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         Icons.arrow_drop_down,
                                         color: primaryColor,
                                       ),
-                                      items: durations.map((String value) {
+                                      items: attitudes.map((String value) {
                                         return DropdownMenuItem<String>(
                                           value: value,
                                           child: Padding(
                                             padding: EdgeInsets.symmetric(
                                               vertical: 8,
                                             ),
-                                            child: Text(
-                                              value,
-                                              style: TextStyle(
-                                                fontSize: isTabletDevice
-                                                    ? 16
-                                                    : 14,
-                                                color: Colors.grey.shade800,
-                                              ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  _getAttitudeIcon(value),
+                                                  color: primaryColor,
+                                                  size:
+                                                      isTabletDevice ? 20 : 18,
+                                                ),
+                                                SizedBox(width: 12),
+                                                Text(
+                                                  value,
+                                                  style: TextStyle(
+                                                    fontSize: isTabletDevice
+                                                        ? 16
+                                                        : 14,
+                                                    color: Colors.grey.shade800,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         );
                                       }).toList(),
                                       onChanged: (newValue) {
                                         setState(() {
-                                          localActivityDuration = newValue!;
+                                          localActivityAttitude = newValue!;
                                         });
                                       },
                                       dropdownColor: Colors.white,
@@ -1393,12 +1394,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
-                              ), // Moins d'espace vertical
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Comment était la participation de ${enfant['prenom']} ?",
+                                    "Comment a participé ${enfant['prenom']} ?",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -1412,9 +1413,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     physics: NeverScrollableScrollPhysics(),
                                     crossAxisSpacing: 12,
                                     mainAxisSpacing: 12,
-                                    childAspectRatio: isTabletDevice
-                                        ? 2.5
-                                        : 2.3, // Ajustement pour les petits écrans
+                                    childAspectRatio:
+                                        isTabletDevice ? 2.5 : 2.3,
                                     children: [
                                       _buildParticipationButtonModern(
                                         'Pas participé',
@@ -1474,7 +1474,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
-                              ), // Moins d'espace vertical
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1616,7 +1616,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     // Si tout est validé, ajouter l'activité
                                     _activityTime = localActivityTime;
                                     _activityType = localActivityType;
-                                    _activityDuration = localActivityDuration;
+                                    _activityAttitude =
+                                        localActivityAttitude; // CHANGÉ
                                     _participationLevel =
                                         localParticipationLevel;
 
@@ -1763,9 +1764,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? primaryColor.withOpacity(0.2)
-              : Colors.grey.shade200,
+          color:
+              isSelected ? primaryColor.withOpacity(0.2) : Colors.grey.shade200,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? primaryColor : Colors.transparent,
@@ -1793,7 +1793,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       DocumentReference activityRef = FirebaseFirestore.instance
           .collection('structures')
-          .doc(structureId) // Utiliser l'ID de structure correct
+          .doc(structureId)
           .collection('children')
           .doc(childId)
           .collection('activites')
@@ -1803,7 +1803,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
         'heure': _activityTime,
         'date': DateTime.now(),
         'type': _activityType,
-        'duration': _activityDuration,
+        'attitude':
+            _activityAttitude, // NOUVELLE LIGNE : sauvegarde de l'attitude
         'participation': _participationLevel,
         'participationLevel': _getParticipationLevel(_participationLevel),
         'observations': _observationsController.text,
@@ -1815,7 +1816,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       setState(() {
         _activityTime = '';
         _activityType = 'Musique';
-        _activityDuration = '1 heure';
+        _activityAttitude = 'Curieux'; // CHANGÉ : réinitialisation attitude
         _participationLevel = 'Bien participé';
         _observationsController.clear();
       });
@@ -1885,8 +1886,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ],
                   ),
                   child: Center(
-                    child:
-                        enfant['photoUrl'] != null &&
+                    child: enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
                         ? ClipOval(
                             child: Image.network(
@@ -1896,13 +1896,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Text(
-                                    enfant['prenom'][0].toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
+                                enfant['prenom'][0].toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           )
                         : Text(
@@ -2063,12 +2063,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ],
                                 ),
                                 SizedBox(height: 4),
-                                Text(
-                                  "Durée: ${activityData['duration']}",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade600,
-                                  ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      _getAttitudeIcon(
+                                          activityData['attitude'] ??
+                                              'Curieux'),
+                                      color: primaryColor,
+                                      size: 14,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // CHANGÉ : affichage attitude
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -2115,13 +2127,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                   )
                 : enfants.isEmpty
-                ? _buildEmptyState()
-                : isTabletDevice
-                ? _buildTabletLayout() // Layout adapté pour iPad
-                : ListView.builder(
-                    itemCount: enfants.length,
-                    itemBuilder: _buildEnfantCard,
-                  ),
+                    ? _buildEmptyState()
+                    : isTabletDevice
+                        ? _buildTabletLayout() // Layout adapté pour iPad
+                        : ListView.builder(
+                            itemCount: enfants.length,
+                            itemBuilder: _buildEnfantCard,
+                          ),
           ),
         ],
       ),
@@ -2195,8 +2207,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: ClipOval(
-                    child:
-                        enfant['photoUrl'] != null &&
+                    child: enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
                         ? Image.network(
                             enfant['photoUrl'],
@@ -2333,9 +2344,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   itemCount: snapshot.data!.docs.length,
                   separatorBuilder: (context, index) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final activityData =
-                        snapshot.data!.docs[index].data()
-                            as Map<String, dynamic>;
+                    final activityData = snapshot.data!.docs[index].data()
+                        as Map<String, dynamic>;
                     return GestureDetector(
                       onTap: () => _showActivityDetailsPopup(activityData),
                       child: Container(
@@ -2390,12 +2400,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     ],
                                   ),
                                   SizedBox(height: 4),
-                                  Text(
-                                    "Durée: ${activityData['duration']}",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey.shade600,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        _getAttitudeIcon(
+                                            activityData['attitude'] ??
+                                                'Curieux'),
+                                        color: primaryColor,
+                                        size: 16,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // CHANGÉ : affichage attitude
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -2424,8 +2446,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // AppBar personnalisé avec gradient comme dans les autres écrans
-  // AppBar personnalisé avec gradient adapté pour iPad
   Widget _buildAppBar(BuildContext context) {
     // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
@@ -2469,9 +2489,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     child: Text(
                       structureName,
                       style: TextStyle(
-                        fontSize: isTabletDevice
-                            ? 28
-                            : 24, // Plus grand pour iPad
+                        fontSize:
+                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -2480,9 +2499,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ),
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isTabletDevice
-                          ? 16
-                          : 12, // Plus grand pour iPad
+                      horizontal:
+                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
                       vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
                     ),
                     decoration: BoxDecoration(
@@ -2492,9 +2510,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     child: Text(
                       DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
                       style: TextStyle(
-                        fontSize: isTabletDevice
-                            ? 16
-                            : 14, // Plus grand pour iPad
+                        fontSize:
+                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
                         color: Colors.white.withOpacity(0.95),
                         fontWeight: FontWeight.w500,
                       ),
@@ -2537,9 +2554,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     Text(
                       'Activités',
                       style: TextStyle(
-                        fontSize: isTabletDevice
-                            ? 24
-                            : 20, // Plus grand pour iPad
+                        fontSize:
+                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),

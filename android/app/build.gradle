@@ -37,13 +37,14 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.beylet.poppinsApp"
+    namespace "com.beylet.poppinsapp"
     compileSdkVersion flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true  // ← NOUVEAU : Active le desugaring
     }
 
     kotlinOptions {
@@ -55,12 +56,12 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.beylet.poppinsApp"
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion flutter.targetSdkVersion
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
-    }
+    applicationId "com.beylet.poppinsapp"
+    minSdkVersion 23  // ← CHANGER de flutter.minSdkVersion vers 23
+    targetSdkVersion flutter.targetSdkVersion
+    versionCode flutterVersionCode.toInteger()
+    versionName flutterVersionName
+}
 
     signingConfigs {
         release {
@@ -88,4 +89,5 @@ dependencies {
     implementation 'com.google.firebase:firebase-firestore'
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-storage'
-}
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'  // ← NOUVEAU : Support des librairies modernes
+}   

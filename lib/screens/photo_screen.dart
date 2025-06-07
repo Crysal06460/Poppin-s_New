@@ -27,7 +27,8 @@ bool _showingPastPhotos = false;
 List<Map<String, dynamic>> _pastPhotos = [];
 bool _loadingPastPhotos = false;
 
-class _PhotosScreenState extends State<PhotosScreen> {
+class _PhotosScreenState extends State<PhotosScreen>
+    with TickerProviderStateMixin {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
@@ -51,6 +52,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Initialisation de l'animation pour le message d'avertissement
+
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadEnfantsDuJour();
       _performPhotoCleanup();
@@ -449,7 +453,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter une photo pour ${enfant['prenom']}",
+                                    "Ajouter une photo - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -1438,6 +1442,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
       ),
       child: Row(
         children: [
+          // Message d'avertissement à gauche
+          Expanded(
+            flex: 2,
+            child: _buildDataRetentionWarning(),
+          ),
+
           // Bouton pour revenir aux photos du jour
           if (_showingPastPhotos)
             TextButton.icon(
@@ -1467,7 +1477,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
             label: Text(
               _showingPastPhotos
                   ? DateFormat('dd MMM yyyy', 'fr_FR').format(_selectedDate)
-                  : "Photos passées",
+                  : "Historique des photos",
               style: TextStyle(
                 color: _showingPastPhotos ? primaryBlue : Colors.grey.shade600,
                 fontWeight: FontWeight.w600,
@@ -1480,6 +1490,47 @@ class _PhotosScreenState extends State<PhotosScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataRetentionWarning() {
+    final bool isTabletDevice = isTablet(context);
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isTabletDevice ? 12 : 10,
+        vertical: isTabletDevice ? 8 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade300,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.schedule_outlined,
+            size: isTabletDevice ? 16 : 14,
+            color: Colors.grey.shade600,
+          ),
+          SizedBox(width: isTabletDevice ? 8 : 6),
+          Flexible(
+            child: Text(
+              "Photos conservées 10 jours",
+              style: TextStyle(
+                fontSize: isTabletDevice ? 14 : 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -1,20 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- 🔥 PERMISSIONS À AJOUTER POUR LES NOTIFICATIONS -->
+    <!-- 🔥 PERMISSIONS POUR LES NOTIFICATIONS -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- 🛒 PERMISSION POUR LES ACHATS INTÉGRÉS (AJOUTÉE) -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 
     <application
         android:label="votre_app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
-        <!-- VOTRE CONFIGURATION EXISTANTE... -->
-        
-        <!-- 🔥 AJOUT POUR LES NOTIFICATIONS FIREBASE -->
+        <!-- 🔥 SERVICE POUR LES NOTIFICATIONS FIREBASE -->
         <service
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
             android:exported="false">
@@ -23,28 +24,45 @@
             </intent-filter>
         </service>
         
-        <!-- 🔥 CANAL DE NOTIFICATION -->
+        <!-- 🔥 CANAL DE NOTIFICATION PAR DÉFAUT -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="messages_channel" />
         
-        <!-- 🔥 ICÔNE DE NOTIFICATION -->
+        <!-- 🔥 ICÔNE DE NOTIFICATION PAR DÉFAUT -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
         
-        <!-- 🔥 COULEUR DE NOTIFICATION -->
+        <!-- 🔥 COULEUR DE NOTIFICATION PAR DÉFAUT -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color" />
 
-        <!-- VOTRE ACTIVITÉ PRINCIPALE EXISTANTE... -->
+        <!-- ✅ ACTIVITÉ PRINCIPALE -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/LaunchTheme">
-            <!-- VOS INTENT-FILTERS EXISTANTS... -->
+            android:theme="@style/LaunchTheme"
+            android:windowSoftInputMode="adjustResize">
+            
+            <!-- ✅ META-DATA POUR LE THÈME NORMAL -->
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+                
+            <!-- ✅ INTENT FILTER POUR LANCER L'APP -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
         </activity>
+        
+        <!-- ✅ VERSION D'EMBEDDING FLUTTER (V2) -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+            
     </application>
 </manifest>

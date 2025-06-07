@@ -693,7 +693,7 @@ class _RepasScreenState extends State<RepasScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter un repas pour ${enfant['prenom']}",
+                                    "Ajouter un repas - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -1043,7 +1043,7 @@ class _RepasScreenState extends State<RepasScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      "Comment était le repas de ${enfant['prenom']} ?",
+                                      "Comment a mangé ${enfant['prenom']} ?",
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 18 : 16,
                                         fontWeight: FontWeight.w600,

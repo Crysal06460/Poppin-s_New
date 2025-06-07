@@ -1,0 +1,434 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:app_badge_plus/app_badge_plus.dart';
+import 'dart:io';
+
+// Imports conditionnels selon la plateforme
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+class NotificationService {
+  static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static bool _isInitialized = false;
+  
+  // Plugin pour iOS uniquement
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
+  /// Initialise le service de notifications
+  static Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    try {
+      print('🔔 Initialisation du service de notifications...');
+
+      if (Platform.isAndroid) {
+        await _initializeAndroid();
+      } else if (Platform.isIOS) {
+        await _initializeIOS();
+      }
+
+      // Configuration Firebase commune
+      await _initializeFirebase();
+
+      _isInitialized = true;
+      print('✅ Service de notifications initialisé avec succès');
+    } catch (e) {
+      print('❌ Erreur lors de l\'initialisation des notifications: $e');
+      _isInitialized = true;
+    }
+  }
+
+  /// Initialisation spécifique Android avec Awesome Notifications
+  static Future<void> _initializeAndroid() async {
+    print('🤖 Initialisation Android avec Awesome Notifications...');
+
+    // 1. Initialiser Awesome Notifications
+    await AwesomeNotifications().initialize(
+      'resource://drawable/ic_launcher',
+      [
+        NotificationChannel(
+          channelKey: 'messages_channel',
+          channelName: 'Messages',
+          channelDescription: 'Notifications pour les nouveaux messages',
+          defaultColor: const Color(0xFF9D50DD),
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+          playSound: true,
+          enableVibration: true,
+        ),
+        NotificationChannel(
+          channelKey: 'test_channel',
+          channelName: 'Test',
+          channelDescription: 'Notifications de test',
+          defaultColor: const Color(0xFF9D50DD),
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+          playSound: true,
+          enableVibration: true,
+        ),
+      ],
+    );
+
+    // 2. Demander les permissions
+    await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+      if (!isAllowed) {
+        AwesomeNotifications().requestPermissionToSendNotifications();
+      }
+    });
+
+    // 3. Configurer les listeners
+    AwesomeNotifications().setListeners(
+      onActionReceivedMethod: _onActionReceived,
+      onNotificationCreatedMethod: _onNotificationCreated,
+      onNotificationDisplayedMethod: _onNotificationDisplayed,
+      onDismissActionReceivedMethod: _onDismissActionReceived,
+    );
+  }
+
+  /// Initialisation spécifique iOS avec Flutter Local Notifications
+  static Future<void> _initializeIOS() async {
+    print('🍎 Initialisation iOS avec Flutter Local Notifications...');
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+      onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
+    );
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await _localNotifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
+    );
+  }
+
+  /// Initialisation Firebase commune
+  static Future<void> _initializeFirebase() async {
+    print('🔥 Initialisation Firebase...');
+
+    // Demander les permissions Firebase
+    NotificationSettings settings = await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+      carPlay: false,
+      criticalAlert: false,
+      announcement: false,
+    );
+
+    print('🔔 Permissions accordées: ${settings.authorizationStatus}');
+
+    // Configuration spéciale iOS avec APNS
+    if (Platform.isIOS) {
+      await Future.delayed(Duration(seconds: 1));
+      String? apnsToken = await _messaging.getAPNSToken();
+      int retryCount = 0;
+      const maxRetries = 8;
+
+      while (apnsToken == null && retryCount < maxRetries) {
+        print('⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
+        await Future.delayed(Duration(seconds: 3));
+        apnsToken = await _messaging.getAPNSToken();
+        retryCount++;
+      }
+
+      if (apnsToken != null) {
+        print('✅ Token APNS obtenu: ${apnsToken.substring(0, 20)}...');
+      }
+    }
+
+    // Récupérer le token FCM
+    try {
+      await Future.delayed(Duration(seconds: 2));
+      String? token = await _messaging.getToken();
+      
+      if (token != null) {
+        print('🔥 TOKEN FCM OBTENU: ${token.substring(0, 50)}...');
+        await _saveTokenToFirestore(token);
+      }
+    } catch (e) {
+      print('❌ Erreur token FCM: $e');
+    }
+
+    // Configurer les listeners Firebase
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageClick);
+
+    try {
+      RemoteMessage? initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleMessageClick(initialMessage);
+      }
+    } catch (e) {
+      print('⚠️ Erreur getInitialMessage: $e');
+    }
+
+    _messaging.onTokenRefresh.listen((String token) {
+      print('🔄 Token FCM mis à jour: ${token.substring(0, 50)}...');
+      _saveTokenToFirestore(token);
+    });
+  }
+
+  /// Effacer le badge de notification
+  static Future<void> clearBadge() async {
+    try {
+      print('🔧 Début clearBadge...');
+
+      // Badge unifié avec app_badge_plus
+      await AppBadge.updateBadge(0);
+      print('✅ Badge réinitialisé');
+
+      // Annuler toutes les notifications selon la plateforme
+      if (Platform.isAndroid) {
+        await AwesomeNotifications().cancelAll();
+      } else if (Platform.isIOS) {
+        await _localNotifications.cancelAll();
+      }
+      print('✅ Toutes les notifications annulées');
+
+    } catch (e) {
+      print('❌ Erreur réinitialisation badge: $e');
+    }
+  }
+
+  /// Définir le badge de notification
+  static Future<void> setBadgeCount(int count) async {
+    try {
+      await AppBadge.updateBadge(count);
+      print('✅ Badge mis à jour: $count');
+    } catch (e) {
+      print('❌ Erreur mise à jour badge: $e');
+    }
+  }
+
+  /// Vérifier si les badges sont supportés
+  static Future<bool> isBadgeSupported() async {
+    try {
+      return await AppBadge.isSupported();
+    } catch (e) {
+      print('❌ Erreur vérification support badge: $e');
+      return false;
+    }
+  }
+
+  /// Sauvegarder le token FCM dans Firestore
+  static Future<void> _saveTokenToFirestore(String token) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.email?.toLowerCase())
+            .update({
+          'fcmToken': token,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+          'platform': Platform.isIOS ? 'ios' : 'android',
+        });
+        print('✅ Token FCM sauvegardé pour ${user.email}');
+      }
+    } catch (e) {
+      print('❌ Erreur sauvegarde token: $e');
+    }
+  }
+
+  /// Gérer les messages en foreground (plateforme spécifique)
+  static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    print('📨 Message reçu en foreground: ${message.notification?.title}');
+
+    if (Platform.isAndroid) {
+      await _showNotificationAndroid(message);
+    } else if (Platform.isIOS) {
+      await _showNotificationIOS(message);
+    }
+  }
+
+  /// Afficher notification sur Android (Awesome Notifications)
+  static Future<void> _showNotificationAndroid(RemoteMessage message) async {
+    Map<String, String> payload = {};
+    message.data.forEach((key, value) {
+      payload[key] = value.toString();
+    });
+
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: message.hashCode,
+        channelKey: 'messages_channel',
+        title: message.notification?.title ?? 'Nouveau message',
+        body: message.notification?.body ?? 'Vous avez reçu un nouveau message',
+        payload: payload,
+        notificationLayout: NotificationLayout.Default,
+      ),
+    );
+  }
+
+  /// Afficher notification sur iOS (Flutter Local Notifications)
+  static Future<void> _showNotificationIOS(RemoteMessage message) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'messages_channel',
+      'Messages',
+      channelDescription: 'Notifications pour les nouveaux messages',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      categoryIdentifier: 'message_category',
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      message.hashCode,
+      message.notification?.title ?? 'Nouveau message',
+      message.notification?.body ?? 'Vous avez reçu un nouveau message',
+      notificationDetails,
+      payload: message.data.toString(),
+    );
+  }
+
+  /// Gérer les clics sur notifications
+  static void _handleMessageClick(RemoteMessage message) {
+    print('🔔 Notification cliquée: ${message.data}');
+  }
+
+  /// Envoyer une notification à un utilisateur spécifique
+  static Future<void> sendNotificationToUser({
+    required String recipientUserId,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      print('📤 Envoi notification vers: $recipientUserId');
+
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipientUserId': recipientUserId,
+        'title': title,
+        'body': body,
+        'data': data ?? {},
+        'timestamp': FieldValue.serverTimestamp(),
+        'sent': false,
+        'platform': Platform.isIOS ? 'ios' : 'android',
+      });
+
+      print('✅ Document notification créé dans Firestore');
+    } catch (e) {
+      print('❌ Erreur envoi notification: $e');
+    }
+  }
+
+  /// Méthode pour tester les notifications
+  static Future<void> testNotification() async {
+    try {
+      if (Platform.isAndroid) {
+        await AwesomeNotifications().createNotification(
+          content: NotificationContent(
+            id: 123,
+            channelKey: 'test_channel',
+            title: 'Test Notification',
+            body: 'Ceci est un test des notifications',
+            notificationLayout: NotificationLayout.Default,
+          ),
+        );
+      } else if (Platform.isIOS) {
+        const AndroidNotificationDetails androidDetails =
+            AndroidNotificationDetails(
+          'test_channel',
+          'Test',
+          channelDescription: 'Notifications de test',
+          importance: Importance.high,
+          priority: Priority.high,
+        );
+
+        const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        );
+
+        const NotificationDetails notificationDetails = NotificationDetails(
+          android: androidDetails,
+          iOS: iosDetails,
+        );
+
+        await _localNotifications.show(
+          123,
+          'Test Notification',
+          'Ceci est un test des notifications',
+          notificationDetails,
+        );
+      }
+
+      print('✅ Notification de test envoyée');
+    } catch (e) {
+      print('❌ Erreur test notification: $e');
+    }
+  }
+
+  // === CALLBACKS iOS (Flutter Local Notifications) ===
+
+  static void _onDidReceiveLocalNotification(
+      int id, String? title, String? body, String? payload) {
+    print('📱 Notification locale iOS reçue: $title - $body');
+  }
+
+  static void _onDidReceiveNotificationResponse(NotificationResponse response) {
+    print('🔔 Réponse notification iOS: ${response.payload}');
+  }
+
+  // === CALLBACKS ANDROID (Awesome Notifications) ===
+
+  @pragma("vm:entry-point")
+  static Future<void> _onActionReceived(ReceivedAction receivedAction) async {
+    print('🔔 Action Android reçue: ${receivedAction.actionType}');
+  }
+
+  @pragma("vm:entry-point")
+  static Future<void> _onNotificationCreated(
+      ReceivedNotification receivedNotification) async {
+    print('🔔 Notification Android créée: ${receivedNotification.title}');
+  }
+
+  @pragma("vm:entry-point")
+  static Future<void> _onNotificationDisplayed(
+      ReceivedNotification receivedNotification) async {
+    print('🔔 Notification Android affichée: ${receivedNotification.title}');
+  }
+
+  @pragma("vm:entry-point")
+  static Future<void> _onDismissActionReceived(
+      ReceivedAction receivedAction) async {
+    print('🔔 Notification Android fermée: ${receivedAction.id}');
+  }
+
+  /// Handler global pour les messages Firebase en arrière-plan
+  @pragma('vm:entry-point')
+  static Future<void> firebaseMessagingBackgroundHandler(
+      RemoteMessage message) async {
+    print('📱 Message Firebase en arrière-plan: ${message.notification?.title}');
+  }
+}

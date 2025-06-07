@@ -11,7 +11,7 @@ import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -2632,21 +2632,16 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     try {
       final response = await http.get(Uri.parse(widget.imageUrl));
       if (response.statusCode == 200) {
-        final result = await ImageGallerySaver.saveImage(
+        await Gal.putImageBytes(
           Uint8List.fromList(response.bodyBytes),
-          quality: 100,
           name:
               "photo_${widget.childName}_${DateTime.now().millisecondsSinceEpoch}",
         );
 
-        if (result['isSuccess']) {
-          _showSuccessSnackBar('Photo sauvegardée dans la galerie');
-        } else {
-          _showErrorSnackBar('Erreur lors de la sauvegarde');
-        }
+        _showSuccessSnackBar('Photo sauvegardée dans la galerie');
       }
     } catch (e) {
-      _showErrorSnackBar('Erreur lors du téléchargement: $e');
+      _showErrorSnackBar('Erreur lors de la sauvegarde: $e');
     } finally {
       setState(() => _isLoading = false);
     }

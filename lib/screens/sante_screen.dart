@@ -51,19 +51,14 @@ class _SanteScreenState extends State<SanteScreen> {
     "Médicaments",
   ];
 
-  final List<String> medicationTypes = [
-    "Suppositoire",
-    "Sirop",
-    "Comprimé",
-    "Autre"
-  ];
+  final List<String> medicationTypes = ["Suppositoire", "Suspension", "Autre"];
 
   final List<String> routes = [
     "Auriculaire",
     "Orale",
-    "Front",
+    "Frontale",
     "Rectale",
-    "Tempe"
+    "Temporale"
   ];
 
   @override
@@ -574,7 +569,7 @@ class _SanteScreenState extends State<SanteScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "Ajouter un soin pour ${enfant['prenom']}",
+                                  "Ajouter un soin - ${enfant['prenom']}",
                                   style: TextStyle(
                                     fontSize: isTabletDevice ? 22 : 18,
                                     fontWeight: FontWeight.bold,

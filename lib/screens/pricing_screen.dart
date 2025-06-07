@@ -400,7 +400,7 @@ class _PricingScreenState extends State<PricingScreen> {
 
     // Mapping des types techniques vers les noms d'affichage
     Map<String, String> structureDisplayNames = {
-      'AssistanteMaternelle': 'Assistante Maternelle',
+      'assistante_maternelle': 'Assistante Maternelle', // ✅ Bonne clé
       'MAM': 'Maison d\'Assistantes Maternelles',
     };
 
