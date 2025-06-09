@@ -463,7 +463,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Informations sur l'alimentation",
+                        "Informations alimentaires",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -1065,7 +1065,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -1188,7 +1188,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
                                     SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Informations sur l'alimentation",
+                                        "Informations alimentaires",
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,

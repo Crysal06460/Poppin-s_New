@@ -282,7 +282,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Horaires de garde",
+                        "Horaires de l'accueil",
                         style: TextStyle(
                           fontSize: maxWidth * 0.025,
                           fontWeight: FontWeight.bold,
@@ -323,7 +323,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Veuillez renseigner les horaires de garde",
+                                    "Veuillez renseigner les horaires",
                                     style: TextStyle(
                                       fontSize: maxWidth * 0.016,
                                       color: primaryBlue,
@@ -443,7 +443,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -555,7 +555,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                     ),
                     if (totalSlots > 0)
                       Text(
-                        "$totalSlots créneaux sur ${activeDays.length} jours",
+                        "$totalSlots ${totalSlots == 1 ? 'créneau' : 'créneaux'} sur ${activeDays.length} jours",
                         style: TextStyle(
                           fontSize: maxWidth * 0.014,
                           color: primaryBlue,
@@ -726,7 +726,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          "${segments.length} créneaux",
+                          "${segments.length} ${segments.length == 1 ? 'créneau' : 'créneaux'}",
                           style: TextStyle(
                             fontSize: maxWidth * 0.014,
                             color: Colors.white,
@@ -1179,7 +1179,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                         ),
                         const SizedBox(height: 20),
                         const Text(
-                          "Veuillez renseigner les horaires de garde :",
+                          "Veuillez renseigner les horaires :",
                           style: TextStyle(
                               fontSize: 20, fontWeight: FontWeight.bold),
                         ),
@@ -1270,7 +1270,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          "${segments.length} créneaux",
+                          "${segments.length} ${segments.length == 1 ? 'créneau' : 'créneaux'}",
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.white,
@@ -1395,7 +1395,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'Horaires de garde',
+                      "Horaires de l'accueil",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,

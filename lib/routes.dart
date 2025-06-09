@@ -64,6 +64,7 @@ import 'package:poppins_app/screens/subscription_upgrade_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/cleaning_schedule_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:poppins_app/screens/parent_second_address_screen.dart';
 
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
@@ -118,6 +119,13 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/invitation-code',
       builder: (context, state) => const InvitationCodeScreen(),
+    ),
+    GoRoute(
+      path: '/parent-second-address',
+      builder: (context, state) {
+        final childId = state.extra as String;
+        return ParentSecondAddressScreen(childId: childId);
+      },
     ),
     GoRoute(
       path: '/invitation-validated',
@@ -287,8 +295,7 @@ final GoRouter router = GoRouter(
         final Map<String, dynamic> extraData =
             state.extra as Map<String, dynamic>? ?? {};
         final String childId = extraData['childId'] ?? '';
-        final String structureId =
-            extraData['structureId'] ??
+        final String structureId = extraData['structureId'] ??
             FirebaseAuth.instance.currentUser?.uid ??
             '';
 
@@ -311,8 +318,7 @@ final GoRouter router = GoRouter(
         }
 
         final String childId = extraData['childId'] ?? '';
-        final String structureId =
-            extraData['structureId'] ??
+        final String structureId = extraData['structureId'] ??
             FirebaseAuth.instance.currentUser?.uid ??
             '';
 

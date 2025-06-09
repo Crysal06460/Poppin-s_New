@@ -589,75 +589,123 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
   }
 
   Widget _buildAuthorizationSectionTablet(double maxWidth, double maxHeight) {
-    return Container(
-      padding: EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
-      decoration: BoxDecoration(
-        color: lightBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryBlue.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      children: [
+        // Cadre d'information bleu clair (comme dans parent_address_screen)
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+          decoration: BoxDecoration(
+            color: lightBlue.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: primaryBlue.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
             children: [
               Container(
                 padding: EdgeInsets.all((maxWidth * 0.01).clamp(6.0, 12.0)),
                 decoration: BoxDecoration(
-                  color: primaryBlue,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  Icons.check_circle_outline,
-                  color: Colors.white,
+                  Icons.info_outline,
+                  color: primaryBlue,
                   size: (maxWidth * 0.02).clamp(16.0, 24.0),
                 ),
               ),
               SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
-              Text(
-                "Autorisations",
-                style: TextStyle(
-                  fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
-                  fontWeight: FontWeight.bold,
-                  color: primaryBlue,
+              Expanded(
+                child: Text(
+                  "Veuillez spécifier les autorisations pour cet enfant",
+                  style: TextStyle(
+                    fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
+                    color: primaryBlue,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
                 ),
               ),
             ],
           ),
-          SizedBox(height: maxHeight * 0.02),
-          Text(
-            "Veuillez spécifier les autorisations pour cet enfant :",
-            style: TextStyle(
-              fontSize: (maxWidth * 0.016).clamp(12.0, 18.0),
-              color: Colors.grey[700],
-            ),
+        ),
+
+        SizedBox(height: maxHeight * 0.04),
+
+        // Section des autorisations (sans le cadre bleu précédent)
+        Container(
+          padding: EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                offset: const Offset(0, 2),
+                blurRadius: 5,
+              )
+            ],
           ),
-          SizedBox(height: maxHeight * 0.03),
-          _buildAuthorizationOptionTablet(
-            "Maquillage",
-            _makeupAllowed,
-            (value) => setState(() => _makeupAllowed = value),
-            maxWidth,
-            maxHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all((maxWidth * 0.01).clamp(6.0, 12.0)),
+                    decoration: BoxDecoration(
+                      color: primaryBlue,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.white,
+                      size: (maxWidth * 0.02).clamp(16.0, 24.0),
+                    ),
+                  ),
+                  SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                  Text(
+                    "Autorisations parentales",
+                    style: TextStyle(
+                      fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+                      fontWeight: FontWeight.bold,
+                      color: primaryBlue,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: maxHeight * 0.03),
+              _buildAuthorizationOptionTablet(
+                "Maquillage",
+                _makeupAllowed,
+                (value) => setState(() => _makeupAllowed = value),
+                maxWidth,
+                maxHeight,
+              ),
+              SizedBox(height: maxHeight * 0.02),
+              _buildAuthorizationOptionTablet(
+                "Photos/Vidéos",
+                _photosAllowed,
+                (value) => setState(() => _photosAllowed = value),
+                maxWidth,
+                maxHeight,
+              ),
+              SizedBox(height: maxHeight * 0.02),
+              _buildAuthorizationOptionTablet(
+                "Sorties",
+                _outingsAllowed,
+                (value) => setState(() => _outingsAllowed = value),
+                maxWidth,
+                maxHeight,
+              ),
+            ],
           ),
-          SizedBox(height: maxHeight * 0.02),
-          _buildAuthorizationOptionTablet(
-            "Photos/Vidéos",
-            _photosAllowed,
-            (value) => setState(() => _photosAllowed = value),
-            maxWidth,
-            maxHeight,
-          ),
-          SizedBox(height: maxHeight * 0.02),
-          _buildAuthorizationOptionTablet(
-            "Sorties",
-            _outingsAllowed,
-            (value) => setState(() => _outingsAllowed = value),
-            maxWidth,
-            maxHeight,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -845,7 +893,7 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -1420,7 +1468,7 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
                                         ),
                                         SizedBox(width: 12),
                                         Text(
-                                          "Autorisations",
+                                          "Autorisations parentales",
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
@@ -1428,14 +1476,6 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
                                           ),
                                         ),
                                       ],
-                                    ),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      "Veuillez spécifier les autorisations pour cet enfant :",
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.grey[700],
-                                      ),
                                     ),
                                     const SizedBox(height: 16),
                                     _buildAuthorizationOption(

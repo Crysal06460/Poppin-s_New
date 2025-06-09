@@ -230,7 +230,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
                             children: [
                               // Carnet de vaccination
                               _buildDocumentPreviewTablet(
-                                  "Carnet de vaccination",
+                                  "Vaccins",
                                   Icons.assignment_rounded,
                                   _vaccinFile != null,
                                   _vaccinFileName,
@@ -475,7 +475,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -607,7 +607,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Carnet de vaccination",
+          "Vaccins",
           style: TextStyle(
             fontSize: (maxWidth * 0.02).clamp(14.0, 20.0),
             fontWeight: FontWeight.w600,
@@ -649,7 +649,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
                               color: Colors.grey),
                           SizedBox(height: (maxHeight * 0.01).clamp(5.0, 8.0)),
                           Text(
-                            "Télécharger le carnet de vaccination",
+                            "Ajouter la photocopie des vaccins",
                             style: TextStyle(
                                 color: Colors.grey,
                                 fontSize: (maxWidth * 0.018).clamp(12.0, 16.0)),
@@ -1348,7 +1348,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
 
                                 // Carnet de vaccination
                                 Text(
-                                  "Carnet de vaccination",
+                                  "Vaccins",
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -1394,7 +1394,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
                                                       color: Colors.grey),
                                                   const SizedBox(height: 8),
                                                   Text(
-                                                    "Télécharger le carnet de vaccination",
+                                                    "Ajouter la photocopie des vaccins",
                                                     style: TextStyle(
                                                         color: Colors.grey,
                                                         fontSize: 16),

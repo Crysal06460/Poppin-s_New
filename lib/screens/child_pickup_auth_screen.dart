@@ -340,7 +340,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                           (maxWidth * 0.01).clamp(6.0, 12.0)),
                                   Flexible(
                                     child: Text(
-                                      "Personnes supplémentaires",
+                                      "Autres",
                                       style: TextStyle(
                                         fontSize: (maxWidth * 0.018)
                                             .clamp(14.0, 20.0),
@@ -495,7 +495,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Personnes autorisées à récuperer",
+                        "Personnes autorisées",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -536,7 +536,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Sélectionnez les personnes autorisées à récupérer l'enfant",
+                                "Veuillez renseigner les personnes autorisées à venir chercher l'enfant",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -678,7 +678,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -958,7 +958,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
               SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
               Expanded(
                 child: Text(
-                  "Personnes autorisées supplémentaires",
+                  "Autres personnes autorisées",
                   style: TextStyle(
                     fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
                     fontWeight: FontWeight.bold,
@@ -1440,7 +1440,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                     Flexible(
                       // Ajout de Flexible pour gérer l'overflow
                       child: Text(
-                        'Autorisé à récupérer',
+                        'Autorisations',
                         style: TextStyle(
                           fontSize: 18, // Taille réduite pour éviter l'overflow
                           fontWeight: FontWeight.w600,
@@ -1586,7 +1586,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                         SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
-                                            "Personnes autorisées à récupérer l'enfant",
+                                            "Personnes autorisées",
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -1598,7 +1598,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                     ),
                                     SizedBox(height: 16),
                                     Text(
-                                      "Sélectionnez les personnes autorisées à récupérer l'enfant à la structure d'accueil.",
+                                      "Veuillez renseigner les personnes autorisées à venir chercher l'enfant.",
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey.shade700,
@@ -1666,7 +1666,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                         SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
-                                            "Personnes autorisées à récupérer l'enfant",
+                                            "Personnes autorisées",
                                             style: TextStyle(
                                               fontSize: 16, // Taille réduite
                                               fontWeight: FontWeight.bold,

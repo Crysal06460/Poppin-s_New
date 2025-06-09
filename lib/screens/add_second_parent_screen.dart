@@ -176,7 +176,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
                           SizedBox(width: (maxWidth * 0.02).clamp(16.0, 24.0)),
                           Flexible(
                             child: Text(
-                              "Ajout d'un deuxième parent",
+                              "Ajout Parent 2",
                               style: TextStyle(
                                 fontSize: (maxWidth * 0.024).clamp(20.0, 28.0),
                                 fontWeight: FontWeight.bold,
@@ -253,7 +253,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
                   children: [
                     // Bouton ajouter parent
                     _buildButtonTablet(
-                      text: "Ajouter un deuxième parent",
+                      text: "Ajouter parent 2",
                       icon: Icons.person_add,
                       onPressed: () {
                         print(
@@ -424,7 +424,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
                                     ),
                                     SizedBox(width: 12),
                                     Text(
-                                      "Ajout d'un deuxième parent",
+                                      "Ajout parent 2",
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -468,7 +468,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
 
                         // Add second parent button
                         _buildButton(
-                          text: "Ajouter un deuxième parent",
+                          text: "Ajouter parent 2",
                           icon: Icons.person_add,
                           onPressed: () {
                             print(
@@ -599,7 +599,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'Deuxième Parent',
+                      'Parent 2',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -696,7 +696,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],

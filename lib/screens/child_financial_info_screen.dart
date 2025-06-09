@@ -191,142 +191,146 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                 ),
                 child: Padding(
                   padding: EdgeInsets.all((maxWidth * 0.025).clamp(15.0, 30.0)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Titre du panneau
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: lightBlue,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.preview_rounded,
-                              color: primaryBlue,
-                              size: (maxWidth * 0.025).clamp(20.0, 30.0),
-                            ),
-                          ),
-                          SizedBox(width: (maxWidth * 0.015).clamp(8.0, 15.0)),
-                          Expanded(
-                            child: Text(
-                              "Aperçu",
-                              style: TextStyle(
-                                fontSize: (maxWidth * 0.022).clamp(16.0, 24.0),
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: maxHeight * 0.04),
-
-                      // Aperçu du choix tableau mensuel
-                      Container(
-                        width: double.infinity,
-                        padding:
-                            EdgeInsets.all((maxWidth * 0.02).clamp(12.0, 20.0)),
-                        decoration: BoxDecoration(
-                          color: _useMonthlyTable == null
-                              ? Colors.grey.shade50
-                              : lightBlue.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _useMonthlyTable == null
-                                ? Colors.grey.shade200
-                                : primaryBlue.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Column(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Titre du panneau
+                        Row(
                           children: [
-                            Text(
-                              "Tableau mensuel",
-                              style: TextStyle(
-                                fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: lightBlue,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.preview_rounded,
+                                color: primaryBlue,
+                                size: (maxWidth * 0.025).clamp(20.0, 30.0),
                               ),
                             ),
-                            SizedBox(height: maxHeight * 0.02),
-                            if (_useMonthlyTable != null) ...[
-                              Container(
-                                padding: EdgeInsets.all(
-                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: _useMonthlyTable == true
-                                        ? [
-                                            primaryBlue.withOpacity(0.7),
-                                            primaryBlue
-                                          ]
-                                        : [
-                                            primaryRed.withOpacity(0.7),
-                                            primaryRed
-                                          ],
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  _useMonthlyTable == true
-                                      ? Icons.check
-                                      : Icons.close,
-                                  size: (maxWidth * 0.04).clamp(24.0, 40.0),
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(height: maxHeight * 0.015),
-                              Text(
-                                _useMonthlyTable == true ? "Oui" : "Non",
+                            SizedBox(
+                                width: (maxWidth * 0.015).clamp(8.0, 15.0)),
+                            Expanded(
+                              child: Text(
+                                "Aperçu",
                                 style: TextStyle(
-                                  fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
+                                  fontSize:
+                                      (maxWidth * 0.022).clamp(16.0, 24.0),
                                   fontWeight: FontWeight.bold,
-                                  color: _useMonthlyTable == true
-                                      ? primaryBlue
-                                      : primaryRed,
+                                  color: Colors.black87,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ] else ...[
-                              Container(
-                                padding: EdgeInsets.all(
-                                    (maxWidth * 0.015).clamp(8.0, 15.0)),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.help_outline,
-                                  size: (maxWidth * 0.04).clamp(24.0, 40.0),
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              SizedBox(height: maxHeight * 0.015),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: maxHeight * 0.04),
+
+                        // Aperçu du choix tableau mensuel
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(
+                              (maxWidth * 0.02).clamp(12.0, 20.0)),
+                          decoration: BoxDecoration(
+                            color: _useMonthlyTable == null
+                                ? Colors.grey.shade50
+                                : lightBlue.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _useMonthlyTable == null
+                                  ? Colors.grey.shade200
+                                  : primaryBlue.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
                               Text(
-                                "Non sélectionné",
+                                "Tableau mensuel",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.018).clamp(14.0, 20.0),
-                                  color: Colors.grey.shade500,
-                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
                                 ),
                               ),
+                              SizedBox(height: maxHeight * 0.02),
+                              if (_useMonthlyTable != null) ...[
+                                Container(
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: _useMonthlyTable == true
+                                          ? [
+                                              primaryBlue.withOpacity(0.7),
+                                              primaryBlue
+                                            ]
+                                          : [
+                                              primaryRed.withOpacity(0.7),
+                                              primaryRed
+                                            ],
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _useMonthlyTable == true
+                                        ? Icons.check
+                                        : Icons.close,
+                                    size: (maxWidth * 0.04).clamp(24.0, 40.0),
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: maxHeight * 0.015),
+                                Text(
+                                  _useMonthlyTable == true ? "Oui" : "Non",
+                                  style: TextStyle(
+                                    fontSize:
+                                        (maxWidth * 0.02).clamp(16.0, 22.0),
+                                    fontWeight: FontWeight.bold,
+                                    color: _useMonthlyTable == true
+                                        ? primaryBlue
+                                        : primaryRed,
+                                  ),
+                                ),
+                              ] else ...[
+                                Container(
+                                  padding: EdgeInsets.all(
+                                      (maxWidth * 0.015).clamp(8.0, 15.0)),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.help_outline,
+                                    size: (maxWidth * 0.04).clamp(24.0, 40.0),
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                SizedBox(height: maxHeight * 0.015),
+                                Text(
+                                  "Non sélectionné",
+                                  style: TextStyle(
+                                    fontSize:
+                                        (maxWidth * 0.018).clamp(14.0, 20.0),
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
 
-                      SizedBox(height: maxHeight * 0.03),
+                        SizedBox(height: maxHeight * 0.03),
 
-                      // Aperçu des informations financières
-                      if (_useMonthlyTable == true) ...[
-                        Expanded(
-                          child: Container(
+                        // Aperçu des informations financières
+                        if (_useMonthlyTable == true) ...[
+                          Container(
                             width: double.infinity,
                             padding: EdgeInsets.all(
                                 (maxWidth * 0.02).clamp(12.0, 20.0)),
@@ -359,7 +363,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                             (maxWidth * 0.01).clamp(6.0, 12.0)),
                                     Flexible(
                                       child: Text(
-                                        "Informations financières",
+                                        "Recap menusel",
                                         style: TextStyle(
                                           fontSize: (maxWidth * 0.018)
                                               .clamp(14.0, 20.0),
@@ -410,7 +414,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                                 SizedBox(height: maxHeight * 0.03),
 
-                                // Information sur l'invitation - déplacée ici
+                                // Information sur l'invitation
                                 Container(
                                   padding: EdgeInsets.all(
                                       (maxWidth * 0.015).clamp(8.0, 15.0)),
@@ -452,7 +456,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                           height: (maxHeight * 0.01)
                                               .clamp(6.0, 12.0)),
                                       Text(
-                                        "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
+                                        "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppin's.",
                                         style: TextStyle(
                                           color: primaryBlue,
                                           fontSize: (maxWidth * 0.014)
@@ -466,11 +470,10 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                               ],
                             ),
                           ),
-                        ),
-                      ] else ...[
-                        Expanded(
-                          child: Container(
+                        ] else ...[
+                          Container(
                             width: double.infinity,
+                            height: 200, // Hauteur fixe pour éviter l'overflow
                             decoration: BoxDecoration(
                               color: Colors.grey.shade50,
                               borderRadius: BorderRadius.circular(16),
@@ -500,9 +503,12 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                               ),
                             ),
                           ),
-                        ),
+                        ],
+
+                        // Ajouter un peu d'espace en bas pour éviter que le contenu soit coupé
+                        SizedBox(height: maxHeight * 0.1),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -571,7 +577,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Le tableau mensuel est proposé à titre d'indication et de générer des récapitulatifs mensuels.",
+                                "Le tableau mensuel est proposé à titre indicatif et permet de générer le récapitulatif mensuels.",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -674,7 +680,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                   ),
                                   SizedBox(height: maxHeight * 0.02),
                                   Text(
-                                    "Les champs financiers\napparaîtront si vous\nsélectionnez 'Oui'",
+                                    "Cliquer sur Oui \n pour remplir les informations du tableau mensuel",
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize:
@@ -797,7 +803,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -1531,7 +1537,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 ),
                                 SizedBox(height: 16),
                                 Text(
-                                  "Le tableau mensuel permet de suivre automatiquement la facturation et de générer des récapitulatifs mensuels.",
+                                  "Le tableau mensuel permet de suivre automatiquement la facturation et de générer le récapitulatif mensuels.",
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
@@ -1603,7 +1609,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                       SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          "Informations financières",
+                                          "Recap mensuel",
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
@@ -1701,7 +1707,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                               SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppins.",
+                                  "Une invitation sera automatiquement envoyée aux parents par email pour accéder à l'application Poppin's.",
                                   style: TextStyle(
                                       color: primaryBlue, fontSize: 14),
                                 ),

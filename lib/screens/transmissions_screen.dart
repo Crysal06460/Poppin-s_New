@@ -35,7 +35,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   final TextEditingController _transmissionController = TextEditingController();
   final List<String> _transmissionCategories = [
     'Santé',
-    'Autres',
+    'Autre',
   ];
   String _selectedCategory = 'Santé';
 
@@ -166,7 +166,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     switch (category) {
       case 'Santé':
         return Icons.medical_services_outlined;
-      case 'Autres':
+      case 'Autre':
         return Icons.category_outlined;
       default:
         return Icons.category_outlined;
@@ -351,7 +351,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Ajouter une transmission pour ${enfant['prenom']}",
+                        "Ajouter une transmission - ${enfant['prenom']}",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,

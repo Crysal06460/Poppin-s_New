@@ -184,14 +184,6 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                         ),
                         child: Column(
                           children: [
-                            Text(
-                              "Genre",
-                              style: TextStyle(
-                                fontSize: maxWidth * 0.018,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
                             SizedBox(height: maxHeight * 0.02),
                             if (gender.isNotEmpty) ...[
                               Container(
@@ -349,14 +341,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                       SizedBox(height: maxHeight * 0.04),
 
                       // Sélection du genre
-                      Text(
-                        "Genre de l'enfant",
-                        style: TextStyle(
-                          fontSize: maxWidth * 0.02,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
+
                       SizedBox(height: maxHeight * 0.025),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -506,7 +491,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],

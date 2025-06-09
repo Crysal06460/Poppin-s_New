@@ -1384,7 +1384,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Ajoutez des événements à venir pour les parents',
+                        'Ajoutez des événements à venir',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade500,
@@ -1577,7 +1577,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                     ),
                     SizedBox(height: 12),
                     Text(
-                      'Ajoutez des événements à venir pour les parents',
+                      'Ajoutez des événements à venir',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.grey.shade600,
@@ -1832,7 +1832,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Ajoutez des sorties à venir pour les parents',
+                        'Ajoutez des sorties à venir',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade500,
@@ -2063,7 +2063,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                     ),
                     SizedBox(height: 12),
                     Text(
-                      'Ajoutez des sorties à venir pour les parents',
+                      'Ajoutez des sorties à venir',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.grey.shade600,
@@ -2356,7 +2356,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
               ),
               SizedBox(height: 16),
               Text(
-                'Voulez-vous vraiment supprimer "${title}"? Cette action est irréversible.',
+                'Voulez-vous vraiment supprimer "${title}"?',
                 textAlign: TextAlign.center,
               ),
             ],

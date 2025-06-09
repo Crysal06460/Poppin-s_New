@@ -19,6 +19,15 @@ bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
 }
 
+// ✅ AJOUT : Fonction de validation d'email
+bool _isValidEmail(String email) {
+  // Expression régulière pour valider l'email
+  final emailRegExp = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+  );
+  return emailRegExp.hasMatch(email.trim());
+}
+
 String structureName = "Chargement...";
 bool isLoadingStructure = true;
 
@@ -207,7 +216,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                                   Flexible(
                                     // CHANGÉ de Text à Flexible
                                     child: Text(
-                                      "Informations du parent",
+                                      "Informations parent 1",
                                       style: TextStyle(
                                         fontSize: (maxWidth * 0.018)
                                             .clamp(14.0, 20.0),
@@ -293,7 +302,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Informations du parent",
+                        "Informations parent 1",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -512,7 +521,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -636,11 +645,32 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
       _isLoading = true;
     });
 
-    if (firstNameController.text.isEmpty ||
-        lastNameController.text.isEmpty ||
-        emailController.text.isEmpty ||
-        phoneController.text.isEmpty) {
+    // ✅ AJOUT : Validation des champs obligatoires
+    if (firstNameController.text.trim().isEmpty ||
+        lastNameController.text.trim().isEmpty ||
+        emailController.text.trim().isEmpty ||
+        phoneController.text.trim().isEmpty) {
       _showError("Merci de remplir tous les champs.");
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // ✅ AJOUT : Validation du format d'email
+    if (!_isValidEmail(emailController.text.trim())) {
+      _showError(
+          "Veuillez saisir une adresse email valide (ex: exemple@gmail.com).");
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // ✅ AJOUT : Validation de la longueur du téléphone
+    if (phoneController.text.trim().length != 10) {
+      _showError(
+          "Le numéro de téléphone doit contenir exactement 10 chiffres.");
       setState(() {
         _isLoading = false;
       });
@@ -755,10 +785,10 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
           .doc(widget.childId)
           .update({
         'parent1': {
-          'firstName': firstNameController.text,
-          'lastName': lastNameController.text,
+          'firstName': firstNameController.text.trim(),
+          'lastName': lastNameController.text.trim(),
           'email': normalizedEmail,
-          'phone': phoneController.text,
+          'phone': phoneController.text.trim(),
         }
       });
 
@@ -857,7 +887,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                                     ),
                                     SizedBox(width: 12),
                                     Text(
-                                      "Informations du parent",
+                                      "Informations parent 1",
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -930,6 +960,12 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
       {TextInputType inputType = TextInputType.text,
       int? maxLength,
       bool onlyNumbers = false}) {
+    // ✅ AJOUT : Déterminer si c'est le champ email pour la validation visuelle
+    bool isEmailField = label.toLowerCase().contains('email');
+    bool hasEmailError = isEmailField &&
+        controller.text.isNotEmpty &&
+        !_isValidEmail(controller.text);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -959,19 +995,29 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
             maxLength: maxLength,
             inputFormatters:
                 onlyNumbers ? [FilteringTextInputFormatter.digitsOnly] : [],
+            onChanged: (value) =>
+                setState(() {}), // ✅ AJOUT : Pour rafraîchir la validation
             decoration: InputDecoration(
-              prefixIcon: Icon(icon, color: primaryBlue),
+              prefixIcon:
+                  Icon(icon, color: hasEmailError ? primaryRed : primaryBlue),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderSide: BorderSide(
+                  color: hasEmailError ? primaryRed : Colors.grey.shade300,
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderSide: BorderSide(
+                  color: hasEmailError ? primaryRed : Colors.grey.shade300,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: primaryBlue, width: 2),
+                borderSide: BorderSide(
+                  color: hasEmailError ? primaryRed : primaryBlue,
+                  width: 2,
+                ),
               ),
               filled: true,
               fillColor: Colors.white,
@@ -981,6 +1027,9 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
               ),
               hintStyle: TextStyle(color: Colors.grey.shade500),
               counterText: "",
+              // ✅ AJOUT : Message d'erreur sous le champ
+              errorText: hasEmailError ? "Format d'email invalide" : null,
+              errorStyle: TextStyle(color: primaryRed, fontSize: 12),
             ),
             style: const TextStyle(fontSize: 16),
           ),

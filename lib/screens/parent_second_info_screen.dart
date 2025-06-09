@@ -218,7 +218,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                                           (maxWidth * 0.01).clamp(6.0, 12.0)),
                                   Flexible(
                                     child: Text(
-                                      "Deuxième parent",
+                                      "Parent 2",
                                       style: TextStyle(
                                         fontSize: (maxWidth * 0.018)
                                             .clamp(14.0, 20.0),
@@ -343,7 +343,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Informations du deuxième parent",
+                        "Informations parent 2",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -384,7 +384,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Veuillez renseigner les informations du second parent",
+                                "Veuillez renseigner les informations du deuxième parent",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -617,7 +617,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
           content: Container(
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
-              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir continuer ?",
+              "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -741,33 +741,26 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
 
     String firstName = _firstNameController.text.trim();
     String lastName = _lastNameController.text.trim();
-    String email =
-        _emailController.text.trim().toLowerCase(); // Normalisation de l'email
+    String email = _emailController.text.trim().toLowerCase();
     String phone = _phoneController.text.trim();
 
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
         phone.isEmpty) {
-      setState(() {
-        errorMessage = "Tous les champs sont obligatoires.";
-      });
+      _showError("Tous les champs sont obligatoires.");
       return;
     }
 
     if (!RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
         .hasMatch(email)) {
-      setState(() {
-        errorMessage = "Veuillez entrer un email valide.";
-      });
+      _showError("Veuillez entrer un email valide.");
       return;
     }
 
     if (!RegExp(r"^\d{10}$").hasMatch(phone)) {
-      setState(() {
-        errorMessage =
-            "Le numéro de téléphone doit contenir exactement 10 chiffres.";
-      });
+      _showError(
+          "Le numéro de téléphone doit contenir exactement 10 chiffres.");
       return;
     }
 
@@ -775,7 +768,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
     print("🔍 Vérification de l'email: $email");
 
     try {
-      // 1. Vérifier si l'email existe déjà dans la collection 'users'
+      // Vérifier si l'email existe déjà dans la collection 'users'
       final userDocSnapshot =
           await FirebaseFirestore.instance.collection('users').doc(email).get();
 
@@ -783,18 +776,15 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
         final userData = userDocSnapshot.data() ?? {};
         print("📋 Email trouvé dans users avec rôle: ${userData['role']}");
 
-        // Vérifier si c'est un utilisateur avec le rôle 'assmat' ou 'mamMember'
         if (userData['role'] == 'assmat' || userData['role'] == 'mamMember') {
-          setState(() {
-            errorMessage =
-                "Cet email est déjà utilisé par un professionnel. Veuillez en utiliser un autre.";
-            _isLoading = false;
-          });
+          _showError(
+              "Cet email est déjà utilisé par un professionnel. Veuillez en utiliser un autre.");
+          setState(() => _isLoading = false);
           return;
         }
       }
 
-      // 2. Vérifier si l'email est celui de l'utilisateur connecté
+      // Vérifier si l'email est celui de l'utilisateur connecté
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         _showError("Erreur : Utilisateur non connecté !");
@@ -804,15 +794,13 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
 
       final userEmail = user.email?.toLowerCase() ?? '';
       if (userEmail == email) {
-        setState(() {
-          errorMessage =
-              "Vous ne pouvez pas utiliser votre propre email comme email du parent. Veuillez en utiliser un autre.";
-          _isLoading = false;
-        });
+        _showError(
+            "Vous ne pouvez pas utiliser votre propre email comme email du parent. Veuillez en utiliser un autre.");
+        setState(() => _isLoading = false);
         return;
       }
 
-      // 3. Identifier la structure à utiliser
+      // Identifier la structure à utiliser
       String structureId = user.uid;
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -823,14 +811,13 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
         final userData = userDoc.data() ?? {};
         if (userData['role'] == 'mamMember' &&
             userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
               "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
       }
 
-      // 4. Vérifier si l'email est déjà utilisé pour un autre enfant dans la même structure
+      // Vérifier si l'email est déjà utilisé pour un autre enfant dans la même structure
       final childrenCollection = FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -838,39 +825,30 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
       final childrenSnapshot = await childrenCollection.get();
 
       for (var doc in childrenSnapshot.docs) {
-        // Ignorer l'enfant actuel
-        if (doc.id == widget.childId) {
-          continue;
-        }
+        if (doc.id == widget.childId) continue;
 
         final childData = doc.data();
 
-        // Vérifier le parent1
         if (childData['parent1'] != null &&
             childData['parent1']['email'] != null &&
             childData['parent1']['email'].toString().toLowerCase() == email) {
-          setState(() {
-            errorMessage =
-                "Cet email est déjà utilisé pour un autre parent dans votre structure.";
-            _isLoading = false;
-          });
+          _showError(
+              "Cet email est déjà utilisé pour un autre parent dans votre structure.");
+          setState(() => _isLoading = false);
           return;
         }
 
-        // Vérifier le parent2
         if (childData['parent2'] != null &&
             childData['parent2']['email'] != null &&
             childData['parent2']['email'].toString().toLowerCase() == email) {
-          setState(() {
-            errorMessage =
-                "Cet email est déjà utilisé pour un autre parent dans votre structure.";
-            _isLoading = false;
-          });
+          _showError(
+              "Cet email est déjà utilisé pour un autre parent dans votre structure.");
+          setState(() => _isLoading = false);
           return;
         }
       }
 
-      // 5. Vérifier aussi si cet email est déjà utilisé pour le premier parent de cet enfant
+      // Vérifier si cet email est déjà utilisé pour le premier parent de cet enfant
       final childDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -884,41 +862,33 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
 
         if (parent1Data['email'] != null &&
             parent1Data['email'].toString().toLowerCase() == email) {
-          setState(() {
-            errorMessage =
-                "Cet email est déjà utilisé pour le premier parent. Veuillez en utiliser un autre.";
-            _isLoading = false;
-          });
+          _showError(
+              "Cet email est déjà utilisé pour le premier parent. Veuillez en utiliser un autre.");
+          setState(() => _isLoading = false);
           return;
         }
       }
 
-      // 6. Rechercher dans toutes les structures si l'email est utilisé pour un professionnel
+      // Rechercher dans toutes les structures si l'email est utilisé pour un professionnel
       final structuresSnapshot =
           await FirebaseFirestore.instance.collection('structures').get();
       for (var structureDoc in structuresSnapshot.docs) {
-        // Vérifier si l'email est utilisé comme propriétaire de structure
         final structureData = structureDoc.data();
         if (structureData['ownerEmail']?.toString().toLowerCase() == email) {
-          setState(() {
-            errorMessage =
-                "Cet email est déjà utilisé par un professionnel. Veuillez en utiliser un autre.";
-            _isLoading = false;
-          });
+          _showError(
+              "Cet email est déjà utilisé par un professionnel. Veuillez en utiliser un autre.");
+          setState(() => _isLoading = false);
           return;
         }
 
-        // Vérifier les membres si c'est une MAM
         if (structureData['type'] == 'mam' &&
             structureData['members'] != null) {
           final List<dynamic> members = structureData['members'] ?? [];
           for (var member in members) {
             if (member['email']?.toString().toLowerCase() == email) {
-              setState(() {
-                errorMessage =
-                    "Cet email est déjà utilisé par un membre MAM. Veuillez en utiliser un autre.";
-                _isLoading = false;
-              });
+              _showError(
+                  "Cet email est déjà utilisé par un membre MAM. Veuillez en utiliser un autre.");
+              setState(() => _isLoading = false);
               return;
             }
           }
@@ -946,7 +916,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
           "✅ Infos du deuxième parent sauvegardées. Redirection vers schedule-info avec childId: ${widget.childId}");
 
       if (mounted) {
-        context.go('/schedule-info', extra: widget.childId);
+        context.go('/parent-second-address', extra: widget.childId);
       }
     } catch (e) {
       print(
@@ -1025,7 +995,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                                     SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Informations du deuxième parent",
+                                        "Informations parent 2",
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
@@ -1039,7 +1009,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                                 ),
                                 SizedBox(height: 16),
                                 Text(
-                                  "Veuillez renseigner les informations du second parent :",
+                                  "Veuillez renseigner les informations du deuxième parent :",
                                   style: TextStyle(
                                     fontSize: 15,
                                     color: Colors.grey[700],
@@ -1280,7 +1250,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'Deuxième Parent',
+                      'Parent 2',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,

@@ -12,21 +12,24 @@ class SubscriptionService {
   // IDs des produits selon la plateforme
   static Map<String, String> get productIds {
     if (Platform.isIOS) {
-      // IDs App Store Connect (iOS) avec votre Bundle ID
+      // IDs EXACTS d'après vos captures App Store Connect
       return {
         'assistante_maternelle':
             '$_bundleId.subscription.assistante_maternelle',
-        'mam_2_members': '$_bundleId.subscription.mam_2_members',
-        'mam_3_members': '$_bundleId.subscription.mam_3_members',
-        'mam_4_members': '$_bundleId.subscription.mam_4_members',
+        'mam_2_members':
+            '$_bundleId.subscription.mam_2_membres', // ← CORRIGÉ: "membres" au lieu de "members"
+        'mam_3_members':
+            '$_bundleId.subscription.mam_3_membres', // ← CORRIGÉ: "membres" au lieu de "members"
+        'mam_4_members':
+            '$_bundleId.subscription.mam_4_membres', // ← CORRIGÉ: "membres" au lieu de "members"
       };
     } else {
-      // IDs Google Play Console (Android)
+      // Android - à configurer dans Google Play Console
       return {
-        'assistante_maternelle': 'assmat',
-        'mam_2_members': 'mam2',
-        'mam_3_members': 'mam3',
-        'mam_4_members': 'mam4',
+        'assistante_maternelle': 'assmat_monthly',
+        'mam_2_members': 'mam2_monthly',
+        'mam_3_members': 'mam3_monthly',
+        'mam_4_members': 'mam4_monthly',
       };
     }
   }

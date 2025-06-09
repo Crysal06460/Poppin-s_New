@@ -1892,7 +1892,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               title: "Historique",
                               icon: Icons.history,
                               imagePath:
-                                  'assets/images/Icone_Recaptitulatif.png', // Vous pouvez créer une icône spécifique
+                                  'assets/images/Icone_historique.png', // Vous pouvez créer une icône spécifique
                               index: 3,
                               maxWidth: maxWidth,
                             ),
@@ -2654,7 +2654,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Recaptitulatif.png',
+                        'assets/images/Icone_historique.png',
                         width: 60,
                         height: 60,
                         errorBuilder: (context, error, stackTrace) => Icon(
