@@ -18,7 +18,8 @@ dependencies:
   firebase_core: ^3.13.1
   firebase_auth: ^5.3.2
   firebase_auth_web: ^5.14.3
-  cloud_firestore: ^5.6.1
+  cloud_firestore: ^5.5.1
+  cloud_functions: ^5.5.1
   firebase_storage: ^12.4.1
   firebase_storage_web: ^3.10.12
   firebase_messaging: ^15.2.5

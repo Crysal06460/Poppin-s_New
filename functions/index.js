@@ -1,8 +1,10 @@
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
+const {onCall} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
+const {getAuth} = require('firebase-admin/auth'); // AJOUT pour l'authentification
 
 // ===== IMPORTS POUR LES EMAILS AVEC MAILJET =====
 const Mailjet = require('node-mailjet');
@@ -21,6 +23,269 @@ const mailjet = Mailjet.apiConnect(
   '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
   '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
 );
+
+// ===== NOUVELLE FONCTION : Envoyer un email depuis l'app =====
+exports.sendEmailToParent = onCall({
+    region: 'europe-west1' // Même région que vos autres fonctions
+}, async (request) => {
+    console.log('📧 NOUVEAU: sendEmailToParent appelée');
+    
+    // Vérification authentification
+    if (!request.auth) {
+        console.error('❌ Utilisateur non authentifié');
+        throw new Error('unauthenticated');
+    }
+
+    const {
+        recipientEmail,
+        recipientName,
+        subject,
+        message,
+        templateType,
+        childId,
+        childName,
+        sendFromApp
+    } = request.data;
+
+    console.log('📧 Données reçues:', {
+        recipientEmail,
+        recipientName,
+        subject,
+        templateType,
+        childId,
+        childName,
+        sendFromApp
+    });
+
+    // Validation des données
+    if (!recipientEmail || !recipientName || !subject || !message) {
+        console.error('❌ Données manquantes');
+        throw new Error('invalid-argument');
+    }
+
+    try {
+        // Récupération des infos utilisateur pour signature
+        const userRecord = await getAuth().getUser(request.auth.uid);
+        const senderName = userRecord.displayName || 'Équipe Poppins';
+        const senderEmail = 'noreply@poppin-s.app'; // Votre email vérifié
+
+        console.log(`📧 Envoi email de ${senderName} vers ${recipientEmail}`);
+
+        // Construction du contenu email avec votre style existant
+        const emailContent = {
+            senderName,
+            recipientName,
+            subject,
+            message: message,
+            childName: childName || '',
+            sentFromApp: sendFromApp || false,
+            templateType: templateType || 'custom',
+            timestamp: new Date().toLocaleString('fr-FR', { 
+                timeZone: 'Europe/Paris',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        };
+
+        // Génération du HTML avec votre style (réutilise votre logique)
+        const htmlContent = generateEmailHtml(emailContent);
+
+        // Configuration email Mailjet (identique à votre logique existante)
+        const mailjetMessage = {
+            From: {
+                Email: senderEmail,
+                Name: senderName
+            },
+            To: [{
+                Email: recipientEmail,
+                Name: recipientName
+            }],
+            Subject: subject,
+            HTMLPart: htmlContent,
+            TextPart: `${message}\n\n---\nEnvoyé depuis l'application Poppins\nPar: ${senderName}\nLe: ${emailContent.timestamp}`
+        };
+
+        console.log('📧 Envoi via Mailjet...');
+
+        // Envoi via Mailjet (utilise votre configuration existante)
+        const request_mailjet = mailjet.post('send', { version: 'v3.1' }).request({
+            Messages: [mailjetMessage]
+        });
+
+        const result = await request_mailjet;
+
+        console.log('✅ Email envoyé avec succès via Mailjet');
+        console.log('📊 Réponse Mailjet:', JSON.stringify(result.body, null, 2));
+
+        // Sauvegarde dans Firestore pour historique
+        await db.collection('email_history').add({
+            recipientEmail,
+            recipientName,
+            subject,
+            message: message,
+            templateType: templateType || 'custom',
+            childId: childId || null,
+            childName: childName || null,
+            sentBy: request.auth.uid,
+            senderName,
+            sentAt: FieldValue.serverTimestamp(),
+            sentFromApp: sendFromApp || false,
+            mailjetResponse: result.body?.Messages?.[0]?.Status || 'sent',
+            messageId: result.body?.Messages?.[0]?.MessageID || 'unknown',
+            status: 'sent'
+        });
+
+        console.log('✅ Email sauvegardé dans l\'historique');
+
+        return {
+            success: true,
+            messageId: result.body?.Messages?.[0]?.MessageID || 'unknown',
+            message: 'Email envoyé avec succès'
+        };
+
+    } catch (error) {
+        console.error('❌ Erreur envoi email:', error);
+        
+        // Sauvegarde de l'erreur dans l'historique
+        try {
+            const userRecord = await getAuth().getUser(request.auth.uid);
+            await db.collection('email_history').add({
+                recipientEmail,
+                recipientName,
+                subject,
+                message,
+                templateType: templateType || 'custom',
+                childId: childId || null,
+                childName: childName || null,
+                sentBy: request.auth.uid,
+                senderName: userRecord.displayName || 'Équipe Poppins',
+                sentAt: FieldValue.serverTimestamp(),
+                sentFromApp: sendFromApp || false,
+                error: error.message,
+                status: 'failed'
+            });
+        } catch (saveError) {
+            console.error('❌ Erreur sauvegarde historique:', saveError);
+        }
+
+        throw new Error('internal');
+    }
+});
+
+// ===== FONCTION HELPER : Générer le HTML de l'email =====
+function generateEmailHtml(content) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${content.subject}</title>
+            <style>
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333333; 
+                    background-color: #f8f9fa;
+                    margin: 0;
+                    padding: 20px;
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    background-color: white;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }
+                .header { 
+                    background: linear-gradient(135deg, #3D9DF2 0%, #05C7F2 100%); 
+                    color: white; 
+                    padding: 30px 20px; 
+                    text-align: center; 
+                }
+                .header h1 { 
+                    margin: 0; 
+                    font-size: 24px; 
+                    font-weight: 600; 
+                }
+                .content { 
+                    padding: 30px 20px; 
+                }
+                .recipient-info {
+                    background-color: #DFE9F2;
+                    border-left: 4px solid #3D9DF2;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 0 8px 8px 0;
+                }
+                .message-content {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    white-space: pre-wrap;
+                }
+                .footer { 
+                    background-color: #f1f3f4; 
+                    padding: 20px; 
+                    text-align: center; 
+                    font-size: 12px; 
+                    color: #666666; 
+                    border-top: 1px solid #e0e0e0;
+                }
+                .app-badge {
+                    display: inline-block;
+                    background-color: #3D9DF2;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 16px;
+                    font-size: 11px;
+                    font-weight: 500;
+                    margin-top: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📧 ${content.subject}</h1>
+                </div>
+                
+                <div class="content">
+                    <div class="recipient-info">
+                        <strong>👋 Bonjour ${content.recipientName},</strong>
+                        ${content.childName ? `<br><small>Concernant: <strong>${content.childName}</strong></small>` : ''}
+                    </div>
+                    
+                    <div class="message-content">
+                        ${content.message}
+                    </div>
+                    
+                    <p style="margin-top: 30px; color: #666;">
+                        Cordialement,<br>
+                        <strong>${content.senderName}</strong>
+                    </p>
+                </div>
+                
+                <div class="footer">
+                    <p>
+                        Envoyé le ${content.timestamp}
+                        ${content.sentFromApp ? '<br><span class="app-badge">📱 Depuis l\'application Poppins</span>' : ''}
+                    </p>
+                    <p style="margin-top: 15px;">
+                        Cet email a été envoyé automatiquement. Pour toute question, 
+                        contactez directement votre structure.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+}
 
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
 exports.processEmailQueue = onDocumentCreated({

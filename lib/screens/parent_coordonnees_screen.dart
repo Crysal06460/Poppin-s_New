@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'email_composer_screen.dart';
 
 class ParentCoordonneesScreen extends StatefulWidget {
   final String childId;
@@ -218,7 +219,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                     padding: EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        // Email
+                        // Email avec fonctionnalité d'envoi
                         if (parent['email'] != null &&
                             parent['email'].toString().isNotEmpty)
                           _buildModernInfoRow(
@@ -226,6 +227,9 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             "Email",
                             parent['email'].toString(),
                             Colors.indigo,
+                            isClickable: true,
+                            onTap: () => _handleEmailTap(
+                                parent['email'].toString(), parentKey),
                           ),
 
                         // Téléphone
@@ -258,62 +262,223 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     );
   }
 
+  // Méthode corrigée pour les infos avec support email cliquable
   Widget _buildModernInfoRow(
-      IconData icon, String label, String value, Color iconColor) {
+    IconData icon,
+    String label,
+    String value,
+    Color iconColor, {
+    bool isClickable = false,
+    VoidCallback? onTap,
+  }) {
     return Container(
       margin: EdgeInsets.only(bottom: 16),
-      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: surfaceColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor.withOpacity(0.5)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 20,
-            ),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: textSecondary,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
+        border: Border.all(color: borderColor.withOpacity(0.5), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+            spreadRadius: 0,
           ),
         ],
       ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isClickable ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Icône avec design moderne
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 20,
+                  ),
+                ),
+
+                SizedBox(width: 16),
+
+                // Contenu texte
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Indicateur pour email cliquable
+                if (isClickable) ...[
+                  SizedBox(width: 12),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [primaryBlue, brightCyan],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryBlue.withOpacity(0.3),
+                          offset: const Offset(0, 2),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+  }
+
+  // Méthode corrigée pour gérer le clic sur l'email
+  Future<void> _handleEmailTap(String email, String parentKey) async {
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('Adresse email non disponible'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Récupérer le nom du parent
+      String parentName = "Parent";
+      if (parentInfo[parentKey] != null) {
+        final parent = parentInfo[parentKey];
+        final firstName = parent['firstName'] ?? '';
+        final lastName = parent['lastName'] ?? '';
+        parentName = "$firstName $lastName".trim();
+        if (parentName.isEmpty) {
+          parentName = parentKey == 'parent1' ? 'Parent 1' : 'Parent 2';
+        }
+      }
+
+      // Navigation vers l'écran de composition d'email
+      final result = await Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              EmailComposerScreen(
+            recipientEmail: email,
+            recipientName: parentName,
+            childId: widget.childId,
+            childName: widget.childName,
+            defaultSubject: 'Message concernant ${widget.childName}',
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
+
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+          transitionDuration: Duration(milliseconds: 300),
+        ),
+      );
+
+      // Afficher un message de confirmation si l'email a été envoyé
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text("Email envoyé avec succès !"),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Expanded(child: Text('Erreur: ${e.toString()}')),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   String _formatAddress(Map<String, dynamic> parentAddr) {

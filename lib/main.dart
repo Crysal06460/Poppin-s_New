@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // AJOUT : Import pour SystemChrome
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Firebase Functions
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
@@ -38,6 +39,16 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 🔥 NOUVEAU : Configuration Firebase Functions pour la région europe-west1
+  // Vos Cloud Functions sont déployées dans cette région
+  try {
+    // Configuration pour la production (région europe-west1)
+    FirebaseFunctions.instanceFor(region: 'europe-west1');
+    print('✅ Firebase Functions configuré pour europe-west1');
+  } catch (e) {
+    print('❌ Erreur configuration Firebase Functions: $e');
+  }
 
   // 🔥 INITIALISER LES NOTIFICATIONS (NOUVEAU)
   await NotificationService.initialize();

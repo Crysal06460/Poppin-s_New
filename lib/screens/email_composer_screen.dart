@@ -1,44 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EmailComposerScreen extends StatefulWidget {
   final String recipientEmail;
   final String recipientName;
-  final String senderStructureId;
-  final String childId;
-  final String childName;
+  final String? childId;
+  final String? childName;
+  final String? defaultSubject;
 
   const EmailComposerScreen({
     Key? key,
     required this.recipientEmail,
     required this.recipientName,
-    required this.senderStructureId,
-    required this.childId,
-    required this.childName,
+    this.childId,
+    this.childName,
+    this.defaultSubject,
   }) : super(key: key);
 
   @override
   _EmailComposerScreenState createState() => _EmailComposerScreenState();
 }
 
-class _EmailComposerScreenState extends State<EmailComposerScreen>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _bodyController = TextEditingController();
-  final FocusNode _subjectFocus = FocusNode();
-  final FocusNode _bodyFocus = FocusNode();
+class _EmailComposerScreenState extends State<EmailComposerScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _subjectController = TextEditingController();
+  final _messageController = TextEditingController();
 
-  bool _isSending = false;
-  late AnimationController _animationController;
-  late Animation<double> _slideAnimation;
+  bool _isLoading = false;
 
-  // Design System - Même palette que parent_coordonnees_screen
-  static const Color primaryRed = Color(0xFFD94350);
-  static const Color primaryBlue = Color(0xFF3D9DF2);
-  static const Color lightBlue = Color(0xFFDFE9F2);
-  static const Color brightCyan = Color(0xFF05C7F2);
-  static const Color primaryYellow = Color(0xFFF2B705);
+  // Design System 2025 - Palette officielle de l'application
+  static const Color primaryRed = Color(0xFFD94350); // #D94350
+  static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
+  static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
+  static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
+  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+
+  // Couleurs dérivées pour le design system
   static const Color surfaceColor = Color(0xFFFAFBFC);
   static const Color cardColor = Color(0xFFFFFFFF);
   static const Color borderColor = Color(0xFFE2E8F0);
@@ -48,167 +46,109 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-    _animationController.forward();
-
-    // Auto-focus sur le sujet
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _subjectFocus.requestFocus();
-    });
+    _subjectController.text = widget.defaultSubject ?? '';
   }
 
   @override
   void dispose() {
     _subjectController.dispose();
-    _bodyController.dispose();
-    _subjectFocus.dispose();
-    _bodyFocus.dispose();
-    _animationController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
   Future<void> _sendEmail() async {
-    if (_subjectController.text.trim().isEmpty ||
-        _bodyController.text.trim().isEmpty) {
-      _showSnackBar("Veuillez remplir le sujet et le message", Colors.orange);
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
-      _isSending = true;
+      _isLoading = true;
     });
 
     try {
-      // Appel à une Cloud Function Firebase pour envoyer l'email
+      // Utilise votre Cloud Function existante avec Mailjet - RÉGION EUROPE-WEST1
       final HttpsCallable callable =
-          FirebaseFunctions.instance.httpsCallable('sendEmail');
+          FirebaseFunctions.instanceFor(region: 'europe-west1')
+              .httpsCallable('sendEmailToParent');
 
-      final emailData = {
-        'to': widget.recipientEmail,
-        'subject': _subjectController.text.trim(),
-        'body': _bodyController.text.trim(),
-        'senderStructureId': widget.senderStructureId,
+      final result = await callable.call({
+        'recipientEmail': widget.recipientEmail,
         'recipientName': widget.recipientName,
+        'subject': _subjectController.text.trim(),
+        'message': _messageController.text.trim(),
+        'templateType': 'custom', // Toujours custom maintenant
         'childId': widget.childId,
         'childName': widget.childName,
-      };
-
-      final result = await callable.call(emailData);
-
-      // Sauvegarder l'email dans Firestore pour l'historique
-      await _saveEmailToHistory(emailData);
-
-      _showSnackBar("Email envoyé avec succès !", Colors.green);
-
-      // Attendre un peu pour que l'utilisateur voie le message de succès
-      await Future.delayed(Duration(seconds: 1));
-      Navigator.pop(context, true); // Retourner true pour indiquer le succès
-    } catch (e) {
-      _showSnackBar("Erreur lors de l'envoi : ${e.toString()}", primaryRed);
-    } finally {
-      setState(() {
-        _isSending = false;
+        'sendFromApp': true, // Flag pour identifier que ça vient de l'app
       });
+
+      // Sauvegarde l'historique dans Firestore
+      await _saveEmailHistory();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('Email envoyé avec succès !'),
+              ],
+            ),
+            backgroundColor: primaryBlue,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.of(context).pop(true); // Retourne true pour indiquer succès
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(child: Text('Erreur: ${e.toString()}')),
+              ],
+            ),
+            backgroundColor: primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _saveEmailToHistory(Map<String, dynamic> emailData) async {
+  Future<void> _saveEmailHistory() async {
     try {
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(widget.senderStructureId)
-          .collection('emailHistory')
-          .add({
-        ...emailData,
+      await FirebaseFirestore.instance.collection('email_history').add({
+        'recipientEmail': widget.recipientEmail,
+        'recipientName': widget.recipientName,
+        'subject': _subjectController.text.trim(),
+        'message': _messageController.text.trim(),
+        'templateType': 'custom',
+        'childId': widget.childId,
+        'childName': widget.childName,
         'sentAt': FieldValue.serverTimestamp(),
+        'sentFromApp': true,
         'status': 'sent',
       });
     } catch (e) {
       print('Erreur sauvegarde historique: $e');
     }
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required FocusNode focusNode,
-    int maxLines = 1,
-    TextInputAction? textInputAction,
-    VoidCallback? onEditingComplete,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: textSecondary,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-          TextField(
-            controller: controller,
-            focusNode: focusNode,
-            maxLines: maxLines,
-            textInputAction: textInputAction,
-            onEditingComplete: onEditingComplete,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: textPrimary,
-              height: 1.4,
-            ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(
-                color: textSecondary.withOpacity(0.6),
-                fontWeight: FontWeight.w400,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -217,13 +157,16 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
       backgroundColor: surfaceColor,
       body: Column(
         children: [
-          // Header avec design moderne
+          // Header moderne avec glassmorphism (même style que parent_coordonnees_screen)
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [primaryBlue, brightCyan],
+                colors: [
+                  primaryBlue,
+                  brightCyan,
+                ],
               ),
               boxShadow: [
                 BoxShadow(
@@ -238,7 +181,7 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Row(
                   children: [
-                    // Bouton retour
+                    // Bouton retour avec effet glassmorphism
                     Container(
                       width: 44,
                       height: 44,
@@ -264,13 +207,13 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
                       ),
                     ),
                     SizedBox(width: 16),
-                    // Titre
+                    // Titre avec typographie moderne
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Nouveau message",
+                            "Nouvel email",
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w700,
@@ -279,7 +222,7 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
                             ),
                           ),
                           Text(
-                            "À ${widget.recipientName}",
+                            "Message à ${widget.recipientName}",
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
@@ -289,190 +232,512 @@ class _EmailComposerScreenState extends State<EmailComposerScreen>
                         ],
                       ),
                     ),
-                    // Bouton d'envoi
-                    Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: _isSending
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
+                    // Bouton envoyer dans le header
+                    if (!_isLoading)
+                      Container(
+                        decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
-                          width: 1,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
                         ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _isSending ? null : _sendEmail,
-                          borderRadius: BorderRadius.circular(14),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_isSending) ...[
-                                  SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _sendEmail,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.send_rounded,
+                                      color: Colors.white, size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Envoyer',
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      strokeWidth: 2,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                ] else
-                                  Icon(
-                                    Icons.send_rounded,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                SizedBox(width: 8),
-                                Text(
-                                  _isSending ? "Envoi..." : "Envoyer",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ),
           ),
 
-          // Contenu du formulaire
+          // Contenu principal
           Expanded(
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: Offset(0, _slideAnimation.value),
-                end: Offset.zero,
-              ).animate(_slideAnimation),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Destinataire (en lecture seule)
-                    Container(
-                      padding: EdgeInsets.all(16),
+            child: _isLoading
+                ? Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
-                        color: lightBlue.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: primaryBlue.withOpacity(0.2)),
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            offset: const Offset(0, 4),
+                            blurRadius: 16,
+                          ),
+                        ],
                       ),
-                      child: Row(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [primaryBlue, brightCyan],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 20,
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(
+                              color: primaryBlue,
+                              strokeWidth: 3,
                             ),
                           ),
-                          SizedBox(width: 12),
-                          Expanded(
+                          SizedBox(height: 8),
+                          Text(
+                            'Envoi...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Informations destinataire
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderColor, width: 1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 16,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "Destinataire",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: textSecondary,
-                                  ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [primaryBlue, brightCyan],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: primaryBlue.withOpacity(0.3),
+                                            offset: const Offset(0, 4),
+                                            blurRadius: 12,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        Icons.person_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Destinataire',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: textSecondary,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            widget.recipientName,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: textPrimary,
+                                              letterSpacing: -0.2,
+                                            ),
+                                          ),
+                                          Text(
+                                            widget.recipientEmail,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(height: 2),
-                                Text(
-                                  "${widget.recipientName} (${widget.recipientEmail})",
+                                if (widget.childName != null) ...[
+                                  SizedBox(height: 16),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          primaryBlue.withOpacity(0.08),
+                                          brightCyan.withOpacity(0.04),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: primaryBlue.withOpacity(0.2),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.child_care_rounded,
+                                          size: 16,
+                                          color: primaryBlue,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Concernant: ${widget.childName}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: primaryBlue,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Sujet
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderColor, width: 1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 16,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: primaryBlue.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.subject_rounded,
+                                        color: primaryBlue,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Sujet',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: textPrimary,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _subjectController,
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                     color: textPrimary,
                                   ),
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'Entrez le sujet de votre email...',
+                                    hintStyle: TextStyle(
+                                      color: textSecondary.withOpacity(0.7),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide:
+                                          BorderSide(color: borderColor),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide:
+                                          BorderSide(color: borderColor),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: primaryBlue,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: primaryRed,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    filled: true,
+                                    fillColor: surfaceColor,
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Le sujet est obligatoire';
+                                    }
+                                    return null;
+                                  },
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
 
-                    SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                    // Champ sujet
-                    _buildTextField(
-                      controller: _subjectController,
-                      label: "Sujet",
-                      hint: "Entrez le sujet de votre message...",
-                      focusNode: _subjectFocus,
-                      textInputAction: TextInputAction.next,
-                      onEditingComplete: () => _bodyFocus.requestFocus(),
-                    ),
-
-                    // Champ message
-                    _buildTextField(
-                      controller: _bodyController,
-                      label: "Message",
-                      hint: "Rédigez votre message ici...",
-                      focusNode: _bodyFocus,
-                      maxLines: 8,
-                      textInputAction: TextInputAction.newline,
-                    ),
-
-                    // Info sur l'enfant
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: primaryYellow.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: primaryYellow.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_rounded,
-                            color: primaryYellow,
-                            size: 20,
+                          // Message
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderColor, width: 1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 16,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: primaryBlue.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.message_rounded,
+                                        color: primaryBlue,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Message',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: textPrimary,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _messageController,
+                                  maxLines: 8,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: textPrimary,
+                                    height: 1.5,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Rédigez votre message...',
+                                    hintStyle: TextStyle(
+                                      color: textSecondary.withOpacity(0.7),
+                                    ),
+                                    contentPadding: const EdgeInsets.all(16),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide:
+                                          BorderSide(color: borderColor),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide:
+                                          BorderSide(color: borderColor),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: primaryBlue,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: primaryRed,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    filled: true,
+                                    fillColor: surfaceColor,
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Le message est obligatoire';
+                                    }
+                                    if (value.trim().length < 10) {
+                                      return 'Le message doit contenir au moins 10 caractères';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              "Ce message concerne ${widget.childName}",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: textPrimary,
+
+                          const SizedBox(height: 30),
+
+                          // Bouton envoyer (version mobile)
+                          Container(
+                            width: double.infinity,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [primaryBlue, brightCyan],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryBlue.withOpacity(0.3),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 16,
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _isLoading ? null : _sendEmail,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Center(
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                          ),
+                                        )
+                                      : Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.send_rounded,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                            SizedBox(width: 12),
+                                            Text(
+                                              'Envoyer l\'email',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
                               ),
                             ),
                           ),
+
+                          // Espace pour le scroll final
+                          SizedBox(height: 20),
                         ],
                       ),
                     ),
-
-                    SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         ],
       ),
