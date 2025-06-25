@@ -144,7 +144,7 @@ class _PlanningTableViewState extends State<PlanningTableView> {
               ),
               SizedBox(height: 16),
               Text(
-                "Pas de garde le week-end",
+                "Pas d'enfant le week-end",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -206,14 +206,14 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<Membre?>(
                         value: _selectedMembre,
-                        hint: Text("Toutes les assistantes"),
+                        hint: Text("L'équipe"),
                         isExpanded: true,
                         icon: Icon(Icons.arrow_drop_down,
                             color: widget.primaryColor),
                         items: [
                           DropdownMenuItem<Membre?>(
                             value: null,
-                            child: Text("Toutes les assistantes"),
+                            child: Text("L'équipe"),
                           ),
                           ...widget.membres.map((membre) {
                             return DropdownMenuItem<Membre?>(
@@ -415,7 +415,7 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      "Nombre d'enfants par heure:",
+                      "Nombre d'enfants :",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,

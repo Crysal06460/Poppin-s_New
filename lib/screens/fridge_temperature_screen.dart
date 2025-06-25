@@ -340,7 +340,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                           children: [
                             _buildTabletFormField(
                               controller: _memberNameController,
-                              label: "Qui a relevé la température ?",
+                              label: "Relevée par",
                               icon: Icons.person,
                               maxWidth: maxWidth,
                             ),
@@ -466,7 +466,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                "${temperatureRecords.length} relevés",
+                                "${temperatureRecords.length} relevé${temperatureRecords.length > 1 ? 's' : ''}",
                                 style: TextStyle(
                                   fontSize: 12, // Taille réduite
                                   fontWeight: FontWeight.w500,
@@ -692,7 +692,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      "La température du frigo n'a pas été relevée aujourd'hui",
+                      "La température du réfrigérateur n'a pas été relevée aujourd'hui",
                       style: TextStyle(
                         color: Colors.red.shade900,
                         fontWeight: FontWeight.w500,
@@ -752,7 +752,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
 
                 _buildPhoneFormField(
                   controller: _memberNameController,
-                  label: "Qui a relevé la température ?",
+                  label: "Température relevée par ?",
                   icon: Icons.person,
                 ),
                 SizedBox(height: 16),
@@ -867,7 +867,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        "${temperatureRecords.length} relevés",
+                        "${temperatureRecords.length} relevé${temperatureRecords.length > 1 ? 's' : ''}",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -1117,7 +1117,7 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                     // Titre avec meilleur style
                     Expanded(
                       child: Text(
-                        "Température du frigo",
+                        "Température du réfrigérateur",
                         style: TextStyle(
                           fontSize:
                               screenSize.width * (isTablet ? 0.028 : 0.055),

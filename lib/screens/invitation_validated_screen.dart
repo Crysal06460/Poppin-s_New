@@ -180,7 +180,7 @@ class InvitationValidatedScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Veuillez continuer pour créer votre compte et rejoindre la structure.",
+                  "Veuillez continuer pour créer votre compte.",
                   style: TextStyle(fontSize: 14, color: Colors.black87),
                 ),
               ],
@@ -480,7 +480,7 @@ class InvitationValidatedScreen extends StatelessWidget {
                         SizedBox(height: maxHeight * 0.02),
                         // Description
                         Text(
-                          "Veuillez continuer pour créer votre compte et rejoindre la structure.",
+                          "Veuillez continuer pour créer votre compte.",
                           style: TextStyle(
                             fontSize: maxWidth * 0.019,
                             color: Colors.black87,

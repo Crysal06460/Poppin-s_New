@@ -576,10 +576,6 @@ class _MonthlyReportGenerateScreenState
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Structure: ${reportData['structureName']}',
-                    style: pw.TextStyle(font: fontBold, fontSize: 10),
-                  ),
-                  pw.Text(
                     'Période: ${reportData['month']}',
                     style: pw.TextStyle(font: fontBold, fontSize: 10),
                   ),
@@ -663,7 +659,7 @@ class _MonthlyReportGenerateScreenState
               pw.SizedBox(height: 10),
               pw.Center(
                 child: pw.Text(
-                  'Voir le récapitulatif financier à la page suivante',
+                  'Voir le récapitulatif à la page suivante',
                   style: pw.TextStyle(
                     font: font,
                     fontSize: 10,
@@ -689,7 +685,7 @@ class _MonthlyReportGenerateScreenState
               // En-tête de la page
               pw.Center(
                 child: pw.Text(
-                  'RÉCAPITULATIF FINANCIER',
+                  'RÉCAPITULATIF',
                   style: pw.TextStyle(
                     font: fontBold,
                     fontSize: 16,
@@ -702,10 +698,6 @@ class _MonthlyReportGenerateScreenState
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(
-                    'Structure: ${reportData['structureName']}',
-                    style: pw.TextStyle(font: fontBold, fontSize: 10),
-                  ),
                   pw.Text(
                     'Période: ${reportData['month']}',
                     style: pw.TextStyle(font: fontBold, fontSize: 10),
@@ -732,7 +724,7 @@ class _MonthlyReportGenerateScreenState
                   children: [
                     pw.Center(
                       child: pw.Text(
-                        'RÉCAPITULATIF',
+                        '',
                         style: pw.TextStyle(font: fontBold, fontSize: 14),
                       ),
                     ),
@@ -743,7 +735,7 @@ class _MonthlyReportGenerateScreenState
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
                         pw.Text(
-                          'Nombre d\'heures total:',
+                          'Nombre total d\'heures :',
                           style: pw.TextStyle(font: font, fontSize: 10),
                         ),
                         pw.Text(

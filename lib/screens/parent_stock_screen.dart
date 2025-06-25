@@ -275,7 +275,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
             if (childDoc.exists) {
               final data = childDoc.data()!;
 
-              // CORRECTION : Utiliser Map<String, dynamic> au lieu de Map<String, bool>
+              // CORRECTION : Initialiser stockNeeds vide et charger depuis Firestore
               Map<String, dynamic> stockNeeds = {};
 
               try {
@@ -294,11 +294,15 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                   print(
                       "📦 [DEBUG] Données brutes de Firestore pour ${data['firstName']}: $stockData");
 
-                  // CORRECTION : Copier directement les données sans filtrer par _stockItems
-                  stockNeeds = Map<String, dynamic>.from(stockData);
+                  // CORRECTION : Ne garder que les items qui sont true
+                  stockData.forEach((key, value) {
+                    if (value == true) {
+                      stockNeeds[key] = value;
+                    }
+                  });
 
                   print(
-                      "📦 [DEBUG] StockNeeds après traitement pour ${data['firstName']}: $stockNeeds");
+                      "📦 [DEBUG] StockNeeds filtrés pour ${data['firstName']}: $stockNeeds");
 
                   // Vérifier s'il y a des besoins
                   bool hasAnyNeeds =
@@ -359,10 +363,9 @@ class _ParentStockScreenState extends State<ParentStockScreen>
       Map<String, dynamic> stockNeeds) {
     List<String> neededItems = [];
 
-    // Ajouter tous les articles nécessaires avec vérification stricte
+    // Ajouter seulement les articles qui sont explicitement true
     stockNeeds.forEach((item, isNeeded) {
-      // Vérifier explicitement si la valeur est true
-      if (isNeeded == true || isNeeded.toString().toLowerCase() == 'true') {
+      if (isNeeded == true) {
         neededItems.add(item);
       }
     });
@@ -505,7 +508,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "Besoins en fournitures",
+                                  "Gestion des stocks",
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
@@ -513,13 +516,6 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                                   ),
                                 ),
                                 SizedBox(height: 4),
-                                Text(
-                                  "À apporter lors de votre prochaine visite",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
                               ],
                             ),
                           ],
@@ -536,9 +532,8 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                               child['stockNeeds'] as Map<String, dynamic>;
 
                           // Amélioration de la détection des besoins
-                          final hasNeeds = stockNeeds.values.any((value) =>
-                              value == true ||
-                              value.toString().toLowerCase() == 'true');
+                          final hasNeeds =
+                              stockNeeds.values.any((value) => value == true);
 
                           print(
                               "📦 [BUILD DEBUG] Enfant ${child['firstName']} - hasNeeds: $hasNeeds");

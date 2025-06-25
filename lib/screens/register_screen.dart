@@ -71,7 +71,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: primaryBlue,
             size: isTablet ? 24 : 24,
           ),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            // Vérifier si on peut faire pop, sinon aller à welcome
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/welcome');
+            }
+          },
         ),
         centerTitle: true,
       ),
@@ -112,7 +119,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 25),
 
               Text(
-                "Créer un compte structure",
+                "Créer un compte",
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -127,7 +134,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Expanded(
                     child: _buildTypeCheckbox(
-                      title: "Assistante Maternelle",
+                      title: "Assistant Maternel",
                       isChecked: isAssistanteMaterCheck,
                       onChanged: (value) {
                         if (value == true) {
@@ -509,7 +516,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         // Titre principal
         Text(
-          "Créer un compte structure",
+          "Créer un compte",
           style: TextStyle(
             fontSize: maxWidth * 0.025, // Réduit de 0.028 à 0.025
             fontWeight: FontWeight.w700, // Légèrement moins gras
@@ -523,7 +530,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         // Sous-titre plus discret
         Text(
-          "Rejoignez notre plateforme et facilitez la gestion de votre structure",
+          "Rejoignez notre application qui simplifie et professionnalise le métier d'assistant maternel",
           style: TextStyle(
             fontSize: maxWidth * 0.016, // Réduit de 0.018 à 0.016
             color: Colors.grey.shade600,
@@ -546,21 +553,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            "Type de structure",
-            style: TextStyle(
-              fontSize: maxWidth * 0.02, // Réduit de 0.022 à 0.02
-              fontWeight: FontWeight.w600, // Moins gras
-              color: primaryBlue,
-            ),
-          ),
           SizedBox(height: maxHeight * 0.015), // Réduit de 0.02 à 0.015
           Row(
             children: [
               Expanded(
                 child: _buildTabletTypeCard(
-                  title: "Assistante Maternelle",
-                  subtitle: "Structure individuelle",
+                  title: "Assistant Maternel",
+                  subtitle: "",
                   icon: Icons.person,
                   isSelected: isAssistanteMaterCheck,
                   onTap: () {
@@ -577,7 +576,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Expanded(
                 child: _buildTabletTypeCard(
                   title: "MAM",
-                  subtitle: "Maison d'Assistantes Maternelles",
+                  subtitle: "Maison d'Assistants Maternels",
                   icon: Icons.group,
                   isSelected: isMAMCheck,
                   onTap: () {
@@ -1106,7 +1105,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       // Déterminer le type de structure sélectionné
-      final String structureType = isMAMCheck ? 'MAM' : 'AssistanteMaternelle';
+      final String structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
 
       // Créer le document structure dans Firestore
       await FirebaseFirestore.instance
@@ -1120,7 +1119,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // Après l'inscription, rediriger vers l'écran de tarification
       if (mounted) {
-        context.go('/pricing', extra: {
+        context.push('/pricing', extra: {
           'structureType': structureType,
           'structureId': userCredential.user!.uid,
         });

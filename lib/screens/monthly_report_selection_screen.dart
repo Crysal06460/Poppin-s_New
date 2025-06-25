@@ -426,13 +426,6 @@ class _MonthlyReportSelectionScreenState
                       ),
                       SizedBox(height: 16),
 
-                      // Structure
-                      Text(
-                        'Structure: $structureName',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      SizedBox(height: 24),
-
                       // Sélection de l'enfant
                       Text(
                         'Sélectionner un enfant:',

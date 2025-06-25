@@ -38,6 +38,17 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
   };
   int _totalActivites = 0;
 
+  Map<String, String> _getCategoryTitle = {
+    'repas': 'Repas',
+    'activites': 'Activités',
+    'siestes': 'Siestes',
+    'changes': 'Changes',
+    'sante': 'Santé',
+    'horaires': 'Horaires',
+    'photos': 'Photos',
+    'transmissions': 'Transmissions',
+  };
+
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350);
   static const Color primaryBlue = Color(0xFF3D9DF2);
@@ -53,6 +64,19 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadChildHistoryData();
     });
+  }
+
+  String _getCorrectActionText(String actionType, String? details) {
+    switch (actionType) {
+      case 'arrivee':
+        return 'Arrivée';
+      case 'depart':
+        return 'Départ';
+      case 'absent':
+        return 'Absent';
+      default:
+        return details ?? actionType;
+    }
   }
 
   Future<void> _loadChildHistoryData() async {
@@ -310,14 +334,16 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
               'heure':
                   horaire['heure'] ?? _formatTimestamp(horaire['timestamp']),
               'type': 'arrivee',
-              'details': 'Arrivée',
+              'details': 'Arrivée', // Avec accent
+              'actionType': 'arrivee',
             });
           } else if (horaire['actionType'] == 'depart') {
             tempRecapData['horaires']!.add({
               'heure':
                   horaire['heure'] ?? _formatTimestamp(horaire['timestamp']),
               'type': 'depart',
-              'details': 'Départ',
+              'details': 'Départ', // Avec accent
+              'actionType': 'depart',
             });
           }
         }
@@ -457,7 +483,7 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
       ),
       child: Column(
         children: [
-          // En-tête de section
+          // En-tête de section avec titre corrigé
           Container(
             padding: EdgeInsets.all(isTablet ? 16 : 12),
             decoration: BoxDecoration(
@@ -476,8 +502,8 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
                 ),
                 SizedBox(width: 12),
                 Text(
-                  category.substring(0, 1).toUpperCase() +
-                      category.substring(1),
+                  _getCategoryTitle[category] ??
+                      category, // Utiliser le titre correct
                   style: TextStyle(
                     fontSize: isTablet ? 20 : 18,
                     fontWeight: FontWeight.bold,
@@ -506,7 +532,7 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
             ),
           ),
 
-          // Liste des éléments
+          // Liste des éléments avec texte corrigé
           ListView.separated(
             physics: NeverScrollableScrollPhysics(),
             shrinkWrap: true,
@@ -514,6 +540,20 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
             separatorBuilder: (context, index) => Divider(height: 1),
             itemBuilder: (context, index) {
               final item = items[index];
+
+              // Déterminer le texte à afficher selon la catégorie
+              String displayText;
+              if (category == 'photos') {
+                displayText = '1 photo';
+              } else if (category == 'horaires') {
+                // Utiliser la méthode pour corriger l'affichage des horaires
+                displayText = _getCorrectActionText(
+                    item['actionType'] ?? item['type'] ?? '', item['details']);
+              } else {
+                // Pour les autres catégories, privilégier 'details' puis 'type'
+                displayText = item['details'] ?? item['type'] ?? '';
+              }
+
               return ListTile(
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: isTablet ? 20 : 16,
@@ -535,9 +575,7 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
                   ),
                 ),
                 title: Text(
-                  category == 'photos'
-                      ? '1 photo'
-                      : (item['type'] ?? item['details'] ?? ''),
+                  displayText,
                   style: TextStyle(
                     fontSize: isTablet ? 16 : 14,
                     fontWeight: FontWeight.bold,
@@ -697,7 +735,7 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Historique pour ${widget.childName}",
+                            "Historique - ${widget.childName}",
                             style: TextStyle(
                               fontSize: isTabletDevice ? 24 : 18,
                               fontWeight: FontWeight.bold,

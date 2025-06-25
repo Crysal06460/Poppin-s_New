@@ -393,6 +393,7 @@ class _StockScreenState extends State<StockScreen> {
         enfants = filteredChildren;
         isLoading = false;
       });
+      await _cleanCorruptedStockData();
     } catch (e) {
       print("❌ Erreur détaillée: $e");
       setState(() => isLoading = false);
@@ -906,10 +907,15 @@ class _StockScreenState extends State<StockScreen> {
       final String structureId =
           enfant['structureId'] ?? FirebaseAuth.instance.currentUser?.uid;
 
-      // Convertir en Map<String, dynamic> pour Firestore
-      final stockData = Map<String, dynamic>.fromEntries(
-          stockNeeds.entries.map((e) => MapEntry(e.key, e.value)));
+      // CORRECTION : Ne sauvegarder que les items qui sont true
+      final stockData = Map<String, dynamic>();
+      stockNeeds.forEach((key, value) {
+        if (value == true) {
+          stockData[key] = value;
+        }
+      });
 
+      // IMPORTANT : Remplacer complètement le document au lieu de merger
       await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -917,7 +923,7 @@ class _StockScreenState extends State<StockScreen> {
           .doc(childId)
           .collection('stocks')
           .doc('current')
-          .set(stockData, SetOptions(merge: true));
+          .set(stockData); // Retirer SetOptions(merge: true)
 
       // Mettre à jour l'état local
       setState(() {
@@ -933,9 +939,59 @@ class _StockScreenState extends State<StockScreen> {
         // On active la notification pour les parents
         await StockBadgeUtil.setStockNeeds(true);
         print("✅ Badge activé dans les SharedPreferences");
+      } else {
+        // AJOUTER : Si plus aucun besoin, désactiver le badge
+        await StockBadgeUtil.setStockNeeds(false);
+        print("❌ Badge désactivé dans les SharedPreferences");
       }
     } catch (e) {
       print("Erreur lors de la mise à jour des stocks: $e");
+    }
+  }
+
+// Méthode pour nettoyer les anciennes données corrompues
+  Future<void> _cleanCorruptedStockData() async {
+    try {
+      for (var enfant in enfants) {
+        final String structureId = enfant['structureId'] ?? '';
+        final String childId = enfant['id'];
+
+        // Lire le document actuel
+        final stockDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .doc(childId)
+            .collection('stocks')
+            .doc('current')
+            .get();
+
+        if (stockDoc.exists) {
+          final stockData = stockDoc.data() as Map<String, dynamic>;
+
+          // Ne garder que les entrées true
+          final cleanedData = Map<String, dynamic>();
+          stockData.forEach((key, value) {
+            if (value == true) {
+              cleanedData[key] = value;
+            }
+          });
+
+          // Remplacer complètement le document avec les données nettoyées
+          await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('children')
+              .doc(childId)
+              .collection('stocks')
+              .doc('current')
+              .set(cleanedData);
+
+          print("🧹 Données nettoyées pour ${enfant['prenom']}: $cleanedData");
+        }
+      }
+    } catch (e) {
+      print("❌ Erreur lors du nettoyage: $e");
     }
   }
 

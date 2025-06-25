@@ -584,7 +584,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
     if (jourSemaine > 5) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Pas de garde le week-end"),
+          content: Text("Pas d'enfant le week-end"),
           backgroundColor: Colors.orange,
         ),
       );

@@ -65,6 +65,7 @@ import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/cleaning_schedule_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:poppins_app/screens/parent_second_address_screen.dart';
+import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {

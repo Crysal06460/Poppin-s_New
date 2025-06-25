@@ -515,7 +515,7 @@ class _CleaningScheduleScreenState extends State<CleaningScheduleScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          "Planning Ménage",
+          "Planning Entretien",
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -643,7 +643,7 @@ class _CleaningScheduleScreenState extends State<CleaningScheduleScreen> {
                             ),
                             SizedBox(width: 8),
                             Text(
-                              "Membres de l'équipe",
+                              "L'équipe",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,

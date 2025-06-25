@@ -138,7 +138,8 @@ class _SubscriptionConfirmedScreenState
     final String structureId = widget.structureInfo['structureId'] ?? '';
     final int memberCount = widget.structureInfo['memberCount'] ?? 1;
     final bool isMam = structureType == 'MAM';
-
+    print("🔍 DEBUG structureType reçu: '$structureType'");
+    print("🔍 DEBUG widget.structureInfo: ${widget.structureInfo}");
     // Récupérer les dimensions de l'écran
     final Size screenSize = MediaQuery.of(context).size;
 
@@ -147,8 +148,10 @@ class _SubscriptionConfirmedScreenState
 
     // Mapping des types techniques vers les noms d'affichage
     Map<String, String> structureDisplayNames = {
-      'assistante_maternelle': 'Assistante Maternelle',
+      'assistante_maternelle': 'Assistant Maternel', // ✅ MODIFIÉ
+      'AssistanteMaternelle': 'Assistant Maternel', // ✅ MODIFIÉ
       'MAM': 'Maison d\'Assistantes Maternelles',
+      'MaisonAssistantesMaternelles': 'Maison d\'Assistantes Maternelles',
     };
 
     // MODIFICATION : Utiliser la nouvelle méthode pour obtenir le prix
@@ -928,7 +931,8 @@ class _SubscriptionConfirmedScreenState
                                       ),
                                       Flexible(
                                         child: Text(
-                                          displayName,
+                                          // ✅ MODIFICATION : Utiliser version courte pour l'affichage dans le panneau gauche
+                                          isMam ? "MAM" : "Assistant Maternel",
                                           style: TextStyle(
                                             fontSize: maxWidth * 0.016,
                                             fontWeight: FontWeight.bold,

@@ -574,8 +574,8 @@ class _PlanningHistoryScreenState extends State<PlanningHistoryScreen> {
             SizedBox(height: 24),
             Text(
               _selectedDate.weekday > 5
-                  ? "Pas de garde le week-end"
-                  : "Pas de garde enregistrée pour cette date",
+                  ? "Pas d'enfant le week-end"
+                  : "Pas de données enregistrée pour cette date",
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,

@@ -19,6 +19,9 @@ import 'package:poppins_app/screens/child_history_detail_screen.dart';
 import 'package:poppins_app/screens/history_date_selection_screen.dart';
 import '../services/photo_cleanup_service.dart';
 import '../screens/admin_cleanup_screen.dart';
+import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
+import '../services/subscription_service.dart';
+import 'package:flutter/foundation.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -87,6 +90,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showPhotoAdministration() {
+    // Sécurité supplémentaire
+    if (!kDebugMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Fonction disponible uniquement en mode développeur"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -121,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
-                        "Température frigo",
+                        "Température réfrigérateur",
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
                           color: needFridgeTemperatureCheck
@@ -203,7 +217,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ListTile(
                   leading: Icon(Icons.cleaning_services, color: primaryColor),
                   title: Text(
-                    "Planning Ménage",
+                    "Planning Entretien",
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   onTap: () {
@@ -215,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ListTile(
                   leading: Icon(Icons.calendar_month, color: primaryColor),
                   title: Text(
-                    "Planning enfant",
+                    "Planning Enfant",
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   onTap: () {
@@ -271,15 +285,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Icon(Icons.person_add, color: primaryColor),
+                leading: Icon(Icons.person_add,
+                    color: currentMemberCount >= maxMemberCount
+                        ? Colors.grey
+                        : primaryColor),
                 title: Text(
                   "Ajouter un membre${currentMemberCount >= maxMemberCount ? ' (limite atteinte)' : ''}",
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: currentMemberCount >= maxMemberCount
+                        ? Colors.grey
+                        : Colors.black87,
+                  ),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _navigateToAddMember();
-                },
+                onTap: currentMemberCount >= maxMemberCount
+                    ? null // Désactiver le tap si limite atteinte
+                    : () {
+                        Navigator.pop(context);
+                        _navigateToAddMember();
+                      },
               ),
               ListTile(
                 leading: Icon(Icons.person_remove, color: primaryColor),
@@ -399,7 +423,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
 
           print(
-              "Assistante Maternelle - Frigo: $assmatFridge, Congélateur: $assmatFreezer");
+              "Assistante Maternelle - Réfrigérateur: $assmatFridge, Congélateur: $assmatFreezer");
 
           // Vérifier les températures si les équipements sont configurés
           if (assmatFridge == true) {
@@ -426,6 +450,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _showParentCoordonneeSelection() async {
+    // Charger les enfants d'abord
+    final children = await _loadChildren();
+
+    if (children.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Aucun enfant trouvé"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Afficher directement le dialogue avec les enfants chargés
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                final child = children[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: primaryColor.withOpacity(0.7),
+                    backgroundImage: child['photoUrl'] != null &&
+                            child['photoUrl'].toString().isNotEmpty
+                        ? NetworkImage(child['photoUrl'])
+                        : null,
+                    child: child['photoUrl'] == null ||
+                            child['photoUrl'].toString().isEmpty
+                        ? Text(
+                            child['firstName'][0].toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    child['firstName'],
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    // Obtenir l'ID de structure avant de naviguer
+                    String structId = await _getStructureId();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ParentCoordonneesScreen(
+                          childId: child['id'],
+                          childName: child['firstName'],
+                          structureId: structId,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "ANNULER",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _checkAssmatFridgeTemperatureStatus(String structureId) async {
     try {
       final today = DateTime.now();
@@ -445,10 +557,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
 
       print(
-          "Vérification température frigo Assistante Maternelle: ${needAssmatFridgeTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
+          "Vérification température réfrigérateur Assistante Maternelle: ${needAssmatFridgeTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
     } catch (e) {
       print(
-          "Erreur lors de la vérification du statut de température du frigo AssistanteMaternelle: $e");
+          "Erreur lors de la vérification du statut de température du réfrigérateur AssistanteMaternelle: $e");
     }
   }
 
@@ -499,7 +611,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       print(
-          "Erreur lors de la sauvegarde de la préférence frigo AssistanteMaternelle: $e");
+          "Erreur lors de la sauvegarde de la préférence réfrigérateur AssistanteMaternelle: $e");
     }
   }
 
@@ -757,7 +869,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          "Température frigo",
+                          "Température réfrigérateur",
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
                             color: needAssmatFridgeTemperatureCheck
@@ -922,82 +1034,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
 
       print(
-          "Vérification température frigo: ${needFridgeTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
+          "Vérification température réfrigérateur: ${needFridgeTemperatureCheck ? 'À relever aujourd\'hui' : 'Déjà relevée'}");
     } catch (e) {
       print(
-          "Erreur lors de la vérification du statut de température du frigo: $e");
+          "Erreur lors de la vérification du statut de température du réfrigérateur: $e");
     }
   }
 
   // Méthode pour naviguer vers l'écran d'ajout de membre
   void _navigateToAddMember() {
-    if (currentMemberCount >= maxMemberCount) {
-      // Montrer une alerte pour proposer une mise à niveau
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Text("Limite d'abonnement atteinte",
-                textAlign: TextAlign.center),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Vous avez atteint le nombre maximum de membres ($maxMemberCount) autorisé par votre abonnement actuel.",
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  "Souhaitez-vous passer à un abonnement supérieur?",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  "NON",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Naviguer vers la page de mise à niveau d'abonnement
-                  context.go('/subscription-upgrade');
-                },
-                child: Text(
-                  "OUI",
-                  style: TextStyle(
-                    color: primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      // Naviguer vers l'écran d'ajout de membre
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MAMMemberAddScreen(),
-        ),
-      ).then((_) {
-        // Rafraîchir les données après ajout
-        _checkIfMAMStructure();
-      });
-    }
+    // Naviguer directement vers l'écran d'ajout de membre
+    // La vérification de limite est maintenant faite dans _showMemberManagement()
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MAMMemberAddScreen(),
+      ),
+    ).then((_) {
+      // Rafraîchir les données après ajout
+      _checkIfMAMStructure();
+    });
   }
 
   // Méthode pour naviguer vers l'écran de suppression de membre
@@ -1036,7 +1092,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -1124,7 +1180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -1212,7 +1268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -1297,7 +1353,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -1628,7 +1684,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text("Sélectionner un enfant", textAlign: TextAlign.center),
+          title: Text("Sélectionnez un enfant", textAlign: TextAlign.center),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -1857,7 +1913,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: ListView(
                           children: [
                             _buildSectionItem(
-                              title: "Gestion de la structure",
+                              title: isMAMStructure
+                                  ? "Gestion de la MAM"
+                                  : "Gestion administrative",
                               icon: Icons.business,
                               imagePath: 'assets/images/Icone_Structure.png',
                               index: 0,
@@ -1879,7 +1937,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             if (showMonthlyTableReports) ...[
                               SizedBox(height: maxHeight * 0.02),
                               _buildSectionItem(
-                                title: "Rapports",
+                                title: "Tableau mensuel",
                                 icon: Icons.assessment,
                                 imagePath:
                                     'assets/images/Icone_Recaptitulatif.png',
@@ -2059,11 +2117,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _getSectionTitle(int sectionIndex) {
     switch (sectionIndex) {
       case 0:
-        return "Structure";
+        return isMAMStructure ? "Gestion de la MAM" : "Gestion administrative";
       case 1:
-        return "Enfants";
+        return "Gestion des Enfants";
       case 2:
-        return "Rapports";
+        return "Gestion des Tableaux mensuels";
       case 3:
         return "Historique";
       default:
@@ -2140,7 +2198,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildTabletActionItem(
             icon: Icons.people,
             title: "Modifier les membres",
-            description: "Gérer les membres de la MAM",
+            description: currentMemberCount >= maxMemberCount
+                ? "Limite de membres atteinte ($currentMemberCount/$maxMemberCount)"
+                : "Gérer les membres de la MAM ($currentMemberCount/$maxMemberCount)",
             onTap: _showMemberManagement,
             maxWidth: maxWidth,
           ),
@@ -2148,7 +2208,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildTabletActionItem(
             icon: Icons.settings,
             title: "Fonctionnement de la MAM",
-            description: "Température frigo, congélateur, planning ménage...",
+            description:
+                "Température réfrigérateur, congélateur, planning entretien...",
             onTap: _showMAMFunctioning,
             maxWidth: maxWidth,
             badge: functioningBadge,
@@ -2159,7 +2220,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildTabletActionItem(
             icon: Icons.settings,
             title: "Fonctionnement quotidien",
-            description: "Température frigo, congélateur, planning enfant...",
+            description:
+                "Température réfrigérateur, congélateur, planning enfant...",
             onTap: _showAssmatDailyFunctioning,
             maxWidth: maxWidth,
             badge: functioningBadge,
@@ -2192,26 +2254,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildTabletActionItem(
           icon: Icons.edit_note,
           title: "Modifier les profils complets",
-          description: "Éditer toutes les informations enfant",
+          description: "Éditer toutes les informations de l'enfant",
           onTap: _showChildProfilesSelection,
           maxWidth: maxWidth,
         ),
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
           icon: Icons.person_remove,
-          title: "Retrait d'enfant",
+          title: "Retirer un enfant",
           description: "Gérer le départ d'un enfant",
           onTap: _showChildRemoval,
           maxWidth: maxWidth,
         ),
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
-          icon: Icons.admin_panel_settings,
-          title: "Administration des photos",
-          description: "Nettoyage et statistiques des photos",
-          onTap: _showPhotoAdministration,
+          icon: Icons.contact_page,
+          title: "Coordonnées des parents",
+          description: "Consulter les coordonnées des parents",
+          onTap: _showParentCoordonneeSelection,
           maxWidth: maxWidth,
         ),
+        if (kDebugMode) ...[
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.admin_panel_settings,
+            title: "🔧 Administration des photos (DEBUG)",
+            description:
+                "Nettoyage et statistiques des photos - Mode développeur",
+            onTap: _showPhotoAdministration,
+            maxWidth: maxWidth,
+          ),
+        ],
       ],
     );
   }
@@ -2223,7 +2296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildTabletActionItem(
           icon: Icons.calendar_month,
           title: "Tableau mensuel",
-          description: "Consulter les rapports mensuels",
+          description: "Consulter les tableaux mensuels",
           onTap: () => context.go('/monthly-report-selection'),
           maxWidth: maxWidth,
         ),
@@ -2388,7 +2461,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "Gestion de la structure",
+                          isMAMStructure
+                              ? "Gestion de la MAM"
+                              : "Gestion administrative",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -2556,6 +2631,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTap: _showScheduleModification,
                   ),
                   _buildActionItem(
+                    icon: Icons.contact_page,
+                    title: "Coordonnées des parents",
+                    onTap: _showParentCoordonneeSelection,
+                  ),
+                  _buildActionItem(
                     icon: Icons.photo_library,
                     title: "Gestion des photos",
                     onTap: _showPhotoManagement,
@@ -2567,14 +2647,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   _buildActionItem(
                     icon: Icons.person_remove,
-                    title: "Retrait d'enfant",
+                    title: "Retirer un enfant",
                     onTap: _showChildRemoval,
                   ),
-                  _buildActionItem(
-                    icon: Icons.admin_panel_settings,
-                    title: "Administration des photos",
-                    onTap: _showPhotoAdministration,
-                  ),
+                  if (kDebugMode)
+                    _buildActionItem(
+                      icon: Icons.admin_panel_settings,
+                      title: "🔧 Administration des photos (DEBUG)",
+                      onTap: _showPhotoAdministration,
+                    ),
                 ],
               ),
             ),
@@ -2613,7 +2694,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            "Rapports",
+                            "Tableau mensuel",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -2702,252 +2783,321 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    // NOUVEAU: Vérifier s'il faut afficher les dialogues de choix pour Assistante Maternelle
-    if (!isMAMStructure &&
-        (showAssmatFridgeChoice || showAssmatFreezerChoice)) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Column(
-          children: [
-            // En-tête identique
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [primaryColor, primaryColor.withOpacity(0.85)],
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft:
-                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
-                  bottomRight:
-                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withOpacity(0.3),
-                    offset: const Offset(0, 4),
-                    blurRadius: 8,
+    // 🆕 AJOUT : Vérification de l'abonnement
+    return FutureBuilder<bool>(
+      future: SubscriptionService.isUserSubscribed(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            ),
+          );
+        }
+
+        final bool isSubscribed = snapshot.data ?? false;
+
+        if (!isSubscribed) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.dashboard_outlined,
+                    size: 80,
+                    color: primaryColor,
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    "Tableau de bord premium",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "Accédez à la gestion complète",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  SizedBox(height: 30),
+                  ElevatedButton(
+                    onPressed: () => context.go('/pricing'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    ),
+                    child: Text(
+                      "DÉBLOQUER LE DASHBOARD",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Configuration",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        structureName,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
+            ),
+          );
+        }
+
+        // NOUVEAU: Vérifier s'il faut afficher les dialogues de choix pour Assistante Maternelle
+        if (!isMAMStructure &&
+            (showAssmatFridgeChoice || showAssmatFreezerChoice)) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Column(
+              children: [
+                // En-tête identique
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(
+                          MediaQuery.of(context).size.width * 0.06),
+                      bottomRight: Radius.circular(
+                          MediaQuery.of(context).size.width * 0.06),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.3),
+                        offset: const Offset(0, 4),
+                        blurRadius: 8,
                       ),
                     ],
                   ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Configuration",
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            structureName,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
 
-            // Contenu avec dialogue de choix
-            Expanded(
-              child: _buildAssmatEquipmentChoiceDialog(),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Récupérer les dimensions de l'écran
-    final Size screenSize = MediaQuery.of(context).size;
-    final bool isTablet = screenSize.shortestSide >= 600;
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // En-tête avec fond de couleur - identique pour phone et tablet
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  primaryColor,
-                  primaryColor.withOpacity(0.85),
-                ],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(screenSize.width * 0.06),
-                bottomRight: Radius.circular(screenSize.width * 0.06),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withOpacity(0.3),
-                  offset: const Offset(0, 4),
-                  blurRadius: 8,
+                // Contenu avec dialogue de choix
+                Expanded(
+                  child: _buildAssmatEquipmentChoiceDialog(),
                 ),
               ],
             ),
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  screenSize.width * (isTablet ? 0.03 : 0.04),
-                  screenSize.height * 0.02,
-                  screenSize.width * (isTablet ? 0.03 : 0.04),
-                  screenSize.height * (isTablet ? 0.02 : 0.025),
+          );
+        }
+
+        // Récupérer les dimensions de l'écran
+        final Size screenSize = MediaQuery.of(context).size;
+        final bool isTablet = screenSize.shortestSide >= 600;
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: Column(
+            children: [
+              // En-tête avec fond de couleur - identique pour phone et tablet
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      primaryColor,
+                      primaryColor.withOpacity(0.85),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(screenSize.width * 0.06),
+                    bottomRight: Radius.circular(screenSize.width * 0.06),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      offset: const Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Titre et date
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      screenSize.width * (isTablet ? 0.03 : 0.04),
+                      screenSize.height * 0.02,
+                      screenSize.width * (isTablet ? 0.03 : 0.04),
+                      screenSize.height * (isTablet ? 0.02 : 0.025),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          "Tableau de bord",
-                          style: TextStyle(
-                            fontSize:
-                                screenSize.width * (isTablet ? 0.032 : 0.06),
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal:
-                                screenSize.width * (isTablet ? 0.018 : 0.03),
-                            vertical:
-                                screenSize.height * (isTablet ? 0.01 : 0.006),
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(
-                              screenSize.width * (isTablet ? 0.025 : 0.05),
-                            ),
-                          ),
-                          child: Text(
-                            DateFormat('EEEE d MMMM', 'fr_FR')
-                                .format(DateTime.now()),
-                            style: TextStyle(
-                              fontSize:
-                                  screenSize.width * (isTablet ? 0.018 : 0.035),
-                              color: Colors.white.withOpacity(0.95),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    // Nom de la structure
-                    Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize: screenSize.width * (isTablet ? 0.024 : 0.045),
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    // Afficher le type de structure si c'est une MAM
-                    if (isMAMStructure)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Row(
+                        // Titre et date
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "MAM",
-                                style: TextStyle(
-                                  fontSize: screenSize.width *
-                                      (isTablet ? 0.016 : 0.03),
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 8),
                             Text(
-                              "$currentMemberCount/$maxMemberCount membres",
+                              "Tableau de bord",
                               style: TextStyle(
                                 fontSize: screenSize.width *
-                                    (isTablet ? 0.016 : 0.03),
-                                color: Colors.white.withOpacity(0.9),
+                                    (isTablet ? 0.032 : 0.06),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: screenSize.width *
+                                    (isTablet ? 0.018 : 0.03),
+                                vertical: screenSize.height *
+                                    (isTablet ? 0.01 : 0.006),
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(
+                                  screenSize.width * (isTablet ? 0.025 : 0.05),
+                                ),
+                              ),
+                              child: Text(
+                                DateFormat('EEEE d MMMM', 'fr_FR')
+                                    .format(DateTime.now()),
+                                style: TextStyle(
+                                  fontSize: screenSize.width *
+                                      (isTablet ? 0.018 : 0.035),
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                  ],
+                        SizedBox(height: 8),
+                        // Nom de la structure
+                        Text(
+                          structureName,
+                          style: TextStyle(
+                            fontSize:
+                                screenSize.width * (isTablet ? 0.024 : 0.045),
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        // Afficher le type de structure si c'est une MAM
+                        if (isMAMStructure)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "MAM",
+                                    style: TextStyle(
+                                      fontSize: screenSize.width *
+                                          (isTablet ? 0.016 : 0.03),
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  "$currentMemberCount/$maxMemberCount membres",
+                                  style: TextStyle(
+                                    fontSize: screenSize.width *
+                                        (isTablet ? 0.016 : 0.03),
+                                    color: Colors.white.withOpacity(0.9),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+
+              // Contenu principal avec adaptation pour iPad
+              Expanded(
+                child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
+              ),
+            ],
           ),
 
-          // Contenu principal avec adaptation pour iPad
-          Expanded(
-            child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
+          // BottomNavigationBar identique
+          bottomNavigationBar: BottomNavigationBar(
+            onTap: _onItemTapped,
+            backgroundColor: Colors.white,
+            selectedItemColor: primaryColor,
+            unselectedItemColor: Colors.grey,
+            showSelectedLabels: false,
+            showUnselectedLabels: false,
+            type: BottomNavigationBarType.fixed,
+            currentIndex: 0, // Dashboard est sélectionné
+            items: [
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/Icone_Dashboard.png',
+                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Dashboard",
+              ),
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/maison_icon.png',
+                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Home",
+              ),
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/Icone_Ajout_Enfant.png',
+                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Ajouter",
+              ),
+            ],
           ),
-        ],
-      ),
-
-      // BottomNavigationBar identique
-      bottomNavigationBar: BottomNavigationBar(
-        onTap: _onItemTapped,
-        backgroundColor: Colors.white,
-        selectedItemColor: primaryColor,
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0, // Dashboard est sélectionné
-        items: [
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Dashboard.png',
-              width: screenSize.width * (isTablet ? 0.07 : 0.14),
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/maison_icon.png',
-              width: screenSize.width * (isTablet ? 0.07 : 0.14),
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Ajout_Enfant.png',
-              width: screenSize.width * (isTablet ? 0.07 : 0.14),
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Ajouter",
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

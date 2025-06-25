@@ -556,7 +556,7 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                           children: [
                             _buildTabletFormField(
                               controller: _memberNameController,
-                              label: "Qui a relevé la température ?",
+                              label: "Relevée par",
                               icon: Icons.person,
                               maxWidth: maxWidth,
                             ),
@@ -681,7 +681,7 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              "${temperatureRecords.length} relevés",
+                              "${temperatureRecords.length} relevé${temperatureRecords.length > 1 ? 's' : ''}",
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -965,7 +965,7 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
 
                 _buildPhoneFormField(
                   controller: _memberNameController,
-                  label: "Qui a relevé la température ?",
+                  label: "Température relevée par ?",
                   icon: Icons.person,
                 ),
                 SizedBox(height: 16),
@@ -1079,7 +1079,7 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        "${temperatureRecords.length} relevés",
+                        "${temperatureRecords.length} relevé${temperatureRecords.length > 1 ? 's' : ''}",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,

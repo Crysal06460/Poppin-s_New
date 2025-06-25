@@ -300,14 +300,6 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(
-          "Informations sur la structure",
-          style: TextStyle(
-            color: primaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: isTablet ? 24 : 20,
-          ),
-        ),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: primaryColor),
@@ -387,7 +379,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Informations de votre ${isMAM ? 'MAM' : 'activité'}",
+                            "Vos informations",
                             style: TextStyle(
                               fontSize: maxWidth * 0.026,
                               fontWeight: FontWeight.bold,

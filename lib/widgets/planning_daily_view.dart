@@ -50,7 +50,7 @@ class PlanningDailyView extends StatelessWidget {
               ),
               SizedBox(height: 16),
               Text(
-                "Pas de gardes le week-end",
+                "Pas d'enfant le week-end",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

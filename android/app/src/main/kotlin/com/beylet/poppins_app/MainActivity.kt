@@ -1,0 +1,5 @@
+package com.beylet.poppins_app
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

@@ -236,7 +236,7 @@ class _MAMMemberRemovalScreenState extends State<MAMMemberRemovalScreen> {
                             ),
                             SizedBox(height: maxHeight * 0.02),
                             Text(
-                              "Suppression de membre",
+                              "Suppression d'un membre",
                               style: TextStyle(
                                 fontSize: maxWidth * 0.018,
                                 fontWeight: FontWeight.bold,
@@ -284,11 +284,6 @@ class _MAMMemberRemovalScreenState extends State<MAMMemberRemovalScreen> {
                         ),
                         child: Column(
                           children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: primaryRed,
-                              size: maxWidth * 0.03,
-                            ),
                             SizedBox(height: maxHeight * 0.01),
                             Text(
                               "Attention",

@@ -577,7 +577,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Le tableau mensuel est proposé à titre indicatif et permet de générer le récapitulatif mensuels.",
+                                "Le tableau mensuel est proposé à titre indicatif et permet de générer le récapitulatif mensuel.",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -1609,7 +1609,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                       SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          "Recap mensuel",
+                                          "Récap mensuel",
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,

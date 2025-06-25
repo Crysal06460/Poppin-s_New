@@ -1,4 +1,4 @@
-// child_removal_screen.dart - Version modifiée
+// child_removal_screen.dart - Version UX/UI améliorée pour iPhone
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,9 +23,31 @@ class ChildRemovalScreen extends StatefulWidget {
   State<ChildRemovalScreen> createState() => _ChildRemovalScreenState();
 }
 
-class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
+class _ChildRemovalScreenState extends State<ChildRemovalScreen>
+    with TickerProviderStateMixin {
   bool _isLoading = false;
   String _status = '';
+  AnimationController? _fadeController;
+  Animation<double>? _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController!, curve: Curves.easeInOut),
+    );
+    _fadeController!.forward();
+  }
+
+  @override
+  void dispose() {
+    _fadeController?.dispose();
+    super.dispose();
+  }
 
   // Service de génération PDF et envoi email MODIFIÉ - UNIQUEMENT ASSMAT
   Future<void> _generateAndSendChildHistory() async {
@@ -66,7 +88,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       final pdfBase64 = base64Encode(pdfBytes);
 
       setState(() {
-        _status = 'Envoi de l\'email à l\'assistante maternelle...';
+        _status = 'Envoi de l\'email à l\'assistant maternel...';
       });
 
       // 4. Envoyer l'email UNIQUEMENT à l'assistante maternelle
@@ -1056,7 +1078,108 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
     print("✅ Suppression complète terminée pour l'enfant $childId");
   }
 
-  // POPUP D'AVERTISSEMENT RENFORCÉ
+  // Widget pour créer une card moderne avec ombre
+  Widget _buildModernCard({
+    required Widget child,
+    Color? color,
+    EdgeInsets? padding,
+    bool hasShadow = true,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: color ?? Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: hasShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+        border: Border.all(
+          color: Colors.grey.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(20),
+        child: child,
+      ),
+    );
+  }
+
+  // Widget pour créer un bouton moderne
+  Widget _buildModernButton({
+    required String text,
+    required VoidCallback onPressed,
+    Color? backgroundColor,
+    Color? textColor,
+    IconData? icon,
+    bool isLoading = false,
+    double borderRadius = 12,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: (backgroundColor ?? Theme.of(context).primaryColor)
+                .withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor ?? Theme.of(context).primaryColor,
+          foregroundColor: textColor ?? Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(borderRadius),
+          ),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+        ),
+        child: isLoading
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: textColor ?? Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 18),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: textColor ?? Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  // POPUP D'AVERTISSEMENT MODERNE
   Future<void> _showRemovalConfirmationDialog() async {
     final childDoc = await FirebaseFirestore.instance
         .collection('structures')
@@ -1073,174 +1196,273 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.red, size: 28),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'RETRAIT DÉFINITIF',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                ],
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      border: Border.all(color: Colors.red.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '⚠️ ATTENTION : ACTION IRRÉVERSIBLE',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade800,
-                            fontSize: 14,
-                          ),
+              elevation: 16,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // En-tête moderne avec icône
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
                         ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Êtes-vous absolument certain de vouloir retirer définitivement $childName ?',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Cette action va DÉFINITIVEMENT :',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  Text('✅ Générer un PDF avec l\'historique complet'),
-                  Text(
-                      '✅ Envoyer l\'historique à l\'assistante maternelle UNIQUEMENT'),
-                  SizedBox(height: 8),
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      border: Border.all(color: Colors.orange.shade300),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '🗑️ SUPPRESSION TOTALE ET IRRÉVERSIBLE :',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade800,
-                          ),
-                        ),
-                        Text('• Toutes les données de repas'),
-                        Text('• Toutes les activités'),
-                        Text('• Tous les horaires d\'arrivée/départ'),
-                        Text('• Toutes les siestes'),
-                        Text('• Tous les changes'),
-                        Text('• Toutes les données de santé'),
-                        Text('• Toutes les transmissions'),
-                        Text('• Le profil complet de l\'enfant'),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      border: Border.all(color: Colors.red.shade400),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '❌ AUCUNE RÉCUPÉRATION POSSIBLE\nToutes les données seront perdues à jamais !',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade800,
-                        fontSize: 13,
                       ),
-                      textAlign: TextAlign.center,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.warning_outlined,
+                              color: Colors.red.shade600,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Retirer $childName',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Confirmer cette action',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 16),
-                  if (_isLoading) ...[
-                    LinearProgressIndicator(),
-                    SizedBox(height: 8),
-                    Text(_status, style: TextStyle(fontSize: 12)),
+
+                    // Contenu
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Cette action va :',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Actions positives
+                          _buildActionItem(
+                            icon: Icons.picture_as_pdf,
+                            text: 'Générer un PDF avec l\'historique complet',
+                            color: Colors.green,
+                          ),
+                          const SizedBox(height: 8),
+                          _buildActionItem(
+                            icon: Icons.email_outlined,
+                            text:
+                                'Envoyer l\'historique à l\'assistant maternel',
+                            color: Colors.blue,
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Section suppression avec style moderne
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.red.shade200,
+                                width: 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red.shade700,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Données qui seront supprimées :',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red.shade800,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                _buildDataItem(
+                                    'Historique des repas et quantités'),
+                                _buildDataItem('Toutes les activités'),
+                                _buildDataItem('Horaires d\'arrivée/départ'),
+                                _buildDataItem('Journal des siestes'),
+                                _buildDataItem('Historique des changes'),
+                                _buildDataItem('Données de santé'),
+                                _buildDataItem('Transmissions et notes'),
+                                _buildDataItem('Profil de l\'enfant'),
+                              ],
+                            ),
+                          ),
+
+                          if (_isLoading) ...[
+                            const SizedBox(height: 20),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                children: [
+                                  const LinearProgressIndicator(),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _status,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // Boutons d'action
+                    if (!_isLoading)
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Annuler',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: _buildModernButton(
+                                text: 'Confirmer',
+                                backgroundColor: Colors.red,
+                                onPressed: () async {
+                                  setDialogState(() {
+                                    _isLoading = true;
+                                    _status = 'Début de la suppression...';
+                                  });
+
+                                  try {
+                                    await _generateAndSendChildHistory();
+                                    Navigator.of(context).pop();
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                              'Enfant retiré avec succès. L\'historique a été envoyé à l\'assistante maternelle.'),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(seconds: 5),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                      context.go('/home');
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() {
+                                      _isLoading = false;
+                                      _status = 'Erreur: $e';
+                                    });
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Erreur lors de la suppression: $e'),
+                                          backgroundColor: Colors.red,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    if (_isLoading)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: SizedBox(),
+                      ),
                   ],
-                ],
+                ),
               ),
-              actions: [
-                if (!_isLoading) ...[
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Annuler',
-                      style: TextStyle(color: Colors.green),
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      setDialogState(() {
-                        _isLoading = true;
-                        _status = 'Début de la suppression définitive...';
-                      });
-
-                      try {
-                        await _generateAndSendChildHistory();
-
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                'Enfant retiré définitivement. L\'historique a été envoyé à l\'assistante maternelle. Toutes les données ont été supprimées.'),
-                            backgroundColor: Colors.green,
-                            duration: Duration(seconds: 7),
-                          ),
-                        );
-                        context.go('/home');
-                      } catch (e) {
-                        setDialogState(() {
-                          _isLoading = false;
-                          _status = 'Erreur: $e';
-                        });
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Erreur lors du retrait: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: Text(
-                      'JE CONFIRME LA SUPPRESSION',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ],
             );
           },
         );
@@ -1248,13 +1470,74 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
     );
   }
 
+  Widget _buildActionItem({
+    required IconData icon,
+    required String text,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 14,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDataItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.red.shade600,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey.shade50,
       body: Column(
         children: [
-          // En-tête avec fond de couleur
+          // En-tête moderne avec dégradé
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -1266,36 +1549,52 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
                   Color(0xFF357ABD),
                 ],
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Row(
                   children: [
                     GestureDetector(
                       onTap: () => context.pop(),
                       child: Container(
-                        padding: EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.arrow_back,
+                        child: const Icon(
+                          Icons.arrow_back_ios,
                           color: Colors.white,
-                          size: 24,
+                          size: 20,
                         ),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
-                      child: Text(
-                        'Retirer l\'enfant',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Retirer l\'enfant',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1304,146 +1603,222 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen> {
             ),
           ),
 
-          // Contenu principal avec avertissements renforcés
-// Contenu principal avec avertissements renforcés
+          // Contenu principal avec animation
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.delete_forever,
-                    size: 64,
-                    color: Colors.red,
-                  ),
-                  SizedBox(height: 24),
-                  Text(
-                    '⚠️ SUPPRESSION DÉFINITIVE',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Cette action supprimera DÉFINITIVEMENT et IRRÉVERSIBLEMENT toutes les données de l\'enfant de l\'application.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.red.shade700,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 24),
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade300, width: 2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '🗑️ DONNÉES QUI SERONT PERDUES À JAMAIS :',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade800,
-                            fontSize: 14,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text('• Historique complet des repas et quantités'),
-                        Text('• Toutes les activités et participations'),
-                        Text('• Horaires d\'arrivée et de départ'),
-                        Text('• Journal des siestes et qualité du sommeil'),
-                        Text('• Historique des changes'),
-                        Text('• Données de santé et températures'),
-                        Text('• Toutes les transmissions et notes'),
-                        Text('• Profil et informations personnelles'),
-                        SizedBox(height: 12),
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade100,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '❌ AUCUNE RÉCUPÉRATION POSSIBLE',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red.shade800,
+            child: _fadeAnimation != null
+                ? FadeTransition(
+                    opacity: _fadeAnimation!,
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Card d'information principale
+                          _buildModernCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade100,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.info_outline,
+                                        color: Colors.blue.shade600,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Expanded(
+                                      child: Text(
+                                        'Suppression définitive',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Cette action supprimera toutes les données de l\'enfant de façon définitive et irréversible après avoir envoyé l\'historique à l\'assistant maternel.',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade700,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
                             ),
-                            textAlign: TextAlign.center,
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '📧 Un email sera envoyé avec l\'historique complet :',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade800,
+
+                          // Card des données sauvegardées
+                          _buildModernCard(
+                            color: Colors.green.shade50,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.save_alt,
+                                        color: Colors.green.shade700,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Données sauvegardées',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.green.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _buildDataCategory('📄 PDF historique complet',
+                                    'Toutes les données organisées chronologiquement'),
+                                _buildDataCategory('📧 Envoi automatique',
+                                    'L\'historique sera envoyé à l\'assistant maternel'),
+                                _buildDataCategory('🔒 Conformité RGPD',
+                                    'Processus respectant la réglementation'),
+                              ],
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        Text('• Uniquement à l\'assistante maternelle'),
-                        Text('• Contient un PDF avec tout l\'historique'),
-                        Text(
-                            '• Permet de conserver une trace pour les dossiers'),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 40), // Plus d'espace avant le bouton
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _showRemovalConfirmationDialog,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+
+                          // Card des données supprimées
+                          _buildModernCard(
+                            color: Colors.red.shade50,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.delete_sweep_outlined,
+                                        color: Colors.red.shade700,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Données supprimées',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _buildDataCategory('🍽️ Historique des repas',
+                                    'Quantités, horaires, types de repas'),
+                                _buildDataCategory(
+                                    '🎨 Activités et participations',
+                                    'Toutes les activités enregistrées'),
+                                _buildDataCategory(
+                                    '⏰ Horaires d\'arrivée/départ',
+                                    'Journal complet des présences'),
+                                _buildDataCategory('😴 Journal des siestes',
+                                    'Qualité et durée du sommeil'),
+                                _buildDataCategory('🔄 Historique des changes',
+                                    'Fréquence et détails'),
+                                _buildDataCategory('🏥 Données de santé',
+                                    'Températures, soins, traitements'),
+                                _buildDataCategory('💬 Transmissions',
+                                    'Toutes les notes et communications'),
+                                _buildDataCategory('👤 Profil complet',
+                                    'Informations personnelles de l\'enfant'),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Bouton d'action principal
+                          _buildModernButton(
+                            text: 'Démarrer la suppression',
+                            icon: Icons.delete_outline,
+                            backgroundColor: Colors.red,
+                            onPressed: _showRemovalConfirmationDialog,
+                          ),
+
+                          const SizedBox(height: 32),
+                        ],
                       ),
-                      child: Text(
-                        'SUPPRIMER DÉFINITIVEMENT',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ),
+                  )
+                : const Center(
+                    child: CircularProgressIndicator(),
                   ),
-                  SizedBox(height: 12),
-                  Text(
-                    '⚠️ Cette action est irréversible. Toutes les données seront perdues à jamais.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.red.shade600,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCategory(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(
+              color: Colors.red.shade400,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                  SizedBox(height: 40), // Espace en bas pour le scroll
-                ],
-              ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

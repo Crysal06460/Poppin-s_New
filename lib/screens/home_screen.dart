@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/subscription_service.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -638,15 +639,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           SizedBox(height: screenSize.height * 0.015),
 
                           // Message de rappel
-                          Text(
-                            "N'oubliez pas de souhaiter un joyeux anniversaire !",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontStyle: FontStyle.italic,
-                              color: Colors.grey.shade700,
-                              fontSize: screenSize.width * 0.035,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1737,239 +1729,307 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Définir les couleurs avant de construire l'interface
-    _setThemeColors();
+    // 🆕 AJOUT : Vérification de l'abonnement
+    return FutureBuilder<bool>(
+      future: SubscriptionService.isUserSubscribed(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            ),
+          );
+        }
 
-    // Récupérer les dimensions de l'écran
-    final Size screenSize = MediaQuery.of(context).size;
+        final bool isSubscribed = snapshot.data ?? false;
 
-    // Déterminer si on est sur iPad
-    final bool isTablet = screenSize.shortestSide >= 600;
-
-    // Liste des fonctionnalités avec leur route, nom et image
-    final features = [
-      {
-        'route': '/horaires',
-        'name': 'Horaires',
-        'imagePath': 'assets/images/Icone_Horaires.png'
-      },
-      {
-        'route': '/repas',
-        'name': 'Repas',
-        'imagePath': 'assets/images/Icone_Repas.png'
-      },
-      {
-        'route': '/activites',
-        'name': 'Activités',
-        'imagePath': 'assets/images/Icone_Activites.png'
-      },
-      {
-        'route': '/sieste',
-        'name': 'Sieste',
-        'imagePath': 'assets/images/Icone_Siestes.png'
-      },
-      {
-        'route': '/sante',
-        'name': 'Santé',
-        'imagePath': 'assets/images/Icone_Sante.png'
-      },
-      {
-        'route': '/change',
-        'name': 'Change',
-        'imagePath': 'assets/images/Icone_Changes.png'
-      },
-      {
-        'route': '/photos',
-        'name': 'Photos',
-        'imagePath': 'assets/images/Icone_Photos.png'
-      },
-      {
-        'route': '/exchanges',
-        'name': 'Échanges',
-        'imagePath': 'assets/images/Icone_Echanges.png'
-      },
-      {
-        'route': '/stock',
-        'name': 'Stock',
-        'imagePath': 'assets/images/Icone_Stock.png'
-      },
-      {
-        'route': '/recap-enfant',
-        'name': 'Recap',
-        'imagePath': 'assets/images/Icone_Recaptitulatif.png'
-      },
-      {
-        'route': '/actualites',
-        'name': 'Actualités',
-        'imagePath': 'assets/images/Icone_Actualites.png'
-      },
-      {
-        'route': '/transmissions',
-        'name': 'Transm.',
-        'imagePath': 'assets/images/Icone_Transmission.png'
-      },
-    ];
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // En-tête avec fond de couleur - hauteur et marges relatives
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  primaryColor,
-                  primaryColor.withOpacity(0.85),
+        if (!isSubscribed) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 80,
+                    color: primaryColor,
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    "Abonnement requis",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "Pour accéder à toutes les fonctionnalités",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  SizedBox(height: 30),
+                  ElevatedButton(
+                    onPressed: () => context.go('/pricing'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    ),
+                    child: Text(
+                      "CHOISIR UN ABONNEMENT",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(screenSize.width * 0.06),
-                bottomRight: Radius.circular(screenSize.width * 0.06),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withOpacity(0.3),
-                  offset: const Offset(0, 4),
-                  blurRadius: 8,
-                ),
-              ],
             ),
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  screenSize.width *
-                      (isTablet ? 0.03 : 0.025), // 3% ou 2.5% de la largeur
-                  screenSize.height * 0.02, // 2% de la hauteur
-                  screenSize.width * (isTablet ? 0.03 : 0.025),
-                  screenSize.height *
-                      (isTablet
-                          ? 0.02
-                          : 0.01), // Plus grand padding bas sur tablette
+          );
+        }
+
+        // Le reste du code existant - utilisateur abonné
+        _setThemeColors();
+
+        final Size screenSize = MediaQuery.of(context).size;
+        final bool isTablet = screenSize.shortestSide >= 600;
+
+        final features = [
+          {
+            'route': '/horaires',
+            'name': 'Horaires',
+            'imagePath': 'assets/images/Icone_Horaires.png'
+          },
+          {
+            'route': '/repas',
+            'name': 'Repas',
+            'imagePath': 'assets/images/Icone_Repas.png'
+          },
+          {
+            'route': '/activites',
+            'name': 'Activités',
+            'imagePath': 'assets/images/Icone_Activites.png'
+          },
+          {
+            'route': '/sieste',
+            'name': 'Sieste',
+            'imagePath': 'assets/images/Icone_Siestes.png'
+          },
+          {
+            'route': '/sante',
+            'name': 'Santé',
+            'imagePath': 'assets/images/Icone_Sante.png'
+          },
+          {
+            'route': '/change',
+            'name': 'Change',
+            'imagePath': 'assets/images/Icone_Changes.png'
+          },
+          {
+            'route': '/photos',
+            'name': 'Photos',
+            'imagePath': 'assets/images/Icone_Photos.png'
+          },
+          {
+            'route': '/exchanges',
+            'name': 'Échanges',
+            'imagePath': 'assets/images/Icone_Echanges.png'
+          },
+          {
+            'route': '/stock',
+            'name': 'Stock',
+            'imagePath': 'assets/images/Icone_Stock.png'
+          },
+          {
+            'route': '/recap-enfant',
+            'name': 'Recap',
+            'imagePath': 'assets/images/Icone_Recaptitulatif.png'
+          },
+          {
+            'route': '/actualites',
+            'name': 'Actualités',
+            'imagePath': 'assets/images/Icone_Actualites.png'
+          },
+          {
+            'route': '/transmissions',
+            'name': 'Transm.',
+            'imagePath': 'assets/images/Icone_Transmission.png'
+          },
+        ];
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: Column(
+            children: [
+              // En-tête avec fond de couleur - hauteur et marges relatives
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      primaryColor,
+                      primaryColor.withOpacity(0.85),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(screenSize.width * 0.06),
+                    bottomRight: Radius.circular(screenSize.width * 0.06),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      offset: const Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
-                child: Column(
-                  children: [
-                    // Nom de la structure et date
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      screenSize.width *
+                          (isTablet ? 0.03 : 0.025), // 3% ou 2.5% de la largeur
+                      screenSize.height * 0.02, // 2% de la hauteur
+                      screenSize.width * (isTablet ? 0.03 : 0.025),
+                      screenSize.height *
+                          (isTablet
+                              ? 0.02
+                              : 0.01), // Plus grand padding bas sur tablette
+                    ),
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: Text(
-                            structureName,
-                            style: TextStyle(
-                              fontSize: screenSize.width *
-                                  (isTablet ? 0.032 : 0.06), // Taille relative
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        // Nom de la structure et date
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Conteneur de la date
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: screenSize.width *
-                                    (isTablet ? 0.018 : 0.03),
-                                vertical: screenSize.height *
-                                    (isTablet ? 0.01 : 0.006),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(
-                                    screenSize.width *
-                                        (isTablet ? 0.025 : 0.05)),
-                              ),
+                            Expanded(
                               child: Text(
-                                DateFormat('EEEE d MMMM', 'fr_FR')
-                                    .format(DateTime.now()),
+                                structureName,
                                 style: TextStyle(
                                   fontSize: screenSize.width *
-                                      (isTablet ? 0.018 : 0.035),
-                                  color: Colors.white.withOpacity(0.95),
-                                  fontWeight: FontWeight.w500,
+                                      (isTablet
+                                          ? 0.032
+                                          : 0.06), // Taille relative
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            // Bouton de déconnexion
-                            IconButton(
-                              icon: Icon(
-                                Icons.logout,
-                                color: Colors.white,
-                                size: screenSize.width *
-                                    (isTablet ? 0.028 : 0.05),
-                              ),
-                              tooltip: 'Se déconnecter',
-                              onPressed: _logout,
-                              padding: EdgeInsets.zero,
-                              constraints: BoxConstraints(),
-                              splashRadius:
-                                  screenSize.width * (isTablet ? 0.028 : 0.05),
+                            Row(
+                              children: [
+                                // Conteneur de la date
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: screenSize.width *
+                                        (isTablet ? 0.018 : 0.03),
+                                    vertical: screenSize.height *
+                                        (isTablet ? 0.01 : 0.006),
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(
+                                        screenSize.width *
+                                            (isTablet ? 0.025 : 0.05)),
+                                  ),
+                                  child: Text(
+                                    DateFormat('EEEE d MMMM', 'fr_FR')
+                                        .format(DateTime.now()),
+                                    style: TextStyle(
+                                      fontSize: screenSize.width *
+                                          (isTablet ? 0.018 : 0.035),
+                                      color: Colors.white.withOpacity(0.95),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                // Bouton de déconnexion
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.logout,
+                                    color: Colors.white,
+                                    size: screenSize.width *
+                                        (isTablet ? 0.028 : 0.05),
+                                  ),
+                                  tooltip: 'Se déconnecter',
+                                  onPressed: _logout,
+                                  padding: EdgeInsets.zero,
+                                  constraints: BoxConstraints(),
+                                  splashRadius: screenSize.width *
+                                      (isTablet ? 0.028 : 0.05),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // Contenu principal avec adaptation pour iPad
-          Expanded(
-            child: isTablet
-                ? _buildTabletContent(features) // Layout spécifique pour iPad
-                : _buildPhoneContent(features), // Layout original pour iPhone
+              // Contenu principal avec adaptation pour iPad
+              Expanded(
+                child: isTablet
+                    ? _buildTabletContent(
+                        features) // Layout spécifique pour iPad
+                    : _buildPhoneContent(
+                        features), // Layout original pour iPhone
+              ),
+            ],
           ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        onTap: _onItemTapped,
-        backgroundColor: Colors.white,
-        selectedItemColor: primaryColor,
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 1, // Home est sélectionné
-        items: [
-          // Premier item - Dashboard
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Dashboard.png',
-              width: screenSize.width *
-                  (isTablet ? 0.07 : 0.14), // Taille relative
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Dashboard",
-          ),
+          bottomNavigationBar: BottomNavigationBar(
+            onTap: _onItemTapped,
+            backgroundColor: Colors.white,
+            selectedItemColor: primaryColor,
+            unselectedItemColor: Colors.grey,
+            showSelectedLabels: false,
+            showUnselectedLabels: false,
+            type: BottomNavigationBarType.fixed,
+            currentIndex: 1, // Home est sélectionné
+            items: [
+              // Premier item - Dashboard
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/Icone_Dashboard.png',
+                  width: screenSize.width *
+                      (isTablet ? 0.07 : 0.14), // Taille relative
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Dashboard",
+              ),
 
-          // Deuxième item - Home (Maison)
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/maison_icon.png',
-              width: screenSize.width * (isTablet ? 0.07 : 0.14),
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Home",
-          ),
+              // Deuxième item - Home (Maison)
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/maison_icon.png',
+                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Home",
+              ),
 
-          // Troisième item - Ajouter enfant
-          BottomNavigationBarItem(
-            icon: Image.asset(
-              'assets/images/Icone_Ajout_Enfant.png',
-              width: screenSize.width * (isTablet ? 0.07 : 0.14),
-              height: screenSize.width * (isTablet ? 0.07 : 0.14),
-            ),
-            label: "Ajouter",
+              // Troisième item - Ajouter enfant
+              BottomNavigationBarItem(
+                icon: Image.asset(
+                  'assets/images/Icone_Ajout_Enfant.png',
+                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
+                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
+                ),
+                label: "Ajouter",
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

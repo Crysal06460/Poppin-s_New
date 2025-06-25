@@ -59,7 +59,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 40),
               child: Image.asset(
-                'assets/images/logo.png',
+                'assets/images/parapluie.png',
                 height: 120,
                 width: 120,
                 fit: BoxFit.contain,
@@ -68,7 +68,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
 
             // Texte explicatif
             Text(
-              "Avez-vous été invité(e) à rejoindre Poppins ?",
+              "Avez-vous été invité(e) à rejoindre Poppin's ?",
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -95,7 +95,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          "Comment utiliser votre invitation",
+                          "Comment utiliser votre invitation ?",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: primaryBlue,
@@ -106,7 +106,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Entrez l'adresse email à laquelle vous avez reçu l'invitation pour rejoindre une structure existante en tant que parent ou membre d'une MAM.",
+                    "Entrez l'adresse email sur laquelle vous avez reçu l'invitation pour rejoindre une structure existante en tant que parent ou membre d'une MAM.",
                     style: TextStyle(fontSize: 14, color: Colors.black87),
                   ),
                 ],
@@ -275,7 +275,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                     child: Padding(
                       padding: EdgeInsets.all(maxWidth * 0.02),
                       child: Image.asset(
-                        'assets/images/logo.png',
+                        'assets/images/parapluie.png',
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -283,7 +283,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
 
                   // Titre principal avec taille adaptative
                   Text(
-                    "Avez-vous été invité(e) à rejoindre Poppins ?",
+                    "Avez-vous été invité(e) à rejoindre Poppin's ?",
                     style: TextStyle(
                       fontSize: maxWidth * 0.028, // 2.8% de la largeur
                       fontWeight: FontWeight.bold,
@@ -338,7 +338,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                             SizedBox(width: maxWidth * 0.02),
                             Expanded(
                               child: Text(
-                                "Comment utiliser votre invitation",
+                                "Comment utiliser votre invitation ?",
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: primaryBlue,
@@ -351,7 +351,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                         SizedBox(height: maxHeight * 0.02),
                         // Description
                         Text(
-                          "Entrez l'adresse email à laquelle vous avez reçu l'invitation pour rejoindre une structure existante en tant que parent ou membre d'une MAM.",
+                          "Entrez l'adresse email sur laquelle vous avez reçu l'invitation pour rejoindre une structure existante en tant que parent ou membre d'une MAM.",
                           style: TextStyle(
                             fontSize: maxWidth * 0.018,
                             color: Colors.black87,
