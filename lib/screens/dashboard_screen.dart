@@ -857,6 +857,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Section équipements avec indicateur visuel moderne
+                Container(
+                  padding: EdgeInsets.all(16),
+                  margin: EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        lightBlue.withOpacity(0.3),
+                        lightBlue.withOpacity(0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: primaryColor.withOpacity(0.3), width: 2),
+                  ),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.kitchen,
+                        color: primaryColor,
+                        size: 24,
+                      ),
+                    ),
+                    title: Text(
+                      "Gérer les équipements",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryColor,
+                        fontSize: 16,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        "Ajouter/retirer réfrigérateur et congélateur",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.settings,
+                        color: primaryColor,
+                        size: 20,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showEquipmentManagement();
+                    },
+                  ),
+                ),
+
                 // Frigo - Affiché seulement si configuré ET la structure en a un
                 if (hasAssmatFridge == true)
                   ListTile(
@@ -2161,7 +2229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Méthode pour les actions de structure
+// Méthode pour les actions de structure
   Widget _buildStructureActions(double maxWidth, double maxHeight) {
     // Calculer le nombre de notifications
     int notificationCount = 0;
@@ -2226,6 +2294,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             maxWidth: maxWidth,
             badge: functioningBadge,
           ),
+          // NOUVELLE SECTION ÉQUIPEMENTS
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.kitchen,
+            title: "Gestion des équipements",
+            description: "Ajouter ou retirer réfrigérateur et congélateur",
+            onTap: _showEquipmentManagement,
+            maxWidth: maxWidth,
+          ),
         ],
       ],
     );
@@ -2287,6 +2364,254 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ],
     );
+  }
+
+// Nouvelle méthode pour afficher la gestion des équipements
+  void _showEquipmentManagement() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.kitchen,
+                      color: primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      "Gestion des équipements",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Container(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Équipement Réfrigérateur
+                    _buildEquipmentCard(
+                      icon: Icons.thermostat,
+                      title: "Réfrigérateur",
+                      description: "Suivi de température quotidien",
+                      isEnabled: hasAssmatFridge == true,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          // Mise à jour temporaire pour l'affichage
+                        });
+                        _updateEquipmentPreference('fridge', value);
+                      },
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Équipement Congélateur
+                    _buildEquipmentCard(
+                      icon: Icons.kitchen,
+                      title: "Congélateur",
+                      description: "Suivi de température quotidien",
+                      isEnabled: hasAssmatFreezer == true,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          // Mise à jour temporaire pour l'affichage
+                        });
+                        _updateEquipmentPreference('freezer', value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    "FERMER",
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+// Widget pour créer une carte d'équipement moderne
+  Widget _buildEquipmentCard({
+    required IconData icon,
+    required String title,
+    required String description,
+    required bool isEnabled,
+    required Function(bool) onChanged,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isEnabled ? primaryColor.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              isEnabled ? primaryColor.withOpacity(0.3) : Colors.grey.shade200,
+          width: 2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isEnabled
+                  ? primaryColor.withOpacity(0.1)
+                  : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: isEnabled ? primaryColor : Colors.grey.shade600,
+              size: 24,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isEnabled ? Colors.black87 : Colors.grey.shade600,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 16),
+          Transform.scale(
+            scale: 1.2,
+            child: Switch(
+              value: isEnabled,
+              onChanged: onChanged,
+              activeColor: primaryColor,
+              activeTrackColor: primaryColor.withOpacity(0.3),
+              inactiveThumbColor: Colors.grey.shade400,
+              inactiveTrackColor: Colors.grey.shade200,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Méthode pour mettre à jour les préférences d'équipement
+  Future<void> _updateEquipmentPreference(
+      String equipmentType, bool hasEquipment) async {
+    try {
+      final structureId = await _getStructureId();
+      if (structureId.isEmpty) return;
+
+      String fieldName =
+          equipmentType == 'fridge' ? 'hasAssmatFridge' : 'hasAssmatFreezer';
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .update({fieldName: hasEquipment});
+
+      setState(() {
+        if (equipmentType == 'fridge') {
+          hasAssmatFridge = hasEquipment;
+          if (hasEquipment) {
+            _checkAssmatFridgeTemperatureStatus(structureId);
+          } else {
+            needAssmatFridgeTemperatureCheck = false;
+          }
+        } else {
+          hasAssmatFreezer = hasEquipment;
+          if (hasEquipment) {
+            _checkAssmatFreezerTemperatureStatus(structureId);
+          } else {
+            needAssmatFreezerTemperatureCheck = false;
+          }
+        }
+      });
+
+      // Feedback utilisateur avec animation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                hasEquipment ? Icons.check_circle : Icons.remove_circle,
+                color: Colors.white,
+                size: 20,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  hasEquipment
+                      ? "${equipmentType == 'fridge' ? 'Réfrigérateur' : 'Congélateur'} ajouté avec succès"
+                      : "${equipmentType == 'fridge' ? 'Réfrigérateur' : 'Congélateur'} retiré avec succès",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: hasEquipment ? Colors.green : primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      print("Erreur lors de la mise à jour de l'équipement: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de la mise à jour"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
   }
 
   // Méthode pour les actions rapports
@@ -2550,6 +2875,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             )
                           : null,
+                    ),
+                    // NOUVELLE SECTION ÉQUIPEMENTS
+                    _buildActionItem(
+                      icon: Icons.kitchen,
+                      title: "Gestion des équipements",
+                      onTap: _showEquipmentManagement,
                     ),
                   ],
                 ],

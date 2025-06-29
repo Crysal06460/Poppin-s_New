@@ -6,6 +6,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+import '../widgets/swipe_navigation_wrapper.dart';
+import '../widgets/common_app_bar.dart';
 
 class SiesteScreen extends StatefulWidget {
   const SiesteScreen({Key? key}) : super(key: key);
@@ -1707,33 +1709,45 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          Expanded(
-            child: isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                    ),
-                  )
-                : enfants.isEmpty
-                    ? _buildEmptyState()
-                    : isTabletDevice
-                        ? _buildTabletLayout() // Layout adapté pour iPad
-                        : ListView.builder(
-                            itemCount: enfants.length,
-                            itemBuilder: _buildEnfantCard,
-                          ),
-          ),
-        ],
+    // 🎉 NOUVEAU : Entourer avec SwipeNavigationWrapper
+    return SwipeNavigationWrapper(
+      backRoute: '/home', // Swipe vers la droite = retour Home
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            // 🎉 NOUVEAU : CommonAppBar au lieu de _buildAppBar(context)
+            CommonAppBar(
+              title: 'Sieste',
+              structureName: structureName,
+              iconPath: 'assets/images/Icone_Siestes.png',
+              backRoute: '/home',
+              primaryColor: primaryColor,
+            ),
+
+            // 🔄 GARDÉ IDENTIQUE : Tout votre contenu existant
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                    )
+                  : enfants.isEmpty
+                      ? _buildEmptyState()
+                      : isTabletDevice
+                          ? _buildTabletLayout() // Layout adapté pour iPad
+                          : ListView.builder(
+                              itemCount: enfants.length,
+                              itemBuilder: _buildEnfantCard,
+                            ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -2003,133 +2017,6 @@ class _SiesteScreenState extends State<SiesteScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // AppBar personnalisé avec gradient
-  Widget _buildAppBar(BuildContext context) {
-    // Détection de l'iPad
-    final bool isTabletDevice = isTablet(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            primaryColor,
-            primaryColor.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          // Plus de padding vertical pour iPad
-          padding: EdgeInsets.fromLTRB(
-              16,
-              isTabletDevice ? 24 : 16, // Augmenté pour iPad
-              16,
-              isTabletDevice ? 28 : 20 // Augmenté pour iPad
-              ),
-          child: Column(
-            children: [
-              // Première ligne: nom structure et date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
-                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(
-                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
-              // Icône et titre de la page
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
-                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.white,
-                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                      ),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Icone_Siestes.png',
-                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.nightlight_round,
-                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(
-                        width:
-                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
-                    Text(
-                      'Sieste',
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

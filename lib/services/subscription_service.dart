@@ -1,4 +1,4 @@
-// subscription_service.dart
+// subscription_service.dart - SECTION MODIFIÉE
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -201,27 +201,23 @@ class SubscriptionService {
     }
   }
 
+  // ✅ MÉTHODE CORRIGÉE : Simulation fiable en mode dev
   static Future<void> purchaseSubscription(String productId) async {
     if (!_isProduction) {
-      // En mode développement, simuler l'achat
+      // ✅ EN MODE DÉVELOPPEMENT : TOUJOURS RÉUSSIR (pour éviter les blocages)
       print('🧪 MODE DEV: Simulation achat de $productId');
 
-      // Simuler un délai de traitement
-      await Future.delayed(Duration(seconds: 2));
+      // Simuler un délai de traitement réaliste
+      await Future.delayed(Duration(seconds: 1));
 
-      // Simuler un achat réussi en 80% des cas
-      final random = DateTime.now().millisecondsSinceEpoch % 100;
-      final bool success = random < 80; // 80% de chance de succès
+      // ✅ MODIFICATION : Toujours réussir en mode dev
+      print('✅ DEV: Simulation achat réussi pour $productId (mode dev)');
 
-      if (success) {
-        print('✅ DEV: Simulation achat réussi pour $productId');
-        // En mode dev, l'interface utilisateur gère le succès via le purchaseStream
-        // On peut déclencher un événement simulé si nécessaire
-      } else {
-        print('❌ DEV: Simulation achat échoué');
-        throw Exception('Simulation échec achat (pour test)');
-      }
-      return;
+      // Créer un PurchaseDetails simulé pour déclencher le succès
+      // Note: En mode dev, l'interface doit gérer ce succès via un autre mécanisme
+      // car on ne peut pas créer un vrai PurchaseDetails
+
+      return; // Succès garanti en mode dev
     }
 
     try {
@@ -280,28 +276,53 @@ class SubscriptionService {
     }
   }
 
-  static Future<void> simulateDevPurchase(String productId) async {
+  // ✅ NOUVELLE MÉTHODE : Simulation spécifique pour le développement
+  static Future<Map<String, dynamic>> simulateDevPurchaseSuccess(
+      String productId) async {
     if (!_isProduction) {
-      print('🧪 MODE DEV: Simulation achat de $productId');
+      print('🧪 MODE DEV: Simulation achat réussi de $productId');
 
-      // Attendre 2 secondes pour simuler le temps d'achat
-      await Future.delayed(Duration(seconds: 2));
+      // Simuler un délai réaliste
+      await Future.delayed(Duration(seconds: 1));
 
-      // Créer un événement d'achat simulé
-      // Pour cela, on va déclencher le callback manuellement
+      // Déterminer le type de structure et nombre de membres selon le produit
+      String structureType = 'assistante_maternelle';
+      int memberCount = 1;
+      double priceAmount = 12.99;
+      String priceDisplay = '12,99 € / mois';
 
-      // Simuler un achat réussi en 80% des cas, échec en 20%
-      final random = DateTime.now().millisecondsSinceEpoch % 100;
-      final bool success = random < 80; // 80% de chance de succès
-
-      if (success) {
-        print('✅ DEV: Simulation achat réussi');
-        // En mode dev, l'interface doit gérer ce succès
-      } else {
-        print('❌ DEV: Simulation achat échoué');
-        throw Exception('Simulation échec achat (test)');
+      if (productId.contains('mam')) {
+        structureType = 'MAM';
+        if (productId.contains('2_membres') || productId == 'mam2') {
+          memberCount = 2;
+          priceAmount = 24.99;
+          priceDisplay = '24,99 € / mois';
+        } else if (productId.contains('3_membres') || productId == 'mam3') {
+          memberCount = 3;
+          priceAmount = 34.99;
+          priceDisplay = '34,99 € / mois';
+        } else if (productId.contains('4_membres') || productId == 'mam4') {
+          memberCount = 4;
+          priceAmount = 44.99;
+          priceDisplay = '44,99 € / mois';
+        }
       }
+
+      print('✅ DEV: Simulation terminée avec succès');
+
+      // Retourner les données de l'abonnement simulé
+      return {
+        'structureType': structureType,
+        'memberCount': memberCount,
+        'priceAmount': priceAmount,
+        'priceDisplay': priceDisplay,
+        'currency': 'EUR',
+        'billingPeriod': 'monthly',
+        'productId': productId,
+      };
     }
+
+    throw Exception('Méthode disponible uniquement en mode développement');
   }
 
   // 🆕 MÉTHODE MODIFIÉE : Gérer les mises à jour d'achat
@@ -533,7 +554,8 @@ class SubscriptionService {
 
     // Vérifier l'environnement
     if (!_isProduction) {
-      print('🧪 Mode développement détecté - simulation des achats activée');
+      print(
+          '🧪 Mode développement détecté - simulation des achats activée (succès garanti)');
     }
 
     // Initialiser les listeners

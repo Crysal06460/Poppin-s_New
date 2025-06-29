@@ -130,40 +130,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 20),
 
               // Sélection du type de structure
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTypeCheckbox(
-                      title: "Assistant Maternel",
-                      isChecked: isAssistanteMaterCheck,
-                      onChanged: (value) {
-                        if (value == true) {
-                          setState(() {
-                            isAssistanteMaterCheck = true;
-                            isMAMCheck = false;
-                          });
-                        }
-                      },
-                      isTablet: false,
+              // Sélection du type de structure
+              IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildTypeCheckbox(
+                        title: "Assistant Maternel",
+                        isChecked: isAssistanteMaterCheck,
+                        onChanged: (value) {
+                          if (value == true) {
+                            setState(() {
+                              isAssistanteMaterCheck = true;
+                              isMAMCheck = false;
+                            });
+                          }
+                        },
+                        isTablet: false,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildTypeCheckbox(
-                      title: "MAM",
-                      isChecked: isMAMCheck,
-                      onChanged: (value) {
-                        if (value == true) {
-                          setState(() {
-                            isAssistanteMaterCheck = false;
-                            isMAMCheck = true;
-                          });
-                        }
-                      },
-                      isTablet: false,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildTypeCheckbox(
+                        title: "MAM",
+                        isChecked: isMAMCheck,
+                        onChanged: (value) {
+                          if (value == true) {
+                            setState(() {
+                              isAssistanteMaterCheck = false;
+                              isMAMCheck = true;
+                            });
+                          }
+                        },
+                        isTablet: false,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -1022,6 +1025,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required bool isTablet,
   }) {
     return Container(
+      height: isTablet ? 50 : 60, // Hauteur fixe pour assurer l'uniformité
       padding: EdgeInsets.symmetric(
           vertical: isTablet ? 10 : 12, horizontal: isTablet ? 12 : 16),
       decoration: BoxDecoration(
@@ -1054,10 +1058,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: isTablet ? 13 : 14,
+                fontSize: isTablet ? 12 : 13,
                 fontWeight: isChecked ? FontWeight.bold : FontWeight.normal,
                 color: isChecked ? primaryBlue : Colors.black87,
               ),
+              textAlign: TextAlign
+                  .center, // Centre le texte pour un meilleur alignement
             ),
           ),
         ],

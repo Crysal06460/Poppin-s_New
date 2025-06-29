@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // ✅ AJOUTÉ
 import 'dart:async'; // ✅ AJOUTÉ
 import '../services/subscription_service.dart';
+import 'package:flutter/foundation.dart';
 
 class PricingScreen extends StatefulWidget {
   final Map<String, dynamic> structureInfo;
@@ -563,7 +564,6 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Bouton d'action moderne pour téléphone
   Widget _buildModernPhoneActionButton(Color primaryColor, bool isMam) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -601,7 +601,6 @@ class _PricingScreenState extends State<PricingScreen> {
           ),
           child: ElevatedButton(
             onPressed: () async {
-              // ✅ COPIER toute la logique d'achat du bouton précédent
               final String structureType =
                   widget.structureInfo['structureType'] ??
                       'assistante_maternelle';
@@ -635,6 +634,46 @@ class _PricingScreenState extends State<PricingScreen> {
               );
 
               try {
+                // ✅ NOUVEAU : Vérifier si on est en mode développement
+                const bool isProduction =
+                    bool.fromEnvironment('dart.vm.product');
+
+                if (!isProduction) {
+                  // ✅ MODE DEV : Utiliser la simulation fiable
+                  try {
+                    final subscriptionData =
+                        await SubscriptionService.simulateDevPurchaseSuccess(
+                            productId);
+
+                    if (Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    }
+
+                    print(
+                        '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                    context.go('/subscription-confirmed', extra: {
+                      'structureType': subscriptionData['structureType'],
+                      'structureId': structureId,
+                      'memberCount': subscriptionData['memberCount'],
+                      'priceAmount': subscriptionData['priceAmount'],
+                      'priceDisplay': subscriptionData['priceDisplay'],
+                      'currency': subscriptionData['currency'],
+                      'billingPeriod': subscriptionData['billingPeriod'],
+                      'productId': subscriptionData['productId'],
+                    });
+                    return;
+                  } catch (e) {
+                    if (Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    }
+                    print('❌ DEV: Erreur simulation: $e');
+                    _showErrorMessage('Erreur de simulation: ${e.toString()}');
+                    return;
+                  }
+                }
+
+                // ✅ MODE PRODUCTION : Logique normale avec les streams
                 StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
 
                 purchaseSubscription = InAppPurchase.instance.purchaseStream
@@ -1017,11 +1056,11 @@ class _PricingScreenState extends State<PricingScreen> {
                                 SizedBox(
                                     height: maxHeight *
                                         0.015), // ✅ RÉDUIT de 0.02 à 0.015
+                                // ✅ REMPLACER TOUT LE CONTAINER + GESTUREDETECTOR du bouton S'abonner dans _buildTabletContent
                                 Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: maxWidth * 0.03,
-                                    vertical: maxHeight *
-                                        0.015, // ✅ RÉDUIT de 0.02 à 0.015
+                                    vertical: maxHeight * 0.015,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
@@ -1036,7 +1075,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                   ),
                                   child: GestureDetector(
                                     onTap: () async {
-                                      // ✅ LOGIQUE D'ACHAT COMPLÈTE
+                                      // ✅ LOGIQUE D'ACHAT COMPLÈTE CORRIGÉE
                                       final String structureType = widget
                                               .structureInfo['structureType'] ??
                                           'assistante_maternelle';
@@ -1078,6 +1117,64 @@ class _PricingScreenState extends State<PricingScreen> {
                                       );
 
                                       try {
+                                        // ✅ NOUVEAU : Vérifier si on est en mode développement
+                                        const bool isProduction =
+                                            bool.fromEnvironment(
+                                                'dart.vm.product');
+
+                                        if (!isProduction) {
+                                          // ✅ MODE DEV : Utiliser la simulation fiable
+                                          try {
+                                            final subscriptionData =
+                                                await SubscriptionService
+                                                    .simulateDevPurchaseSuccess(
+                                                        productId);
+
+                                            if (Navigator.canPop(context)) {
+                                              Navigator.of(context).pop();
+                                            }
+
+                                            print(
+                                                '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                                            context.go(
+                                                '/subscription-confirmed',
+                                                extra: {
+                                                  'structureType':
+                                                      subscriptionData[
+                                                          'structureType'],
+                                                  'structureId': structureId,
+                                                  'memberCount':
+                                                      subscriptionData[
+                                                          'memberCount'],
+                                                  'priceAmount':
+                                                      subscriptionData[
+                                                          'priceAmount'],
+                                                  'priceDisplay':
+                                                      subscriptionData[
+                                                          'priceDisplay'],
+                                                  'currency': subscriptionData[
+                                                      'currency'],
+                                                  'billingPeriod':
+                                                      subscriptionData[
+                                                          'billingPeriod'],
+                                                  'productId': subscriptionData[
+                                                      'productId'],
+                                                });
+                                            return;
+                                          } catch (e) {
+                                            if (Navigator.canPop(context)) {
+                                              Navigator.of(context).pop();
+                                            }
+                                            print(
+                                                '❌ DEV: Erreur simulation: $e');
+                                            _showErrorMessage(
+                                                'Erreur de simulation: ${e.toString()}');
+                                            return;
+                                          }
+                                        }
+
+                                        // ✅ MODE PRODUCTION : Logique normale avec les streams
                                         StreamSubscription<
                                                 List<PurchaseDetails>>?
                                             purchaseSubscription;
@@ -1233,7 +1330,6 @@ class _PricingScreenState extends State<PricingScreen> {
       ),
       child: ElevatedButton(
         onPressed: () async {
-          // ✅ COPIER tout le code onPressed du bouton existant
           final String structureType =
               widget.structureInfo['structureType'] ?? 'assistante_maternelle';
           final String structureId = widget.structureInfo['structureId'] ?? '';
@@ -1264,6 +1360,45 @@ class _PricingScreenState extends State<PricingScreen> {
           );
 
           try {
+            // ✅ NOUVEAU : Vérifier si on est en mode développement
+            const bool isProduction = bool.fromEnvironment('dart.vm.product');
+
+            if (!isProduction) {
+              // ✅ MODE DEV : Utiliser la simulation fiable
+              try {
+                final subscriptionData =
+                    await SubscriptionService.simulateDevPurchaseSuccess(
+                        productId);
+
+                if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                }
+
+                print(
+                    '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                context.go('/subscription-confirmed', extra: {
+                  'structureType': subscriptionData['structureType'],
+                  'structureId': structureId,
+                  'memberCount': subscriptionData['memberCount'],
+                  'priceAmount': subscriptionData['priceAmount'],
+                  'priceDisplay': subscriptionData['priceDisplay'],
+                  'currency': subscriptionData['currency'],
+                  'billingPeriod': subscriptionData['billingPeriod'],
+                  'productId': subscriptionData['productId'],
+                });
+                return;
+              } catch (e) {
+                if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                }
+                print('❌ DEV: Erreur simulation: $e');
+                _showErrorMessage('Erreur de simulation: ${e.toString()}');
+                return;
+              }
+            }
+
+            // ✅ MODE PRODUCTION : Logique normale avec les streams
             StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
 
             purchaseSubscription = InAppPurchase.instance.purchaseStream
@@ -1853,8 +1988,6 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-  // BOUTON MODIFIÉ : Ajouter le paramètre isMam et les informations de prix
-  // BOUTON CORRIGÉ : Ajouter le paramètre isMam et les informations de prix
   Widget _buildTabletActionButton(
       Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
     return Container(
@@ -1876,18 +2009,14 @@ class _PricingScreenState extends State<PricingScreen> {
               widget.structureInfo['structureType'] ?? 'assistante_maternelle';
           final String structureId = widget.structureInfo['structureId'] ?? '';
 
-          // Calculer le prix basé sur la sélection actuelle
           final double priceAmount = _calculatePrice(isMam, _mamMembersCount);
           final String priceDisplay =
               _getFormattedPrice(isMam, _mamMembersCount);
-
-          // Obtenir l'ID du produit pour l'abonnement
           final String productId =
               SubscriptionService.getProductId(structureType, _mamMembersCount);
 
           print('🛒 Tentative d\'achat du produit: $productId');
 
-          // Afficher un indicateur de chargement
           showDialog(
             context: context,
             barrierDismissible: false,
@@ -1906,7 +2035,45 @@ class _PricingScreenState extends State<PricingScreen> {
           );
 
           try {
-            // ✅ NOUVEAU : Écouter les achats AVANT de lancer l'achat
+            // ✅ NOUVEAU : Vérifier si on est en mode développement
+            const bool isProduction = bool.fromEnvironment('dart.vm.product');
+
+            if (!isProduction) {
+              // ✅ MODE DEV : Utiliser la simulation fiable
+              try {
+                final subscriptionData =
+                    await SubscriptionService.simulateDevPurchaseSuccess(
+                        productId);
+
+                if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                }
+
+                print(
+                    '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                context.go('/subscription-confirmed', extra: {
+                  'structureType': subscriptionData['structureType'],
+                  'structureId': structureId,
+                  'memberCount': subscriptionData['memberCount'],
+                  'priceAmount': subscriptionData['priceAmount'],
+                  'priceDisplay': subscriptionData['priceDisplay'],
+                  'currency': subscriptionData['currency'],
+                  'billingPeriod': subscriptionData['billingPeriod'],
+                  'productId': subscriptionData['productId'],
+                });
+                return;
+              } catch (e) {
+                if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                }
+                print('❌ DEV: Erreur simulation: $e');
+                _showErrorMessage('Erreur de simulation: ${e.toString()}');
+                return;
+              }
+            }
+
+            // ✅ MODE PRODUCTION : Logique normale avec les streams
             StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
 
             purchaseSubscription = InAppPurchase.instance.purchaseStream
@@ -1916,18 +2083,13 @@ class _PricingScreenState extends State<PricingScreen> {
                     '📱 État achat: ${purchase.productID} - ${purchase.status}');
 
                 if (purchase.productID == productId) {
-                  // Fermer le dialog de chargement
                   if (Navigator.canPop(context)) {
                     Navigator.of(context).pop();
                   }
-
-                  // Annuler l'écoute
                   purchaseSubscription?.cancel();
 
                   if (purchase.status == PurchaseStatus.purchased) {
-                    // ✅ ACHAT RÉUSSI - Rediriger vers confirmation
                     print('✅ Achat confirmé !');
-
                     context.go('/subscription-confirmed', extra: {
                       'structureType': structureType,
                       'structureId': structureId,
@@ -1939,17 +2101,14 @@ class _PricingScreenState extends State<PricingScreen> {
                       'productId': productId,
                     });
                   } else if (purchase.status == PurchaseStatus.error) {
-                    // ❌ ERREUR
                     print('❌ Erreur d\'achat: ${purchase.error}');
                     _showErrorMessage(
                         'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
                   } else if (purchase.status == PurchaseStatus.canceled) {
-                    // ⚠️ ANNULÉ
                     print('⚠️ Achat annulé par l\'utilisateur');
                     _showErrorMessage('Achat annulé');
                   }
 
-                  // Finaliser la transaction
                   if (purchase.pendingCompletePurchase) {
                     InAppPurchase.instance.completePurchase(purchase);
                   }
@@ -1957,10 +2116,8 @@ class _PricingScreenState extends State<PricingScreen> {
               }
             });
 
-            // Lancer l'achat (ceci ouvrira l'App Store/Google Play)
             await SubscriptionService.purchaseSubscription(productId);
 
-            // Timeout de sécurité après 60 secondes
             Timer(Duration(seconds: 60), () {
               if (Navigator.canPop(context)) {
                 Navigator.of(context).pop();
@@ -1969,7 +2126,6 @@ class _PricingScreenState extends State<PricingScreen> {
               _showErrorMessage('Timeout - Veuillez réessayer');
             });
           } catch (e) {
-            // Fermer le dialog et afficher l'erreur
             if (Navigator.canPop(context)) {
               Navigator.of(context).pop();
             }

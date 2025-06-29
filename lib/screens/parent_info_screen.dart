@@ -31,6 +31,51 @@ bool _isValidEmail(String email) {
 String structureName = "Chargement...";
 bool isLoadingStructure = true;
 
+class CapitalizeFirstLetterFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text[0].toUpperCase() +
+        (newValue.text.length > 1 ? newValue.text.substring(1) : '');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
+class CapitalizeWordsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? word
+            : word[0].toUpperCase() +
+                (word.length > 1 ? word.substring(1).toLowerCase() : ''))
+        .join(' ');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
 class _ParentInfoScreenState extends State<ParentInfoScreen> {
   TextEditingController firstNameController = TextEditingController();
   TextEditingController lastNameController = TextEditingController();
@@ -371,10 +416,14 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                                   firstNameController,
                                   Icons.person,
                                   maxWidth,
-                                  maxHeight),
+                                  maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildTextFieldTablet("Nom", lastNameController,
-                                  Icons.person_outline, maxWidth, maxHeight),
+                                  Icons.person_outline, maxWidth, maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildTextFieldTablet("Email", emailController,
                                   Icons.email, maxWidth, maxHeight,
@@ -578,7 +627,24 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
       IconData icon, double maxWidth, double maxHeight,
       {TextInputType inputType = TextInputType.text,
       int? maxLength,
-      bool onlyNumbers = false}) {
+      bool onlyNumbers = false,
+      bool shouldCapitalize = false, // Nouveau paramètre
+      bool capitalizeWords = false}) {
+    // Nouveau paramètre
+
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (onlyNumbers) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -605,9 +671,8 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
             controller: controller,
             keyboardType: inputType,
             maxLength: maxLength,
-            inputFormatters:
-                onlyNumbers ? [FilteringTextInputFormatter.digitsOnly] : [],
-            onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+            inputFormatters: formatters, // Utiliser la liste des formatters
+            onChanged: (value) => setState(() {}),
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: primaryBlue),
               border: OutlineInputBorder(
@@ -910,9 +975,11 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                         ),
                         SizedBox(height: 24),
                         _buildTextField(
-                            "Prénom", firstNameController, Icons.person),
+                            "Prénom", firstNameController, Icons.person,
+                            shouldCapitalize: true, capitalizeWords: true),
                         _buildTextField(
-                            "Nom", lastNameController, Icons.person_outline),
+                            "Nom", lastNameController, Icons.person_outline,
+                            shouldCapitalize: true, capitalizeWords: true),
                         _buildTextField("Email", emailController, Icons.email,
                             inputType: TextInputType.emailAddress),
                         _buildTextField(
@@ -954,13 +1021,29 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
     );
   }
 
-  /// ✅ Champs de texte réutilisables avec validation
   Widget _buildTextField(
       String label, TextEditingController controller, IconData icon,
       {TextInputType inputType = TextInputType.text,
       int? maxLength,
-      bool onlyNumbers = false}) {
-    // ✅ AJOUT : Déterminer si c'est le champ email pour la validation visuelle
+      bool onlyNumbers = false,
+      bool shouldCapitalize = false, // Nouveau paramètre
+      bool capitalizeWords = false}) {
+    // Nouveau paramètre
+
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (onlyNumbers) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
+    // Déterminer si c'est le champ email pour la validation visuelle
     bool isEmailField = label.toLowerCase().contains('email');
     bool hasEmailError = isEmailField &&
         controller.text.isNotEmpty &&
@@ -993,10 +1076,8 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
             controller: controller,
             keyboardType: inputType,
             maxLength: maxLength,
-            inputFormatters:
-                onlyNumbers ? [FilteringTextInputFormatter.digitsOnly] : [],
-            onChanged: (value) =>
-                setState(() {}), // ✅ AJOUT : Pour rafraîchir la validation
+            inputFormatters: formatters, // Utiliser la liste des formatters
+            onChanged: (value) => setState(() {}),
             decoration: InputDecoration(
               prefixIcon:
                   Icon(icon, color: hasEmailError ? primaryRed : primaryBlue),
@@ -1027,7 +1108,6 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
               ),
               hintStyle: TextStyle(color: Colors.grey.shade500),
               counterText: "",
-              // ✅ AJOUT : Message d'erreur sous le champ
               errorText: hasEmailError ? "Format d'email invalide" : null,
               errorStyle: TextStyle(color: primaryRed, fontSize: 12),
             ),

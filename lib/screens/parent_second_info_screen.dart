@@ -23,6 +23,51 @@ bool isTablet(BuildContext context) {
 String structureName = "Chargement...";
 bool isLoadingStructure = true;
 
+class CapitalizeFirstLetterFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text[0].toUpperCase() +
+        (newValue.text.length > 1 ? newValue.text.substring(1) : '');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
+class CapitalizeWordsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? word
+            : word[0].toUpperCase() +
+                (word.length > 1 ? word.substring(1).toLowerCase() : ''))
+        .join(' ');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
 class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
@@ -411,10 +456,14 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                                   _firstNameController,
                                   Icons.person,
                                   maxWidth,
-                                  maxHeight),
+                                  maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildTextFieldTablet("Nom", _lastNameController,
-                                  Icons.person_outline, maxWidth, maxHeight),
+                                  Icons.person_outline, maxWidth, maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildTextFieldTablet("Email", _emailController,
                                   Icons.email, maxWidth, maxHeight,
@@ -674,7 +723,24 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
       IconData icon, double maxWidth, double maxHeight,
       {TextInputType inputType = TextInputType.text,
       int? maxLength,
-      bool onlyNumbers = false}) {
+      bool onlyNumbers = false,
+      bool shouldCapitalize = false, // Nouveau paramètre
+      bool capitalizeWords = false}) {
+    // Nouveau paramètre
+
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (onlyNumbers) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -701,8 +767,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
             controller: controller,
             keyboardType: inputType,
             maxLength: maxLength,
-            inputFormatters:
-                onlyNumbers ? [FilteringTextInputFormatter.digitsOnly] : [],
+            inputFormatters: formatters, // Utiliser la liste des formatters
             onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: primaryBlue),
@@ -1021,9 +1086,11 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
                         ),
                         SizedBox(height: 24),
                         _buildTextField(
-                            "Prénom", _firstNameController, Icons.person),
+                            "Prénom", _firstNameController, Icons.person,
+                            shouldCapitalize: true, capitalizeWords: true),
                         _buildTextField(
-                            "Nom", _lastNameController, Icons.person_outline),
+                            "Nom", _lastNameController, Icons.person_outline,
+                            shouldCapitalize: true, capitalizeWords: true),
                         _buildTextField("Email", _emailController, Icons.email,
                             inputType: TextInputType.emailAddress),
                         _buildTextField("Numéro de téléphone", _phoneController,
@@ -1110,7 +1177,24 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
       String label, TextEditingController controller, IconData icon,
       {TextInputType inputType = TextInputType.text,
       int? maxLength,
-      bool onlyNumbers = false}) {
+      bool onlyNumbers = false,
+      bool shouldCapitalize = false, // Nouveau paramètre
+      bool capitalizeWords = false}) {
+    // Nouveau paramètre
+
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (onlyNumbers) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1138,8 +1222,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
             controller: controller,
             keyboardType: inputType,
             maxLength: maxLength,
-            inputFormatters:
-                onlyNumbers ? [FilteringTextInputFormatter.digitsOnly] : [],
+            inputFormatters: formatters, // Utiliser la liste des formatters
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: primaryBlue),
               border: OutlineInputBorder(

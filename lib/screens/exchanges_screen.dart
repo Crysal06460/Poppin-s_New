@@ -13,8 +13,9 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/message_badge_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// 🔥 AJOUT DE L'IMPORT
 import '../services/notification_service.dart';
+import '../widgets/swipe_navigation_wrapper.dart';
+import '../widgets/common_app_bar.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -37,6 +38,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   final ScrollController _scrollController = ScrollController();
   bool _isUploadingFile = false;
   int _selectedIndex = 1;
+  String? selectedParentForMessage;
+  Map<String, List<Map<String, dynamic>>> parentsCache = {};
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -200,6 +203,201 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(8),
       ),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _getParentsList(
+      String childId, String structureId) async {
+    try {
+      // Vérifier le cache d'abord
+      if (parentsCache.containsKey(childId)) {
+        return parentsCache[childId]!;
+      }
+
+      print("🔍 Récupération de la liste des parents pour enfant: $childId");
+
+      // Récupérer le document enfant
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+
+      if (!childDoc.exists) {
+        return [];
+      }
+
+      final childData = childDoc.data()!;
+      List<Map<String, dynamic>> parentsList = [];
+
+      // Parent 1
+      final parent1Data = childData['parent1'] as Map<String, dynamic>?;
+      if (parent1Data != null) {
+        final parent1FirstName =
+            parent1Data['firstName']?.toString().trim() ?? '';
+        final parent1Email = parent1Data['email']?.toString().trim() ?? '';
+        if (parent1FirstName.isNotEmpty && parent1Email.isNotEmpty) {
+          parentsList.add({
+            'firstName': parent1FirstName,
+            'email': parent1Email,
+            'type': 'parent1',
+          });
+        }
+      }
+
+      // Parent 2
+      final parent2Data = childData['parent2'] as Map<String, dynamic>?;
+      if (parent2Data != null) {
+        final parent2FirstName =
+            parent2Data['firstName']?.toString().trim() ?? '';
+        final parent2Email = parent2Data['email']?.toString().trim() ?? '';
+        if (parent2FirstName.isNotEmpty && parent2Email.isNotEmpty) {
+          parentsList.add({
+            'firstName': parent2FirstName,
+            'email': parent2Email,
+            'type': 'parent2',
+          });
+        }
+      }
+
+      // Mettre en cache
+      parentsCache[childId] = parentsList;
+
+      print("📋 Parents trouvés: ${parentsList.length}");
+      return parentsList;
+    } catch (e) {
+      print('❌ Erreur récupération liste parents: $e');
+      return [];
+    }
+  }
+
+  Widget _buildParentSelector(
+      String childId, String structureId, bool isTablet) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getParentsList(childId, structureId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        final parents = snapshot.data!;
+        if (parents.length == 1) {
+          // Un seul parent, pas besoin de sélecteur
+          selectedParentForMessage = parents.first['email'];
+          return SizedBox.shrink();
+        }
+
+        // Deux parents, afficher le sélecteur
+        return Container(
+          margin: EdgeInsets.only(bottom: isTablet ? 12 : 8),
+          padding: EdgeInsets.symmetric(horizontal: isTablet ? 16 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Envoyer à :",
+                style: TextStyle(
+                  fontSize: isTablet ? 14 : 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              SizedBox(height: isTablet ? 8 : 6),
+              Row(
+                children: [
+                  // Option "Les deux parents"
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedParentForMessage = 'both';
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTablet ? 12 : 8,
+                          vertical: isTablet ? 10 : 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selectedParentForMessage == 'both'
+                              ? primaryBlue.withOpacity(0.1)
+                              : Colors.grey.shade100,
+                          border: Border.all(
+                            color: selectedParentForMessage == 'both'
+                                ? primaryBlue
+                                : Colors.grey.shade300,
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "Les deux",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isTablet ? 13 : 12,
+                            fontWeight: selectedParentForMessage == 'both'
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: selectedParentForMessage == 'both'
+                                ? primaryBlue
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: isTablet ? 12 : 8),
+                  // Options pour chaque parent
+                  ...parents.map((parent) {
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedParentForMessage = parent['email'];
+                          });
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isTablet ? 12 : 8,
+                            vertical: isTablet ? 10 : 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selectedParentForMessage == parent['email']
+                                ? primaryBlue.withOpacity(0.1)
+                                : Colors.grey.shade100,
+                            border: Border.all(
+                              color: selectedParentForMessage == parent['email']
+                                  ? primaryBlue
+                                  : Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            parent['firstName'],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: isTablet ? 13 : 12,
+                              fontWeight:
+                                  selectedParentForMessage == parent['email']
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                              color: selectedParentForMessage == parent['email']
+                                  ? primaryBlue
+                                  : Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -519,7 +717,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       final messageContent =
           replyToId != null ? messageText.split(': ')[1] : messageText;
 
-      // 🔥 EXACTEMENT COMME PARENT_MESSAGES_SCREEN : PAS DE PARENTID DANS LE MESSAGE !
+      // NOUVEAU : Ajouter le destinataire dans le message
       await FirebaseFirestore.instance.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
@@ -529,27 +727,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         'senderType': 'assistante',
         'nonLu': true,
         'replyTo': replyToId,
-        // ❌ PAS DE PARENTID ! Comme dans parent_messages_screen.dart
+        'targetParent': selectedParentForMessage, // NOUVEAU CHAMP
       });
 
       _messageController.clear();
-      print("✅ Message envoyé SANS parentId (comme parent)");
+      print("✅ Message envoyé avec destinataire: $selectedParentForMessage");
 
-      // 🔥 COPIER EXACTEMENT LA LOGIQUE DE PARENT_MESSAGES_SCREEN
-      // Récupérer l'email du parent et envoyer notification
-      final parentEmail =
-          await _getParentEmailForNotification(childId, structureId);
-      if (parentEmail != null) {
-        await NotificationService.sendNotificationToUser(
-          recipientUserId: parentEmail,
-          title: 'Nouveau message de Poppin\'s',
-          body: messageContent,
-        );
-        print("✅ Notification envoyée au parent: $parentEmail");
-      }
-
-      // Notifier le parent (comme dans parent_messages_screen)
-      await _notifyParent(childId, structureId);
+      // Envoyer notifications selon le destinataire sélectionné
+      await _sendNotificationsToSelectedParents(
+          childId, structureId, messageContent);
 
       // Message de succès
       ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -565,6 +751,51 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         _showErrorSnackBar("Erreur lors de l'envoi du message",
             dialogContext: dialogContext);
       }
+    }
+  }
+
+  Future<void> _sendNotificationsToSelectedParents(
+      String childId, String structureId, String messageContent) async {
+    try {
+      if (selectedParentForMessage == null) return;
+
+      if (selectedParentForMessage == 'both') {
+        // Envoyer à tous les parents
+        final parentsList = await _getParentsList(childId, structureId);
+        for (var parent in parentsList) {
+          await NotificationService.sendNotificationToUser(
+            recipientUserId: parent['email'],
+            title: 'Nouveau message de Poppin\'s',
+            body: messageContent,
+          );
+
+          // Mettre à jour le compteur
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(parent['email'])
+              .update({'unreadMessages': FieldValue.increment(1)});
+
+          print("✅ Notification envoyée au parent: ${parent['email']}");
+        }
+      } else {
+        // Envoyer à un parent spécifique
+        await NotificationService.sendNotificationToUser(
+          recipientUserId: selectedParentForMessage!,
+          title: 'Nouveau message de Poppin\'s',
+          body: messageContent,
+        );
+
+        // Mettre à jour le compteur
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(selectedParentForMessage!)
+            .update({'unreadMessages': FieldValue.increment(1)});
+
+        print(
+            "✅ Notification envoyée au parent sélectionné: $selectedParentForMessage");
+      }
+    } catch (e) {
+      print("❌ Erreur lors de l'envoi des notifications: $e");
     }
   }
 
@@ -1174,6 +1405,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   }
 
   void _showChatPopup(Map<String, dynamic> enfant) {
+    // NOUVEAU : Réinitialiser la sélection de parent
+    selectedParentForMessage = 'both'; // Par défaut, envoyer aux deux parents
+
     // Utiliser l'ID de structure stocké avec l'enfant
     final String structureId =
         enfant['structureId'] ?? FirebaseAuth.instance.currentUser?.uid;
@@ -1192,299 +1426,480 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: EdgeInsets.all(isTabletDevice ? 24 : 16),
-          child: Container(
-            width: double.infinity,
-            height: MediaQuery.of(dialogContext).size.height * 0.8,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.all(isTabletDevice ? 24 : 16),
+              child: Container(
+                width: double.infinity,
+                height: MediaQuery.of(dialogContext).size.height * 0.8,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Header
-                // Header
-                Container(
-                  padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [primaryBlue, primaryBlue.withOpacity(0.85)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                child: Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primaryBlue, primaryBlue.withOpacity(0.85)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundImage:
+                                NetworkImage(enfant['photoUrl'] ?? ''),
+                            backgroundColor: lightBlue,
+                            radius: isTabletDevice ? 36 : 30,
+                            child: enfant['photoUrl'] == null ||
+                                    enfant['photoUrl'].isEmpty
+                                ? Text(
+                                    enfant['prenom'][0].toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 30 : 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: primaryBlue,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          SizedBox(width: isTabletDevice ? 20 : 16),
+                          Expanded(
+                            child: FutureBuilder<String>(
+                              future: _getParentsNames(
+                                  enfant['id'], enfant['structureId'] ?? ''),
+                              builder: (context, snapshot) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      snapshot.data ??
+                                          "Discussion avec les parents",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: isTabletDevice ? 22 : 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      "Enfant : ${enfant['prenom']}",
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: isTabletDevice ? 16 : 14,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: isTabletDevice ? 28 : 24,
+                            ),
+                            onPressed: () {
+                              // Mettre à jour l'indicateur de discussion en cours
+                              FirebaseFirestore.instance
+                                  .collection('structures')
+                                  .doc(structureId)
+                                  .collection('children')
+                                  .doc(enfant['id'])
+                                  .update({
+                                'discussionEnCours': false,
+                              });
+                              Navigator.of(dialogContext).pop();
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundImage: NetworkImage(enfant['photoUrl'] ?? ''),
-                        backgroundColor: lightBlue,
-                        radius: isTabletDevice ? 36 : 30,
-                        child: enfant['photoUrl'] == null ||
-                                enfant['photoUrl'].isEmpty
-                            ? Text(
-                                enfant['prenom'][0].toUpperCase(),
+
+                    // Messages
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('exchanges')
+                            .where('childId', isEqualTo: enfant['id'])
+                            .orderBy('timestamp', descending: true)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            print('Erreur de chargement: ${snapshot.error}');
+                            return Center(
+                              child: Text(
+                                'Erreur de chargement des messages',
                                 style: TextStyle(
-                                  fontSize: isTabletDevice ? 30 : 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
+                                  color: Colors.grey,
+                                  fontSize: isTabletDevice ? 16 : 14,
                                 ),
-                              )
-                            : null,
-                      ),
-                      SizedBox(width: isTabletDevice ? 20 : 16),
-                      Expanded(
-                        child: FutureBuilder<String>(
-                          future: _getParentsNames(
-                              enfant['id'], enfant['structureId'] ?? ''),
-                          builder: (context, snapshot) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  snapshot.data ??
-                                      "Discussion avec les parents",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: isTabletDevice ? 22 : 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  "Enfant : ${enfant['prenom']}",
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: isTabletDevice ? 16 : 14,
-                                  ),
-                                ),
-                              ],
+                              ),
                             );
-                          },
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: isTabletDevice ? 28 : 24,
-                        ),
-                        onPressed: () {
-                          // Mettre à jour l'indicateur de discussion en cours
-                          FirebaseFirestore.instance
-                              .collection('structures')
-                              .doc(structureId)
-                              .collection('children')
-                              .doc(enfant['id'])
-                              .update({
-                            'discussionEnCours': false,
-                          });
-                          Navigator.of(dialogContext).pop();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
+                          }
 
-                // Messages
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('exchanges')
-                        .where('childId', isEqualTo: enfant['id'])
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        print('Erreur de chargement: ${snapshot.error}');
-                        return Center(
-                          child: Text(
-                            'Erreur de chargement des messages',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: isTabletDevice ? 16 : 14,
-                            ),
-                          ),
-                        );
-                      }
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Center(
+                                child: CircularProgressIndicator(
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(primaryBlue),
+                            ));
+                          }
 
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(
-                            child: CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(primaryBlue),
-                        ));
-                      }
-
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.chat_bubble_outline,
-                                    size: isTabletDevice ? 60 : 48,
-                                    color: Colors.grey),
-                                SizedBox(height: isTabletDevice ? 20 : 16),
-                                Text(
-                                  "Aucun message\nCommencez la conversation !",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: isTabletDevice ? 20 : 16,
-                                  ),
+                          if (!snapshot.hasData ||
+                              snapshot.data!.docs.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding:
+                                    EdgeInsets.all(isTabletDevice ? 24 : 16),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.chat_bubble_outline,
+                                        size: isTabletDevice ? 60 : 48,
+                                        color: Colors.grey),
+                                    SizedBox(height: isTabletDevice ? 20 : 16),
+                                    Text(
+                                      "Aucun message\nCommencez la conversation !",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: isTabletDevice ? 20 : 16,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
+                              ),
+                            );
+                          }
 
-                      final messages = snapshot.data!.docs;
-                      return ListView.builder(
-                        controller: _scrollController,
-                        reverse: true,
-                        padding: EdgeInsets.only(
-                          bottom: isTabletDevice ? 12 : 8,
-                          left: isTabletDevice ? 12 : 0,
-                          right: isTabletDevice ? 12 : 0,
-                        ),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final messageData = {
-                            ...messages[index].data() as Map<String, dynamic>,
-                            'id': messages[index].id,
-                          };
-                          final isMe = messageData['senderId'] ==
-                              FirebaseAuth.instance.currentUser?.uid;
-                          // Marquer le message comme lu
-                          FirebaseFirestore.instance
-                              .collection('exchanges')
-                              .doc(messages[index].id)
-                              .update({
-                            'nonLu': false,
-                          }).then((_) {
-                            print(
-                                '🔍 Avant clearBadge - message marqué comme lu');
-                            NotificationService.clearBadge();
-                            print('🔍 Après clearBadge');
-                          });
-                          return _buildMessage(
-                            messageData,
-                            isMe,
-                            isTabletDevice,
+                          final messages = snapshot.data!.docs;
+                          return ListView.builder(
+                            controller: _scrollController,
+                            reverse: true,
+                            padding: EdgeInsets.only(
+                              bottom: isTabletDevice ? 12 : 8,
+                              left: isTabletDevice ? 12 : 0,
+                              right: isTabletDevice ? 12 : 0,
+                            ),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final messageData = {
+                                ...messages[index].data()
+                                    as Map<String, dynamic>,
+                                'id': messages[index].id,
+                              };
+                              final isMe = messageData['senderId'] ==
+                                  FirebaseAuth.instance.currentUser?.uid;
+                              // Marquer le message comme lu
+                              FirebaseFirestore.instance
+                                  .collection('exchanges')
+                                  .doc(messages[index].id)
+                                  .update({
+                                'nonLu': false,
+                              }).then((_) {
+                                print(
+                                    '🔍 Avant clearBadge - message marqué comme lu');
+                                NotificationService.clearBadge();
+                                print('🔍 Après clearBadge');
+                              });
+                              return _buildMessage(
+                                messageData,
+                                isMe,
+                                isTabletDevice,
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
-                ),
+                      ),
+                    ),
 
-                // Upload Progress
-                if (_isUploadingFile)
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isTabletDevice ? 24 : 16,
-                    ),
-                    child: LinearProgressIndicator(
-                      backgroundColor: lightBlue,
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                    ),
-                  ),
+                    // Upload Progress
+                    if (_isUploadingFile)
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isTabletDevice ? 24 : 16,
+                        ),
+                        child: LinearProgressIndicator(
+                          backgroundColor: lightBlue,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(primaryBlue),
+                        ),
+                      ),
 
-                // Barre de saisie
-                Container(
-                  padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      top: BorderSide(color: Colors.grey.shade200),
+                    // MODIFIÉ : Barre de saisie avec sélecteur de parent
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade200),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          // NOUVEAU : Sélecteur de parent
+                          FutureBuilder<List<Map<String, dynamic>>>(
+                            future: _getParentsList(enfant['id'], structureId),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return SizedBox.shrink();
+                              }
+
+                              final parents = snapshot.data!;
+                              if (parents.length == 1) {
+                                // Un seul parent, pas besoin de sélecteur
+                                selectedParentForMessage =
+                                    parents.first['email'];
+                                return SizedBox.shrink();
+                              }
+
+                              // Deux parents, afficher le sélecteur
+                              return Container(
+                                margin: EdgeInsets.only(
+                                    bottom: isTabletDevice ? 12 : 8),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: isTabletDevice ? 16 : 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(height: isTabletDevice ? 16 : 12),
+                                    Text(
+                                      "Envoyer à :",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 14 : 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                    SizedBox(height: isTabletDevice ? 8 : 6),
+                                    Row(
+                                      children: [
+                                        // Option "Les deux parents"
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              setDialogState(() {
+                                                selectedParentForMessage =
+                                                    'both';
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal:
+                                                    isTabletDevice ? 12 : 8,
+                                                vertical:
+                                                    isTabletDevice ? 10 : 8,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    selectedParentForMessage ==
+                                                            'both'
+                                                        ? primaryBlue
+                                                            .withOpacity(0.1)
+                                                        : Colors.grey.shade100,
+                                                border: Border.all(
+                                                  color:
+                                                      selectedParentForMessage ==
+                                                              'both'
+                                                          ? primaryBlue
+                                                          : Colors
+                                                              .grey.shade300,
+                                                  width: 1.5,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                "Les deux",
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isTabletDevice ? 13 : 12,
+                                                  fontWeight:
+                                                      selectedParentForMessage ==
+                                                              'both'
+                                                          ? FontWeight.w600
+                                                          : FontWeight.normal,
+                                                  color:
+                                                      selectedParentForMessage ==
+                                                              'both'
+                                                          ? primaryBlue
+                                                          : Colors
+                                                              .grey.shade700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(
+                                            width: isTabletDevice ? 12 : 8),
+                                        // Options pour chaque parent
+                                        ...parents.map((parent) {
+                                          return Expanded(
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                setDialogState(() {
+                                                  selectedParentForMessage =
+                                                      parent['email'];
+                                                });
+                                              },
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal:
+                                                      isTabletDevice ? 12 : 8,
+                                                  vertical:
+                                                      isTabletDevice ? 10 : 8,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      selectedParentForMessage ==
+                                                              parent['email']
+                                                          ? primaryBlue
+                                                              .withOpacity(0.1)
+                                                          : Colors
+                                                              .grey.shade100,
+                                                  border: Border.all(
+                                                    color:
+                                                        selectedParentForMessage ==
+                                                                parent['email']
+                                                            ? primaryBlue
+                                                            : Colors
+                                                                .grey.shade300,
+                                                    width: 1.5,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  parent['firstName'],
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: isTabletDevice
+                                                        ? 13
+                                                        : 12,
+                                                    fontWeight:
+                                                        selectedParentForMessage ==
+                                                                parent['email']
+                                                            ? FontWeight.w600
+                                                            : FontWeight.normal,
+                                                    color:
+                                                        selectedParentForMessage ==
+                                                                parent['email']
+                                                            ? primaryBlue
+                                                            : Colors
+                                                                .grey.shade700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Barre de saisie existante
+                          Padding(
+                            padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.attach_file,
+                                    size: isTabletDevice ? 28 : 24,
+                                  ),
+                                  color: primaryBlue,
+                                  onPressed: _isUploadingFile
+                                      ? null
+                                      : () => _pickAndSendFile(
+                                          enfant['id'], dialogContext),
+                                ),
+                                SizedBox(width: isTabletDevice ? 12 : 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _messageController,
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 16 : 14,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: "Écrire un message...",
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(30),
+                                        borderSide: const BorderSide(
+                                          color: primaryBlue,
+                                        ),
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: isTabletDevice ? 24 : 20,
+                                        vertical: isTabletDevice ? 14 : 10,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey.shade50,
+                                    ),
+                                    onSubmitted: (_) => _sendMessage(
+                                        enfant['id'], dialogContext),
+                                    textInputAction: TextInputAction.send,
+                                  ),
+                                ),
+                                SizedBox(width: isTabletDevice ? 12 : 8),
+                                CircleAvatar(
+                                  backgroundColor: primaryBlue,
+                                  radius: isTabletDevice ? 24 : 20,
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: isTabletDevice ? 24 : 20,
+                                    ),
+                                    onPressed: () => _sendMessage(
+                                        enfant['id'], dialogContext),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.attach_file,
-                          size: isTabletDevice ? 28 : 24,
-                        ),
-                        color: primaryBlue,
-                        onPressed: _isUploadingFile
-                            ? null
-                            : () =>
-                                _pickAndSendFile(enfant['id'], dialogContext),
-                      ),
-                      SizedBox(width: isTabletDevice ? 12 : 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          style: TextStyle(
-                            fontSize: isTabletDevice ? 16 : 14,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: "Écrire un message...",
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: const BorderSide(
-                                color: primaryBlue,
-                              ),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: isTabletDevice ? 24 : 20,
-                              vertical: isTabletDevice ? 14 : 10,
-                            ),
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                          ),
-                          onSubmitted: (_) =>
-                              _sendMessage(enfant['id'], dialogContext),
-                          textInputAction: TextInputAction.send,
-                        ),
-                      ),
-                      SizedBox(width: isTabletDevice ? 12 : 8),
-                      CircleAvatar(
-                        backgroundColor: primaryBlue,
-                        radius: isTabletDevice ? 24 : 20,
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.send,
-                            color: Colors.white,
-                            size: isTabletDevice ? 24 : 20,
-                          ),
-                          onPressed: () =>
-                              _sendMessage(enfant['id'], dialogContext),
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1782,30 +2197,40 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   Widget build(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          Expanded(
-            child: isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                    ),
-                  )
-                : enfants.isEmpty
-                    ? _buildEmptyState()
-                    : isTabletDevice
-                        ? _buildTabletLayout()
-                        : ListView.builder(
-                            itemCount: enfants.length,
-                            itemBuilder: _buildEnfantCard,
-                          ),
-          )
-        ],
+    return SwipeNavigationWrapper(
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            // ✨ NOUVEAU : CommonAppBar remplace _buildAppBar(context)
+            CommonAppBar(
+              title: 'Échanges',
+              structureName: structureName,
+              iconPath: 'assets/images/Icone_Echanges.png',
+              primaryColor: primaryBlue,
+            ),
+
+            // 🔄 GARDÉ IDENTIQUE : tout votre contenu existant
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                      ),
+                    )
+                  : enfants.isEmpty
+                      ? _buildEmptyState()
+                      : isTabletDevice
+                          ? _buildTabletLayout()
+                          : ListView.builder(
+                              itemCount: enfants.length,
+                              itemBuilder: _buildEnfantCard,
+                            ),
+            )
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -2124,117 +2549,6 @@ class _ExchangesScreenState extends State<ExchangesScreen>
               },
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // AppBar personnalisé avec gradient
-  // AppBar personnalisé avec gradient adapté pour iPad
-  Widget _buildAppBar(BuildContext context) {
-    final bool isTabletDevice = isTablet(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            primaryBlue,
-            primaryBlue.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-              16, isTabletDevice ? 24 : 16, 16, isTabletDevice ? 28 : 20),
-          child: Column(
-            children: [
-              // Première ligne: nom structure et date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 28 : 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: isTabletDevice ? 16 : 12,
-                        vertical: isTabletDevice ? 8 : 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 16 : 14,
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: isTabletDevice ? 22 : 15),
-              // Icône et titre de la page dans un conteneur bordé comme sur la page Activités
-              Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: isTabletDevice ? 22 : 16,
-                    vertical: isTabletDevice ? 12 : 8),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.white, width: isTabletDevice ? 2.5 : 2),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Icone_Echanges.png',
-                      width: isTabletDevice ? 36 : 30,
-                      height: isTabletDevice ? 36 : 30,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.chat_bubble_outline,
-                        size: isTabletDevice ? 32 : 26,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: isTabletDevice ? 12 : 8),
-                    Text(
-                      'Échanges',
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 24 : 20,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

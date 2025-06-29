@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/custom_scaffold.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 
 class ChildInfoScreen extends StatefulWidget {
   @override
@@ -14,6 +15,51 @@ class ChildInfoScreen extends StatefulWidget {
 
 bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
+class CapitalizeFirstLetterFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text[0].toUpperCase() +
+        (newValue.text.length > 1 ? newValue.text.substring(1) : '');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
+class CapitalizeWordsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? word
+            : word[0].toUpperCase() +
+                (word.length > 1 ? word.substring(1).toLowerCase() : ''))
+        .join(' ');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
 }
 
 class _ChildInfoScreenState extends State<ChildInfoScreen> {
@@ -362,10 +408,14 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                           child: Column(
                             children: [
                               _buildTextFieldTablet("Prénom",
-                                  firstNameController, maxWidth, maxHeight),
+                                  firstNameController, maxWidth, maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildTextFieldTablet("Nom", lastNameController,
-                                  maxWidth, maxHeight),
+                                  maxWidth, maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true),
                               SizedBox(height: maxHeight * 0.03),
                               _buildDateFieldTablet(maxWidth, maxHeight),
                             ],
@@ -601,7 +651,19 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
   }
 
   Widget _buildTextFieldTablet(String label, TextEditingController controller,
-      double maxWidth, double maxHeight) {
+      double maxWidth, double maxHeight,
+      {bool shouldCapitalize = false, bool capitalizeWords = false}) {
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -627,6 +689,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
           child: TextField(
             controller: controller,
             keyboardType: TextInputType.text,
+            inputFormatters: formatters, // Ajouter les formatters ici
             onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
             decoration: InputDecoration(
               border: OutlineInputBorder(
@@ -985,8 +1048,10 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                           ],
                         ),
                         const SizedBox(height: 30),
-                        _buildTextField("Prénom", firstNameController),
-                        _buildTextField("Nom", lastNameController),
+                        _buildTextField("Prénom", firstNameController,
+                            shouldCapitalize: true, capitalizeWords: true),
+                        _buildTextField("Nom", lastNameController,
+                            shouldCapitalize: true, capitalizeWords: true),
 
                         // Champ de date amélioré (code existant...)
                         Column(
@@ -1098,7 +1163,20 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
   }
 
   Widget _buildTextField(String label, TextEditingController controller,
-      {IconData? icon}) {
+      {IconData? icon,
+      bool shouldCapitalize = false,
+      bool capitalizeWords = false}) {
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1125,6 +1203,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
           child: TextField(
             controller: controller,
             keyboardType: TextInputType.text,
+            inputFormatters: formatters, // Ajouter les formatters ici
             decoration: InputDecoration(
               prefixIcon: icon != null ? Icon(icon, color: primaryBlue) : null,
               border: OutlineInputBorder(

@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/swipe_navigation_wrapper.dart';
+import '../widgets/common_app_bar.dart';
 
 class RecapScreen extends StatefulWidget {
   const RecapScreen({Key? key}) : super(key: key);
@@ -1441,160 +1443,44 @@ class _RecapScreenState extends State<RecapScreen> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
-    // Détection de l'iPad
-    final bool isTabletDevice = isTablet(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            primaryBlue,
-            primaryBlue.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          // Plus de padding vertical pour iPad
-          padding: EdgeInsets.fromLTRB(
-              16,
-              isTabletDevice ? 24 : 16, // Augmenté pour iPad
-              16,
-              isTabletDevice ? 28 : 20 // Augmenté pour iPad
-              ),
-          child: Column(
-            children: [
-              // Première ligne: nom structure et date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
-                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(
-                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
-              // Icône et titre de la page
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
-                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.white,
-                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                      ),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Icone_Recaptitulatif.png',
-                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.summarize_outlined,
-                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(
-                        width:
-                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
-                    Text(
-                      'Récapitulatif',
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          Expanded(
-            child: isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                  ))
-                : enfants.isEmpty
-                    ? _buildEmptyState()
-                    : isTabletDevice
-                        ? _buildTabletLayout() // Layout adapté pour iPad
-                        : ListView.builder(
-                            itemCount: enfants.length,
-                            itemBuilder: _buildEnfantCard,
-                          ),
-          ),
-        ],
+    return SwipeNavigationWrapper(
+      child: Scaffold(
+        backgroundColor: Colors.grey[50],
+        body: Column(
+          children: [
+            // ✨ NOUVEAU : CommonAppBar remplace _buildAppBar(context)
+            CommonAppBar(
+              title: 'Récapitulatif',
+              structureName: structureName,
+              iconPath: 'assets/images/Icone_Recaptitulatif.png',
+              primaryColor: primaryBlue,
+            ),
+
+            // 🔄 GARDÉ IDENTIQUE : tout votre contenu existant
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                    ))
+                  : enfants.isEmpty
+                      ? _buildEmptyState()
+                      : isTabletDevice
+                          ? _buildTabletLayout() // Layout adapté pour iPad
+                          : ListView.builder(
+                              itemCount: enfants.length,
+                              itemBuilder: _buildEnfantCard,
+                            ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 

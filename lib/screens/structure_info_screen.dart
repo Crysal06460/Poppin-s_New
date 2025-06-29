@@ -20,6 +20,51 @@ class StructureInfoScreen extends StatefulWidget {
 
 List<String> citySuggestions = [];
 
+class CapitalizeFirstLetterFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text[0].toUpperCase() +
+        (newValue.text.length > 1 ? newValue.text.substring(1) : '');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
+class CapitalizeWordsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    String newText = newValue.text
+        .split(' ')
+        .map((word) => word.isEmpty
+            ? word
+            : word[0].toUpperCase() +
+                (word.length > 1 ? word.substring(1).toLowerCase() : ''))
+        .join(' ');
+
+    return TextEditingValue(
+      text: newText,
+      selection: newValue.selection,
+    );
+  }
+}
+
 class _StructureInfoScreenState extends State<StructureInfoScreen> {
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350);
@@ -469,11 +514,11 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                                     helperText: "Entrez le nom de votre MAM",
                                     maxWidth: maxWidth,
                                     maxHeight: maxHeight,
+                                    shouldCapitalize: true,
+                                    capitalizeWords: true,
                                   ),
-                                  SizedBox(height: maxHeight * 0.025),
                                 ],
 
-                                // Prénom
                                 _buildTabletTextField(
                                   firstNameController,
                                   "Prénom",
@@ -481,6 +526,8 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                                   color: primaryColor,
                                   maxWidth: maxWidth,
                                   maxHeight: maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true,
                                   onChanged: (value) {
                                     if (!isMAM) {
                                       structureNameController.text = value;
@@ -490,7 +537,6 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
                                 SizedBox(height: maxHeight * 0.025),
 
-                                // Nom
                                 _buildTabletTextField(
                                   lastNameController,
                                   "Nom",
@@ -498,6 +544,8 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                                   color: primaryColor,
                                   maxWidth: maxWidth,
                                   maxHeight: maxHeight,
+                                  shouldCapitalize: true,
+                                  capitalizeWords: true,
                                 ),
 
                                 SizedBox(height: maxHeight * 0.025),
@@ -718,7 +766,22 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
     String? helperText,
     required double maxWidth,
     required double maxHeight,
+    bool shouldCapitalize = false, // Nouveau paramètre
+    bool capitalizeWords = false, // Pour les prénoms composés
   }) {
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (isNumeric) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -737,8 +800,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
         keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
         maxLength: maxLength,
         readOnly: isReadOnly,
-        inputFormatters:
-            isNumeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+        inputFormatters: formatters,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(
@@ -893,8 +955,9 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
               icon: Icons.business_outlined,
               color: primaryColor,
               helperText: "Entrez le nom de votre MAM",
+              shouldCapitalize: true, // Active la capitalisation
+              capitalizeWords: true, // Pour gérer les noms composés
             ),
-            const SizedBox(height: 15),
           ],
 
           // Champs de formulaire
@@ -903,9 +966,11 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
             "Prénom",
             icon: Icons.person_outline,
             color: primaryColor,
+            shouldCapitalize: true, // Active la capitalisation
+            capitalizeWords:
+                true, // Pour gérer les prénoms composés comme "Jean-Pierre"
             onChanged: (value) {
               if (!isMAM) {
-                // Mettre à jour automatiquement le nom de la structure pour AssistanteMaternelle
                 structureNameController.text = value;
               }
             },
@@ -913,8 +978,14 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
           const SizedBox(height: 15),
 
-          _buildTextField(lastNameController, "Nom",
-              icon: Icons.person_outline, color: primaryColor),
+          _buildTextField(
+            lastNameController,
+            "Nom",
+            icon: Icons.person_outline,
+            color: primaryColor,
+            shouldCapitalize: true, // Active la capitalisation
+            capitalizeWords: true, // Pour gérer les noms composés
+          ),
 
           const SizedBox(height: 15),
 
@@ -1033,15 +1104,28 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
     required IconData icon,
     required Color color,
     String? helperText,
+    bool shouldCapitalize = false, // Nouveau paramètre
+    bool capitalizeWords = false, // Pour les prénoms composés
   }) {
+    // Construction de la liste des formatters
+    List<TextInputFormatter> formatters = [];
+
+    if (isNumeric) {
+      formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else if (shouldCapitalize) {
+      if (capitalizeWords) {
+        formatters.add(CapitalizeWordsFormatter());
+      } else {
+        formatters.add(CapitalizeFirstLetterFormatter());
+      }
+    }
+
     return TextField(
       controller: controller,
       keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
       maxLength: maxLength,
       readOnly: isReadOnly,
-      // Formatage pour n'accepter que les chiffres pour les champs numériques
-      inputFormatters:
-          isNumeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+      inputFormatters: formatters,
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: color.withOpacity(0.8)),
@@ -1067,8 +1151,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
       onChanged: onChanged,
       style: TextStyle(
         fontSize: 16,
-        color:
-            isReadOnly ? Colors.grey : Colors.black, // Grisé si lecture seule
+        color: isReadOnly ? Colors.grey : Colors.black,
       ),
       cursorColor: color,
     );

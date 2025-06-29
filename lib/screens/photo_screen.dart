@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io';
 import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
+import '../widgets/swipe_navigation_wrapper.dart';
+import '../widgets/common_app_bar.dart';
 
 class PhotosScreen extends StatefulWidget {
   const PhotosScreen({Key? key}) : super(key: key);
@@ -1367,63 +1369,73 @@ class _PhotosScreenState extends State<PhotosScreen>
   Widget build(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          // Ajouter le sélecteur de date
-          _buildDateSelector(),
-          Expanded(
-            child: isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
-                    ),
-                  )
-                : _showingPastPhotos
-                    ? _buildPastPhotosView(isTabletDevice)
-                    : enfants.isEmpty
-                        ? _buildEmptyState()
-                        : Stack(
-                            children: [
-                              isTabletDevice
-                                  ? _buildTabletLayout()
-                                  : ListView.builder(
-                                      itemCount: enfants.length,
-                                      itemBuilder: _buildEnfantCard,
-                                    ),
-                              if (_isUploadingFile)
-                                Container(
-                                  color: Colors.black.withOpacity(0.5),
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
-                                        ),
-                                        SizedBox(height: 16),
-                                        Text(
-                                          "Téléchargement en cours...",
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize:
-                                                  isTabletDevice ? 20 : 18),
-                                        )
-                                      ],
+    return SwipeNavigationWrapper(
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            // ✨ NOUVEAU : CommonAppBar remplace _buildAppBar(context)
+            CommonAppBar(
+              title: 'Photos',
+              structureName: structureName,
+              iconPath: 'assets/images/Icone_Photos.png',
+              primaryColor: primaryBlue,
+            ),
+
+            // 🔄 GARDÉ IDENTIQUE : tout votre contenu existant
+            // Ajouter le sélecteur de date
+            _buildDateSelector(),
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+                      ),
+                    )
+                  : _showingPastPhotos
+                      ? _buildPastPhotosView(isTabletDevice)
+                      : enfants.isEmpty
+                          ? _buildEmptyState()
+                          : Stack(
+                              children: [
+                                isTabletDevice
+                                    ? _buildTabletLayout()
+                                    : ListView.builder(
+                                        itemCount: enfants.length,
+                                        itemBuilder: _buildEnfantCard,
+                                      ),
+                                if (_isUploadingFile)
+                                  Container(
+                                    color: Colors.black.withOpacity(0.5),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          CircularProgressIndicator(
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.white),
+                                          ),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            "Téléchargement en cours...",
+                                            style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize:
+                                                    isTabletDevice ? 20 : 18),
+                                          )
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
-          )
-        ],
+                              ],
+                            ),
+            )
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -2169,120 +2181,6 @@ class _PhotosScreenState extends State<PhotosScreen>
             fontSize: 28,
             fontWeight: FontWeight.bold,
             color: primaryBlue,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // AppBar personnalisé avec gradient
-  Widget _buildAppBar(BuildContext context) {
-    // Détection de l'iPad
-    final bool isTabletDevice = isTablet(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            primaryBlue,
-            primaryBlue.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          // Plus de padding vertical pour iPad
-          padding: EdgeInsets.fromLTRB(
-              16, isTabletDevice ? 24 : 16, 16, isTabletDevice ? 28 : 20),
-          child: Column(
-            children: [
-              // Première ligne: nom structure et date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 28 : 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isTabletDevice ? 16 : 12,
-                      vertical: isTabletDevice ? 8 : 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 16 : 14,
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: isTabletDevice ? 22 : 15),
-              // Icône et titre de la page
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTabletDevice ? 22 : 16,
-                  vertical: isTabletDevice ? 12 : 8,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.white, width: isTabletDevice ? 2.5 : 2),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Icone_Photos.png',
-                      width: isTabletDevice ? 36 : 30,
-                      height: isTabletDevice ? 36 : 30,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.photo_camera,
-                        size: isTabletDevice ? 32 : 26,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: isTabletDevice ? 12 : 8),
-                    Text(
-                      'Photos',
-                      style: TextStyle(
-                        fontSize: isTabletDevice ? 24 : 20,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
       ),

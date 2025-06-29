@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_composer_screen.dart';
+import 'package:url_launcher/url_launcher.dart'; // AJOUT en haut du fichier
 
 class ParentCoordonneesScreen extends StatefulWidget {
   final String childId;
@@ -378,106 +379,55 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
 
   // Méthode corrigée pour gérer le clic sur l'email
   Future<void> _handleEmailTap(String email, String parentKey) async {
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.warning, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text('Adresse email non disponible'),
-            ],
-          ),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
-        ),
-      );
-      return;
-    }
+    // Créer l'URL mailto simple - JUSTE l'adresse email
+    final mailtoUrl = 'mailto:$email';
 
     try {
-      // Récupérer le nom du parent
-      String parentName = "Parent";
-      if (parentInfo[parentKey] != null) {
-        final parent = parentInfo[parentKey];
-        final firstName = parent['firstName'] ?? '';
-        final lastName = parent['lastName'] ?? '';
-        parentName = "$firstName $lastName".trim();
-        if (parentName.isEmpty) {
-          parentName = parentKey == 'parent1' ? 'Parent 1' : 'Parent 2';
+      // Ouvrir l'app de messagerie native
+      if (await canLaunchUrl(Uri.parse(mailtoUrl))) {
+        await launchUrl(Uri.parse(mailtoUrl));
+      } else {
+        // Fallback si pas d'app mail configurée
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Aucune application de messagerie configurée'),
+                  ),
+                ],
+              ),
+              backgroundColor: primaryRed,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: EdgeInsets.all(16),
+            ),
+          );
         }
       }
-
-      // Navigation vers l'écran de composition d'email
-      final result = await Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              EmailComposerScreen(
-            recipientEmail: email,
-            recipientName: parentName,
-            childId: widget.childId,
-            childName: widget.childName,
-            defaultSubject: 'Message concernant ${widget.childName}',
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
-
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
-
-            return SlideTransition(
-              position: animation.drive(tween),
-              child: child,
-            );
-          },
-          transitionDuration: Duration(milliseconds: 300),
-        ),
-      );
-
-      // Afficher un message de confirmation si l'email a été envoyé
-      if (result == true) {
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                Icon(Icons.error, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text("Email envoyé avec succès !"),
+                Expanded(child: Text('Erreur: ${e.toString()}')),
               ],
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: primaryRed,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: EdgeInsets.all(16),
-            duration: Duration(seconds: 3),
           ),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Expanded(child: Text('Erreur: ${e.toString()}')),
-            ],
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
-        ),
-      );
     }
   }
 
