@@ -571,7 +571,7 @@ class _RecapScreenState extends State<RecapScreen> {
           .doc(structureId)
           .collection('children')
           .doc(childId)
-          .collection('photos')
+          .collection('medias')
           .where('date', isGreaterThanOrEqualTo: todayStart)
           .where('date', isLessThanOrEqualTo: todayEnd)
           .orderBy('date', descending: true)

@@ -53,6 +53,9 @@ void main() async {
   // 🔥 INITIALISER LES NOTIFICATIONS (NOUVEAU)
   await NotificationService.initialize();
 
+  // 🔧 FORCER LE MODE DEV pour les tests (AJOUTÉ)
+  SubscriptionService.setDebugMode(true);
+
   // 🛒 CORRIGÉ : Initialisation unique du SubscriptionService
   await SubscriptionService.initialize();
 

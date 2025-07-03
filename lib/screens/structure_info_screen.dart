@@ -271,36 +271,48 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
   }
 
   Future<void> _fetchCityFromPostalCode(String postalCode) async {
+    print("🔍 Recherche pour code postal: $postalCode");
+
     if (postalCode.length == 5 && RegExp(r'^\d{5}$').hasMatch(postalCode)) {
       setState(() {
         isLoading = true;
+        // Vider immédiatement le champ ville et les suggestions
+        cityController.text = "";
+        citySuggestions = [];
       });
 
       final url = Uri.parse(
           'https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom');
       try {
+        print("📡 Appel API: $url");
         final response = await http.get(url);
+
         if (response.statusCode == 200) {
           List<dynamic> cities = json.decode(response.body);
+          print("📍 Villes trouvées: ${cities.length}");
 
-          // Important: vider et mettre à jour les suggestions
-          List<String> newCities =
-              cities.map((city) => city['nom'].toString()).toList();
+          List<String> newCities = cities
+              .map((city) => city['nom'].toString())
+              .toSet() // Supprimer les doublons
+              .toList();
+
+          // Trier alphabétiquement
+          newCities.sort();
 
           setState(() {
             citySuggestions = newCities;
             isLoading = false;
 
-            // Mettre à jour le champ de ville avec la première suggestion
             if (newCities.isNotEmpty) {
               cityController.text = newCities.first;
-              print("Ville trouvée: ${newCities.first}");
+              print("✅ Ville sélectionnée: ${newCities.first}");
             } else {
               cityController.text = "";
-              print("Aucune ville trouvée pour ce code postal");
+              print("❌ Aucune ville trouvée");
             }
           });
         } else {
+          print("❌ Erreur API: ${response.statusCode}");
           setState(() {
             citySuggestions = [];
             cityController.text = "";
@@ -308,11 +320,22 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           });
         }
       } catch (e) {
-        print("Erreur API: $e");
+        print("❌ Erreur réseau: $e");
         setState(() {
           citySuggestions = [];
           cityController.text = "";
           isLoading = false;
+          errorMessage =
+              "Erreur de connexion. Vérifiez votre connexion internet.";
+        });
+
+        // Effacer le message d'erreur après 3 secondes
+        Future.delayed(Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              errorMessage = null;
+            });
+          }
         });
       }
     } else {
@@ -686,69 +709,86 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           ),
         ],
       ),
-      child: TextField(
-        controller: cityController,
-        readOnly: true,
-        decoration: InputDecoration(
-          labelText: "Ville",
-          labelStyle: TextStyle(
-            color: primaryColor.withOpacity(0.8),
-            fontSize: maxWidth * 0.016,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: primaryColor, width: 2),
-          ),
-          filled: true,
-          fillColor: Colors.grey.shade50,
-          prefixIcon: Container(
-            margin: EdgeInsets.all(maxWidth * 0.015),
-            padding: EdgeInsets.all(maxWidth * 0.01),
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.location_city_outlined,
-              color: primaryColor,
-              size: maxWidth * 0.018,
-            ),
-          ),
-          suffixIcon: citySuggestions.isNotEmpty
-              ? PopupMenuButton<String>(
-                  icon: Icon(Icons.arrow_drop_down, color: primaryColor),
-                  onSelected: (String value) {
-                    setState(() {
-                      cityController.text = value;
-                    });
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return citySuggestions
-                        .map<PopupMenuItem<String>>((String value) {
-                      return PopupMenuItem(value: value, child: Text(value));
-                    }).toList();
-                  },
-                )
-              : null,
-          hintText:
-              citySuggestions.isEmpty ? "Entrez d'abord un code postal" : null,
-          hintStyle: TextStyle(color: Colors.grey.shade500),
-          contentPadding: EdgeInsets.symmetric(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: citySuggestions.length > 1
+            ? () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text("Choisissez votre ville"),
+                    content: Container(
+                      width: double.maxFinite,
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: citySuggestions.length,
+                        itemBuilder: (context, index) {
+                          return ListTile(
+                            title: Text(citySuggestions[index]),
+                            onTap: () {
+                              setState(() {
+                                cityController.text = citySuggestions[index];
+                              });
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              }
+            : null,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
             vertical: maxHeight * 0.02,
             horizontal: maxWidth * 0.02,
           ),
-        ),
-        style: TextStyle(
-          fontSize: maxWidth * 0.018,
-          color: Colors.black,
+          child: Row(
+            children: [
+              Container(
+                margin: EdgeInsets.all(maxWidth * 0.015),
+                padding: EdgeInsets.all(maxWidth * 0.01),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.location_city_outlined,
+                  color: primaryColor,
+                  size: maxWidth * 0.018,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Ville",
+                      style: TextStyle(
+                        color: primaryColor.withOpacity(0.8),
+                        fontSize: maxWidth * 0.016,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      cityController.text.isEmpty
+                          ? "Entrez d'abord un code postal"
+                          : cityController.text,
+                      style: TextStyle(
+                        fontSize: maxWidth * 0.018,
+                        color: cityController.text.isEmpty
+                            ? Colors.grey.shade500
+                            : Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (citySuggestions.length > 1)
+                Icon(Icons.arrow_drop_down, color: primaryColor),
+            ],
+          ),
         ),
       ),
     );

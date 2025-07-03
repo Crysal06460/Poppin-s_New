@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/subscription_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -1430,8 +1429,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  // Dans home_screen.dart, remplacez la méthode _getAssignedChildrenIds() par cette version UNIVERSELLE :
 
   Future<List<String>> _getAssignedChildrenIds() async {
     try {

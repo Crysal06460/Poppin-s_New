@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:in_app_purchase/in_app_purchase.dart'; // ✅ AJOUTÉ
-import 'dart:async'; // ✅ AJOUTÉ
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'dart:async';
 import '../services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -49,12 +49,9 @@ class _PricingScreenState extends State<PricingScreen> {
   // MÉTHODE MODIFIÉE : Obtenir le prix formaté pour l'affichage
   String _getFormattedPrice(bool isMam, int memberCount) {
     double price = _calculatePrice(isMam, memberCount);
-    // Enlever .toInt() pour garder les décimales
     if (price == price.roundToDouble()) {
-      // Si le prix est un nombre entier (comme 32.0), afficher sans décimales
       return '${price.toInt()} € / mois';
     } else {
-      // Si le prix a des décimales (comme 24.99), les afficher
       return '${price.toStringAsFixed(2)} € / mois';
     }
   }
@@ -103,12 +100,10 @@ class _PricingScreenState extends State<PricingScreen> {
                   ),
                 ),
               ),
-
               // Contenu principal
               Column(
                 children: [
                   const SizedBox(height: 20),
-
                   // Logo moderne
                   Container(
                     width: 110,
@@ -132,9 +127,7 @@ class _PricingScreenState extends State<PricingScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 25),
-
                   // Type de structure
                   Text(
                     displayName,
@@ -146,9 +139,7 @@ class _PricingScreenState extends State<PricingScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-
                   const SizedBox(height: 20),
-
                   // Prix moderne
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -183,9 +174,7 @@ class _PricingScreenState extends State<PricingScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
                   // Badge essai gratuit moderne
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -228,7 +217,6 @@ class _PricingScreenState extends State<PricingScreen> {
             ],
           ),
         ),
-
         // Contenu principal moderne
         Expanded(
           child: SingleChildScrollView(
@@ -241,7 +229,6 @@ class _PricingScreenState extends State<PricingScreen> {
                   _buildModernMAMSelectorPhone(primaryColor),
                   const SizedBox(height: 25),
                 ],
-
                 // Titre section moderne
                 Row(
                   children: [
@@ -285,14 +272,10 @@ class _PricingScreenState extends State<PricingScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 25),
-
                 // Grille moderne des fonctionnalités
                 _buildModernPhoneFeaturesGrid(featuresList, primaryColor),
-
                 const SizedBox(height: 25),
-
                 // Info box moderne
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -343,14 +326,13 @@ class _PricingScreenState extends State<PricingScreen> {
             ),
           ),
         ),
-
         // Bouton moderne
         _buildModernPhoneActionButton(primaryColor, isMam),
       ],
     );
   }
 
-// Sélecteur MAM moderne pour téléphone
+  // Sélecteur MAM moderne pour téléphone
   Widget _buildModernMAMSelectorPhone(Color primaryColor) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -420,7 +402,7 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Boutons membres modernes pour téléphone
+  // Boutons membres modernes pour téléphone
   Widget _buildModernMemberButtonPhone(int count, Color primaryColor) {
     final bool isSelected = _mamMembersCount == count;
     return GestureDetector(
@@ -484,23 +466,22 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Grille moderne des fonctionnalités pour téléphone
+  // Grille moderne des fonctionnalités pour téléphone
   Widget _buildModernPhoneFeaturesGrid(
       List<String> featuresList, Color primaryColor) {
-    // Icônes pour chaque fonctionnalité
     final List<IconData> icons = [
-      Icons.access_time_rounded, // Transmissions temps réel
-      Icons.chat_bubble_rounded, // Chat instantané
-      Icons.campaign_rounded, // Actualités
-      Icons.health_and_safety_rounded, // Santé
-      Icons.dashboard_rounded, // Tableau de bord
-      Icons.file_copy_rounded, // Dématérialisation
-      Icons.school_rounded, // Professionnalisation
-      Icons.child_care_rounded, // Suivi enfant
-      Icons.favorite_rounded, // Amélioration relation
-      Icons.verified_rounded, // Confiance
-      Icons.group_rounded, // Gestion multi-membres
-      Icons.share_rounded, // Tableau partagé
+      Icons.access_time_rounded,
+      Icons.chat_bubble_rounded,
+      Icons.campaign_rounded,
+      Icons.health_and_safety_rounded,
+      Icons.dashboard_rounded,
+      Icons.file_copy_rounded,
+      Icons.school_rounded,
+      Icons.child_care_rounded,
+      Icons.favorite_rounded,
+      Icons.verified_rounded,
+      Icons.group_rounded,
+      Icons.share_rounded,
     ];
 
     return Column(
@@ -606,7 +587,6 @@ class _PricingScreenState extends State<PricingScreen> {
                       'assistante_maternelle';
               final String structureId =
                   widget.structureInfo['structureId'] ?? '';
-
               final double priceAmount =
                   _calculatePrice(isMam, _mamMembersCount);
               final String priceDisplay =
@@ -624,8 +604,11 @@ class _PricingScreenState extends State<PricingScreen> {
                     children: [
                       CircularProgressIndicator(color: primaryColor),
                       const SizedBox(width: 16),
-                      const Expanded(
-                        child: Text('Ouverture de l\'App Store...',
+                      Expanded(
+                        child: Text(
+                            SubscriptionService.isInDevMode
+                                ? 'Simulation en cours...'
+                                : 'Ouverture de l\'App Store...',
                             style: TextStyle(fontSize: 16)),
                       ),
                     ],
@@ -634,97 +617,84 @@ class _PricingScreenState extends State<PricingScreen> {
               );
 
               try {
-                // ✅ NOUVEAU : Vérifier si on est en mode développement
-                const bool isProduction =
-                    bool.fromEnvironment('dart.vm.product');
+                if (SubscriptionService.isInDevMode) {
+                  // MODE DEV : Simulation directe
+                  final subscriptionData =
+                      await SubscriptionService.simulateDevPurchaseSuccess(
+                          productId);
 
-                if (!isProduction) {
-                  // ✅ MODE DEV : Utiliser la simulation fiable
-                  try {
-                    final subscriptionData =
-                        await SubscriptionService.simulateDevPurchaseSuccess(
-                            productId);
-
-                    if (Navigator.canPop(context)) {
-                      Navigator.of(context).pop();
-                    }
-
-                    print(
-                        '✅ DEV: Simulation réussie, redirection vers confirmation');
-
-                    context.go('/subscription-confirmed', extra: {
-                      'structureType': subscriptionData['structureType'],
-                      'structureId': structureId,
-                      'memberCount': subscriptionData['memberCount'],
-                      'priceAmount': subscriptionData['priceAmount'],
-                      'priceDisplay': subscriptionData['priceDisplay'],
-                      'currency': subscriptionData['currency'],
-                      'billingPeriod': subscriptionData['billingPeriod'],
-                      'productId': subscriptionData['productId'],
-                    });
-                    return;
-                  } catch (e) {
-                    if (Navigator.canPop(context)) {
-                      Navigator.of(context).pop();
-                    }
-                    print('❌ DEV: Erreur simulation: $e');
-                    _showErrorMessage('Erreur de simulation: ${e.toString()}');
-                    return;
-                  }
-                }
-
-                // ✅ MODE PRODUCTION : Logique normale avec les streams
-                StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
-
-                purchaseSubscription = InAppPurchase.instance.purchaseStream
-                    .listen((purchaseDetailsList) {
-                  for (PurchaseDetails purchase in purchaseDetailsList) {
-                    print(
-                        '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                    if (purchase.productID == productId) {
-                      if (Navigator.canPop(context)) {
-                        Navigator.of(context).pop();
-                      }
-                      purchaseSubscription?.cancel();
-
-                      if (purchase.status == PurchaseStatus.purchased) {
-                        print('✅ Achat confirmé !');
-                        context.go('/subscription-confirmed', extra: {
-                          'structureType': structureType,
-                          'structureId': structureId,
-                          'memberCount': isMam ? _mamMembersCount : 1,
-                          'priceAmount': priceAmount,
-                          'priceDisplay': priceDisplay,
-                          'currency': 'EUR',
-                          'billingPeriod': 'monthly',
-                          'productId': productId,
-                        });
-                      } else if (purchase.status == PurchaseStatus.error) {
-                        print('❌ Erreur d\'achat: ${purchase.error}');
-                        _showErrorMessage(
-                            'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                      } else if (purchase.status == PurchaseStatus.canceled) {
-                        print('⚠️ Achat annulé par l\'utilisateur');
-                        _showErrorMessage('Achat annulé');
-                      }
-
-                      if (purchase.pendingCompletePurchase) {
-                        InAppPurchase.instance.completePurchase(purchase);
-                      }
-                    }
-                  }
-                });
-
-                await SubscriptionService.purchaseSubscription(productId);
-
-                Timer(const Duration(seconds: 60), () {
                   if (Navigator.canPop(context)) {
                     Navigator.of(context).pop();
                   }
-                  purchaseSubscription?.cancel();
-                  _showErrorMessage('Timeout - Veuillez réessayer');
-                });
+
+                  print(
+                      '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                  context.go('/subscription-confirmed', extra: {
+                    'structureType': subscriptionData['structureType'],
+                    'structureId': structureId,
+                    'memberCount': subscriptionData['memberCount'],
+                    'priceAmount': subscriptionData['priceAmount'],
+                    'priceDisplay': subscriptionData['priceDisplay'],
+                    'currency': subscriptionData['currency'],
+                    'billingPeriod': subscriptionData['billingPeriod'],
+                    'productId': subscriptionData['productId'],
+                  });
+                } else {
+                  // MODE PRODUCTION : Vraie logique d'achat
+                  StreamSubscription<List<PurchaseDetails>>?
+                      purchaseSubscription;
+
+                  purchaseSubscription = InAppPurchase.instance.purchaseStream
+                      .listen((purchaseDetailsList) {
+                    for (PurchaseDetails purchase in purchaseDetailsList) {
+                      print(
+                          '📱 État achat: ${purchase.productID} - ${purchase.status}');
+
+                      if (purchase.productID == productId) {
+                        if (Navigator.canPop(context)) {
+                          Navigator.of(context).pop();
+                        }
+                        purchaseSubscription?.cancel();
+
+                        if (purchase.status == PurchaseStatus.purchased) {
+                          print('✅ Achat confirmé !');
+                          context.go('/subscription-confirmed', extra: {
+                            'structureType': structureType,
+                            'structureId': structureId,
+                            'memberCount': isMam ? _mamMembersCount : 1,
+                            'priceAmount': priceAmount,
+                            'priceDisplay': priceDisplay,
+                            'currency': 'EUR',
+                            'billingPeriod': 'monthly',
+                            'productId': productId,
+                          });
+                        } else if (purchase.status == PurchaseStatus.error) {
+                          print('❌ Erreur d\'achat: ${purchase.error}');
+                          _showErrorMessage(
+                              'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
+                        } else if (purchase.status == PurchaseStatus.canceled) {
+                          print('⚠️ Achat annulé par l\'utilisateur');
+                          _showErrorMessage('Achat annulé');
+                        }
+
+                        if (purchase.pendingCompletePurchase) {
+                          InAppPurchase.instance.completePurchase(purchase);
+                        }
+                      }
+                    }
+                  });
+
+                  await SubscriptionService.purchaseSubscription(productId);
+
+                  Timer(const Duration(seconds: 30), () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    }
+                    purchaseSubscription?.cancel();
+                    _showErrorMessage('Timeout - Veuillez réessayer');
+                  });
+                }
               } catch (e) {
                 if (Navigator.canPop(context)) {
                   Navigator.of(context).pop();
@@ -744,10 +714,7 @@ class _PricingScreenState extends State<PricingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.diamond_rounded,
-                  size: 24,
-                ),
+                Icon(Icons.diamond_rounded, size: 24),
                 const SizedBox(width: 12),
                 const Text(
                   "S'ABONNER",
@@ -767,28 +734,20 @@ class _PricingScreenState extends State<PricingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Récupérer les informations de la structure
     final String structureType =
         widget.structureInfo['structureType'] ?? 'assistante_maternelle';
     final String structureId = widget.structureInfo['structureId'] ?? '';
     final bool isMam = structureType == 'MAM';
-
-    // Récupérer les dimensions de l'écran
     final Size screenSize = MediaQuery.of(context).size;
-
-    // Déterminer si on est sur iPad
     final bool isTablet = screenSize.shortestSide >= 600;
 
-    // Mapping des types techniques vers les noms d'affichage
     Map<String, String> structureDisplayNames = {
-      'assistante_maternelle': 'Assistante Maternelle', // ✅ Bonne clé
+      'assistante_maternelle': 'Assistante Maternelle',
       'MAM': 'Maison d\'Assistants Maternels',
     };
 
-    // TARIFS MODIFIÉS : Utiliser la nouvelle méthode
     String price = _getFormattedPrice(isMam, _mamMembersCount);
 
-    // Mapping des caractéristiques selon le type - REMPLACER la variable features existante
     Map<String, List<String>> features = {
       'assistante_maternelle': [
         'Transmissions en temps réel\n(pointage horaire, repas, sieste, soins, activités, ...)',
@@ -816,11 +775,8 @@ class _PricingScreenState extends State<PricingScreen> {
       ],
     };
 
-    // Obtenir le nom d'affichage et les caractéristiques
     String displayName = structureDisplayNames[structureType] ?? "";
     List<String> featuresList = features[structureType] ?? [];
-
-    // Couleur principale en fonction du type de structure
     Color primaryColor = isMam ? primaryRed : primaryBlue;
 
     return Scaffold(
@@ -863,8 +819,6 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-  // AJOUTEZ CES MÉTHODES DANS VOTRE CLASSE _PricingScreenState
-
   Widget _buildTabletContent(Color primaryColor, String displayName,
       String price, List<String> featuresList, bool isMam, Size screenSize) {
     return LayoutBuilder(
@@ -881,7 +835,7 @@ class _PricingScreenState extends State<PricingScreen> {
             children: [
               // Section héro avec design moderne
               Container(
-                height: maxHeight * 0.35, // ✅ RETOUR à la hauteur originale
+                height: maxHeight * 0.35,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -916,7 +870,6 @@ class _PricingScreenState extends State<PricingScreen> {
                         ),
                       ),
                     ),
-
                     // Contenu principal
                     Padding(
                       padding: EdgeInsets.all(maxWidth * 0.04),
@@ -952,9 +905,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                     ),
                                   ),
                                 ),
-
                                 SizedBox(height: maxHeight * 0.03),
-
                                 // Titre
                                 Text(
                                   displayName,
@@ -965,9 +916,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                     height: 1.1,
                                   ),
                                 ),
-
                                 SizedBox(height: maxHeight * 0.02),
-
                                 // Prix avec design moderne
                                 Container(
                                   decoration: BoxDecoration(
@@ -1005,20 +954,18 @@ class _PricingScreenState extends State<PricingScreen> {
                               ],
                             ),
                           ),
-
                           // Partie droite - Badge, bouton et sélecteur MAM
                           Expanded(
                             flex: 3,
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min, // ✅ AJOUTÉ
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 // Badge essai gratuit
                                 Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: maxWidth * 0.03,
-                                    vertical: maxHeight *
-                                        0.015, // ✅ RÉDUIT de 0.02 à 0.015
+                                    vertical: maxHeight * 0.015,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
@@ -1051,12 +998,8 @@ class _PricingScreenState extends State<PricingScreen> {
                                     ],
                                   ),
                                 ),
-
-                                // ✅ NOUVEAU : Bouton S'abonner juste en dessous
-                                SizedBox(
-                                    height: maxHeight *
-                                        0.015), // ✅ RÉDUIT de 0.02 à 0.015
-                                // ✅ REMPLACER TOUT LE CONTAINER + GESTUREDETECTOR du bouton S'abonner dans _buildTabletContent
+                                SizedBox(height: maxHeight * 0.015),
+                                // Bouton S'abonner
                                 Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: maxWidth * 0.03,
@@ -1075,14 +1018,12 @@ class _PricingScreenState extends State<PricingScreen> {
                                   ),
                                   child: GestureDetector(
                                     onTap: () async {
-                                      // ✅ LOGIQUE D'ACHAT COMPLÈTE CORRIGÉE
                                       final String structureType = widget
                                               .structureInfo['structureType'] ??
                                           'assistante_maternelle';
                                       final String structureId =
                                           widget.structureInfo['structureId'] ??
                                               '';
-
                                       final double priceAmount =
                                           _calculatePrice(
                                               isMam, _mamMembersCount);
@@ -1107,7 +1048,10 @@ class _PricingScreenState extends State<PricingScreen> {
                                               SizedBox(width: 16),
                                               Expanded(
                                                 child: Text(
-                                                    'Ouverture de l\'App Store...',
+                                                    SubscriptionService
+                                                            .isInDevMode
+                                                        ? 'Simulation en cours...'
+                                                        : 'Ouverture de l\'App Store...',
                                                     style: TextStyle(
                                                         fontSize: 16)),
                                               ),
@@ -1117,139 +1061,121 @@ class _PricingScreenState extends State<PricingScreen> {
                                       );
 
                                       try {
-                                        // ✅ NOUVEAU : Vérifier si on est en mode développement
-                                        const bool isProduction =
-                                            bool.fromEnvironment(
-                                                'dart.vm.product');
+                                        if (SubscriptionService.isInDevMode) {
+                                          // MODE DEV : Simulation directe
+                                          final subscriptionData =
+                                              await SubscriptionService
+                                                  .simulateDevPurchaseSuccess(
+                                                      productId);
 
-                                        if (!isProduction) {
-                                          // ✅ MODE DEV : Utiliser la simulation fiable
-                                          try {
-                                            final subscriptionData =
-                                                await SubscriptionService
-                                                    .simulateDevPurchaseSuccess(
-                                                        productId);
-
-                                            if (Navigator.canPop(context)) {
-                                              Navigator.of(context).pop();
-                                            }
-
-                                            print(
-                                                '✅ DEV: Simulation réussie, redirection vers confirmation');
-
-                                            context.go(
-                                                '/subscription-confirmed',
-                                                extra: {
-                                                  'structureType':
-                                                      subscriptionData[
-                                                          'structureType'],
-                                                  'structureId': structureId,
-                                                  'memberCount':
-                                                      subscriptionData[
-                                                          'memberCount'],
-                                                  'priceAmount':
-                                                      subscriptionData[
-                                                          'priceAmount'],
-                                                  'priceDisplay':
-                                                      subscriptionData[
-                                                          'priceDisplay'],
-                                                  'currency': subscriptionData[
-                                                      'currency'],
-                                                  'billingPeriod':
-                                                      subscriptionData[
-                                                          'billingPeriod'],
-                                                  'productId': subscriptionData[
-                                                      'productId'],
-                                                });
-                                            return;
-                                          } catch (e) {
-                                            if (Navigator.canPop(context)) {
-                                              Navigator.of(context).pop();
-                                            }
-                                            print(
-                                                '❌ DEV: Erreur simulation: $e');
-                                            _showErrorMessage(
-                                                'Erreur de simulation: ${e.toString()}');
-                                            return;
-                                          }
-                                        }
-
-                                        // ✅ MODE PRODUCTION : Logique normale avec les streams
-                                        StreamSubscription<
-                                                List<PurchaseDetails>>?
-                                            purchaseSubscription;
-
-                                        purchaseSubscription = InAppPurchase
-                                            .instance.purchaseStream
-                                            .listen((purchaseDetailsList) {
-                                          for (PurchaseDetails purchase
-                                              in purchaseDetailsList) {
-                                            print(
-                                                '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                                            if (purchase.productID ==
-                                                productId) {
-                                              if (Navigator.canPop(context)) {
-                                                Navigator.of(context).pop();
-                                              }
-                                              purchaseSubscription?.cancel();
-
-                                              if (purchase.status ==
-                                                  PurchaseStatus.purchased) {
-                                                print('✅ Achat confirmé !');
-                                                context.go(
-                                                    '/subscription-confirmed',
-                                                    extra: {
-                                                      'structureType':
-                                                          structureType,
-                                                      'structureId':
-                                                          structureId,
-                                                      'memberCount': isMam
-                                                          ? _mamMembersCount
-                                                          : 1,
-                                                      'priceAmount':
-                                                          priceAmount,
-                                                      'priceDisplay':
-                                                          priceDisplay,
-                                                      'currency': 'EUR',
-                                                      'billingPeriod':
-                                                          'monthly',
-                                                      'productId': productId,
-                                                    });
-                                              } else if (purchase.status ==
-                                                  PurchaseStatus.error) {
-                                                print(
-                                                    '❌ Erreur d\'achat: ${purchase.error}');
-                                                _showErrorMessage(
-                                                    'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                                              } else if (purchase.status ==
-                                                  PurchaseStatus.canceled) {
-                                                print(
-                                                    '⚠️ Achat annulé par l\'utilisateur');
-                                                _showErrorMessage(
-                                                    'Achat annulé');
-                                              }
-
-                                              if (purchase
-                                                  .pendingCompletePurchase) {
-                                                InAppPurchase.instance
-                                                    .completePurchase(purchase);
-                                              }
-                                            }
-                                          }
-                                        });
-
-                                        await SubscriptionService
-                                            .purchaseSubscription(productId);
-
-                                        Timer(Duration(seconds: 60), () {
                                           if (Navigator.canPop(context)) {
                                             Navigator.of(context).pop();
                                           }
-                                          purchaseSubscription?.cancel();
-                                          _showErrorMessage(
-                                              'Timeout - Veuillez réessayer');
-                                        });
+
+                                          print(
+                                              '✅ DEV: Simulation réussie, redirection vers confirmation');
+
+                                          context.go('/subscription-confirmed',
+                                              extra: {
+                                                'structureType':
+                                                    subscriptionData[
+                                                        'structureType'],
+                                                'structureId': structureId,
+                                                'memberCount': subscriptionData[
+                                                    'memberCount'],
+                                                'priceAmount': subscriptionData[
+                                                    'priceAmount'],
+                                                'priceDisplay':
+                                                    subscriptionData[
+                                                        'priceDisplay'],
+                                                'currency': subscriptionData[
+                                                    'currency'],
+                                                'billingPeriod':
+                                                    subscriptionData[
+                                                        'billingPeriod'],
+                                                'productId': subscriptionData[
+                                                    'productId'],
+                                              });
+                                        } else {
+                                          // MODE PRODUCTION : Vraie logique d'achat
+                                          StreamSubscription<
+                                                  List<PurchaseDetails>>?
+                                              purchaseSubscription;
+
+                                          purchaseSubscription = InAppPurchase
+                                              .instance.purchaseStream
+                                              .listen((purchaseDetailsList) {
+                                            for (PurchaseDetails purchase
+                                                in purchaseDetailsList) {
+                                              print(
+                                                  '📱 État achat: ${purchase.productID} - ${purchase.status}');
+
+                                              if (purchase.productID ==
+                                                  productId) {
+                                                if (Navigator.canPop(context)) {
+                                                  Navigator.of(context).pop();
+                                                }
+                                                purchaseSubscription?.cancel();
+
+                                                if (purchase.status ==
+                                                    PurchaseStatus.purchased) {
+                                                  print('✅ Achat confirmé !');
+                                                  context.go(
+                                                      '/subscription-confirmed',
+                                                      extra: {
+                                                        'structureType':
+                                                            structureType,
+                                                        'structureId':
+                                                            structureId,
+                                                        'memberCount': isMam
+                                                            ? _mamMembersCount
+                                                            : 1,
+                                                        'priceAmount':
+                                                            priceAmount,
+                                                        'priceDisplay':
+                                                            priceDisplay,
+                                                        'currency': 'EUR',
+                                                        'billingPeriod':
+                                                            'monthly',
+                                                        'productId': productId,
+                                                      });
+                                                } else if (purchase.status ==
+                                                    PurchaseStatus.error) {
+                                                  print(
+                                                      '❌ Erreur d\'achat: ${purchase.error}');
+                                                  _showErrorMessage(
+                                                      'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
+                                                } else if (purchase.status ==
+                                                    PurchaseStatus.canceled) {
+                                                  print(
+                                                      '⚠️ Achat annulé par l\'utilisateur');
+                                                  _showErrorMessage(
+                                                      'Achat annulé');
+                                                }
+
+                                                if (purchase
+                                                    .pendingCompletePurchase) {
+                                                  InAppPurchase.instance
+                                                      .completePurchase(
+                                                          purchase);
+                                                }
+                                              }
+                                            }
+                                          });
+
+                                          await SubscriptionService
+                                              .purchaseSubscription(productId);
+
+                                          Timer(const Duration(seconds: 30),
+                                              () {
+                                            if (Navigator.canPop(context)) {
+                                              Navigator.of(context).pop();
+                                            }
+                                            purchaseSubscription?.cancel();
+                                            _showErrorMessage(
+                                                'Timeout - Veuillez réessayer');
+                                          });
+                                        }
                                       } catch (e) {
                                         if (Navigator.canPop(context)) {
                                           Navigator.of(context).pop();
@@ -1280,12 +1206,9 @@ class _PricingScreenState extends State<PricingScreen> {
                                     ),
                                   ),
                                 ),
-
                                 // Sélecteur MAM moderne si applicable
                                 if (isMam) ...[
-                                  SizedBox(
-                                      height: maxHeight *
-                                          0.015), // ✅ RÉDUIT de 0.025 à 0.015
+                                  SizedBox(height: maxHeight * 0.015),
                                   _buildModernMAMSelector(
                                       primaryColor, maxWidth, maxHeight),
                                 ],
@@ -1298,9 +1221,7 @@ class _PricingScreenState extends State<PricingScreen> {
                   ],
                 ),
               ),
-
               SizedBox(height: maxHeight * 0.05),
-
               // Section fonctionnalités moderne
               _buildModernFeaturesSection(
                   featuresList, primaryColor, maxWidth, maxHeight),
@@ -1311,194 +1232,14 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// ✅ NOUVEAU : Bouton héro en blanc
-  Widget _buildModernHeroButton(
-      Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
-    return Container(
-      width: maxWidth * 0.4,
-      height: maxHeight * 0.07,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            offset: const Offset(0, 8),
-            blurRadius: 25,
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: () async {
-          final String structureType =
-              widget.structureInfo['structureType'] ?? 'assistante_maternelle';
-          final String structureId = widget.structureInfo['structureId'] ?? '';
-
-          final double priceAmount = _calculatePrice(isMam, _mamMembersCount);
-          final String priceDisplay =
-              _getFormattedPrice(isMam, _mamMembersCount);
-          final String productId =
-              SubscriptionService.getProductId(structureType, _mamMembersCount);
-
-          print('🛒 Tentative d\'achat du produit: $productId');
-
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              content: Row(
-                children: [
-                  CircularProgressIndicator(color: primaryColor),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: Text('Ouverture de l\'App Store...',
-                        style: TextStyle(fontSize: 16)),
-                  ),
-                ],
-              ),
-            ),
-          );
-
-          try {
-            // ✅ NOUVEAU : Vérifier si on est en mode développement
-            const bool isProduction = bool.fromEnvironment('dart.vm.product');
-
-            if (!isProduction) {
-              // ✅ MODE DEV : Utiliser la simulation fiable
-              try {
-                final subscriptionData =
-                    await SubscriptionService.simulateDevPurchaseSuccess(
-                        productId);
-
-                if (Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
-
-                print(
-                    '✅ DEV: Simulation réussie, redirection vers confirmation');
-
-                context.go('/subscription-confirmed', extra: {
-                  'structureType': subscriptionData['structureType'],
-                  'structureId': structureId,
-                  'memberCount': subscriptionData['memberCount'],
-                  'priceAmount': subscriptionData['priceAmount'],
-                  'priceDisplay': subscriptionData['priceDisplay'],
-                  'currency': subscriptionData['currency'],
-                  'billingPeriod': subscriptionData['billingPeriod'],
-                  'productId': subscriptionData['productId'],
-                });
-                return;
-              } catch (e) {
-                if (Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
-                print('❌ DEV: Erreur simulation: $e');
-                _showErrorMessage('Erreur de simulation: ${e.toString()}');
-                return;
-              }
-            }
-
-            // ✅ MODE PRODUCTION : Logique normale avec les streams
-            StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
-
-            purchaseSubscription = InAppPurchase.instance.purchaseStream
-                .listen((purchaseDetailsList) {
-              for (PurchaseDetails purchase in purchaseDetailsList) {
-                print(
-                    '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                if (purchase.productID == productId) {
-                  if (Navigator.canPop(context)) {
-                    Navigator.of(context).pop();
-                  }
-                  purchaseSubscription?.cancel();
-
-                  if (purchase.status == PurchaseStatus.purchased) {
-                    print('✅ Achat confirmé !');
-                    context.go('/subscription-confirmed', extra: {
-                      'structureType': structureType,
-                      'structureId': structureId,
-                      'memberCount': isMam ? _mamMembersCount : 1,
-                      'priceAmount': priceAmount,
-                      'priceDisplay': priceDisplay,
-                      'currency': 'EUR',
-                      'billingPeriod': 'monthly',
-                      'productId': productId,
-                    });
-                  } else if (purchase.status == PurchaseStatus.error) {
-                    print('❌ Erreur d\'achat: ${purchase.error}');
-                    _showErrorMessage(
-                        'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                  } else if (purchase.status == PurchaseStatus.canceled) {
-                    print('⚠️ Achat annulé par l\'utilisateur');
-                    _showErrorMessage('Achat annulé');
-                  }
-
-                  if (purchase.pendingCompletePurchase) {
-                    InAppPurchase.instance.completePurchase(purchase);
-                  }
-                }
-              }
-            });
-
-            await SubscriptionService.purchaseSubscription(productId);
-
-            Timer(Duration(seconds: 60), () {
-              if (Navigator.canPop(context)) {
-                Navigator.of(context).pop();
-              }
-              purchaseSubscription?.cancel();
-              _showErrorMessage('Timeout - Veuillez réessayer');
-            });
-          } catch (e) {
-            if (Navigator.canPop(context)) {
-              Navigator.of(context).pop();
-            }
-            print('❌ Erreur lors de l\'achat: $e');
-            _showErrorMessage('Erreur lors de l\'achat: ${e.toString()}');
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: primaryColor,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.diamond_rounded,
-              size: maxWidth * 0.02,
-              color: primaryColor,
-            ),
-            SizedBox(width: maxWidth * 0.01),
-            Text(
-              "S'ABONNER MAINTENANT",
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: maxWidth * 0.018,
-                letterSpacing: 1.2,
-                color: primaryColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-// Sélecteur MAM moderne
   // Sélecteur MAM moderne
   Widget _buildModernMAMSelector(
       Color primaryColor, double maxWidth, double maxHeight) {
     return Container(
-      padding: EdgeInsets.all(maxWidth * 0.015), // ✅ RÉDUIT de 0.02 à 0.015
+      padding: EdgeInsets.all(maxWidth * 0.015),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16), // ✅ RÉDUIT de 20 à 16
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.3)),
       ),
       child: Column(
@@ -1507,11 +1248,11 @@ class _PricingScreenState extends State<PricingScreen> {
             "Nombre d'assistants maternels",
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              fontSize: maxWidth * 0.014, // ✅ RÉDUIT de 0.016 à 0.014
+              fontSize: maxWidth * 0.014,
               color: Colors.white,
             ),
           ),
-          SizedBox(height: maxHeight * 0.01), // ✅ RÉDUIT de 0.015 à 0.01
+          SizedBox(height: maxHeight * 0.01),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -1524,7 +1265,6 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Boutons membres modernes
   // Boutons membres modernes
   Widget _buildModernMemberButton(
       int count, double maxWidth, double maxHeight) {
@@ -1533,17 +1273,17 @@ class _PricingScreenState extends State<PricingScreen> {
       onTap: () => setState(() => _mamMembersCount = count),
       child: AnimatedContainer(
         duration: Duration(milliseconds: 200),
-        width: maxWidth * 0.05, // ✅ RÉDUIT de 0.06 à 0.05
-        height: maxWidth * 0.05, // ✅ RÉDUIT de 0.06 à 0.05
+        width: maxWidth * 0.05,
+        height: maxWidth * 0.05,
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12), // ✅ RÉDUIT de 16 à 12
+          borderRadius: BorderRadius.circular(12),
           boxShadow: isSelected
               ? [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8, // ✅ RÉDUIT de 10 à 8
-                    offset: const Offset(0, 3), // ✅ RÉDUIT de 4 à 3
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   )
                 ]
               : null,
@@ -1552,7 +1292,7 @@ class _PricingScreenState extends State<PricingScreen> {
           child: Text(
             "$count",
             style: TextStyle(
-              fontSize: maxWidth * 0.018, // ✅ RÉDUIT de 0.02 à 0.018
+              fontSize: maxWidth * 0.018,
               fontWeight: FontWeight.bold,
               color: isSelected ? primaryRed : Colors.white,
             ),
@@ -1562,7 +1302,7 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Section fonctionnalités moderne
+  // Section fonctionnalités moderne
   Widget _buildModernFeaturesSection(List<String> featuresList,
       Color primaryColor, double maxWidth, double maxHeight) {
     return Column(
@@ -1610,15 +1350,11 @@ class _PricingScreenState extends State<PricingScreen> {
             ),
           ],
         ),
-
         SizedBox(height: maxHeight * 0.04),
-
         // Grille moderne des fonctionnalités
         _buildModernFeaturesGrid(
             featuresList, primaryColor, maxWidth, maxHeight),
-
         SizedBox(height: maxHeight * 0.04),
-
         // Info box moderne
         Container(
           padding: EdgeInsets.all(maxWidth * 0.03),
@@ -1662,7 +1398,7 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Grille moderne des fonctionnalités
+  // Grille moderne des fonctionnalités
   Widget _buildModernFeaturesGrid(List<String> featuresList, Color primaryColor,
       double maxWidth, double maxHeight) {
     return GridView.builder(
@@ -1682,23 +1418,22 @@ class _PricingScreenState extends State<PricingScreen> {
     );
   }
 
-// Carte fonctionnalité moderne
+  // Carte fonctionnalité moderne
   Widget _buildModernFeatureCard(String feature, Color primaryColor,
       double maxWidth, double maxHeight, int index) {
-    // Icônes pour chaque fonctionnalité
     final List<IconData> icons = [
-      Icons.access_time_rounded, // Transmissions temps réel
-      Icons.chat_bubble_rounded, // Chat instantané
-      Icons.campaign_rounded, // Actualités
-      Icons.health_and_safety_rounded, // Santé
-      Icons.dashboard_rounded, // Tableau de bord
-      Icons.file_copy_rounded, // Dématérialisation
-      Icons.school_rounded, // Professionnalisation
-      Icons.child_care_rounded, // Suivi enfant
-      Icons.favorite_rounded, // Amélioration relation
-      Icons.verified_rounded, // Confiance
-      Icons.group_rounded, // Gestion multi-membres
-      Icons.share_rounded, // Tableau partagé
+      Icons.access_time_rounded,
+      Icons.chat_bubble_rounded,
+      Icons.campaign_rounded,
+      Icons.health_and_safety_rounded,
+      Icons.dashboard_rounded,
+      Icons.file_copy_rounded,
+      Icons.school_rounded,
+      Icons.child_care_rounded,
+      Icons.favorite_rounded,
+      Icons.verified_rounded,
+      Icons.group_rounded,
+      Icons.share_rounded,
     ];
 
     return Container(
@@ -1746,461 +1481,6 @@ class _PricingScreenState extends State<PricingScreen> {
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-// Bouton d'action moderne
-  Widget _buildModernActionButton(
-      Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
-    return Container(
-      width: maxWidth * 0.5,
-      height: maxHeight * 0.08,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            primaryColor,
-            primaryColor.withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.4),
-            offset: const Offset(0, 8),
-            blurRadius: 25,
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: () {
-          // Même logique d'achat que before...
-          // [Copier le code onPressed existant]
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.diamond_rounded,
-              size: maxWidth * 0.02,
-            ),
-            SizedBox(width: maxWidth * 0.01),
-            Text(
-              "S'ABONNER MAINTENANT",
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: maxWidth * 0.018,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Sélecteur MAM adapté pour tablette
-  Widget _buildTabletMAMSelector(
-      Color primaryColor, double maxWidth, double maxHeight) {
-    return Container(
-      padding: EdgeInsets.all(maxWidth * 0.025),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Nombre d'assistants maternels",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: maxWidth * 0.018,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: maxHeight * 0.02),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (int i = 2; i <= 4; i++)
-                _buildTabletMemberCountButton(
-                  count: i,
-                  isSelected: _mamMembersCount == i,
-                  maxWidth: maxWidth,
-                  maxHeight: maxHeight,
-                ),
-            ],
-          ),
-          SizedBox(height: maxHeight * 0.015),
-          Text(
-            "Le prix s'adapte au nombre de membres.",
-            style: TextStyle(
-              fontStyle: FontStyle.italic,
-              fontSize: maxWidth * 0.014,
-              color: Colors.white.withOpacity(0.9),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Boutons de sélection membres adaptés pour tablette
-  Widget _buildTabletMemberCountButton({
-    required int count,
-    required bool isSelected,
-    required double maxWidth,
-    required double maxHeight,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _mamMembersCount = count;
-        });
-      },
-      child: Container(
-        width: maxWidth * 0.08,
-        padding: EdgeInsets.symmetric(vertical: maxHeight * 0.015),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? Colors.white : Colors.white.withOpacity(0.5),
-            width: 1.5,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            Text(
-              "$count",
-              style: TextStyle(
-                fontSize: maxWidth * 0.022,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? primaryRed : Colors.white,
-              ),
-            ),
-            SizedBox(height: maxHeight * 0.005),
-            Text(
-              "membres",
-              style: TextStyle(
-                fontSize: maxWidth * 0.012,
-                color: isSelected ? primaryRed : Colors.white.withOpacity(0.9),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Grille de fonctionnalités adaptée pour tablette
-  Widget _buildTabletFeaturesGrid(List<String> featuresList, Color primaryColor,
-      double maxWidth, double maxHeight) {
-    // Diviser les fonctionnalités en colonnes pour une meilleure répartition
-    final int itemsPerColumn = (featuresList.length / 2).ceil();
-    final List<String> leftColumn = featuresList.take(itemsPerColumn).toList();
-    final List<String> rightColumn = featuresList.skip(itemsPerColumn).toList();
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Colonne gauche
-        Expanded(
-          child: Column(
-            children: leftColumn
-                .map((feature) => _buildTabletFeatureItem(
-                    feature, primaryColor, maxWidth, maxHeight))
-                .toList(),
-          ),
-        ),
-        SizedBox(width: maxWidth * 0.03),
-        // Colonne droite
-        Expanded(
-          child: Column(
-            children: rightColumn
-                .map((feature) => _buildTabletFeatureItem(
-                    feature, primaryColor, maxWidth, maxHeight))
-                .toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Item de fonctionnalité adapté pour tablette
-  Widget _buildTabletFeatureItem(
-      String feature, Color primaryColor, double maxWidth, double maxHeight) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: maxHeight * 0.02),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: EdgeInsets.all(maxWidth * 0.008),
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.check_circle,
-              color: primaryColor,
-              size: maxWidth * 0.018,
-            ),
-          ),
-          SizedBox(width: maxWidth * 0.015),
-          Expanded(
-            child: Text(
-              feature,
-              style: TextStyle(
-                fontSize: maxWidth * 0.016,
-                height: 1.4,
-                color: const Color(0xFF455A64),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabletActionButton(
-      Color primaryColor, double maxWidth, double maxHeight, bool isMam) {
-    return Container(
-      width: maxWidth * 0.4, // 40% de la largeur de l'écran
-      height: maxHeight * 0.08, // 8% de la hauteur de l'écran
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: () async {
-          final String structureType =
-              widget.structureInfo['structureType'] ?? 'assistante_maternelle';
-          final String structureId = widget.structureInfo['structureId'] ?? '';
-
-          final double priceAmount = _calculatePrice(isMam, _mamMembersCount);
-          final String priceDisplay =
-              _getFormattedPrice(isMam, _mamMembersCount);
-          final String productId =
-              SubscriptionService.getProductId(structureType, _mamMembersCount);
-
-          print('🛒 Tentative d\'achat du produit: $productId');
-
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              content: Row(
-                children: [
-                  CircularProgressIndicator(color: primaryColor),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: Text('Ouverture de l\'App Store...',
-                        style: TextStyle(fontSize: 16)),
-                  ),
-                ],
-              ),
-            ),
-          );
-
-          try {
-            // ✅ NOUVEAU : Vérifier si on est en mode développement
-            const bool isProduction = bool.fromEnvironment('dart.vm.product');
-
-            if (!isProduction) {
-              // ✅ MODE DEV : Utiliser la simulation fiable
-              try {
-                final subscriptionData =
-                    await SubscriptionService.simulateDevPurchaseSuccess(
-                        productId);
-
-                if (Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
-
-                print(
-                    '✅ DEV: Simulation réussie, redirection vers confirmation');
-
-                context.go('/subscription-confirmed', extra: {
-                  'structureType': subscriptionData['structureType'],
-                  'structureId': structureId,
-                  'memberCount': subscriptionData['memberCount'],
-                  'priceAmount': subscriptionData['priceAmount'],
-                  'priceDisplay': subscriptionData['priceDisplay'],
-                  'currency': subscriptionData['currency'],
-                  'billingPeriod': subscriptionData['billingPeriod'],
-                  'productId': subscriptionData['productId'],
-                });
-                return;
-              } catch (e) {
-                if (Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
-                print('❌ DEV: Erreur simulation: $e');
-                _showErrorMessage('Erreur de simulation: ${e.toString()}');
-                return;
-              }
-            }
-
-            // ✅ MODE PRODUCTION : Logique normale avec les streams
-            StreamSubscription<List<PurchaseDetails>>? purchaseSubscription;
-
-            purchaseSubscription = InAppPurchase.instance.purchaseStream
-                .listen((purchaseDetailsList) {
-              for (PurchaseDetails purchase in purchaseDetailsList) {
-                print(
-                    '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                if (purchase.productID == productId) {
-                  if (Navigator.canPop(context)) {
-                    Navigator.of(context).pop();
-                  }
-                  purchaseSubscription?.cancel();
-
-                  if (purchase.status == PurchaseStatus.purchased) {
-                    print('✅ Achat confirmé !');
-                    context.go('/subscription-confirmed', extra: {
-                      'structureType': structureType,
-                      'structureId': structureId,
-                      'memberCount': isMam ? _mamMembersCount : 1,
-                      'priceAmount': priceAmount,
-                      'priceDisplay': priceDisplay,
-                      'currency': 'EUR',
-                      'billingPeriod': 'monthly',
-                      'productId': productId,
-                    });
-                  } else if (purchase.status == PurchaseStatus.error) {
-                    print('❌ Erreur d\'achat: ${purchase.error}');
-                    _showErrorMessage(
-                        'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                  } else if (purchase.status == PurchaseStatus.canceled) {
-                    print('⚠️ Achat annulé par l\'utilisateur');
-                    _showErrorMessage('Achat annulé');
-                  }
-
-                  if (purchase.pendingCompletePurchase) {
-                    InAppPurchase.instance.completePurchase(purchase);
-                  }
-                }
-              }
-            });
-
-            await SubscriptionService.purchaseSubscription(productId);
-
-            Timer(Duration(seconds: 60), () {
-              if (Navigator.canPop(context)) {
-                Navigator.of(context).pop();
-              }
-              purchaseSubscription?.cancel();
-              _showErrorMessage('Timeout - Veuillez réessayer');
-            });
-          } catch (e) {
-            if (Navigator.canPop(context)) {
-              Navigator.of(context).pop();
-            }
-            print('❌ Erreur lors de l\'achat: $e');
-            _showErrorMessage('Erreur lors de l\'achat: ${e.toString()}');
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: Text(
-          "S'ABONNER",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: maxWidth * 0.02,
-            letterSpacing: 1.1,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Widget pour les boutons de sélection du nombre de membres
-  Widget _buildMemberCountButton({
-    required int count,
-    required bool isSelected,
-    required Color color,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _mamMembersCount = count;
-        });
-      },
-      child: Container(
-        width: 90,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey.shade300,
-            width: 1.5,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            Text(
-              "$count",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "membres",
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.white : Colors.grey.shade700,
               ),
             ),
           ],

@@ -7,7 +7,24 @@ import 'dart:io';
 import 'dart:async';
 
 class SubscriptionService {
-  static const bool _isProduction = bool.fromEnvironment('dart.vm.product');
+  static bool get _isProduction {
+    // En mode debug, on est forcément en développement
+    if (kDebugMode) return false;
+
+    // Sinon, utiliser la variable d'environnement
+    return bool.fromEnvironment('dart.vm.product', defaultValue: false);
+  }
+
+  static bool _forceDevMode = false;
+
+  static void setDebugMode(bool enabled) {
+    _forceDevMode = enabled;
+    print('🔧 Mode debug forcé: $enabled');
+  }
+
+  static bool get isInDevMode {
+    return _forceDevMode || !_isProduction;
+  }
 
   // 🔧 BUNDLE ID CONFIGURÉ : com.beylet.poppinsApp
   static const String _bundleId = 'com.beylet.poppinsApp';
@@ -18,21 +35,19 @@ class SubscriptionService {
   // IDs des produits selon la plateforme
   static Map<String, String> get productIds {
     if (Platform.isIOS) {
-      // IDs EXACTS d'après vos captures App Store Connect
       return {
         'assistante_maternelle':
             '$_bundleId.subscription.assistante_maternelle',
-        'mam_2_members': '$_bundleId.subscription.mam_2_membres',
-        'mam_3_members': '$_bundleId.subscription.mam_3_membres',
-        'mam_4_members': '$_bundleId.subscription.mam_4_membres',
+        'mam_2_members': '$_bundleId.subscription.mam_2_members', // ✅ CORRIGÉ
+        'mam_3_members': '$_bundleId.subscription.mam_3_members', // ✅ CORRIGÉ
+        'mam_4_members': '$_bundleId.subscription.mam_4_members', // ✅ CORRIGÉ
       };
     } else {
-      // ✅ CORRIGÉ : IDs exacts de Google Play Console (sans suffixes _monthly)
       return {
-        'assistante_maternelle': 'assmat', // ✅ Correspond à Google Play
-        'mam_2_members': 'mam2', // ✅ Correspond à Google Play
-        'mam_3_members': 'mam3', // ✅ Correspond à Google Play
-        'mam_4_members': 'mam4', // ✅ Correspond à Google Play
+        'assistante_maternelle': 'assmat',
+        'mam_2_members': 'mam2',
+        'mam_3_members': 'mam3',
+        'mam_4_members': 'mam4',
       };
     }
   }
@@ -150,11 +165,11 @@ class SubscriptionService {
         // Format iOS : com.beylet.poppinsApp.subscription.mam_2_membres
         if (productId.contains('mam')) {
           structureType = 'MAM';
-          if (productId.contains('2_membres'))
+          if (productId.contains('2_members'))
             memberCount = 2;
-          else if (productId.contains('3_membres'))
+          else if (productId.contains('3_members'))
             memberCount = 3;
-          else if (productId.contains('4_membres')) memberCount = 4;
+          else if (productId.contains('4_members')) memberCount = 4;
         }
       } else {
         // Format Android : mam2, mam3, mam4, assmat
@@ -203,21 +218,19 @@ class SubscriptionService {
 
   // ✅ MÉTHODE CORRIGÉE : Simulation fiable en mode dev
   static Future<void> purchaseSubscription(String productId) async {
-    if (!_isProduction) {
-      // ✅ EN MODE DÉVELOPPEMENT : TOUJOURS RÉUSSIR (pour éviter les blocages)
-      print('🧪 MODE DEV: Simulation achat de $productId');
+    print('🛒 Tentative d\'achat de: $productId');
+    print('🔍 Mode développement: ${isInDevMode}');
 
-      // Simuler un délai de traitement réaliste
-      await Future.delayed(Duration(seconds: 1));
+    if (isInDevMode) {
+      print('🧪 MODE DEV: Simulation achat automatique');
 
-      // ✅ MODIFICATION : Toujours réussir en mode dev
-      print('✅ DEV: Simulation achat réussi pour $productId (mode dev)');
+      // Simuler un délai réaliste
+      await Future.delayed(Duration(seconds: 2));
 
-      // Créer un PurchaseDetails simulé pour déclencher le succès
-      // Note: En mode dev, l'interface doit gérer ce succès via un autre mécanisme
-      // car on ne peut pas créer un vrai PurchaseDetails
-
-      return; // Succès garanti en mode dev
+      // En mode dev, on ne lance pas l'achat réel
+      // L'interface doit utiliser simulateDevPurchaseSuccess() directement
+      print('✅ DEV: Prêt pour simulation');
+      return;
     }
 
     try {
@@ -259,7 +272,7 @@ class SubscriptionService {
       final PurchaseParam purchaseParam =
           PurchaseParam(productDetails: productDetails);
 
-      // 🚀 LANCER L'ACHAT - L'état sera capturé par le purchaseStream
+      // 🚀 LANCER L'ACHAT
       final bool launched =
           await inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
 
@@ -268,61 +281,60 @@ class SubscriptionService {
         throw Exception('Impossible de lancer l\'interface d\'achat');
       }
 
-      print(
-          '🚀 Achat lancé - En attente de la réponse utilisateur dans ${Platform.isIOS ? 'l\'App Store' : 'Google Play'}...');
+      print('🚀 Achat lancé - En attente de la réponse utilisateur...');
     } catch (e) {
       print('❌ Erreur lors du lancement de l\'achat: $e');
-      rethrow; // Relancer l'exception pour que l'UI puisse la capturer
+      rethrow;
     }
   }
 
   // ✅ NOUVELLE MÉTHODE : Simulation spécifique pour le développement
   static Future<Map<String, dynamic>> simulateDevPurchaseSuccess(
       String productId) async {
-    if (!_isProduction) {
-      print('🧪 MODE DEV: Simulation achat réussi de $productId');
-
-      // Simuler un délai réaliste
-      await Future.delayed(Duration(seconds: 1));
-
-      // Déterminer le type de structure et nombre de membres selon le produit
-      String structureType = 'assistante_maternelle';
-      int memberCount = 1;
-      double priceAmount = 12.99;
-      String priceDisplay = '12,99 € / mois';
-
-      if (productId.contains('mam')) {
-        structureType = 'MAM';
-        if (productId.contains('2_membres') || productId == 'mam2') {
-          memberCount = 2;
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
-        } else if (productId.contains('3_membres') || productId == 'mam3') {
-          memberCount = 3;
-          priceAmount = 34.99;
-          priceDisplay = '34,99 € / mois';
-        } else if (productId.contains('4_membres') || productId == 'mam4') {
-          memberCount = 4;
-          priceAmount = 44.99;
-          priceDisplay = '44,99 € / mois';
-        }
-      }
-
-      print('✅ DEV: Simulation terminée avec succès');
-
-      // Retourner les données de l'abonnement simulé
-      return {
-        'structureType': structureType,
-        'memberCount': memberCount,
-        'priceAmount': priceAmount,
-        'priceDisplay': priceDisplay,
-        'currency': 'EUR',
-        'billingPeriod': 'monthly',
-        'productId': productId,
-      };
+    if (!isInDevMode) {
+      throw Exception('Méthode disponible uniquement en mode développement');
     }
 
-    throw Exception('Méthode disponible uniquement en mode développement');
+    print('🧪 MODE DEV: Simulation achat réussi de $productId');
+
+    // Simuler un délai réaliste
+    await Future.delayed(Duration(seconds: 1));
+
+    // Déterminer le type de structure et nombre de membres selon le produit
+    String structureType = 'assistante_maternelle';
+    int memberCount = 1;
+    double priceAmount = 12.99;
+    String priceDisplay = '12,99 € / mois';
+
+    if (productId.contains('mam')) {
+      structureType = 'MAM';
+      if (productId.contains('2_members') || productId == 'mam2') {
+        memberCount = 2;
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
+      } else if (productId.contains('3_members') || productId == 'mam3') {
+        memberCount = 3;
+        priceAmount = 34.99;
+        priceDisplay = '34,99 € / mois';
+      } else if (productId.contains('4_members') || productId == 'mam4') {
+        memberCount = 4;
+        priceAmount = 44.99;
+        priceDisplay = '44,99 € / mois';
+      }
+    }
+
+    print('✅ DEV: Simulation terminée avec succès');
+
+    // Retourner les données de l'abonnement simulé
+    return {
+      'structureType': structureType,
+      'memberCount': memberCount,
+      'priceAmount': priceAmount,
+      'priceDisplay': priceDisplay,
+      'currency': 'EUR',
+      'billingPeriod': 'monthly',
+      'productId': productId,
+    };
   }
 
   // 🆕 MÉTHODE MODIFIÉE : Gérer les mises à jour d'achat
