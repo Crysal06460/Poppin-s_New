@@ -1,16 +1,19 @@
+// lib/screens/pricing_screen.dart
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
-import 'dart:async';
-import '../services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'package:go_router/go_router.dart';
+// Import du nouveau service unifié
+import '../services/unified_subscription_service.dart';
 
 class PricingScreen extends StatefulWidget {
-  final Map<String, dynamic> structureInfo;
+  final String structureType;
+  final int mamMembersCount;
 
   const PricingScreen({
     Key? key,
-    required this.structureInfo,
+    required this.structureType,
+    this.mamMembersCount = 2,
   }) : super(key: key);
 
   @override
@@ -18,1484 +21,741 @@ class PricingScreen extends StatefulWidget {
 }
 
 class _PricingScreenState extends State<PricingScreen> {
-  // Couleurs officielles de l'application
-  static const Color primaryRed = Color(0xFFD94350);
+  // Service unifié
+  final UnifiedSubscriptionService _subscriptionService =
+      UnifiedSubscriptionService.instance;
+
+  // État
+  bool _isLoading = true;
+  bool _isPurchasing = false;
+  List<SubscriptionInfo> _availableSubscriptions = [];
+  SubscriptionInfo? _activeSubscription;
+  String _errorMessage = '';
+
+  // Pour la sélection du nombre de membres MAM
+  int _selectedMamMembers = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialiser le nombre de membres sélectionné avec la valeur passée
+    _selectedMamMembers = widget.mamMembersCount;
+    _initializeSubscriptions();
+  }
+
+  /// Couleurs officielles de l'application
   static const Color primaryBlue = Color(0xFF3D9DF2);
-  static const Color lightBlue = Color(0xFFDFE9F2);
-  static const Color brightCyan = Color(0xFF05C7F2);
-  static const Color primaryYellow = Color(0xFFF2B705);
+  static const Color primaryRed = Color(0xFFD94350);
+  static const Color lightGray = Color(0xFFDFE9F2);
+  static const Color cyan = Color(0xFF05C7F2);
+  static const Color orange = Color(0xFFF2B705);
 
-  // Nombre de membres MAM (valeur par défaut)
-  int _mamMembersCount = 2;
+  /// Initialise les abonnements
+  Future<void> _initializeSubscriptions() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
 
-  // NOUVELLE MÉTHODE : Calculer le prix en euros (nombre uniquement)
-  double _calculatePrice(bool isMam, int memberCount) {
-    if (isMam) {
-      switch (memberCount) {
-        case 2:
-          return 24.99;
-        case 3:
-          return 34.99;
-        case 4:
-          return 44.99;
-        default:
-          return 24.99;
+      // Initialiser le service
+      await _subscriptionService.initialize();
+
+      // Écouter les mises à jour
+      _subscriptionService.subscriptionUpdates.listen(
+        _handleSubscriptionUpdate,
+        onError: (error) {
+          setState(() {
+            _errorMessage = error.toString();
+          });
+        },
+      );
+
+      _subscriptionService.errors.listen(
+        (error) {
+          setState(() {
+            _errorMessage = error;
+          });
+          _showErrorDialog(error);
+        },
+      );
+
+      // Charger les produits et vérifier les abonnements actifs
+      await _loadSubscriptions();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur d\'initialisation: $e';
+        _isLoading = false;
+      });
+      _showErrorDialog(_errorMessage);
+    }
+  }
+
+  /// Charge les abonnements disponibles
+  Future<void> _loadSubscriptions() async {
+    try {
+      // Récupérer les produits disponibles
+      final subscriptions =
+          await _subscriptionService.getAvailableSubscriptions();
+
+      // Vérifier l'abonnement actif (seulement en production, pas en mode dev)
+      SubscriptionInfo? activeSubscription;
+      if (!kDebugMode) {
+        activeSubscription = await _subscriptionService.getActiveSubscription();
       }
-    } else {
-      return 12.99;
+
+      setState(() {
+        _availableSubscriptions = subscriptions;
+        _activeSubscription = activeSubscription;
+        _isLoading = false;
+      });
+
+      print('📱 ${subscriptions.length} abonnements chargés');
+      if (activeSubscription != null) {
+        print('✅ Abonnement actif: ${activeSubscription.productId}');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur de chargement: $e';
+        _isLoading = false;
+      });
     }
   }
 
-  // MÉTHODE MODIFIÉE : Obtenir le prix formaté pour l'affichage
-  String _getFormattedPrice(bool isMam, int memberCount) {
-    double price = _calculatePrice(isMam, memberCount);
-    if (price == price.roundToDouble()) {
-      return '${price.toInt()} € / mois';
+  /// Gère les mises à jour d'abonnement
+  void _handleSubscriptionUpdate(SubscriptionInfo subscription) {
+    setState(() {
+      if (subscription.status == SubscriptionStatus.purchased) {
+        _activeSubscription = subscription;
+        _isPurchasing = false;
+        _showSuccessDialog();
+      } else if (subscription.status == SubscriptionStatus.error) {
+        _isPurchasing = false;
+        _showErrorDialog('Erreur d\'achat');
+      }
+    });
+  }
+
+  /// Détermine le plan selon la configuration
+  SubscriptionPlan _getCurrentPlan() {
+    if (widget.structureType == 'assistante_maternelle') {
+      return SubscriptionPlan.assistantMaternel;
     } else {
-      return '${price.toStringAsFixed(2)} € / mois';
+      switch (_selectedMamMembers) {
+        case 2:
+          return SubscriptionPlan.mam2Members;
+        case 3:
+          return SubscriptionPlan.mam3Members;
+        case 4:
+          return SubscriptionPlan.mam4Members;
+        default:
+          return SubscriptionPlan.mam2Members;
+      }
     }
   }
 
-  Widget _buildPhoneContent(Color primaryColor, String displayName,
-      String price, List<String> featuresList, bool isMam) {
-    return Column(
-      children: [
-        // En-tête moderne avec design sophistiqué
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                primaryColor,
-                primaryColor.withOpacity(0.85),
-                primaryColor.withOpacity(0.9),
-              ],
-            ),
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(40),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withOpacity(0.3),
-                offset: const Offset(0, 10),
-                blurRadius: 30,
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Éléments décoratifs
-              Positioned(
-                top: -30,
-                right: -30,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.1),
-                  ),
-                ),
-              ),
-              // Contenu principal
-              Column(
-                children: [
-                  const SizedBox(height: 20),
-                  // Logo moderne
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Image.asset(
-                        'assets/images/parapluie.png',
-                        width: 70,
-                        height: 70,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  // Type de structure
-                  Text(
-                    displayName,
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1.1,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  // Prix moderne
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.euro,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          price,
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Badge essai gratuit moderne
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.access_time_rounded,
-                          color: primaryColor,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "7 jours d'essai gratuit",
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        // Contenu principal moderne
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Sélecteur MAM moderne
-                if (isMam) ...[
-                  _buildModernMAMSelectorPhone(primaryColor),
-                  const SizedBox(height: 25),
-                ],
-                // Titre section moderne
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [primaryColor, primaryColor.withOpacity(0.7)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        Icons.star_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Pourquoi choisir Poppin's ?",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: primaryColor,
-                            ),
-                          ),
-                          Text(
-                            "Fonctionnalités incluses",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 25),
-                // Grille moderne des fonctionnalités
-                _buildModernPhoneFeaturesGrid(featuresList, primaryColor),
-                const SizedBox(height: 25),
-                // Info box moderne
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [lightBlue, lightBlue.withOpacity(0.5)],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: primaryBlue.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        offset: const Offset(0, 4),
-                        blurRadius: 15,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: primaryBlue.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.info_outline_rounded,
-                          color: primaryBlue,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          "Résiliation possible à tout moment depuis l'AppStore (iOS) ou GooglePlay (Android)",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF455A64),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Bouton moderne
-        _buildModernPhoneActionButton(primaryColor, isMam),
-      ],
-    );
+  /// Achète un abonnement
+  Future<void> _purchaseSubscription() async {
+    if (_isPurchasing) return;
+
+    setState(() {
+      _isPurchasing = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final plan = _getCurrentPlan();
+      final success = await _subscriptionService.purchaseSubscription(plan);
+
+      if (!success) {
+        setState(() {
+          _isPurchasing = false;
+          _errorMessage = 'Échec de l\'achat';
+        });
+        _showErrorDialog('L\'achat n\'a pas pu être finalisé');
+      }
+      // Le succès sera géré par _handleSubscriptionUpdate
+    } catch (e) {
+      setState(() {
+        _isPurchasing = false;
+        _errorMessage = 'Erreur: $e';
+      });
+      _showErrorDialog('Erreur lors de l\'achat: $e');
+    }
   }
 
-  // Sélecteur MAM moderne pour téléphone
-  Widget _buildModernMAMSelectorPhone(Color primaryColor) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [lightBlue, lightBlue.withOpacity(0.7)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: primaryColor.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            offset: const Offset(0, 4),
-            blurRadius: 15,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.group_rounded,
-                  color: primaryColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  "Nombre d'assistants maternels dans votre MAM",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: const Color(0xFF455A64),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (int i = 2; i <= 4; i++)
-                _buildModernMemberButtonPhone(i, primaryColor),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Le prix de l'abonnement s'adapte au nombre de membres.",
-            style: TextStyle(
-              fontStyle: FontStyle.italic,
-              fontSize: 14,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Restaure les achats
+  Future<void> _restorePurchases() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      await _subscriptionService.restorePurchases();
+      await _loadSubscriptions();
+
+      if (_activeSubscription != null) {
+        _showSuccessDialog('Abonnement restauré avec succès !');
+      } else {
+        _showErrorDialog('Aucun abonnement à restaurer');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur de restauration: $e';
+        _isLoading = false;
+      });
+      _showErrorDialog('Erreur lors de la restauration: $e');
+    }
   }
 
-  // Boutons membres modernes pour téléphone
-  Widget _buildModernMemberButtonPhone(int count, Color primaryColor) {
-    final bool isSelected = _mamMembersCount == count;
-    return GestureDetector(
-      onTap: () => setState(() => _mamMembersCount = count),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 80,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [primaryColor, primaryColor.withOpacity(0.8)],
-                )
-              : null,
-          color: isSelected ? null : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? primaryColor : Colors.grey.shade300,
-            width: 2,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: primaryColor.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-        ),
-        child: Column(
+  /// Affiche le dialog de succès
+  void _showSuccessDialog([String? message]) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
           children: [
-            Text(
-              "$count",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : primaryColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "membres",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? Colors.white.withOpacity(0.9)
-                    : Colors.grey.shade600,
-              ),
-            ),
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Succès'),
           ],
         ),
-      ),
-    );
-  }
+        content: Text(message ?? 'Abonnement activé avec succès !'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Fermer le dialog
 
-  // Grille moderne des fonctionnalités pour téléphone
-  Widget _buildModernPhoneFeaturesGrid(
-      List<String> featuresList, Color primaryColor) {
-    final List<IconData> icons = [
-      Icons.access_time_rounded,
-      Icons.chat_bubble_rounded,
-      Icons.campaign_rounded,
-      Icons.health_and_safety_rounded,
-      Icons.dashboard_rounded,
-      Icons.file_copy_rounded,
-      Icons.school_rounded,
-      Icons.child_care_rounded,
-      Icons.favorite_rounded,
-      Icons.verified_rounded,
-      Icons.group_rounded,
-      Icons.share_rounded,
-    ];
-
-    return Column(
-      children: featuresList.asMap().entries.map((entry) {
-        final int index = entry.key;
-        final String feature = entry.value;
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: primaryColor.withOpacity(0.1),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                offset: const Offset(0, 4),
-                blurRadius: 20,
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [primaryColor, primaryColor.withOpacity(0.7)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  index < icons.length
-                      ? icons[index]
-                      : Icons.check_circle_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  feature,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF455A64),
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildModernPhoneActionButton(Color primaryColor, bool isMam) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+              // Rediriger vers l'écran de confirmation avec les bonnes données
+              _redirectToConfirmationScreen();
+            },
+            child: const Text('OK'),
           ),
         ],
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 60,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                primaryColor,
-                primaryColor.withOpacity(0.8),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: primaryColor.withOpacity(0.4),
-                offset: const Offset(0, 8),
-                blurRadius: 25,
-              ),
-            ],
-          ),
-          child: ElevatedButton(
-            onPressed: () async {
-              final String structureType =
-                  widget.structureInfo['structureType'] ??
-                      'assistante_maternelle';
-              final String structureId =
-                  widget.structureInfo['structureId'] ?? '';
-              final double priceAmount =
-                  _calculatePrice(isMam, _mamMembersCount);
-              final String priceDisplay =
-                  _getFormattedPrice(isMam, _mamMembersCount);
-              final String productId = SubscriptionService.getProductId(
-                  structureType, _mamMembersCount);
+    );
+  }
 
-              print('🛒 Tentative d\'achat du produit: $productId');
+  void _redirectToConfirmationScreen() {
+    // Déterminer le type de structure et le nombre de membres
+    final String structureType = widget.structureType == 'assistante_maternelle'
+        ? 'assistante_maternelle'
+        : 'MAM';
 
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => AlertDialog(
-                  content: Row(
-                    children: [
-                      CircularProgressIndicator(color: primaryColor),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                            SubscriptionService.isInDevMode
-                                ? 'Simulation en cours...'
-                                : 'Ouverture de l\'App Store...',
-                            style: TextStyle(fontSize: 16)),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+    final int memberCount = widget.structureType == 'assistante_maternelle'
+        ? 1
+        : _selectedMamMembers;
 
-              try {
-                if (SubscriptionService.isInDevMode) {
-                  // MODE DEV : Simulation directe
-                  final subscriptionData =
-                      await SubscriptionService.simulateDevPurchaseSuccess(
-                          productId);
+    // Calculer le prix
+    final double priceAmount = widget.structureType == 'assistante_maternelle'
+        ? 12.99
+        : _selectedMamMembers == 2
+            ? 24.99
+            : _selectedMamMembers == 3
+                ? 34.99
+                : 44.99;
 
-                  if (Navigator.canPop(context)) {
-                    Navigator.of(context).pop();
-                  }
+    final String priceDisplay = widget.structureType == 'assistante_maternelle'
+        ? '12,99 € / mois'
+        : _selectedMamMembers == 2
+            ? '24,99 € / mois'
+            : _selectedMamMembers == 3
+                ? '34,99 € / mois'
+                : '44,99 € / mois';
 
-                  print(
-                      '✅ DEV: Simulation réussie, redirection vers confirmation');
+    // Naviguer vers l'écran de confirmation
+    context.go('/subscription-confirmed', extra: {
+      'structureType': structureType,
+      'structureId': '', // Sera rempli automatiquement
+      'memberCount': memberCount,
+      'priceAmount': priceAmount,
+      'priceDisplay': priceDisplay,
+      'currency': 'EUR',
+      'billingPeriod': 'monthly',
+    });
+  }
 
-                  context.go('/subscription-confirmed', extra: {
-                    'structureType': subscriptionData['structureType'],
-                    'structureId': structureId,
-                    'memberCount': subscriptionData['memberCount'],
-                    'priceAmount': subscriptionData['priceAmount'],
-                    'priceDisplay': subscriptionData['priceDisplay'],
-                    'currency': subscriptionData['currency'],
-                    'billingPeriod': subscriptionData['billingPeriod'],
-                    'productId': subscriptionData['productId'],
-                  });
-                } else {
-                  // MODE PRODUCTION : Vraie logique d'achat
-                  StreamSubscription<List<PurchaseDetails>>?
-                      purchaseSubscription;
-
-                  purchaseSubscription = InAppPurchase.instance.purchaseStream
-                      .listen((purchaseDetailsList) {
-                    for (PurchaseDetails purchase in purchaseDetailsList) {
-                      print(
-                          '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                      if (purchase.productID == productId) {
-                        if (Navigator.canPop(context)) {
-                          Navigator.of(context).pop();
-                        }
-                        purchaseSubscription?.cancel();
-
-                        if (purchase.status == PurchaseStatus.purchased) {
-                          print('✅ Achat confirmé !');
-                          context.go('/subscription-confirmed', extra: {
-                            'structureType': structureType,
-                            'structureId': structureId,
-                            'memberCount': isMam ? _mamMembersCount : 1,
-                            'priceAmount': priceAmount,
-                            'priceDisplay': priceDisplay,
-                            'currency': 'EUR',
-                            'billingPeriod': 'monthly',
-                            'productId': productId,
-                          });
-                        } else if (purchase.status == PurchaseStatus.error) {
-                          print('❌ Erreur d\'achat: ${purchase.error}');
-                          _showErrorMessage(
-                              'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                        } else if (purchase.status == PurchaseStatus.canceled) {
-                          print('⚠️ Achat annulé par l\'utilisateur');
-                          _showErrorMessage('Achat annulé');
-                        }
-
-                        if (purchase.pendingCompletePurchase) {
-                          InAppPurchase.instance.completePurchase(purchase);
-                        }
-                      }
-                    }
-                  });
-
-                  await SubscriptionService.purchaseSubscription(productId);
-
-                  Timer(const Duration(seconds: 30), () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.of(context).pop();
-                    }
-                    purchaseSubscription?.cancel();
-                    _showErrorMessage('Timeout - Veuillez réessayer');
-                  });
-                }
-              } catch (e) {
-                if (Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
-                print('❌ Erreur lors de l\'achat: $e');
-                _showErrorMessage('Erreur lors de l\'achat: ${e.toString()}');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.diamond_rounded, size: 24),
-                const SizedBox(width: 12),
-                const Text(
-                  "S'ABONNER",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
+  /// Affiche le dialog d'erreur
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.error, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Erreur'),
+          ],
         ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
+  }
+
+  /// Retourne le titre selon le type de structure
+  String _getTitle() {
+    if (widget.structureType == 'assistante_maternelle') {
+      return 'Abonnement Assistant Maternel';
+    } else {
+      return 'Abonnement MAM $_selectedMamMembers Membres';
+    }
+  }
+
+  /// Retourne le prix selon le type
+  String _getPrice() {
+    if (widget.structureType == 'assistante_maternelle') {
+      return '12,99€';
+    } else {
+      switch (_selectedMamMembers) {
+        case 2:
+          return '24,99€';
+        case 3:
+          return '34,99€';
+        case 4:
+          return '44,99€';
+        default:
+          return '24,99€';
+      }
+    }
+  }
+
+  /// Retourne la description des fonctionnalités
+  List<String> _getFeatures() {
+    return [
+      '📱 Transmissions temps réel',
+      '💬 Chat avec les parents',
+      '📊 Tableau de bord complet',
+      '📋 Gestion administrative',
+      '📸 Partage de photos sécurisé',
+      '🔔 Notifications push',
+      '☁️ Sauvegarde cloud',
+      '📞 Support client premium',
+    ];
+  }
+
+  /// Retourne le prix pour un nombre de membres donné
+  String _getPriceForMembers(int members) {
+    switch (members) {
+      case 2:
+        return '24,99€';
+      case 3:
+        return '34,99€';
+      case 4:
+        return '44,99€';
+      default:
+        return '24,99€';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String structureType =
-        widget.structureInfo['structureType'] ?? 'assistante_maternelle';
-    final String structureId = widget.structureInfo['structureId'] ?? '';
-    final bool isMam = structureType == 'MAM';
-    final Size screenSize = MediaQuery.of(context).size;
-    final bool isTablet = screenSize.shortestSide >= 600;
-
-    Map<String, String> structureDisplayNames = {
-      'assistante_maternelle': 'Assistante Maternelle',
-      'MAM': 'Maison d\'Assistants Maternels',
-    };
-
-    String price = _getFormattedPrice(isMam, _mamMembersCount);
-
-    Map<String, List<String>> features = {
-      'assistante_maternelle': [
-        'Transmissions en temps réel\n(pointage horaire, repas, sieste, soins, activités, ...)',
-        'Chat instantané avec les parents\n(chat + partage de fichiers)',
-        'Actualités\n(menu, sorties, évènements)',
-        'Santé\n(PAI, allergies, ...)',
-        'Tableau de bord\n(planning enfant, planning entretien, coordonnées parents, autorisations, droit à l\'image, ...)',
-        'Dématérialisation des tâches',
-        'Professionnalisation du métier d\'assistant maternel',
-        'Suivi précis de l\'enfant',
-        'Amélioration de la relation parent - équipe',
-      ],
-      'MAM': [
-        'Transmissions en temps réel\n(pointage horaire, repas, sieste, soins, activités, ...)',
-        'Chat instantané avec les parents\n(chat + partage de fichiers)',
-        'Actualités\n(menu, sorties, évènements)',
-        'Santé\n(PAI, allergies, ...)',
-        'Tableau de bord\n(planning enfant, planning entretien, coordonnées parents, autorisations, droit à l\'image, ...)',
-        'Dématérialisation des tâches',
-        'Professionnalisation du métier d\'assistant maternel',
-        'Suivi précis de l\'enfant',
-        'Amélioration de la relation parent - équipe',
-        'Gestion multi-membres',
-        'Tableau de bord partagé',
-      ],
-    };
-
-    String displayName = structureDisplayNames[structureType] ?? "";
-    List<String> featuresList = features[structureType] ?? [];
-    Color primaryColor = isMam ? primaryRed : primaryBlue;
-
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(
-          "Abonnement",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: isTablet ? 24 : 20,
-          ),
-        ),
-        backgroundColor: primaryColor,
-        elevation: 0,
-        centerTitle: true,
-        leading: Padding(
-          padding: EdgeInsets.all(isTablet ? 12.0 : 8.0),
-          child: GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: isTablet ? 24 : 20,
-              ),
-            ),
-          ),
-        ),
+        title: const Text('Choisir un Abonnement'),
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
       ),
-      body: isTablet
-          ? _buildTabletContent(
-              primaryColor, displayName, price, featuresList, isMam, screenSize)
-          : _buildPhoneContent(
-              primaryColor, displayName, price, featuresList, isMam),
-    );
-  }
-
-  Widget _buildTabletContent(Color primaryColor, String displayName,
-      String price, List<String> featuresList, bool isMam, Size screenSize) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double maxWidth = constraints.maxWidth;
-        final double maxHeight = constraints.maxHeight;
-
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: maxWidth * 0.06,
-            vertical: maxHeight * 0.04,
-          ),
-          child: Column(
-            children: [
-              // Section héro avec design moderne
-              Container(
-                height: maxHeight * 0.35,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      primaryColor,
-                      primaryColor.withOpacity(0.8),
-                      primaryColor.withOpacity(0.9),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(32),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withOpacity(0.4),
-                      offset: const Offset(0, 20),
-                      blurRadius: 40,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // Éléments décoratifs
-                    Positioned(
-                      top: -50,
-                      right: -50,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.1),
-                        ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // En-tête avec badge essai gratuit
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [primaryBlue, Color(0xFF2B7BD9)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    // Contenu principal
-                    Padding(
-                      padding: EdgeInsets.all(maxWidth * 0.04),
-                      child: Row(
-                        children: [
-                          // Partie gauche - Logo et infos
-                          Expanded(
-                            flex: 4,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Logo moderne
-                                Container(
-                                  width: maxWidth * 0.12,
-                                  height: maxWidth * 0.12,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: Image.asset(
-                                      'assets/images/parapluie.png',
-                                      width: maxWidth * 0.08,
-                                      height: maxWidth * 0.08,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: maxHeight * 0.03),
-                                // Titre
-                                Text(
-                                  displayName,
-                                  style: TextStyle(
-                                    fontSize: maxWidth * 0.032,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    height: 1.1,
-                                  ),
-                                ),
-                                SizedBox(height: maxHeight * 0.02),
-                                // Prix avec design moderne
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.3),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: maxWidth * 0.025,
-                                    vertical: maxHeight * 0.015,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.euro,
-                                        color: Colors.white,
-                                        size: maxWidth * 0.025,
-                                      ),
-                                      SizedBox(width: maxWidth * 0.01),
-                                      Text(
-                                        price,
-                                        style: TextStyle(
-                                          fontSize: maxWidth * 0.028,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        // Badge essai gratuit
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: orange,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            '🎁 7 JOURS GRATUITS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
                             ),
                           ),
-                          // Partie droite - Badge, bouton et sélecteur MAM
-                          Expanded(
-                            flex: 3,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Badge essai gratuit
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: maxWidth * 0.03,
-                                    vertical: maxHeight * 0.015,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 15,
-                                        offset: const Offset(0, 5),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.access_time,
-                                        color: primaryColor,
-                                        size: maxWidth * 0.02,
-                                      ),
-                                      SizedBox(width: maxWidth * 0.01),
-                                      Text(
-                                        "7 jours d'essai gratuit",
-                                        style: TextStyle(
-                                          color: primaryColor,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: maxWidth * 0.018,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Titre et prix
+                        Text(
+                          _getTitle(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              _getPrice(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Text(
+                              '/mois',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Puis résiliation possible à tout moment',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Sélecteur de nombre de membres pour MAM
+                  if (widget.structureType != 'assistante_maternelle') ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Nombre de membres :',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              for (int members in [2, 3, 4])
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      right: members < 4 ? 8 : 0,
+                                    ),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedMamMembers = members;
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 8,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(height: maxHeight * 0.015),
-                                // Bouton S'abonner
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: maxWidth * 0.03,
-                                    vertical: maxHeight * 0.015,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
-                                        blurRadius: 15,
-                                        offset: const Offset(0, 5),
-                                      ),
-                                    ],
-                                  ),
-                                  child: GestureDetector(
-                                    onTap: () async {
-                                      final String structureType = widget
-                                              .structureInfo['structureType'] ??
-                                          'assistante_maternelle';
-                                      final String structureId =
-                                          widget.structureInfo['structureId'] ??
-                                              '';
-                                      final double priceAmount =
-                                          _calculatePrice(
-                                              isMam, _mamMembersCount);
-                                      final String priceDisplay =
-                                          _getFormattedPrice(
-                                              isMam, _mamMembersCount);
-                                      final String productId =
-                                          SubscriptionService.getProductId(
-                                              structureType, _mamMembersCount);
-
-                                      print(
-                                          '🛒 Tentative d\'achat du produit: $productId');
-
-                                      showDialog(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (context) => AlertDialog(
-                                          content: Row(
-                                            children: [
-                                              CircularProgressIndicator(
-                                                  color: primaryColor),
-                                              SizedBox(width: 16),
-                                              Expanded(
-                                                child: Text(
-                                                    SubscriptionService
-                                                            .isInDevMode
-                                                        ? 'Simulation en cours...'
-                                                        : 'Ouverture de l\'App Store...',
-                                                    style: TextStyle(
-                                                        fontSize: 16)),
+                                        decoration: BoxDecoration(
+                                          color: _selectedMamMembers == members
+                                              ? Colors.blue[600]
+                                              : Colors.grey[100],
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color:
+                                                _selectedMamMembers == members
+                                                    ? Colors.blue[600]!
+                                                    : Colors.grey[300]!,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              '$members',
+                                              style: TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                                color: _selectedMamMembers ==
+                                                        members
+                                                    ? Colors.white
+                                                    : Colors.grey[700],
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'membres',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: _selectedMamMembers ==
+                                                        members
+                                                    ? Colors.white
+                                                    : Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _getPriceForMembers(members),
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: _selectedMamMembers ==
+                                                        members
+                                                    ? Colors.white
+                                                    : Colors.blue[600],
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      );
-
-                                      try {
-                                        if (SubscriptionService.isInDevMode) {
-                                          // MODE DEV : Simulation directe
-                                          final subscriptionData =
-                                              await SubscriptionService
-                                                  .simulateDevPurchaseSuccess(
-                                                      productId);
-
-                                          if (Navigator.canPop(context)) {
-                                            Navigator.of(context).pop();
-                                          }
-
-                                          print(
-                                              '✅ DEV: Simulation réussie, redirection vers confirmation');
-
-                                          context.go('/subscription-confirmed',
-                                              extra: {
-                                                'structureType':
-                                                    subscriptionData[
-                                                        'structureType'],
-                                                'structureId': structureId,
-                                                'memberCount': subscriptionData[
-                                                    'memberCount'],
-                                                'priceAmount': subscriptionData[
-                                                    'priceAmount'],
-                                                'priceDisplay':
-                                                    subscriptionData[
-                                                        'priceDisplay'],
-                                                'currency': subscriptionData[
-                                                    'currency'],
-                                                'billingPeriod':
-                                                    subscriptionData[
-                                                        'billingPeriod'],
-                                                'productId': subscriptionData[
-                                                    'productId'],
-                                              });
-                                        } else {
-                                          // MODE PRODUCTION : Vraie logique d'achat
-                                          StreamSubscription<
-                                                  List<PurchaseDetails>>?
-                                              purchaseSubscription;
-
-                                          purchaseSubscription = InAppPurchase
-                                              .instance.purchaseStream
-                                              .listen((purchaseDetailsList) {
-                                            for (PurchaseDetails purchase
-                                                in purchaseDetailsList) {
-                                              print(
-                                                  '📱 État achat: ${purchase.productID} - ${purchase.status}');
-
-                                              if (purchase.productID ==
-                                                  productId) {
-                                                if (Navigator.canPop(context)) {
-                                                  Navigator.of(context).pop();
-                                                }
-                                                purchaseSubscription?.cancel();
-
-                                                if (purchase.status ==
-                                                    PurchaseStatus.purchased) {
-                                                  print('✅ Achat confirmé !');
-                                                  context.go(
-                                                      '/subscription-confirmed',
-                                                      extra: {
-                                                        'structureType':
-                                                            structureType,
-                                                        'structureId':
-                                                            structureId,
-                                                        'memberCount': isMam
-                                                            ? _mamMembersCount
-                                                            : 1,
-                                                        'priceAmount':
-                                                            priceAmount,
-                                                        'priceDisplay':
-                                                            priceDisplay,
-                                                        'currency': 'EUR',
-                                                        'billingPeriod':
-                                                            'monthly',
-                                                        'productId': productId,
-                                                      });
-                                                } else if (purchase.status ==
-                                                    PurchaseStatus.error) {
-                                                  print(
-                                                      '❌ Erreur d\'achat: ${purchase.error}');
-                                                  _showErrorMessage(
-                                                      'Erreur lors de l\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
-                                                } else if (purchase.status ==
-                                                    PurchaseStatus.canceled) {
-                                                  print(
-                                                      '⚠️ Achat annulé par l\'utilisateur');
-                                                  _showErrorMessage(
-                                                      'Achat annulé');
-                                                }
-
-                                                if (purchase
-                                                    .pendingCompletePurchase) {
-                                                  InAppPurchase.instance
-                                                      .completePurchase(
-                                                          purchase);
-                                                }
-                                              }
-                                            }
-                                          });
-
-                                          await SubscriptionService
-                                              .purchaseSubscription(productId);
-
-                                          Timer(const Duration(seconds: 30),
-                                              () {
-                                            if (Navigator.canPop(context)) {
-                                              Navigator.of(context).pop();
-                                            }
-                                            purchaseSubscription?.cancel();
-                                            _showErrorMessage(
-                                                'Timeout - Veuillez réessayer');
-                                          });
-                                        }
-                                      } catch (e) {
-                                        if (Navigator.canPop(context)) {
-                                          Navigator.of(context).pop();
-                                        }
-                                        print('❌ Erreur lors de l\'achat: $e');
-                                        _showErrorMessage(
-                                            'Erreur lors de l\'achat: ${e.toString()}');
-                                      }
-                                    },
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.diamond_rounded,
-                                          color: primaryColor,
-                                          size: maxWidth * 0.02,
-                                        ),
-                                        SizedBox(width: maxWidth * 0.01),
-                                        Text(
-                                          "S'ABONNER",
-                                          style: TextStyle(
-                                            color: primaryColor,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: maxWidth * 0.018,
-                                          ),
-                                        ),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                                // Sélecteur MAM moderne si applicable
-                                if (isMam) ...[
-                                  SizedBox(height: maxHeight * 0.015),
-                                  _buildModernMAMSelector(
-                                      primaryColor, maxWidth, maxHeight),
-                                ],
-                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Statut actuel
+                  if (_activeSubscription != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        border: Border.all(color: Colors.green[200]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.check_circle,
+                                  color: Colors.green[600]),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Abonnement Actif',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_activeSubscription!.isTrialPeriod) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '🎁 Période d\'essai gratuit',
+                              style: TextStyle(
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Erreur
+                  if (_errorMessage.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        border: Border.all(color: Colors.red[200]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error, color: Colors.red[600]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMessage,
+                              style: TextStyle(color: Colors.red[700]),
                             ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
                   ],
-                ),
-              ),
-              SizedBox(height: maxHeight * 0.05),
-              // Section fonctionnalités moderne
-              _buildModernFeaturesSection(
-                  featuresList, primaryColor, maxWidth, maxHeight),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
-  // Sélecteur MAM moderne
-  Widget _buildModernMAMSelector(
-      Color primaryColor, double maxWidth, double maxHeight) {
-    return Container(
-      padding: EdgeInsets.all(maxWidth * 0.015),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            "Nombre d'assistants maternels",
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: maxWidth * 0.014,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: maxHeight * 0.01),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (int i = 2; i <= 4; i++)
-                _buildModernMemberButton(i, maxWidth, maxHeight),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Boutons membres modernes
-  Widget _buildModernMemberButton(
-      int count, double maxWidth, double maxHeight) {
-    final bool isSelected = _mamMembersCount == count;
-    return GestureDetector(
-      onTap: () => setState(() => _mamMembersCount = count),
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
-        width: maxWidth * 0.05,
-        height: maxWidth * 0.05,
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            "$count",
-            style: TextStyle(
-              fontSize: maxWidth * 0.018,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? primaryRed : Colors.white,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Section fonctionnalités moderne
-  Widget _buildModernFeaturesSection(List<String> featuresList,
-      Color primaryColor, double maxWidth, double maxHeight) {
-    return Column(
-      children: [
-        // Titre moderne
-        Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(maxWidth * 0.015),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withOpacity(0.7)],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.star_rounded,
-                color: Colors.white,
-                size: maxWidth * 0.025,
-              ),
-            ),
-            SizedBox(width: maxWidth * 0.02),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Pourquoi choisir Poppin's ?",
+                  // Fonctionnalités incluses
+                  const Text(
+                    'Fonctionnalités incluses :',
                     style: TextStyle(
-                      fontSize: maxWidth * 0.028,
-                      fontWeight: FontWeight.w800,
-                      color: primaryColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    "Fonctionnalités incluses",
-                    style: TextStyle(
-                      fontSize: maxWidth * 0.018,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade600,
+                  const SizedBox(height: 12),
+
+                  ..._getFeatures().map((feature) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check,
+                                color: Colors.green[600], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                feature,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+
+                  const SizedBox(height: 32),
+
+                  // Informations légales
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Informations importantes :',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '• L\'abonnement se renouvelle automatiquement\n'
+                          '• Résiliation possible à tout moment dans les paramètres ${Platform.isIOS ? 'iOS' : 'Android'}\n'
+                          '• Prix affiché TTC pour la France',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
+                  const SizedBox(height: 24),
+
+                  // Boutons d'action
+                  if (_activeSubscription == null) ...[
+                    // Bouton d'achat
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isPurchasing ? null : _purchaseSubscription,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isPurchasing
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation(Colors.white),
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text('Traitement...'),
+                                ],
+                              )
+                            : const Text(
+                                'Commencer l\'essai gratuit de 7 jours',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Bouton de restauration
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _restorePurchases,
+                      child: Text(
+                        'Restaurer mes achats',
+                        style: TextStyle(
+                          color: primaryBlue,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
-          ],
-        ),
-        SizedBox(height: maxHeight * 0.04),
-        // Grille moderne des fonctionnalités
-        _buildModernFeaturesGrid(
-            featuresList, primaryColor, maxWidth, maxHeight),
-        SizedBox(height: maxHeight * 0.04),
-        // Info box moderne
-        Container(
-          padding: EdgeInsets.all(maxWidth * 0.03),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [lightBlue, lightBlue.withOpacity(0.5)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: primaryBlue.withOpacity(0.2)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(maxWidth * 0.015),
-                decoration: BoxDecoration(
-                  color: primaryBlue.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.info_outline_rounded,
-                  color: primaryBlue,
-                  size: maxWidth * 0.022,
-                ),
-              ),
-              SizedBox(width: maxWidth * 0.02),
-              Expanded(
-                child: Text(
-                  "Résiliation possible à tout moment depuis l'AppStore (iOS) ou GooglePlay (Android)",
-                  style: TextStyle(
-                    fontSize: maxWidth * 0.016,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF455A64),
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
-  // Grille moderne des fonctionnalités
-  Widget _buildModernFeaturesGrid(List<String> featuresList, Color primaryColor,
-      double maxWidth, double maxHeight) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: maxWidth * 0.02,
-        mainAxisSpacing: maxHeight * 0.02,
-        childAspectRatio: 2.5,
-      ),
-      itemCount: featuresList.length,
-      itemBuilder: (context, index) {
-        return _buildModernFeatureCard(
-            featuresList[index], primaryColor, maxWidth, maxHeight, index);
-      },
-    );
-  }
-
-  // Carte fonctionnalité moderne
-  Widget _buildModernFeatureCard(String feature, Color primaryColor,
-      double maxWidth, double maxHeight, int index) {
-    final List<IconData> icons = [
-      Icons.access_time_rounded,
-      Icons.chat_bubble_rounded,
-      Icons.campaign_rounded,
-      Icons.health_and_safety_rounded,
-      Icons.dashboard_rounded,
-      Icons.file_copy_rounded,
-      Icons.school_rounded,
-      Icons.child_care_rounded,
-      Icons.favorite_rounded,
-      Icons.verified_rounded,
-      Icons.group_rounded,
-      Icons.share_rounded,
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            offset: const Offset(0, 4),
-            blurRadius: 20,
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(maxWidth * 0.02),
-        child: Row(
-          children: [
-            Container(
-              width: maxWidth * 0.025,
-              height: maxWidth * 0.025,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withOpacity(0.7)],
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                index < icons.length
-                    ? icons[index]
-                    : Icons.check_circle_rounded,
-                color: Colors.white,
-                size: maxWidth * 0.015,
-              ),
-            ),
-            SizedBox(width: maxWidth * 0.015),
-            Expanded(
-              child: Text(
-                feature,
-                style: TextStyle(
-                  fontSize: maxWidth * 0.014,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF455A64),
-                  height: 1.3,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: Duration(seconds: 4),
-      ),
-    );
+  @override
+  void dispose() {
+    // Le service sera nettoyé automatiquement
+    super.dispose();
   }
 }

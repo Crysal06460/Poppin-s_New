@@ -154,8 +154,8 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/subscription-confirmed',
       builder: (context, state) {
-        final structureInfo = state.extra as Map<String, dynamic>? ?? {};
-        return SubscriptionConfirmedScreen(structureInfo: structureInfo);
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return SubscriptionConfirmedScreen(structureInfo: data);
       },
     ),
     GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
@@ -164,9 +164,23 @@ final GoRouter router = GoRouter(
       path: '/pricing',
       builder: (context, state) {
         final structureInfo = state.extra as Map<String, dynamic>? ?? {};
-        return PricingScreen(structureInfo: structureInfo);
+
+        // Extraire le type de structure
+        final String structureType =
+            structureInfo['structureType'] ?? 'assistante_maternelle';
+
+        // Extraire le nombre de membres (pour MAM)
+        final int mamMembersCount = structureInfo['memberCount'] ??
+            structureInfo['mamMembersCount'] ??
+            2;
+
+        return PricingScreen(
+          structureType: structureType,
+          mamMembersCount: mamMembersCount,
+        );
       },
     ),
+
     GoRoute(
       path: '/structure-details',
       builder: (context, state) => const StructureDetailsScreen(),

@@ -112,21 +112,21 @@ class _SubscriptionConfirmedScreenState
       return widget.structureInfo['priceDisplay'];
     }
 
-    // Sinon, calculer le prix comme avant (fallback)
+    // Sinon, calculer le prix comme avant (fallback) - ✅ PRIX CORRIGÉS
     final bool isMam = structureType == 'MAM';
     if (isMam) {
       switch (memberCount) {
         case 2:
-          return '22 € / mois';
+          return '24,99 € / mois'; // ✅ CORRIGÉ
         case 3:
-          return '32 € / mois';
+          return '34,99 € / mois'; // ✅ CORRIGÉ
         case 4:
-          return '40 € / mois';
+          return '44,99 € / mois'; // ✅ CORRIGÉ
         default:
-          return '22 € / mois';
+          return '24,99 € / mois'; // ✅ CORRIGÉ
       }
     } else {
-      return '12 € / mois';
+      return '12,99 € / mois'; // ✅ CORRIGÉ
     }
   }
 
@@ -148,17 +148,30 @@ class _SubscriptionConfirmedScreenState
 
     // Mapping des types techniques vers les noms d'affichage
     Map<String, String> structureDisplayNames = {
-      'assistante_maternelle': 'Assistant Maternel', // ✅ MODIFIÉ
-      'AssistanteMaternelle': 'Assistant Maternel', // ✅ MODIFIÉ
-      'MAM': 'Maison d\'Assistantes Maternelles',
-      'MaisonAssistantesMaternelles': 'Maison d\'Assistantes Maternelles',
+      'assistante_maternelle':
+          'Assistant(e) Maternel(le)', // ✅ FÉMINISÉ/PLURALISÉ
+      'AssistanteMaternelle':
+          'Assistant(e) Maternel(le)', // ✅ FÉMINISÉ/PLURALISÉ
+      'MAM': 'Maison d\'Assistant(e)s Maternel(le)s',
+      'MaisonAssistantesMaternelles': 'Maison d\'Assistant(e)s Maternel(le)s',
+    };
+
+    // Version courte pour les détails (section Type)
+    Map<String, String> structureShortNames = {
+      'assistante_maternelle': 'Assistant(e) Maternel(le)', // ✅ VERSION COURTE
+      'AssistanteMaternelle': 'Assistant(e) Maternel(le)',
+      'MAM': 'MAM', // ✅ VERSION COURTE
+      'MaisonAssistantesMaternelles': 'MAM',
     };
 
     // MODIFICATION : Utiliser la nouvelle méthode pour obtenir le prix
     String price = _getPrice(structureType, memberCount);
 
-    // Obtenir le nom d'affichage
+    // Obtenir le nom d'affichage (version longue pour les messages)
     String displayName = structureDisplayNames[structureType] ?? "Structure";
+
+    // Obtenir le nom court pour les détails
+    String shortName = structureShortNames[structureType] ?? "Structure";
 
     // Couleur principale en fonction du type de structure
     Color primaryColor = isMam ? primaryRed : primaryBlue;
@@ -179,18 +192,18 @@ class _SubscriptionConfirmedScreenState
         iconTheme: IconThemeData(color: primaryColor),
         centerTitle: true,
       ),
-      // Version iPad ou iPhone selon la taille d'écran
+      // Version iPad ou iPhone selon la taille d'écran - ✅ CORRIGÉ : passer shortName
       body: isTablet
-          ? _buildTabletContent(
-              primaryColor, displayName, price, memberCount, isMam, screenSize)
+          ? _buildTabletContent(primaryColor, displayName, shortName, price,
+              memberCount, isMam, screenSize)
           : _buildPhoneContent(
-              primaryColor, displayName, price, memberCount, isMam),
+              primaryColor, displayName, shortName, price, memberCount, isMam),
     );
   }
 
-  // Méthode pour la version iPhone (garder exactement comme avant)
+  // Méthode pour la version iPhone - ✅ CORRIGÉ : ajout paramètre shortName
   Widget _buildPhoneContent(Color primaryColor, String displayName,
-      String price, int memberCount, bool isMam) {
+      String shortName, String price, int memberCount, bool isMam) {
     return SafeArea(
       child: Column(
         children: [
@@ -234,7 +247,7 @@ class _SubscriptionConfirmedScreenState
 
                   const SizedBox(height: 20),
 
-                  // Message de confirmation
+                  // Message de confirmation - ✅ UTILISE displayName (version longue)
                   Text(
                     "Votre abonnement $displayName a été activé avec succès.",
                     style: const TextStyle(
@@ -279,11 +292,11 @@ class _SubscriptionConfirmedScreenState
 
                           const SizedBox(height: 15),
 
-                          // Type d'abonnement
+                          // Type d'abonnement - ✅ CORRIGÉ : utilise shortName
                           _buildInfoRow(
                             icon: Icons.business,
                             title: "Type",
-                            value: displayName,
+                            value: shortName, // ✅ UTILISE LA VERSION COURTE
                             color: primaryColor,
                           ),
 
@@ -343,35 +356,6 @@ class _SubscriptionConfirmedScreenState
                   ),
 
                   const SizedBox(height: 30),
-
-                  // Information supplémentaire
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: lightBlue,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: primaryBlue.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: primaryBlue,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            "Vous pouvez gérer votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
-                            style: TextStyle(
-                              fontSize: 14,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
                   const SizedBox(height: 30),
                 ],
@@ -441,8 +425,10 @@ class _SubscriptionConfirmedScreenState
     );
   }
 
+  // ✅ CORRIGÉ : ajout paramètre shortName
   Widget _buildTabletDetailsGrid(
       String displayName,
+      String shortName, // ✅ NOUVEAU PARAMÈTRE
       String price,
       int memberCount,
       bool isMam,
@@ -454,7 +440,7 @@ class _SubscriptionConfirmedScreenState
       {
         'icon': Icons.business_outlined,
         'title': 'Type d\'abonnement',
-        'value': displayName,
+        'value': shortName, // ✅ UTILISE LA VERSION COURTE
       },
       {
         'icon': Icons.euro_outlined,
@@ -795,8 +781,15 @@ class _SubscriptionConfirmedScreenState
     );
   }
 
-  Widget _buildTabletContent(Color primaryColor, String displayName,
-      String price, int memberCount, bool isMam, Size screenSize) {
+  // ✅ CORRIGÉ : ajout paramètre shortName
+  Widget _buildTabletContent(
+      Color primaryColor,
+      String displayName,
+      String shortName,
+      String price,
+      int memberCount,
+      bool isMam,
+      Size screenSize) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double maxWidth = constraints.maxWidth;
@@ -931,8 +924,8 @@ class _SubscriptionConfirmedScreenState
                                       ),
                                       Flexible(
                                         child: Text(
-                                          // ✅ MODIFICATION : Utiliser version courte pour l'affichage dans le panneau gauche
-                                          isMam ? "MAM" : "Assistant Maternel",
+                                          // ✅ UTILISE shortName (version courte)
+                                          shortName,
                                           style: TextStyle(
                                             fontSize: maxWidth * 0.016,
                                             fontWeight: FontWeight.bold,
@@ -1051,9 +1044,10 @@ class _SubscriptionConfirmedScreenState
 
                                 SizedBox(height: maxHeight * 0.03),
 
-                                // Grille de détails pour iPad
+                                // Grille de détails pour iPad - ✅ CORRIGÉ : passer shortName
                                 _buildTabletDetailsGrid(
                                     displayName,
+                                    shortName, // ✅ PASSER LA VERSION COURTE
                                     price,
                                     memberCount,
                                     isMam,
@@ -1112,7 +1106,7 @@ class _SubscriptionConfirmedScreenState
                                     ),
                                     SizedBox(height: maxHeight * 0.005),
                                     Text(
-                                      "Vous pouvez modifier ou résilier votre abonnement à tout moment depuis l'AppStore pour iOS ou GooglePlay pour Android.",
+                                      "Vous pouvez modifier ou résilier votre abonnement à tout moment depuis les paramètres de votre appareil.",
                                       style: TextStyle(
                                         fontSize: maxWidth * 0.016,
                                         height: 1.4,

@@ -3,6 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'dart:async';
+import 'dart:io';
+
+// ✅ IMPORTS AJOUTÉS pour les services d'abonnement
+import '../services/subscription_service.dart';
+import '../services/unified_subscription_service.dart';
 
 class SubscriptionUpgradeScreen extends StatefulWidget {
   const SubscriptionUpgradeScreen({Key? key}) : super(key: key);
@@ -14,8 +20,8 @@ class SubscriptionUpgradeScreen extends StatefulWidget {
 
 class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   // Couleurs officielles de l'application
-  static const Color primaryRed = Color(0xFFD94350);
-  static const Color primaryBlue = Color(0xFF3D9DF2);
+  static const Color primaryRed = Color(0xFFD94350); // Pour erreurs uniquement
+  static const Color primaryBlue = Color(0xFF3D9DF2); // COULEUR PRINCIPALE
   static const Color lightBlue = Color(0xFFDFE9F2);
   static const Color brightCyan = Color(0xFF05C7F2);
   static const Color primaryYellow = Color(0xFFF2B705);
@@ -32,10 +38,184 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   String _currentPrice = '';
   String _newPrice = '';
 
+  // ✅ AJOUTÉ : Stream subscription pour écouter les achats
+  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+
   @override
   void initState() {
     super.initState();
+    _initializeServices();
     _loadCurrentSubscriptionData();
+  }
+
+  @override
+  void dispose() {
+    // ✅ AJOUTÉ : Nettoyer les listeners
+    _purchaseSubscription?.cancel();
+    super.dispose();
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Initialiser les services d'abonnement
+  Future<void> _initializeServices() async {
+    try {
+      // Initialiser le service d'abonnement
+      await SubscriptionService.initialize();
+
+      // Initialiser le service unifié
+      await UnifiedSubscriptionService.instance.initialize();
+
+      // ✅ ÉCOUTER LES MISES À JOUR D'ACHAT
+      _purchaseSubscription = InAppPurchase.instance.purchaseStream.listen(
+        _handlePurchaseUpdate,
+        onError: (error) {
+          setState(() {
+            _isPurchasing = false;
+            _errorMessage = "Erreur d'achat: $error";
+          });
+        },
+      );
+
+      print('✅ Services d\'abonnement initialisés');
+    } catch (e) {
+      print('❌ Erreur initialisation services: $e');
+    }
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Traiter les mises à jour d'achat
+  void _handlePurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) {
+    for (final PurchaseDetails purchase in purchaseDetailsList) {
+      print('🛒 Mise à jour achat: ${purchase.productID} - ${purchase.status}');
+
+      switch (purchase.status) {
+        case PurchaseStatus.purchased:
+          _handlePurchaseSuccess(purchase);
+          break;
+        case PurchaseStatus.error:
+          _handlePurchaseError(purchase.error?.message ?? 'Erreur inconnue');
+          break;
+        case PurchaseStatus.canceled:
+          _handlePurchaseCanceled();
+          break;
+        case PurchaseStatus.pending:
+          // L'achat est en attente (payment deferral sur iOS)
+          print('⏳ Achat en attente: ${purchase.productID}');
+          break;
+        case PurchaseStatus.restored:
+          // Achat restauré
+          _handlePurchaseSuccess(purchase);
+          break;
+      }
+
+      // Finaliser la transaction
+      if (purchase.pendingCompletePurchase) {
+        InAppPurchase.instance.completePurchase(purchase);
+      }
+    }
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Traiter un achat réussi
+  Future<void> _handlePurchaseSuccess(PurchaseDetails purchase) async {
+    try {
+      setState(() {
+        _isPurchasing = false;
+      });
+
+      // Mettre à jour Firestore avec le nouvel abonnement
+      await _updateFirestoreSubscription(purchase);
+
+      // ✅ REDIRECTION VERS L'ÉCRAN DE CONFIRMATION
+      context.go('/upgrade-confirmed', extra: {
+        'structureType': 'MAM',
+        'structureId': await _getStructureId(),
+        'memberCount': _selectedMemberCount,
+        'oldMemberCount': _maxMemberCount,
+        'purchaseId': purchase.purchaseID,
+        'productId': purchase.productID,
+      });
+
+      print('✅ Achat réussi et Firestore mis à jour');
+    } catch (e) {
+      setState(() {
+        _isPurchasing = false;
+        _errorMessage = "Erreur lors de la finalisation: $e";
+      });
+    }
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Traiter une erreur d'achat
+  void _handlePurchaseError(String error) {
+    setState(() {
+      _isPurchasing = false;
+      _errorMessage = "Erreur d'achat: $error";
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Erreur d'achat: $error"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Traiter un achat annulé
+  void _handlePurchaseCanceled() {
+    setState(() {
+      _isPurchasing = false;
+      _errorMessage = "";
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Achat annulé"),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  // ✅ MÉTHODE MODIFIÉE : Mettre à jour Firestore après achat réussi
+  Future<void> _updateFirestoreSubscription(PurchaseDetails purchase) async {
+    final String structureId = await _getStructureId();
+
+    // 1. Mettre à jour l'abonnement dans la collection subscriptions
+    final subscriptionQuery = await FirebaseFirestore.instance
+        .collection('subscriptions')
+        .where('structureId', isEqualTo: structureId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    if (subscriptionQuery.docs.isNotEmpty) {
+      await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .doc(subscriptionQuery.docs.first.id)
+          .update({
+        'memberCount': _selectedMemberCount,
+        'productId': purchase.productID,
+        'purchaseId': purchase.purchaseID,
+        'purchaseDate': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await FirebaseFirestore.instance.collection('subscriptions').add({
+        'structureId': structureId,
+        'structureType': 'MAM',
+        'memberCount': _selectedMemberCount,
+        'productId': purchase.productID,
+        'purchaseId': purchase.purchaseID,
+        'purchaseDate': FieldValue.serverTimestamp(),
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 2. Mettre à jour le document principal de la structure
+    await FirebaseFirestore.instance
+        .collection('structures')
+        .doc(structureId)
+        .update({
+      'maxMemberCount': _selectedMemberCount,
+      'subscriptionActive': true,
+      'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> _loadCurrentSubscriptionData() async {
@@ -137,6 +317,35 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     }
   }
 
+  // ✅ OBTENIR L'ID PRODUIT POUR LES ACHATS IN-APP
+  String _getProductIdForMembers(int memberCount) {
+    if (Platform.isIOS) {
+      // IDs iOS (définis dans subscription_service.dart)
+      switch (memberCount) {
+        case 2:
+          return 'com.beylet.poppinsApp.subscription.mam_2_members';
+        case 3:
+          return 'com.beylet.poppinsApp.subscription.mam_3_members';
+        case 4:
+          return 'com.beylet.poppinsApp.subscription.mam_4_members';
+        default:
+          return 'com.beylet.poppinsApp.subscription.mam_2_members';
+      }
+    } else {
+      // IDs Android (définis dans subscription_service.dart)
+      switch (memberCount) {
+        case 2:
+          return 'mam2';
+        case 3:
+          return 'mam3';
+        case 4:
+          return 'mam4';
+        default:
+          return 'mam2';
+      }
+    }
+  }
+
   Future<String> _getStructureId() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return "";
@@ -158,7 +367,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     return user.uid;
   }
 
-  // Fonction pour effectuer la mise à niveau de l'abonnement
+  // ✅ MÉTHODE COMPLÈTEMENT RÉÉCRITE : Vraie mise à niveau avec Apple Store/Google Play
   Future<void> _upgradeSubscription() async {
     setState(() {
       _isPurchasing = true;
@@ -166,66 +375,80 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     });
 
     try {
-      // Simuler le processus d'achat via in_app_purchase
-      // En production, cela devrait appeler le SDK Google Play ou App Store
-      await Future.delayed(Duration(seconds: 2)); // Simulation du traitement
+      // ✅ OBTENIR L'ID PRODUIT CORRECT
+      final String productId = _getProductIdForMembers(_selectedMemberCount);
+      print('🛒 Tentative d\'achat du produit: $productId');
 
-      // Dans une vraie implémentation, on utiliserait par exemple:
-      // final bool available = await InAppPurchase.instance.isAvailable();
-      // if (!available) {
-      //   throw Exception("Les achats in-app ne sont pas disponibles");
-      // }
-      //
-      // String productId = 'mam_members_${_selectedMemberCount}';
-      // final ProductDetailsResponse response = await InAppPurchase.instance.queryProductDetails({productId});
-      // await InAppPurchase.instance.buyNonConsumable(productDetails: response.productDetails.first);
+      // ✅ VÉRIFIER SI ON EST EN MODE DÉVELOPPEMENT
+      if (SubscriptionService.isInDevMode) {
+        print('🧪 MODE DEV: Simulation d\'achat');
 
-      // Mettre à jour Firestore avec le nouveau nombre de membres
-      final String structureId = await _getStructureId();
+        // Simuler un délai d'achat
+        await Future.delayed(Duration(seconds: 2));
 
-      // 1. Mettre à jour l'abonnement dans la collection subscriptions
-      // Trouver d'abord l'abonnement actif
-      final subscriptionQuery = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: structureId)
-          .where('status', isEqualTo: 'active')
-          .get();
+        // Simuler un achat réussi
+        final fakeSuccess =
+            await SubscriptionService.simulateDevPurchaseSuccess(productId);
 
-      // Mettre à jour ou créer un nouvel abonnement
-      if (subscriptionQuery.docs.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('subscriptions')
-            .doc(subscriptionQuery.docs.first.id)
-            .update({
-          'memberCount': _selectedMemberCount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        await FirebaseFirestore.instance.collection('subscriptions').add({
-          'structureId': structureId,
+        // Mettre à jour Firestore directement en mode dev
+        await _updateFirestoreAfterDevPurchase();
+
+        // Rediriger vers la confirmation
+        context.go('/upgrade-confirmed', extra: {
           'structureType': 'MAM',
+          'structureId': await _getStructureId(),
           'memberCount': _selectedMemberCount,
-          'status': 'active',
-          'createdAt': FieldValue.serverTimestamp(),
+          'oldMemberCount': _maxMemberCount,
+          'isDev': true,
         });
+
+        setState(() {
+          _isPurchasing = false;
+        });
+
+        return;
       }
 
-      // 2. Mettre à jour le document principal de la structure
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .update({
-        'maxMemberCount': _selectedMemberCount,
-        'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      // ✅ MODE PRODUCTION : VRAI ACHAT via Apple Store/Google Play
+      final InAppPurchase inAppPurchase = InAppPurchase.instance;
 
-      // Rediriger vers l'écran de confirmation
-      context.go('/upgrade-confirmed', extra: {
-        'structureType': 'MAM',
-        'structureId': structureId,
-        'memberCount': _selectedMemberCount,
-        'oldMemberCount': _maxMemberCount,
-      });
+      // Vérifier que les achats sont disponibles
+      final bool isAvailable = await inAppPurchase.isAvailable();
+      if (!isAvailable) {
+        throw Exception('Achats intégrés non disponibles sur cet appareil');
+      }
+
+      // Récupérer les détails du produit
+      final ProductDetailsResponse response =
+          await inAppPurchase.queryProductDetails({productId});
+
+      if (response.error != null) {
+        throw Exception(
+            'Erreur lors de la récupération du produit: ${response.error?.message}');
+      }
+
+      if (response.productDetails.isEmpty) {
+        throw Exception('Produit non trouvé: $productId');
+      }
+
+      // ✅ LANCER L'ACHAT RÉEL
+      final ProductDetails productDetails = response.productDetails.first;
+      print(
+          '✅ Produit trouvé: ${productDetails.title} - ${productDetails.price}');
+
+      final PurchaseParam purchaseParam =
+          PurchaseParam(productDetails: productDetails);
+
+      // 🚀 ACHAT RÉEL via Apple Store/Google Play
+      final bool launched =
+          await inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
+
+      if (!launched) {
+        throw Exception('Impossible de lancer l\'interface d\'achat');
+      }
+
+      print('🚀 Achat lancé - En attente de la réponse de l\'utilisateur...');
+      // Le résultat sera traité par _handlePurchaseUpdate()
     } catch (e) {
       setState(() {
         _isPurchasing = false;
@@ -239,6 +462,52 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
         ),
       );
     }
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Mise à jour Firestore en mode développement
+  Future<void> _updateFirestoreAfterDevPurchase() async {
+    final String structureId = await _getStructureId();
+
+    // Mettre à jour ou créer l'abonnement
+    final subscriptionQuery = await FirebaseFirestore.instance
+        .collection('subscriptions')
+        .where('structureId', isEqualTo: structureId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    if (subscriptionQuery.docs.isNotEmpty) {
+      await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .doc(subscriptionQuery.docs.first.id)
+          .update({
+        'memberCount': _selectedMemberCount,
+        'productId': 'dev_${_getProductIdForMembers(_selectedMemberCount)}',
+        'purchaseId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
+        'purchaseDate': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await FirebaseFirestore.instance.collection('subscriptions').add({
+        'structureId': structureId,
+        'structureType': 'MAM',
+        'memberCount': _selectedMemberCount,
+        'productId': 'dev_${_getProductIdForMembers(_selectedMemberCount)}',
+        'purchaseId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
+        'purchaseDate': FieldValue.serverTimestamp(),
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Mettre à jour la structure
+    await FirebaseFirestore.instance
+        .collection('structures')
+        .doc(structureId)
+        .update({
+      'maxMemberCount': _selectedMemberCount,
+      'subscriptionActive': true,
+      'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   // Widget pour les boutons de sélection du nombre de membres
@@ -332,23 +601,26 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
           "Mise à niveau abonnement",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: primaryRed,
+        backgroundColor: primaryBlue,
         elevation: 0,
-        iconTheme: IconThemeData(color: Colors.white),
         centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go('/dashboard'),
+        ),
       ),
       body: _isLoading
           ? Center(
-              child: CircularProgressIndicator(color: primaryRed),
+              child: CircularProgressIndicator(color: primaryBlue),
             )
           : Column(
               children: [
-                // En-tête avec couleur selon le type de structure
+                // En-tête avec couleur BLEUE
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
                   decoration: BoxDecoration(
-                    color: primaryRed,
+                    color: primaryBlue,
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(30)),
                   ),
@@ -433,7 +705,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: primaryRed,
+                            color: primaryBlue,
                           ),
                         ),
                         SizedBox(height: 20),
@@ -444,7 +716,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                             color: lightBlue,
                             borderRadius: BorderRadius.circular(16),
                             border:
-                                Border.all(color: primaryRed.withOpacity(0.3)),
+                                Border.all(color: primaryBlue.withOpacity(0.3)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +738,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                     _buildMemberCountButton(
                                       count: i,
                                       isSelected: _selectedMemberCount == i,
-                                      color: primaryRed,
+                                      color: primaryBlue,
                                     ),
                                 ],
                               ),
@@ -492,7 +764,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: primaryRed),
+                              border: Border.all(color: primaryBlue),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),
@@ -508,7 +780,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: primaryRed,
+                                    color: primaryBlue,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -550,7 +822,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                     ),
                                     Icon(
                                       Icons.arrow_forward,
-                                      color: primaryRed,
+                                      color: primaryBlue,
                                       size: 24,
                                     ),
                                     Expanded(
@@ -569,7 +841,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
-                                              color: primaryRed,
+                                              color: primaryBlue,
                                             ),
                                           ),
                                           SizedBox(height: 4),
@@ -577,7 +849,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                             _newPrice,
                                             style: TextStyle(
                                               fontSize: 16,
-                                              color: primaryRed,
+                                              color: primaryBlue,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -616,6 +888,40 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                     ],
                                   ),
                                 ),
+
+                                // ✅ INDICATEUR DE MODE DÉVELOPPEMENT
+                                if (SubscriptionService.isInDevMode) ...[
+                                  SizedBox(height: 16),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.orange.shade200),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.developer_mode,
+                                          color: Colors.orange.shade700,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            "Mode développement activé - Aucun achat réel ne sera effectué",
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -704,7 +1010,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                           ? null
                           : _upgradeSubscription,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryRed,
+                        backgroundColor: primaryBlue,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -721,7 +1027,9 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                               ),
                             )
                           : Text(
-                              "METTRE À NIVEAU",
+                              SubscriptionService.isInDevMode
+                                  ? "SIMULER MISE À NIVEAU"
+                                  : "METTRE À NIVEAU",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,

@@ -136,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Expanded(
                       child: _buildTypeCheckbox(
-                        title: "Assistant Maternel",
+                        title: "Assistant(e) Maternel(le)",
                         isChecked: isAssistanteMaterCheck,
                         onChanged: (value) {
                           if (value == true) {
@@ -533,7 +533,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         // Sous-titre plus discret
         Text(
-          "Rejoignez notre application qui simplifie et professionnalise le métier d'assistant maternel",
+          "Rejoignez notre application qui simplifie et professionnalise le métier d'assistant(e) maternel(le)",
           style: TextStyle(
             fontSize: maxWidth * 0.016, // Réduit de 0.018 à 0.016
             color: Colors.grey.shade600,
@@ -561,7 +561,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               Expanded(
                 child: _buildTabletTypeCard(
-                  title: "Assistant Maternel",
+                  title: "Assistant(e) Maternel(le)",
                   subtitle: "",
                   icon: Icons.person,
                   isSelected: isAssistanteMaterCheck,
@@ -579,7 +579,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Expanded(
                 child: _buildTabletTypeCard(
                   title: "MAM",
-                  subtitle: "Maison d'Assistants Maternels",
+                  subtitle: "Maison d'Assistant(e)s Maternel(le)s",
                   icon: Icons.group,
                   isSelected: isMAMCheck,
                   onTap: () {

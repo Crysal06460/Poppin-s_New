@@ -26,7 +26,8 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
   // Définition des couleurs de la palette
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
   static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
-  static const Color primaryRed = Color(0xFFD94350); // #D94350
+  static const Color primaryRed =
+      Color(0xFFD94350); // #D94350 (pour erreurs seulement)
 
   @override
   void initState() {
@@ -387,6 +388,8 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
   }
 
   // Remplacer la méthode build() existante par celle-ci
+  // Remplacer TOUTE la méthode build() dans mam_member_add_screen.dart par :
+
   @override
   Widget build(BuildContext context) {
     // Récupérer les dimensions de l'écran
@@ -395,9 +398,26 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      // CORRECTION APPBAR EN BLEU
+      appBar: AppBar(
+        title: Text(
+          "Gestion des membres",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: primaryBlue, // BLEU au lieu du rouge
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go('/dashboard'),
+        ),
+        centerTitle: true,
+      ),
       body: Column(
         children: [
-          // En-tête avec fond de couleur - Responsive
+          // En-tête avec fond BLEU
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -405,8 +425,8 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  primaryBlue,
-                  primaryBlue.withOpacity(0.85),
+                  primaryBlue, // BLEU
+                  primaryBlue.withOpacity(0.85), // BLEU
                 ],
               ),
               borderRadius: BorderRadius.only(
@@ -415,7 +435,7 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: primaryBlue.withOpacity(0.3),
+                  color: primaryBlue.withOpacity(0.3), // BLEU
                   offset: const Offset(0, 4),
                   blurRadius: 8,
                 ),
@@ -425,42 +445,19 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
                   screenSize.width * (isTablet ? 0.03 : 0.04),
-                  screenSize.height * 0.02,
+                  screenSize.height * 0.01,
                   screenSize.width * (isTablet ? 0.03 : 0.04),
                   screenSize.height * (isTablet ? 0.02 : 0.025),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    // Bouton retour avec meilleur contraste
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: EdgeInsets.all(
-                            screenSize.width * (isTablet ? 0.015 : 0.02)),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: Colors.white,
-                          size: screenSize.width * (isTablet ? 0.025 : 0.06),
-                        ),
+                    Text(
+                      "Ajout d'un nouveau membre à votre MAM",
+                      style: TextStyle(
+                        fontSize: screenSize.width * (isTablet ? 0.020 : 0.04),
+                        color: Colors.white.withOpacity(0.9),
                       ),
-                    ),
-                    SizedBox(
-                        width: screenSize.width * (isTablet ? 0.02 : 0.04)),
-                    // Titre avec meilleur style
-                    Expanded(
-                      child: Text(
-                        "Gestion des membres",
-                        style: TextStyle(
-                          fontSize:
-                              screenSize.width * (isTablet ? 0.028 : 0.055),
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -472,7 +469,8 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
           _isLoading && _currentMemberCount == 0
               ? Expanded(
                   child: Center(
-                    child: CircularProgressIndicator(color: primaryBlue),
+                    child:
+                        CircularProgressIndicator(color: primaryBlue), // BLEU
                   ),
                 )
               : Expanded(
@@ -961,16 +959,21 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
 
 // Méthode pour l'interface limite atteinte sur iPad
   Widget _buildTabletLimitReached(double maxWidth, double maxHeight) {
+    // Déterminer si on peut encore faire une mise à niveau
+    bool canUpgrade = _maxMemberCount < 4;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Titre de la section
         Text(
-          "Limite de membres atteinte",
+          canUpgrade
+              ? "Limite d'abonnement atteinte"
+              : "Limite maximale atteinte",
           style: TextStyle(
             fontSize: maxWidth * 0.022,
             fontWeight: FontWeight.bold,
-            color: primaryRed,
+            color: canUpgrade ? primaryBlue : primaryRed, // BLEU pour upgrade
           ),
         ),
 
@@ -982,32 +985,44 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.people_alt_outlined,
+                canUpgrade ? Icons.upgrade : Icons.people_alt_outlined,
                 size: maxWidth * 0.1,
-                color: primaryRed.withOpacity(0.7),
+                color: canUpgrade
+                    ? primaryBlue.withOpacity(0.7) // BLEU
+                    : primaryRed.withOpacity(0.7),
               ),
               SizedBox(height: maxHeight * 0.03),
               Container(
                 padding: EdgeInsets.all(maxWidth * 0.025),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: canUpgrade
+                      ? primaryBlue.withOpacity(0.1) // BLEU
+                      : Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  border: Border.all(
+                      color: canUpgrade
+                          ? primaryBlue.withOpacity(0.3) // BLEU
+                          : Colors.red.withOpacity(0.3)),
                 ),
                 child: Column(
                   children: [
                     Text(
-                      "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) autorisé par votre abonnement.",
+                      canUpgrade
+                          ? "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) de votre abonnement actuel."
+                          : "Vous avez atteint le nombre maximum absolu de membres (4) pour une MAM.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: maxWidth * 0.016,
-                        color: Colors.red[700],
+                        color:
+                            canUpgrade ? primaryBlue : Colors.red[700], // BLEU
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     SizedBox(height: maxHeight * 0.02),
                     Text(
-                      "Pour ajouter d'autres membres, veuillez retirer un membre existant ou mettre à niveau votre abonnement.",
+                      canUpgrade
+                          ? "Pour ajouter d'autres membres, vous pouvez passer à l'abonnement ${_maxMemberCount + 1} membres ou retirer un membre existant."
+                          : "Pour ajouter un nouveau membre, vous devez d'abord retirer un membre existant.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: maxWidth * 0.014,
@@ -1018,44 +1033,64 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
                 ),
               ),
               SizedBox(height: maxHeight * 0.04),
+
               // Boutons d'action pour iPad
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTabletActionButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MAMMemberRemovalScreen(),
-                          ),
-                        );
-                      },
-                      icon: Icons.person_remove,
-                      label: "RETIRER UN MEMBRE",
-                      color: primaryRed,
-                      maxWidth: maxWidth,
-                      maxHeight: maxHeight,
+              if (canUpgrade) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTabletActionButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MAMMemberRemovalScreen(),
+                            ),
+                          );
+                        },
+                        icon: Icons.person_remove,
+                        label: "RETIRER UN MEMBRE",
+                        color: primaryRed,
+                        maxWidth: maxWidth,
+                        maxHeight: maxHeight,
+                        isOutlined: true,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: maxWidth * 0.02),
-                  Expanded(
-                    child: _buildTabletActionButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        context.go('/subscription-upgrade');
-                      },
-                      icon: Icons.upgrade,
-                      label: "METTRE À NIVEAU",
-                      color: primaryBlue,
-                      maxWidth: maxWidth,
-                      maxHeight: maxHeight,
-                      isOutlined: true,
+                    SizedBox(width: maxWidth * 0.02),
+                    Expanded(
+                      child: _buildTabletActionButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          context.go('/subscription-upgrade');
+                        },
+                        icon: Icons.upgrade,
+                        label: "PASSER À ${_maxMemberCount + 1} MEMBRES",
+                        color: primaryBlue, // BLEU
+                        maxWidth: maxWidth,
+                        maxHeight: maxHeight,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ] else ...[
+                _buildTabletActionButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MAMMemberRemovalScreen(),
+                      ),
+                    );
+                  },
+                  icon: Icons.person_remove,
+                  label: "RETIRER UN MEMBRE",
+                  color: primaryRed,
+                  maxWidth: maxWidth,
+                  maxHeight: maxHeight,
+                ),
+              ],
             ],
           ),
         ),
@@ -1224,18 +1259,24 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
 
 // Méthode pour l'interface limite atteinte sur iPhone
   Widget _buildPhoneLimitReached() {
+    bool canUpgrade = _maxMemberCount < 4;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(height: 40),
         Icon(
-          Icons.people_alt,
+          canUpgrade ? Icons.upgrade : Icons.people_alt,
           size: 80,
-          color: primaryBlue.withOpacity(0.7),
+          color: canUpgrade
+              ? primaryBlue.withOpacity(0.7) // BLEU
+              : primaryRed.withOpacity(0.7),
         ),
         SizedBox(height: 24),
         Text(
-          "Limite de membres atteinte",
+          canUpgrade
+              ? "Limite d'abonnement atteinte"
+              : "Limite maximale atteinte",
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 24,
@@ -1247,24 +1288,33 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
         Container(
           padding: EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: canUpgrade
+                ? primaryBlue.withOpacity(0.1) // BLEU
+                : Colors.red.withOpacity(0.1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.red.withOpacity(0.3)),
+            border: Border.all(
+                color: canUpgrade
+                    ? primaryBlue.withOpacity(0.3) // BLEU
+                    : Colors.red.withOpacity(0.3)),
           ),
           child: Column(
             children: [
               Text(
-                "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) autorisé par votre abonnement.",
+                canUpgrade
+                    ? "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) de votre abonnement actuel."
+                    : "Vous avez atteint le nombre maximum absolu de membres (4) pour une MAM.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.red[700],
+                  color: canUpgrade ? primaryBlue : Colors.red[700], // BLEU
                   fontWeight: FontWeight.w500,
                 ),
               ),
               SizedBox(height: 12),
               Text(
-                "Pour ajouter d'autres membres, veuillez retirer un membre existant ou mettre à niveau votre abonnement.",
+                canUpgrade
+                    ? "Pour ajouter d'autres membres, vous pouvez passer à l'abonnement ${_maxMemberCount + 1} membres ou retirer un membre existant."
+                    : "Pour ajouter un nouveau membre, vous devez d'abord retirer un membre existant.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -1275,31 +1325,50 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
           ),
         ),
         SizedBox(height: 40),
-        _buildPhoneActionButton(
-          onPressed: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MAMMemberRemovalScreen(),
-              ),
-            );
-          },
-          icon: Icons.person_remove,
-          label: "RETIRER UN MEMBRE",
-          color: primaryRed,
-        ),
-        SizedBox(height: 16),
-        _buildPhoneActionButton(
-          onPressed: () {
-            Navigator.pop(context);
-            context.go('/subscription-upgrade');
-          },
-          icon: Icons.upgrade,
-          label: "METTRE À NIVEAU L'ABONNEMENT",
-          color: primaryBlue,
-          isOutlined: true,
-        ),
+        if (canUpgrade) ...[
+          // Bouton principal : Mise à niveau
+          _buildPhoneActionButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.go('/subscription-upgrade');
+            },
+            icon: Icons.upgrade,
+            label: "PASSER À ${_maxMemberCount + 1} MEMBRES",
+            color: primaryBlue, // BLEU
+          ),
+          SizedBox(height: 16),
+          // Bouton secondaire : Retirer un membre
+          _buildPhoneActionButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MAMMemberRemovalScreen(),
+                ),
+              );
+            },
+            icon: Icons.person_remove,
+            label: "RETIRER UN MEMBRE",
+            color: primaryRed,
+            isOutlined: true,
+          ),
+        ] else ...[
+          _buildPhoneActionButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MAMMemberRemovalScreen(),
+                ),
+              );
+            },
+            icon: Icons.person_remove,
+            label: "RETIRER UN MEMBRE",
+            color: primaryRed,
+          ),
+        ],
       ],
     );
   }

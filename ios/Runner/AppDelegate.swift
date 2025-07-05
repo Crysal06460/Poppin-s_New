@@ -1,3 +1,4 @@
+// ios/Runner/AppDelegate.swift
 import Flutter
 import UIKit
 import Firebase
@@ -37,6 +38,19 @@ import UserNotifications
     
     // Enregistrer pour les notifications à distance
     application.registerForRemoteNotifications()
+    
+    // ✅ NOUVEAU : Enregistrement du plugin de subscription natif iOS
+    if #available(iOS 13.0, *) {
+      let controller = window?.rootViewController as! FlutterViewController
+      if let registrar = self.registrar(forPlugin: "SwiftSubscriptionPlugin") {
+        SwiftSubscriptionPlugin.register(with: registrar)
+        print("🍎 Plugin de subscription iOS natif enregistré")
+      } else {
+        print("⚠️ Impossible d'enregistrer le plugin de subscription")
+      }
+    } else {
+      print("⚠️ StoreKit natif nécessite iOS 13.0+")
+    }
     
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
