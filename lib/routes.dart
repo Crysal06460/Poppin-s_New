@@ -66,6 +66,7 @@ import 'package:poppins_app/screens/cleaning_schedule_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:poppins_app/screens/parent_second_address_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
+import 'package:poppins_app/screens/splash_screen.dart';
 
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
@@ -90,7 +91,7 @@ Future<String> _getStructureId() async {
 }
 
 final GoRouter router = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/splash',
   redirect: _handleRedirect,
   errorBuilder: (context, state) => Scaffold(
     body: Center(
@@ -150,6 +151,11 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/freezer-temperature',
       builder: (context, state) => const FreezerTemperatureScreen(),
+    ),
+    GoRoute(
+      path: '/splash',
+      name: 'splash',
+      builder: (context, state) => const SplashScreen(),
     ),
     GoRoute(
       path: '/subscription-confirmed',

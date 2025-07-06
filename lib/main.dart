@@ -50,14 +50,29 @@ void main() async {
     print('❌ Erreur configuration Firebase Functions: $e');
   }
 
-  // 🔥 INITIALISER LES NOTIFICATIONS (NOUVEAU)
-  await NotificationService.initialize();
+  // 🔥 INITIALISER LES NOTIFICATIONS (NON BLOQUANT)
+  try {
+    await NotificationService.initialize().timeout(
+      Duration(seconds: 3),
+      onTimeout: () {
+        print('⚠️ Timeout notifications - continuer sans');
+      },
+    );
+    print('✅ Notifications initialisées');
+  } catch (e) {
+    print('⚠️ Erreur notifications: $e - continuer sans');
+  }
 
-  // 🔧 FORCER LE MODE DEV pour les tests (AJOUTÉ)
+  // 🔧 FORCER LE MODE DEV pour les tests (INSTANTANÉ)
   SubscriptionService.setDebugMode(true);
+  print('🧪 Mode debug activé pour SubscriptionService');
 
-  // 🛒 CORRIGÉ : Initialisation unique du SubscriptionService
-  await SubscriptionService.initialize();
+  // ⚡ SUPPRIMÉ LA LIGNE QUI BLOQUAIT LE DÉMARRAGE :
+  // await SubscriptionService.initialize(); // ← Cette ligne prenait 10-30 secondes !
+
+  // ✅ MAINTENANT : Services initialisés dans SplashScreen avec feedback utilisateur
+
+  print('🚀 Démarrage rapide de Poppins - Services en arrière-plan');
 
   // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());
