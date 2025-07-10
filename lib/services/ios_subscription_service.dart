@@ -1,17 +1,40 @@
-// ios_subscription_service.dart
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// lib/services/ios_subscription_service.dart
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class iOSNativeSubscriptionService {
-  static const MethodChannel _channel = MethodChannel('ios_subscription');
+/// Service d'abonnement spécifique à iOS utilisant in_app_purchase
+class iOSSubscriptionService {
+  static iOSSubscriptionService? _instance;
+  static iOSSubscriptionService get instance =>
+      _instance ??= iOSSubscriptionService._internal();
 
-  // Configuration des produits
-  static const String bundleId = 'com.beylet.poppinsApp';
-  static const Map<String, String> productIds = {
+  iOSSubscriptionService._internal();
+
+  // Instance in_app_purchase
+  final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+
+  // Stream controllers
+  final StreamController<PurchaseDetails> _subscriptionController =
+      StreamController<PurchaseDetails>.broadcast();
+  final StreamController<String> _errorController =
+      StreamController<String>.broadcast();
+
+  // Streams publics
+  Stream<PurchaseDetails> get subscriptionUpdates =>
+      _subscriptionController.stream;
+  Stream<String> get errors => _errorController.stream;
+
+  // État
+  bool _isInitialized = false;
+  StreamSubscription<List<PurchaseDetails>>? _subscription;
+  List<ProductDetails> _availableProducts = [];
+
+  // IDs des produits iOS (App Store)
+  static const Map<String, String> _iOSProductIds = {
     'assistante_maternelle':
         'com.beylet.poppinsApp.subscription.assistante_maternelle',
     'mam_2_members': 'com.beylet.poppinsApp.subscription.mam_2_members',
@@ -19,277 +42,147 @@ class iOSNativeSubscriptionService {
     'mam_4_members': 'com.beylet.poppinsApp.subscription.mam_4_members',
   };
 
-  // Stream controller pour les événements d'achat
-  static final StreamController<Map<String, dynamic>> _purchaseController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  static const Set<String> _allProductIds = {
+    'com.beylet.poppinsApp.subscription.assistante_maternelle',
+    'com.beylet.poppinsApp.subscription.mam_2_members',
+    'com.beylet.poppinsApp.subscription.mam_3_members',
+    'com.beylet.poppinsApp.subscription.mam_4_members',
+  };
 
-  static Stream<Map<String, dynamic>> get purchaseStream =>
-      _purchaseController.stream;
-
-  static bool _isInitialized = false;
-  static bool get isInDevMode => kDebugMode;
-
-  /// Initialiser le service avec l'API native iOS
-  static Future<void> initialize() async {
+  /// Initialise le service iOS
+  Future<void> initialize() async {
     if (_isInitialized) return;
 
-    print('🍎 Initialisation du service d\'abonnement iOS natif...');
-
     try {
-      // Configurer le listener pour les callbacks natifs
-      _channel.setMethodCallHandler(_handleNativeCallback);
-
-      if (Platform.isIOS && !isInDevMode) {
-        // Initialiser StoreKit natif
-        final result = await _channel.invokeMethod('initialize', {
-          'productIds': productIds.values.toList(),
-          'bundleId': bundleId,
-        });
-
-        print('✅ StoreKit initialisé: $result');
-      } else {
-        print('🧪 Mode développement - simulation activée');
+      // Vérifier la disponibilité de l'App Store
+      final bool isAvailable = await _inAppPurchase.isAvailable();
+      if (!isAvailable) {
+        throw Exception('App Store n\'est pas disponible');
       }
 
+      // Écouter les mises à jour d'achat
+      _subscription = _inAppPurchase.purchaseStream.listen(
+        _handlePurchaseUpdates,
+        onDone: () => print('🍎 Stream d\'achat iOS fermé'),
+        onError: (error) {
+          print('❌ Erreur stream iOS: $error');
+          _errorController.add('Erreur de stream: $error');
+        },
+      );
+
+      // Charger les produits disponibles
+      await _loadProducts();
+
       _isInitialized = true;
-      print('✅ Service d\'abonnement iOS initialisé avec succès');
+      print('✅ Service d\'abonnement iOS initialisé');
     } catch (e) {
-      print('❌ Erreur lors de l\'initialisation: $e');
-      // En cas d'erreur, on peut continuer en mode simulation
-      _isInitialized = true;
-    }
-  }
-
-  /// Gérer les callbacks depuis le code natif iOS
-  static Future<void> _handleNativeCallback(MethodCall call) async {
-    print('📱 Callback natif reçu: ${call.method}');
-
-    switch (call.method) {
-      case 'onPurchaseSuccess':
-        await _handlePurchaseSuccess(Map<String, dynamic>.from(call.arguments));
-        break;
-      case 'onPurchaseError':
-        await _handlePurchaseError(Map<String, dynamic>.from(call.arguments));
-        break;
-      case 'onPurchaseCanceled':
-        await _handlePurchaseCanceled();
-        break;
-      case 'onRestoreComplete':
-        await _handleRestoreComplete(
-            List<Map<String, dynamic>>.from(call.arguments));
-        break;
-      default:
-        print('⚠️ Callback non géré: ${call.method}');
-    }
-  }
-
-  /// Lancer un achat d'abonnement
-  static Future<void> purchaseSubscription(String productKey) async {
-    if (!_isInitialized) {
-      throw Exception('Service non initialisé. Appelez initialize() d\'abord.');
-    }
-
-    final productId = productIds[productKey];
-    if (productId == null) {
-      throw Exception('Produit non trouvé: $productKey');
-    }
-
-    print('🛒 Lancement achat: $productKey ($productId)');
-
-    if (isInDevMode) {
-      // Simulation en mode développement
-      await _simulatePurchaseSuccess(productKey);
-      return;
-    }
-
-    try {
-      if (Platform.isIOS) {
-        await _channel.invokeMethod('purchaseProduct', {
-          'productId': productId,
-        });
-      } else {
-        throw Exception('Service iOS uniquement');
-      }
-    } catch (e) {
-      print('❌ Erreur lors de l\'achat: $e');
-      _purchaseController.add({
-        'type': 'error',
-        'message': e.toString(),
-      });
+      print('❌ Erreur d\'initialisation iOS: $e');
+      _errorController.add('Erreur d\'initialisation: $e');
       rethrow;
     }
   }
 
-  /// Restaurer les achats précédents
-  static Future<void> restorePurchases() async {
-    if (!_isInitialized) {
-      throw Exception('Service non initialisé');
-    }
-
-    print('🔄 Restauration des achats...');
-
-    if (isInDevMode) {
-      _purchaseController.add({
-        'type': 'restore_complete',
-        'purchases': [],
-      });
-      return;
-    }
-
+  /// Charge les produits depuis l'App Store
+  Future<void> _loadProducts() async {
     try {
-      if (Platform.isIOS) {
-        await _channel.invokeMethod('restorePurchases');
+      final ProductDetailsResponse response =
+          await _inAppPurchase.queryProductDetails(_allProductIds);
+
+      if (response.error != null) {
+        throw Exception(
+            'Erreur de chargement des produits: ${response.error?.message}');
+      }
+
+      _availableProducts = response.productDetails;
+
+      print('🍎 Produits iOS chargés: ${_availableProducts.length}');
+      for (final product in _availableProducts) {
+        print('  - ${product.id}: ${product.price}');
+      }
+
+      if (_availableProducts.isEmpty) {
+        print('⚠️ Aucun produit trouvé sur l\'App Store');
       }
     } catch (e) {
-      print('❌ Erreur lors de la restauration: $e');
+      print('❌ Erreur de chargement des produits: $e');
+      _errorController.add('Erreur de chargement: $e');
       rethrow;
     }
   }
 
-  /// Vérifier le statut d'abonnement actuel
-  static Future<Map<String, dynamic>?> checkSubscriptionStatus() async {
-    if (!_isInitialized) {
-      await initialize();
+  /// Gère les mises à jour d'achat
+  void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
+    for (final purchase in purchaseDetailsList) {
+      _handlePurchase(purchase);
     }
+  }
 
-    print('🔍 Vérification du statut d\'abonnement...');
+  /// Traite un achat individuel
+  Future<void> _handlePurchase(PurchaseDetails purchase) async {
+    print(
+        '🍎 Traitement achat iOS: ${purchase.productID} - ${purchase.status}');
 
-    if (isInDevMode) {
-      return {
-        'isActive': true,
-        'productId': 'dev_subscription',
-        'expirationDate':
-            DateTime.now().add(Duration(days: 7)).toIso8601String(),
-      };
+    switch (purchase.status) {
+      case PurchaseStatus.purchased:
+        // Vérifier la transaction
+        await _verifyPurchase(purchase);
+
+        // Sauvegarder dans Firestore
+        await _saveSubscriptionToFirestore(purchase);
+
+        // Finaliser l'achat si nécessaire
+        if (purchase.pendingCompletePurchase) {
+          await _inAppPurchase.completePurchase(purchase);
+        }
+
+        _subscriptionController.add(purchase);
+        break;
+
+      case PurchaseStatus.error:
+        print('❌ Erreur d\'achat iOS: ${purchase.error?.message}');
+        _errorController.add(
+            'Erreur d\'achat: ${purchase.error?.message ?? "Erreur inconnue"}');
+        break;
+
+      case PurchaseStatus.pending:
+        print('⏳ Achat iOS en attente: ${purchase.productID}');
+        _subscriptionController.add(purchase);
+        break;
+
+      case PurchaseStatus.restored:
+        print('🔄 Achat iOS restauré: ${purchase.productID}');
+        await _saveSubscriptionToFirestore(purchase);
+        _subscriptionController.add(purchase);
+        break;
+
+      case PurchaseStatus.canceled:
+        print('❌ Achat iOS annulé: ${purchase.productID}');
+        _errorController.add('Achat annulé par l\'utilisateur');
+        break;
     }
+  }
 
+  /// Vérifie un achat (validation côté serveur recommandée)
+  Future<void> _verifyPurchase(PurchaseDetails purchase) async {
     try {
-      if (Platform.isIOS) {
-        final result = await _channel.invokeMethod('checkSubscriptionStatus');
-        return Map<String, dynamic>.from(result ?? {});
-      }
-      return null;
+      // TODO: Implémenter la vérification côté serveur
+      // Envoyer purchase.verificationData.serverVerificationData à votre serveur
+      // pour vérifier avec l'App Store
+
+      print('✅ Achat iOS vérifié: ${purchase.productID}');
     } catch (e) {
-      print('❌ Erreur vérification statut: $e');
-      return null;
+      print('❌ Erreur de vérification: $e');
+      _errorController.add('Erreur de vérification: $e');
     }
-  }
-
-  /// Obtenir les informations des produits
-  static Future<List<Map<String, dynamic>>> getProductsInfo() async {
-    if (!_isInitialized) {
-      await initialize();
-    }
-
-    if (isInDevMode) {
-      return [
-        {
-          'productId': 'subscription_assistante_maternelle',
-          'title': 'Abonnement Assistant Maternel',
-          'price': '12,99 €',
-          'description': 'Abonnement mensuel pour assistants maternels',
-        },
-        {
-          'productId': 'subscription_mam_2_members',
-          'title': 'Abonnement MAM 2 membres',
-          'price': '24,99 €',
-          'description': 'Abonnement mensuel MAM pour 2 membres',
-        },
-      ];
-    }
-
-    try {
-      if (Platform.isIOS) {
-        final result = await _channel.invokeMethod('getProductsInfo');
-        return List<Map<String, dynamic>>.from(result ?? []);
-      }
-      return [];
-    } catch (e) {
-      print('❌ Erreur récupération produits: $e');
-      return [];
-    }
-  }
-
-  /// Simulation d'achat réussi (mode dev)
-  static Future<void> _simulatePurchaseSuccess(String productKey) async {
-    print('🧪 Simulation achat réussi: $productKey');
-
-    await Future.delayed(Duration(seconds: 2));
-
-    final Map<String, dynamic> purchaseData = {
-      'productId': productIds[productKey],
-      'transactionId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
-      'purchaseDate': DateTime.now().toIso8601String(),
-      'expirationDate':
-          DateTime.now().add(Duration(days: 30)).toIso8601String(),
-    };
-
-    await _handlePurchaseSuccess(purchaseData);
-  }
-
-  /// Gérer un achat réussi
-  static Future<void> _handlePurchaseSuccess(
-      Map<String, dynamic> purchaseData) async {
-    print('✅ Achat réussi: ${purchaseData['productId']}');
-
-    try {
-      // Sauvegarder dans Firestore
-      await _saveSubscriptionToFirestore(purchaseData);
-
-      // Notifier l'interface
-      _purchaseController.add({
-        'type': 'purchase_success',
-        'data': purchaseData,
-      });
-    } catch (e) {
-      print('❌ Erreur sauvegarde achat: $e');
-    }
-  }
-
-  /// Gérer une erreur d'achat
-  static Future<void> _handlePurchaseError(
-      Map<String, dynamic> errorData) async {
-    print('❌ Erreur d\'achat: ${errorData['message']}');
-
-    _purchaseController.add({
-      'type': 'purchase_error',
-      'message': errorData['message'] ?? 'Erreur inconnue',
-      'code': errorData['code'],
-    });
-  }
-
-  /// Gérer l'annulation d'achat
-  static Future<void> _handlePurchaseCanceled() async {
-    print('⚠️ Achat annulé par l\'utilisateur');
-
-    _purchaseController.add({
-      'type': 'purchase_canceled',
-    });
-  }
-
-  /// Gérer la restauration terminée
-  static Future<void> _handleRestoreComplete(
-      List<Map<String, dynamic>> purchases) async {
-    print('🔄 Restauration terminée: ${purchases.length} achats trouvés');
-
-    for (var purchase in purchases) {
-      await _saveSubscriptionToFirestore(purchase);
-    }
-
-    _purchaseController.add({
-      'type': 'restore_complete',
-      'purchases': purchases,
-    });
   }
 
   /// Sauvegarder l'abonnement dans Firestore
-  static Future<void> _saveSubscriptionToFirestore(
-      Map<String, dynamic> purchaseData) async {
+  Future<void> _saveSubscriptionToFirestore(PurchaseDetails purchase) async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String productId = purchaseData['productId'] ?? '';
+      final String productId = purchase.productID;
 
       // Déterminer le type de structure et nombre de membres
       String structureType = 'assistante_maternelle';
@@ -321,9 +214,10 @@ class iOSNativeSubscriptionService {
         'memberCount': memberCount,
         'status': 'active',
         'productId': productId,
-        'transactionId': purchaseData['transactionId'],
-        'purchaseDate': purchaseData['purchaseDate'],
-        'expirationDate': purchaseData['expirationDate'],
+        'transactionId': purchase.purchaseID,
+        'purchaseDate': DateTime.now().toIso8601String(),
+        'expirationDate':
+            DateTime.now().add(Duration(days: 30)).toIso8601String(),
         'priceAmount': priceAmount,
         'priceDisplay': priceDisplay,
         'currency': 'EUR',
@@ -344,14 +238,148 @@ class iOSNativeSubscriptionService {
         'currentPriceDisplay': priceDisplay,
       });
 
-      print('✅ Abonnement sauvegardé dans Firestore');
+      print('✅ Abonnement iOS sauvegardé dans Firestore');
     } catch (e) {
       print('❌ Erreur sauvegarde Firestore: $e');
     }
   }
 
+  /// Retourne l'ID produit iOS
+  static String getProductId(String structureType, int mamMembersCount) {
+    switch (structureType) {
+      case 'assistante_maternelle':
+        return _iOSProductIds['assistante_maternelle']!;
+      case 'mam':
+        switch (mamMembersCount) {
+          case 2:
+            return _iOSProductIds['mam_2_members']!;
+          case 3:
+            return _iOSProductIds['mam_3_members']!;
+          case 4:
+            return _iOSProductIds['mam_4_members']!;
+          default:
+            return _iOSProductIds['mam_2_members']!;
+        }
+      default:
+        return _iOSProductIds['assistante_maternelle']!;
+    }
+  }
+
+  /// Récupère les produits disponibles
+  Future<List<ProductDetails>> getAvailableProducts() async {
+    await _ensureInitialized();
+    return _availableProducts;
+  }
+
+  /// Achète un abonnement
+  Future<bool> purchaseSubscription(String productId) async {
+    await _ensureInitialized();
+
+    try {
+      // Chercher le produit correspondant
+      ProductDetails? product;
+      for (final p in _availableProducts) {
+        if (p.id == productId) {
+          product = p;
+          break;
+        }
+      }
+
+      if (product == null) {
+        throw Exception('Produit non trouvé: $productId');
+      }
+
+      final PurchaseParam purchaseParam =
+          PurchaseParam(productDetails: product);
+
+      // Pour les abonnements, utiliser buyNonConsumable
+      final bool success = await _inAppPurchase.buyNonConsumable(
+        purchaseParam: purchaseParam,
+      );
+
+      print('🍎 Achat iOS initié: $productId - Success: $success');
+      return success;
+    } catch (e) {
+      print('❌ Erreur d\'achat iOS: $e');
+      _errorController.add('Erreur d\'achat: $e');
+      return false;
+    }
+  }
+
+  /// Restaure les achats
+  Future<void> restorePurchases() async {
+    await _ensureInitialized();
+
+    try {
+      await _inAppPurchase.restorePurchases();
+      print('🍎 Restauration iOS terminée');
+    } catch (e) {
+      print('❌ Erreur de restauration iOS: $e');
+      _errorController.add('Erreur de restauration: $e');
+      rethrow;
+    }
+  }
+
+  /// Vérifie le statut d'un abonnement
+  Future<PurchaseDetails?> checkSubscriptionStatus(String productId) async {
+    await _ensureInitialized();
+
+    // Pour le moment, on utilise une approche simplifiée
+    // Dans un vrai projet, il faudrait implémenter une vérification côté serveur
+    print('🍎 Vérification du statut de l\'abonnement: $productId');
+
+    // TODO: Implémenter la vérification d'abonnement avec votre backend
+    // qui interroge l'API App Store
+
+    return null;
+  }
+
+  /// S'assure que le service est initialisé
+  Future<void> _ensureInitialized() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+  }
+
+  /// Nettoie les ressources
+  void dispose() {
+    _subscription?.cancel();
+    _subscriptionController.close();
+    _errorController.close();
+    _isInitialized = false;
+  }
+
+  /// Vérifie si un abonnement est actif
+  Future<bool> hasActiveSubscription() async {
+    try {
+      // Pour une implémentation complète, il faudrait vérifier côté serveur
+      // avec l'API App Store
+      print('🍎 Vérification d\'abonnement actif');
+
+      // TODO: Implémenter avec votre backend
+      return false;
+    } catch (e) {
+      print('❌ Erreur de vérification d\'abonnement actif: $e');
+      return false;
+    }
+  }
+
+  /// Retourne l'abonnement actif
+  Future<PurchaseDetails?> getActiveSubscription() async {
+    try {
+      // Pour une implémentation complète, il faudrait vérifier côté serveur
+      print('🍎 Récupération de l\'abonnement actif');
+
+      // TODO: Implémenter avec votre backend
+      return null;
+    } catch (e) {
+      print('❌ Erreur de récupération d\'abonnement actif: $e');
+      return null;
+    }
+  }
+
   /// Obtenir les informations d'abonnement depuis Firestore
-  static Future<Map<String, dynamic>?> getSubscriptionInfo() async {
+  Future<Map<String, dynamic>?> getSubscriptionInfo() async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
@@ -373,20 +401,6 @@ class iOSNativeSubscriptionService {
       print('❌ Erreur récupération abonnement: $e');
       return null;
     }
-  }
-
-  /// Nettoyer les ressources
-  static void dispose() {
-    _purchaseController.close();
-  }
-
-  /// Obtenir le product ID pour un type de structure
-  static String getProductId(String structureType, int memberCount) {
-    if (structureType == 'MAM') {
-      return productIds['mam_${memberCount}_members'] ??
-          productIds['mam_2_members']!;
-    }
-    return productIds['assistante_maternelle']!;
   }
 
   /// Calculer le prix pour un type d'abonnement

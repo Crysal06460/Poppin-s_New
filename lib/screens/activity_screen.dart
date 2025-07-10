@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
-import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 
@@ -42,7 +41,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   String _activityType = "Musique";
   String _activityAttitude =
-      "Curieux"; // CHANGÉ : _activityDuration par _activityAttitude
+      "Curieux"; // ✅ CORRIGÉ : Plus de référence à _activityDuration
   String _participationLevel = "Bien participé";
   String _activityTime = "";
 
@@ -65,13 +64,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ...customActivityTypes,
       ];
 
-  // NOUVELLE LISTE : Liste des attitudes disponibles
+  // Liste des attitudes disponibles
   final List<String> attitudes = [
     "Curieux",
     "Attentif",
     "Hésitant",
     "Enjoué",
   ];
+
   IconData _getAttitudeIcon(String attitude) {
     switch (attitude.toLowerCase()) {
       case 'curieux':
@@ -156,7 +156,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     // Obtenir l'heure actuelle ou celle déjà saisie
     TimeOfDay initialTime;
     if (_activityTime.isNotEmpty) {
-      // Utiliser _activityTime, pas _siesteTime
       final parts = _activityTime.split(':');
       initialTime = TimeOfDay(
         hour: int.parse(parts[0]),
@@ -178,13 +177,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
               dayPeriodTextColor: primaryColor,
               dialHandColor: primaryColor,
               dialBackgroundColor: lightBlue.withOpacity(0.2),
-              // Fix pour le rectangle bleu
               hourMinuteColor: MaterialStateColor.resolveWith(
                 (states) => states.contains(MaterialState.selected)
                     ? primaryColor.withOpacity(0.15)
                     : Colors.transparent,
               ),
-              // Forme pour les conteneurs heure/minute
               hourMinuteShape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -213,12 +210,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Obtenir l'ID de structure
       if (structureId.isEmpty) {
         await _loadStructureId();
       }
 
-      // Charger les activités personnalisées depuis Firestore
       final customActivitiesDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -241,24 +236,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   // Fonction pour ajouter une activité personnalisée
-  // Fonction pour ajouter une activité personnalisée
   Future<bool> _addCustomActivity(String newActivity) async {
-    if (newActivity.trim().isEmpty) return false; // Retourner false si vide
+    if (newActivity.trim().isEmpty) return false;
 
     try {
-      // Vérifier que l'ID de structure est disponible
       if (structureId.isEmpty) {
         await _loadStructureId();
       }
 
-      // Ajouter à la liste locale
       setState(() {
         if (!customActivityTypes.contains(newActivity.trim())) {
           customActivityTypes.add(newActivity.trim());
         }
       });
 
-      // Sauvegarder dans Firestore
       await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -277,7 +268,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ),
       );
 
-      // Retournons true pour indiquer que l'ajout a réussi
       return true;
     } catch (e) {
       print("Erreur lors de l'ajout d'une activité personnalisée: $e");
@@ -287,8 +277,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
           backgroundColor: Colors.red,
         ),
       );
-
-      // Retournons false pour indiquer que l'ajout a échoué
       return false;
     }
   }
@@ -321,7 +309,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                // Réafficher le popup d'ajout d'activité
                 _showAddActivityPopup(childId);
               },
               child: Text('ANNULER', style: TextStyle(color: Colors.grey)),
@@ -331,7 +318,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 if (newActivityController.text.trim().isNotEmpty) {
                   await _addCustomActivity(newActivityController.text);
                   Navigator.pop(dialogContext);
-                  // Réafficher le popup d'ajout d'activité
                   _showAddActivityPopup(childId);
                 }
               },
@@ -352,17 +338,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // Fonction pour supprimer une activité personnalisée
   Future<void> _removeCustomActivity(String activity) async {
     try {
-      // Vérifier si l'activité est utilisée
-      bool isUsed = false;
-      // Cette vérification pourrait être plus complexe en vérifiant toutes les activités,
-      // mais pour simplifier, nous supposons qu'elle n'est pas utilisée
-
-      // Supprimer de la liste locale
       setState(() {
         customActivityTypes.remove(activity);
       });
 
-      // Mettre à jour dans Firestore
       await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -399,16 +378,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return;
       }
 
-      // Récupérer l'email de l'utilisateur actuel
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
 
-      // Vérifier si l'utilisateur est un membre MAM
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserEmail)
           .get();
 
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
       if (structureId.isEmpty) {
         structureId = user.uid;
       }
@@ -417,7 +393,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         final userData = userDoc.data() ?? {};
         if (userData['role'] == 'mamMember' &&
             userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
             "🔄 Activités: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId",
@@ -430,7 +405,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      // Récupérer la structure pour déterminer le type
       final structureSnapshot = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -449,22 +423,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
               "AssistanteMaternelle")
           : "AssistanteMaternelle";
 
-      // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
           .collection('children')
           .get();
 
-      // Liste complète de tous les enfants
       List<Map<String, dynamic>> allChildren =
           snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
 
-      // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == "MAM") {
-        // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
               child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
@@ -475,14 +445,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
           "👨‍👧‍👦 Activités: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)",
         );
       } else {
-        // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
         print(
           "👩‍👧‍👦 Activités: Assistante Maternelle - affichage de tous les enfants",
         );
       }
 
-      // Diagnostic des enfants filtrés
       print(
         "🔍 DIAGNOSTIC ACTIVITÉS - Type de structure: $structureType, Utilisateur: $currentUserEmail",
       );
@@ -490,7 +458,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         "🔍 DIAGNOSTIC ACTIVITÉS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}",
       );
 
-      // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
         if (child['schedule'] != null &&
@@ -501,8 +468,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
-            'structureId':
-                structureId, // Ajouter l'ID de structure pour les requêtes futures
+            'structureId': structureId,
           });
         }
       }
@@ -565,7 +531,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   void _showActivityDetailsPopup(Map<String, dynamic> activityData) {
-    // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
 
     showDialog(
@@ -822,7 +787,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Dialogue pour ajouter une activité personnalisée
   void _showAddCustomActivityDialog() {
     newActivityController.text = '';
 
@@ -872,7 +836,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Dialogue pour gérer les activités personnalisées
   void _showManageCustomActivitiesDialog() {
     showDialog(
       context: context,
@@ -946,11 +909,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     String localActivityTime = _activityTime;
     String localActivityType = _activityType;
     String localActivityAttitude =
-        _activityAttitude; // CHANGÉ : localActivityDuration par localActivityAttitude
+        _activityAttitude; // ✅ CORRIGÉ : Plus de confusion
     String localParticipationLevel = _participationLevel;
     String? errorMessage;
 
-    // Réorganiser les types d'activités pour placer les activités personnalisées en haut
     List<String> organizedActivityTypes = [
       ...customActivityTypes,
       if (customActivityTypes.isNotEmpty) "_separator_",
@@ -1308,7 +1270,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               ),
                             ),
 
-                            // NOUVELLE SECTION : Attitude de l'enfant
+                            // Section Attitude de l'enfant
                             Container(
                               margin: EdgeInsets.only(
                                 bottom: isTabletDevice ? 24 : 16,
@@ -1610,23 +1572,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       return;
                                     }
 
-                                    // Réinitialiser le message d'erreur si tout est OK
                                     setState(() {
                                       errorMessage = null;
                                     });
 
-                                    // Si tout est validé, ajouter l'activité
                                     _activityTime = localActivityTime;
                                     _activityType = localActivityType;
                                     _activityAttitude =
-                                        localActivityAttitude; // CHANGÉ
+                                        localActivityAttitude; // ✅ CORRIGÉ
                                     _participationLevel =
                                         localParticipationLevel;
 
-                                    // Ajouter l'activité dans Firebase
                                     _addActivityToFirebase(childId);
 
-                                    // Fermer le popup une fois l'activité ajoutée
                                     Navigator.of(context).pop();
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -1665,7 +1623,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Nouveau bouton de participation moderne
   Widget _buildParticipationButtonModern(
     String level,
     String selectedLevel,
@@ -1676,36 +1633,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
   ) {
     bool isSelected = selectedLevel == level;
 
-    // Utilisation des couleurs officielles de l'application avec opacité adaptée
     Color backgroundColor;
     Color textColor;
     Color iconColor;
 
     if (isSelected) {
-      // Si le bouton est sélectionné
       if (level == "Bien participé") {
-        // Pour "Bien participé", utiliser primaryBlue avec opacité
         backgroundColor = primaryColor.withOpacity(0.15);
         textColor = primaryColor;
         iconColor = primaryColor;
       } else if (level == "Très bien participé") {
-        // Pour "Très bien participé", utiliser primaryYellow avec opacité
         backgroundColor = primaryYellow.withOpacity(0.15);
         textColor = Colors.brown.shade700;
         iconColor = primaryYellow;
       } else if (level == "Pas participé") {
-        // Pour "Pas participé", utiliser primaryRed avec opacité
         backgroundColor = primaryRed.withOpacity(0.15);
         textColor = primaryRed;
         iconColor = primaryRed;
       } else {
-        // Pour "Peu participé", utiliser orange avec opacité
         backgroundColor = Colors.orange.withOpacity(0.15);
         textColor = Colors.orange.shade800;
         iconColor = Colors.orange;
       }
     } else {
-      // Si le bouton n'est pas sélectionné
       backgroundColor = Colors.grey.shade100;
       textColor = Colors.grey.shade700;
       iconColor = Colors.grey.shade400;
@@ -1755,40 +1705,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildParticipationButton(
-    String level,
-    String selectedLevel,
-    Function(String) onSelect,
-  ) {
-    bool isSelected = selectedLevel == level;
-    return GestureDetector(
-      onTap: () => onSelect(level),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              isSelected ? primaryColor.withOpacity(0.2) : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? primaryColor : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Text(
-          level,
-          style: TextStyle(
-            color: isSelected ? primaryColor : Colors.black54,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-
   Future<void> _addActivityToFirebase(String childId) async {
     try {
-      // Trouver l'enfant pour récupérer l'ID de structure
       final enfant = enfants.firstWhere((e) => e['id'] == childId);
       final String structureId =
           enfant['structureId'] ?? FirebaseAuth.instance.currentUser?.uid;
@@ -1805,8 +1723,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         'heure': _activityTime,
         'date': DateTime.now(),
         'type': _activityType,
-        'attitude':
-            _activityAttitude, // NOUVELLE LIGNE : sauvegarde de l'attitude
+        'attitude': _activityAttitude, // ✅ CORRIGÉ : Sauvegarde de l'attitude
         'participation': _participationLevel,
         'participationLevel': _getParticipationLevel(_participationLevel),
         'observations': _observationsController.text,
@@ -1814,11 +1731,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       await activityRef.set(activityData);
 
-      // Réinitialisation des champs
       setState(() {
         _activityTime = '';
         _activityType = 'Musique';
-        _activityAttitude = 'Curieux'; // CHANGÉ : réinitialisation attitude
+        _activityAttitude = 'Curieux'; // ✅ CORRIGÉ : Réinitialisation attitude
         _participationLevel = 'Bien participé';
         _observationsController.clear();
       });
@@ -1868,7 +1784,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
             padding: EdgeInsets.all(12),
             child: Row(
               children: [
-                // Utilisation de l'avatar avec dégradé comme dans HomeScreen
                 Container(
                   width: 60,
                   height: 60,
@@ -2076,7 +1991,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     ),
                                     SizedBox(width: 4),
                                     Text(
-                                      "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // CHANGÉ : affichage attitude
+                                      "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // ✅ CORRIGÉ
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: Colors.grey.shade600,
@@ -2114,14 +2029,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Widget build(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
-    // 🎉 NOUVEAU : Entourer avec SwipeNavigationWrapper
     return SwipeNavigationWrapper(
-      backRoute: '/home', // Swipe vers la droite = retour Home
+      backRoute: '/home',
       child: Scaffold(
         backgroundColor: Colors.white,
         body: Column(
           children: [
-            // 🎉 NOUVEAU : CommonAppBar au lieu de _buildAppBar(context)
             CommonAppBar(
               title: 'Activités',
               structureName: structureName,
@@ -2129,8 +2042,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
               backRoute: '/home',
               primaryColor: primaryColor,
             ),
-
-            // 🔄 GARDÉ IDENTIQUE : Tout votre contenu existant
             Expanded(
               child: isLoading
                   ? Center(
@@ -2141,7 +2052,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   : enfants.isEmpty
                       ? _buildEmptyState()
                       : isTabletDevice
-                          ? _buildTabletLayout() // Layout adapté pour iPad
+                          ? _buildTabletLayout()
                           : ListView.builder(
                               itemCount: enfants.length,
                               itemBuilder: _buildEnfantCard,
@@ -2160,15 +2071,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Nouveau layout pour iPad - affiche les enfants dans une grille
   Widget _buildTabletLayout() {
     return GridView.builder(
       padding: EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 2 cartes par ligne
-        childAspectRatio: 1.2, // Un peu plus large que haut
-        crossAxisSpacing: 20, // Espace horizontal entre les cartes
-        mainAxisSpacing: 20, // Espace vertical entre les cartes
+        crossAxisCount: 2,
+        childAspectRatio: 1.2,
+        crossAxisSpacing: 20,
+        mainAxisSpacing: 20,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -2176,8 +2086,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Carte enfant adaptée pour iPad
-  // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     String genre = enfant['genre']?.toString() ?? 'Garçon';
@@ -2197,7 +2105,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ),
       child: Column(
         children: [
-          // En-tête avec gradient et infos enfant
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -2210,7 +2117,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
             padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar avec photo de l'enfant
                 Container(
                   width: 70,
                   height: 70,
@@ -2257,7 +2163,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                   ),
                 ),
-                // Bouton d'ajout d'activité
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
@@ -2288,8 +2193,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ],
             ),
           ),
-
-          // Liste des activités
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -2424,7 +2327,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       ),
                                       SizedBox(width: 6),
                                       Text(
-                                        "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // CHANGÉ : affichage attitude
+                                        "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // ✅ CORRIGÉ
                                         style: TextStyle(
                                           fontSize: 16,
                                           color: Colors.grey.shade600,
@@ -2459,7 +2362,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // État vide (aucun enfant)
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -2489,7 +2391,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  // Navigation du bas
   Widget _buildBottomNavigationBar() {
     return BottomNavigationBar(
       onTap: _onItemTapped,

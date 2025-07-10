@@ -19,18 +19,18 @@ bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
 }
 
-String structureName = "Chargement...";
-bool isLoadingStructure = true;
-
 class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
-  int _selectedIndex = 2; // Pour la barre de navigation du bas
+  int _selectedIndex = 2;
+
+  String _structureName = "Chargement...";
+  bool _isLoadingStructure = true;
 
   // Couleurs officielles de l'application
-  static const Color primaryRed = Color(0xFFD94350); // #D94350
-  static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
-  static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
-  static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+  static const Color primaryRed = Color(0xFFD94350);
+  static const Color primaryBlue = Color(0xFF3D9DF2);
+  static const Color lightBlue = Color(0xFFDFE9F2);
+  static const Color brightCyan = Color(0xFF05C7F2);
+  static const Color primaryYellow = Color(0xFFF2B705);
 
   @override
   void initState() {
@@ -68,7 +68,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        setState(() => isLoadingStructure = false);
+        setState(() => _isLoadingStructure = false);
         return;
       }
 
@@ -103,22 +103,28 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
 
       if (structureDoc.exists) {
         final data = structureDoc.data() as Map<String, dynamic>;
-        setState(() {
-          structureName = data['structureName'] ?? 'Structure inconnue';
-          isLoadingStructure = false;
-        });
+        if (mounted) {
+          setState(() {
+            _structureName = data['structureName'] ?? 'Structure inconnue';
+            _isLoadingStructure = false;
+          });
+        }
       } else {
-        setState(() {
-          structureName = 'Structure inconnue';
-          isLoadingStructure = false;
-        });
+        if (mounted) {
+          setState(() {
+            _structureName = 'Structure inconnue';
+            _isLoadingStructure = false;
+          });
+        }
       }
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
-      setState(() {
-        structureName = 'Erreur de chargement';
-        isLoadingStructure = false;
-      });
+      if (mounted) {
+        setState(() {
+          _structureName = 'Erreur de chargement';
+          _isLoadingStructure = false;
+        });
+      }
     }
   }
 
@@ -553,15 +559,37 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      structureName, // CHANGEMENT : utiliser structureName au lieu de "Poppins"
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: _isLoadingStructure
+                        ? Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                "Chargement...",
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white.withOpacity(0.8),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            _structureName, // ✅ CORRECTION ICI
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ),
                   Container(
                     padding:

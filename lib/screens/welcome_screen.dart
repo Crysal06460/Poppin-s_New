@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // 🧪 AJOUT : Import pour kDebugMode
 import 'package:go_router/go_router.dart';
+
+// 🧪 AJOUT : Import pour le test sandbox
+import '../screens/subscription_test_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({Key? key}) : super(key: key);
@@ -133,6 +137,69 @@ class WelcomeScreen extends StatelessWidget {
                           isPrimary: true,
                           width: buttonWidth,
                         ),
+
+                        // 🧪 NOUVEAU : Bouton de test sandbox (seulement en mode debug)
+                        if (kDebugMode) ...[
+                          const SizedBox(height: 30),
+
+                          // Séparateur pour les tests
+                          SizedBox(
+                            width: buttonWidth,
+                            child: Row(
+                              children: const [
+                                Expanded(child: Divider(color: Colors.purple)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    "🧪 DEBUG",
+                                    style: TextStyle(
+                                      color: Colors.purple,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: Colors.purple)),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Bouton Test Sandbox
+                          _buildButton(
+                            context,
+                            text: "🧪 Test Abonnements Sandbox",
+                            icon: Icons.science,
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SubscriptionTestScreen(),
+                                ),
+                              );
+                            },
+                            color: Colors.purple,
+                            isPrimary: true,
+                            width: buttonWidth,
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // Note explicative
+                          SizedBox(
+                            width: buttonWidth,
+                            child: Text(
+                              "Mode Sandbox activé - Achats gratuits pour test",
+                              style: TextStyle(
+                                fontSize: isTablet ? 11 : 12,
+                                color: Colors.purple[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

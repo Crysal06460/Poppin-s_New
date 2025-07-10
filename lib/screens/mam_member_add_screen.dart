@@ -411,7 +411,14 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => context.go('/dashboard'),
+          onPressed: () {
+            // ✅ MEILLEURE SOLUTION : Navigation intelligente et robuste
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
         ),
         centerTitle: true,
       ),

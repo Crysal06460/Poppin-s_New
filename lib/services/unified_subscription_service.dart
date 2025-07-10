@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 // Import des services spécifiques
 import 'ios_subscription_service.dart';
@@ -50,7 +51,8 @@ class UnifiedSubscriptionService {
 
   UnifiedSubscriptionService._internal();
 
-  // Service Android uniquement (iOS utilise des méthodes statiques)
+  // Services spécifiques aux plateformes
+  iOSSubscriptionService? _iOSService;
   AndroidSubscriptionService? _androidService;
 
   // Stream controllers pour les événements
@@ -65,7 +67,7 @@ class UnifiedSubscriptionService {
   Stream<String> get errors => _errorController.stream;
 
   bool _isInitialized = false;
-  StreamSubscription<Map<String, dynamic>>? _iOSSubscription;
+  StreamSubscription<PurchaseDetails>? _platformSubscription;
 
   /// Initialise le service selon la plateforme
   Future<void> initialize() async {
@@ -73,19 +75,22 @@ class UnifiedSubscriptionService {
 
     try {
       if (Platform.isIOS) {
-        print('🍎 Initialisation du service iOS natif...');
+        print('🍎 Initialisation du service iOS...');
+        _iOSService = iOSSubscriptionService.instance;
+        await _iOSService!.initialize();
 
-        // Initialise le service iOS statique
-        await iOSNativeSubscriptionService.initialize();
-
-        // Écoute les événements iOS avec purchaseStream
-        _iOSSubscription = iOSNativeSubscriptionService.purchaseStream.listen(
-          (event) {
-            _handleIOSEvent(event);
+        // Écoute les événements iOS
+        _platformSubscription = _iOSService!.subscriptionUpdates.listen(
+          (purchase) {
+            _subscriptionController.add(_mapPurchaseToSubscription(purchase));
           },
           onError: (error) {
             _errorController.add('iOS Error: $error');
           },
+        );
+
+        _iOSService!.errors.listen(
+          (error) => _errorController.add('iOS: $error'),
         );
       } else if (Platform.isAndroid) {
         print('🤖 Initialisation du service Android...');
@@ -93,9 +98,9 @@ class UnifiedSubscriptionService {
         await _androidService!.initialize();
 
         // Écoute les événements Android
-        _androidService!.subscriptionUpdates.listen(
-          (subscription) {
-            _subscriptionController.add(_mapAndroidSubscription(subscription));
+        _platformSubscription = _androidService!.subscriptionUpdates.listen(
+          (purchase) {
+            _subscriptionController.add(_mapPurchaseToSubscription(purchase));
           },
           onError: (error) {
             _errorController.add('Android Error: $error');
@@ -120,92 +125,48 @@ class UnifiedSubscriptionService {
     }
   }
 
-  /// Gère les événements iOS
-  void _handleIOSEvent(Map<String, dynamic> event) {
-    final type = event['type'];
+  /// Mappe les données de PurchaseDetails vers SubscriptionInfo
+  SubscriptionInfo _mapPurchaseToSubscription(PurchaseDetails purchase) {
+    return SubscriptionInfo(
+      productId: purchase.productID,
+      localizedPrice: _getPriceFromProductId(purchase.productID),
+      status: _mapPurchaseStatus(purchase.status),
+      purchaseDate: DateTime.now(), // TODO: extraire la vraie date d'achat
+      expiryDate: null, // TODO: calculer la date d'expiration
+      isTrialPeriod: _isTrialPeriod(purchase.productID),
+    );
+  }
 
-    switch (type) {
-      case 'purchase_success':
-        final data = event['data'] as Map<String, dynamic>;
-        _subscriptionController.add(SubscriptionInfo(
-          productId: data['productId'] ?? '',
-          localizedPrice: _getPriceFromProductId(data['productId']),
-          status: SubscriptionStatus.purchased,
-          purchaseDate: data['purchaseDate'] != null
-              ? DateTime.tryParse(data['purchaseDate'])
-              : DateTime.now(),
-          expiryDate: data['expirationDate'] != null
-              ? DateTime.tryParse(data['expirationDate'])
-              : null,
-          isTrialPeriod: true, // Les 7 premiers jours
-        ));
-        break;
-
-      case 'purchase_error':
-        _errorController.add(event['message'] ?? 'Erreur d\'achat');
-        break;
-
-      case 'purchase_canceled':
-        _errorController.add('Achat annulé par l\'utilisateur');
-        break;
-
-      case 'restore_complete':
-        final purchases =
-            event['purchases'] as List<Map<String, dynamic>>? ?? [];
-        for (final purchase in purchases) {
-          _subscriptionController.add(SubscriptionInfo(
-            productId: purchase['productId'] ?? '',
-            localizedPrice: _getPriceFromProductId(purchase['productId']),
-            status: SubscriptionStatus.restored,
-            purchaseDate: purchase['purchaseDate'] != null
-                ? DateTime.tryParse(purchase['purchaseDate'])
-                : DateTime.now(),
-          ));
-        }
-        break;
+  /// Mappe le statut de PurchaseStatus vers SubscriptionStatus
+  SubscriptionStatus _mapPurchaseStatus(PurchaseStatus status) {
+    switch (status) {
+      case PurchaseStatus.purchased:
+        return SubscriptionStatus.purchased;
+      case PurchaseStatus.pending:
+        return SubscriptionStatus.pending;
+      case PurchaseStatus.restored:
+        return SubscriptionStatus.restored;
+      case PurchaseStatus.error:
+        return SubscriptionStatus.error;
+      case PurchaseStatus.canceled:
+        return SubscriptionStatus.cancelled;
     }
   }
 
-  /// Retourne le prix à partir du productId
-  String _getPriceFromProductId(String? productId) {
-    if (productId == null) return 'Prix inconnu';
+  /// Détermine si c'est une période d'essai
+  bool _isTrialPeriod(String productId) {
+    // Logique pour déterminer si c'est un essai
+    // Pour le moment, on considère que tous les nouveaux achats sont des essais
+    return true;
+  }
 
+  /// Retourne le prix à partir du productId
+  String _getPriceFromProductId(String productId) {
     if (productId.contains('assistante_maternelle')) return '12,99€';
     if (productId.contains('mam_2_members')) return '24,99€';
     if (productId.contains('mam_3_members')) return '34,99€';
     if (productId.contains('mam_4_members')) return '44,99€';
-
     return 'Prix inconnu';
-  }
-
-  /// Mappe les données Android vers le format unifié
-  SubscriptionInfo _mapAndroidSubscription(dynamic androidSubscription) {
-    return SubscriptionInfo(
-      productId: androidSubscription.productID ?? '',
-      localizedPrice: 'Prix Android', // TODO: récupérer le vrai prix
-      status: _mapAndroidStatus(androidSubscription.status.toString()),
-      purchaseDate: DateTime.now(), // TODO: récupérer la vraie date
-      expiryDate: null, // TODO: calculer la date d'expiration
-      isTrialPeriod: false, // TODO: détecter la période d'essai
-    );
-  }
-
-  /// Mappe le statut Android
-  SubscriptionStatus _mapAndroidStatus(String status) {
-    switch (status) {
-      case 'PurchaseStatus.purchased':
-        return SubscriptionStatus.purchased;
-      case 'PurchaseStatus.pending':
-        return SubscriptionStatus.pending;
-      case 'PurchaseStatus.restored':
-        return SubscriptionStatus.restored;
-      case 'PurchaseStatus.error':
-        return SubscriptionStatus.error;
-      case 'PurchaseStatus.canceled':
-        return SubscriptionStatus.cancelled;
-      default:
-        return SubscriptionStatus.unknown;
-    }
   }
 
   /// Récupère les produits disponibles
@@ -213,26 +174,21 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
+      List<ProductDetails> products = [];
+
       if (Platform.isIOS) {
-        final products = await iOSNativeSubscriptionService.getProductsInfo();
-        return products
-            .map<SubscriptionInfo>((product) => SubscriptionInfo(
-                  productId: product['productId'] ?? '',
-                  localizedPrice: product['price'] ?? '',
-                  status: SubscriptionStatus.unknown,
-                ))
-            .toList();
+        products = await _iOSService!.getAvailableProducts();
       } else if (Platform.isAndroid) {
-        final products = await _androidService!.getAvailableProducts();
-        return products
-            .map<SubscriptionInfo>((product) => SubscriptionInfo(
-                  productId: product.id,
-                  localizedPrice: product.price,
-                  status: SubscriptionStatus.unknown,
-                ))
-            .toList();
+        products = await _androidService!.getAvailableProducts();
       }
-      return [];
+
+      return products
+          .map<SubscriptionInfo>((product) => SubscriptionInfo(
+                productId: product.id,
+                localizedPrice: product.price,
+                status: SubscriptionStatus.unknown,
+              ))
+          .toList();
     } catch (e) {
       print('❌ Erreur de récupération des produits: $e');
       _errorController.add('Erreur de récupération: $e');
@@ -245,12 +201,11 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
+      final productId = _getProductId(plan);
+
       if (Platform.isIOS) {
-        final productKey = _getIOSProductKey(plan);
-        await iOSNativeSubscriptionService.purchaseSubscription(productKey);
-        return true; // Le callback gérera le résultat
+        return await _iOSService!.purchaseSubscription(productId);
       } else if (Platform.isAndroid) {
-        final productId = _getAndroidProductId(plan);
         return await _androidService!.purchaseSubscription(productId);
       }
       return false;
@@ -266,7 +221,7 @@ class UnifiedSubscriptionService {
 
     try {
       if (Platform.isIOS) {
-        await iOSNativeSubscriptionService.restorePurchases();
+        await _iOSService!.restorePurchases();
       } else if (Platform.isAndroid) {
         await _androidService!.restorePurchases();
       }
@@ -282,51 +237,33 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
+      final productId = _getProductId(plan);
+      PurchaseDetails? purchase;
+
       if (Platform.isIOS) {
-        final status =
-            await iOSNativeSubscriptionService.checkSubscriptionStatus();
-        if (status != null && status['isActive'] == true) {
-          return SubscriptionInfo(
-            productId: status['productId'] ?? '',
-            localizedPrice: _getPriceFromProductId(status['productId']),
-            status: SubscriptionStatus.purchased,
-            expiryDate: status['expirationDate'] != null
-                ? DateTime.tryParse(status['expirationDate'])
-                : null,
-          );
-        }
+        purchase = await _iOSService!.checkSubscriptionStatus(productId);
       } else if (Platform.isAndroid) {
-        final productId = _getAndroidProductId(plan);
-        final status =
-            await _androidService!.checkSubscriptionStatus(productId);
-        return status != null ? _mapAndroidSubscription(status) : null;
+        purchase = await _androidService!.checkSubscriptionStatus(productId);
       }
-      return null;
+
+      return purchase != null ? _mapPurchaseToSubscription(purchase) : null;
     } catch (e) {
       _errorController.add('Erreur de vérification: $e');
       return null;
     }
   }
 
-  /// Retourne la clé produit iOS
-  String _getIOSProductKey(SubscriptionPlan plan) {
-    switch (plan) {
-      case SubscriptionPlan.assistantMaternel:
-        return 'assistante_maternelle';
-      case SubscriptionPlan.mam2Members:
-        return 'mam_2_members';
-      case SubscriptionPlan.mam3Members:
-        return 'mam_3_members';
-      case SubscriptionPlan.mam4Members:
-        return 'mam_4_members';
-    }
-  }
-
-  /// Retourne l'ID produit Android
-  String _getAndroidProductId(SubscriptionPlan plan) {
+  /// Retourne l'ID produit selon la plateforme et le plan
+  String _getProductId(SubscriptionPlan plan) {
     final structureType = _planToStructureType(plan);
     final memberCount = _planToMemberCount(plan);
-    return AndroidSubscriptionService.getProductId(structureType, memberCount);
+
+    if (Platform.isIOS) {
+      return iOSSubscriptionService.getProductId(structureType, memberCount);
+    } else {
+      return AndroidSubscriptionService.getProductId(
+          structureType, memberCount);
+    }
   }
 
   /// Convertit le plan en type de structure
@@ -364,44 +301,37 @@ class UnifiedSubscriptionService {
 
   /// Nettoie les ressources
   void dispose() {
-    _iOSSubscription?.cancel();
+    _platformSubscription?.cancel();
     _subscriptionController.close();
     _errorController.close();
+    _iOSService?.dispose();
+    _androidService?.dispose();
     _isInitialized = false;
   }
 
   /// Méthodes de commodité pour vérifier les abonnements actifs
   Future<bool> hasActiveSubscription() async {
+    await _ensureInitialized();
+
     if (Platform.isIOS) {
-      final status =
-          await iOSNativeSubscriptionService.checkSubscriptionStatus();
-      return status?['isActive'] == true;
+      return await _iOSService?.hasActiveSubscription() ?? false;
     } else {
       return await _androidService?.hasActiveSubscription() ?? false;
     }
   }
 
   Future<SubscriptionInfo?> getActiveSubscription() async {
+    await _ensureInitialized();
+
+    PurchaseDetails? purchase;
+
     if (Platform.isIOS) {
-      final status =
-          await iOSNativeSubscriptionService.checkSubscriptionStatus();
-      if (status != null && status['isActive'] == true) {
-        return SubscriptionInfo(
-          productId: status['productId'] ?? '',
-          localizedPrice: _getPriceFromProductId(status['productId']),
-          status: SubscriptionStatus.purchased,
-          expiryDate: status['expirationDate'] != null
-              ? DateTime.tryParse(status['expirationDate'])
-              : null,
-        );
-      }
+      purchase = await _iOSService?.getActiveSubscription();
     } else {
-      final subscription = await _androidService?.getActiveSubscription();
-      return subscription != null
-          ? _mapAndroidSubscription(subscription)
-          : null;
+      purchase = await _androidService?.getActiveSubscription();
     }
-    return null;
+
+    return purchase != null ? _mapPurchaseToSubscription(purchase) : null;
   }
 
   /// Vérifie si l'utilisateur est en période d'essai

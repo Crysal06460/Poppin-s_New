@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/custom_bottom_navigation.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 
@@ -72,9 +71,21 @@ class _ActualitesScreenState extends State<ActualitesScreen>
 
   // MODIFIÉ: Fonction pour déterminer le bon structureId selon le type (assmat ou MAM)
   Future<void> _loadStructureData() async {
+    print("🔧 Actualités: Début du chargement des données de structure");
+    setState(() => isLoading = true);
+
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        print("❌ Actualités: Utilisateur non connecté");
+        setState(() {
+          structureName = 'Utilisateur non connecté';
+          isLoading = false;
+        });
+        return;
+      }
+
+      print("✅ Actualités: Utilisateur connecté - ${user.email}");
 
       // Récupérer l'email de l'utilisateur actuel
       currentUserEmail = user.email?.toLowerCase() ?? '';
@@ -102,10 +113,20 @@ class _ActualitesScreenState extends State<ActualitesScreen>
         }
       }
 
+      // Validation que structureId n'est pas vide
+      if (structureId.isEmpty) {
+        print("❌ Actualités: Structure ID vide");
+        setState(() {
+          structureName = 'Erreur de structure';
+          isLoading = false;
+        });
+        return;
+      }
+
       // Récupération des informations de la structure avec l'ID correct
       final structureSnapshot = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(structureId) // Utiliser structureId au lieu de user.uid
+          .doc(structureId)
           .get();
 
       if (structureSnapshot.exists) {
@@ -113,13 +134,36 @@ class _ActualitesScreenState extends State<ActualitesScreen>
         setState(() {
           structureName = data['structureName'] ?? 'Structure inconnue';
         });
+        print("✅ Actualités: Structure trouvée - ${structureName}");
+      } else {
+        print("❌ Actualités: Structure non trouvée pour ID: $structureId");
+        setState(() {
+          structureName = 'Structure introuvable';
+          isLoading = false;
+        });
+        return;
       }
 
       // Charger les actualités avec le bon structureId
-      _loadActualites();
+      await _loadActualites();
     } catch (e) {
-      print("Erreur lors du chargement des données de structure: $e");
-      setState(() => isLoading = false);
+      print(
+          "❌ Actualités: Erreur lors du chargement des données de structure: $e");
+      setState(() {
+        structureName = 'Erreur de chargement';
+        isLoading = false;
+      });
+
+      // Afficher une notification d'erreur à l'utilisateur
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur de chargement des actualités: $e"),
+            backgroundColor: primaryRed,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -764,7 +808,13 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     try {
       // Vérifier que structureId est défini
       if (structureId.isEmpty) {
-        print("Erreur: structureId vide lors de l'ajout d'actualité");
+        print("❌ Actualités: structureId vide lors de l'ajout d'actualité");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: Structure non définie'),
+            backgroundColor: primaryRed,
+          ),
+        );
         return;
       }
 
@@ -833,7 +883,18 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     try {
       // Vérifier que structureId est défini
       if (structureId.isEmpty) {
-        print("Erreur: structureId vide lors de la sauvegarde du menu");
+        print("❌ Actualités: structureId vide lors de la sauvegarde du menu");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Erreur: Structure non définie - Impossible de sauvegarder le menu'),
+            backgroundColor: primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
         return;
       }
 
@@ -891,7 +952,19 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     try {
       // Vérifier que structureId est défini
       if (structureId.isEmpty) {
-        print("Erreur: structureId vide lors de la suppression d'actualité");
+        print(
+            "❌ Actualités: structureId vide lors de la suppression d'actualité");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Erreur: Structure non définie - Impossible de supprimer'),
+            backgroundColor: primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
         return;
       }
 
@@ -2399,9 +2472,8 @@ class _ActualitesScreenState extends State<ActualitesScreen>
   }
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    // Ne pas changer _selectedIndex car nous sommes sur la page actualités
+    // qui n'est pas dans la bottom nav standard
 
     if (index == 0) {
       context.go('/dashboard');
@@ -2418,6 +2490,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     final bool isTabletDevice = isTablet(context);
 
     return SwipeNavigationWrapper(
+      backRoute: '/home', // Route de retour en swipe
       child: Scaffold(
         backgroundColor: Colors.white,
         body: Column(
@@ -2427,6 +2500,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
               title: 'Actualités',
               structureName: structureName,
               iconPath: 'assets/images/Icone_Actualites.png',
+              backRoute: '/home',
               primaryColor: primaryBlue,
             ),
 
@@ -2507,7 +2581,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       showSelectedLabels: false,
       showUnselectedLabels: false,
       type: BottomNavigationBarType.fixed,
-      currentIndex: _selectedIndex,
+      currentIndex: 1,
       elevation: 8,
       items: [
         BottomNavigationBarItem(

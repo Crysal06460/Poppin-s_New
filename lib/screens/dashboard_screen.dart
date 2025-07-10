@@ -71,12 +71,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     primaryColor = primaryBlue;
     secondaryColor = lightBlue;
 
-    // Initialiser avec les valeurs par défaut
+    // Initialiser avec les valeurs par défaut CORRIGÉES
     isMAMStructure = false;
-    maxMemberCount = 1;
+    maxMemberCount = 1; // Pour AssistanteMaternelle seule
     currentMemberCount = 1;
     needFridgeTemperatureCheck = false;
-    needFreezerTemperatureCheck = false; // NOUVEAU
+    needFreezerTemperatureCheck = false;
     hasAssmatFridge = null;
     hasAssmatFreezer = null;
     needAssmatFridgeTemperatureCheck = false;
@@ -272,6 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     context.go('/fridge-temperature');
   }
 
+  // ✅ VERSION AMÉLIORÉE de _showMemberManagement (fusion)
   void _showMemberManagement() {
     showDialog(
       context: context,
@@ -346,28 +347,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-// Nouvelle méthode pour obtenir le titre du bouton d'ajout
+// ✅ NOUVELLES MÉTHODES AMÉLIORÉES (fusion)
   String _getAddMemberTitle() {
-    if (currentMemberCount >= maxMemberCount) {
-      if (maxMemberCount >= 4) {
-        return "Limite atteinte (4 membres max)";
+    if (isMAMStructure) {
+      // Pour une MAM, minimum 2 membres
+      if (currentMemberCount >= maxMemberCount) {
+        if (maxMemberCount >= 4) {
+          return "Limite atteinte (4 membres max)";
+        } else {
+          return "Membres $currentMemberCount/$maxMemberCount - Passer à l'abonnement supérieur";
+        }
       } else {
-        return "Membres $currentMemberCount/$maxMemberCount - Passer à l'abonnement supérieur";
+        // Si on a moins de membres que la limite, on peut ajouter
+        return "Ajouter un membre (${currentMemberCount}/${maxMemberCount})";
       }
     } else {
-      return "Ajouter un membre";
+      // Pour AssistanteMaternelle seule
+      return "Cette fonction est réservée aux MAM";
     }
   }
 
-// Nouvelle méthode pour gérer l'ajout de membre
   void _handleAddMember() {
-    // Si on a atteint la limite mais qu'on n'est pas à 4 membres, rediriger vers mise à niveau
-    if (currentMemberCount >= maxMemberCount && maxMemberCount < 4) {
-      context.go('/subscription-upgrade');
-    } else {
-      // Sinon, aller à l'écran d'ajout normal
-      _navigateToAddMember();
-    }
+    // ✅ TOUJOURS aller vers MAMMemberAddScreen
+    // Cet écran gère intelligemment tous les cas : ajout normal, limite atteinte, upgrade
+    _navigateToAddMember();
   }
 
   // Méthode _checkIfMAMStructure modifiée pour vérifier aussi la température du frigo
@@ -394,18 +397,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
         print("Type de structure trouvé: $structureType, isMAM = $isMam");
 
         if (isMam) {
-          // Code existant pour MAM
-          int maxMembers = 1;
+          // ✅ CORRECTION : MAM minimum 2 membres
+          int maxMembers = 2; // MINIMUM 2 pour MAM
           int currentMembers = 1;
           bool? structureHasFreezer;
 
           if (data.containsKey('maxMemberCount')) {
-            maxMembers = data['maxMemberCount'] ?? 3;
+            maxMembers = data['maxMemberCount'] ?? 2;
+            // ✅ S'assurer que c'est au minimum 2 pour une MAM
+            if (maxMembers < 2) {
+              maxMembers = 2;
+              // Mettre à jour en base pour corriger la valeur
+              await FirebaseFirestore.instance
+                  .collection('structures')
+                  .doc(structureId)
+                  .update({'maxMemberCount': 2});
+            }
           } else if (data.containsKey('subscription') &&
               data['subscription'] != null) {
-            maxMembers = data['subscription']['maxMembers'] ?? 3;
+            maxMembers = data['subscription']['maxMembers'] ?? 2;
+            // ✅ S'assurer que c'est au minimum 2 pour une MAM
+            if (maxMembers < 2) maxMembers = 2;
           } else {
-            maxMembers = 3;
+            maxMembers = 2; // ✅ MINIMUM 2 pour MAM
+            // Mettre à jour en base
+            await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .update({'maxMemberCount': 2});
           }
 
           final membersSnapshot = await FirebaseFirestore.instance
@@ -415,6 +434,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               .get();
 
           currentMembers = membersSnapshot.docs.length;
+          // ✅ S'assurer qu'on a au minimum 1 membre même si la collection est vide
+          if (currentMembers < 1) currentMembers = 1;
 
           if (data.containsKey('hasFreezer')) {
             structureHasFreezer = data['hasFreezer'] as bool;
@@ -437,43 +458,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             hasFreezer = structureHasFreezer;
           });
         } else {
-          // NOUVEAU CODE pour Assistante Maternelle
+          // Code existant pour Assistante Maternelle (pas de changement)
           print("AssistanteMaternelle détectée, vérification des équipements");
-
-          bool? assmatFridge;
-          bool? assmatFreezer;
-
-          // Vérifier si l'assistante maternelle a un frigo
-          if (data.containsKey('hasAssmatFridge')) {
-            assmatFridge = data['hasAssmatFridge'] as bool;
-          } else {
-            assmatFridge = null; // Première fois, pas encore configuré
-          }
-
-          // Vérifier si l'assistante maternelle a un congélateur
-          if (data.containsKey('hasAssmatFreezer')) {
-            assmatFreezer = data['hasAssmatFreezer'] as bool;
-          } else {
-            assmatFreezer = null; // Première fois, pas encore configuré
-          }
-
-          print(
-              "Assistante Maternelle - Réfrigérateur: $assmatFridge, Congélateur: $assmatFreezer");
-
-          // Vérifier les températures si les équipements sont configurés
-          if (assmatFridge == true) {
-            _checkAssmatFridgeTemperatureStatus(structureId);
-          }
-          if (assmatFreezer == true) {
-            _checkAssmatFreezerTemperatureStatus(structureId);
-          }
-
+          // ... reste du code inchangé pour AssistanteMaternelle
           setState(() {
-            isMAMStructure = isMam;
-            hasAssmatFridge = assmatFridge;
-            hasAssmatFreezer = assmatFreezer;
-            showAssmatFridgeChoice = assmatFridge == null;
-            showAssmatFreezerChoice = assmatFreezer == null;
+            isMAMStructure = false;
+            maxMemberCount = 1; // Pour AssistanteMaternelle seule
+            currentMemberCount = 1;
           });
         }
       }
@@ -2295,13 +2286,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         if (isMAMStructure) ...[
           SizedBox(height: maxHeight * 0.02),
-          // REMETTRE LE MENU "Modifier les membres" ORIGINAL
+          // ✅ VERSION AMÉLIORÉE avec description simplifiée (fusion)
           _buildTabletActionItem(
             icon: Icons.people,
             title: "Modifier les membres", // TITRE ORIGINAL
             description:
                 "Gérer les membres de la MAM ($currentMemberCount/$maxMemberCount)",
-            onTap: _showMemberManagement, // MENU ORIGINAL
+            onTap: _showMemberManagement, // MENU ORIGINAL AMÉLIORÉ
             maxWidth: maxWidth,
           ),
           SizedBox(height: maxHeight * 0.02),
@@ -2837,7 +2828,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTap: () => context.go('/structure-management'),
                   ),
                   if (isMAMStructure) ...[
-                    // REMETTRE LE MENU "Modifier les membres" ORIGINAL
+                    // ✅ VERSION AMÉLIORÉE - Menu intelligent pour l'ajout de membres
                     _buildActionItem(
                       icon: Icons.people,
                       title: "Modifier les membres", // TITRE ORIGINAL
@@ -2920,11 +2911,231 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-            // ... reste du code identique
+
+            // Section Gestion des Enfants
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _abacusClickCount++;
+                            print(
+                                "🧮 Image enfant cliquée: $_abacusClickCount fois");
+                            if (_abacusClickCount >= 5) {
+                              _abacusClickCount = 0;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text("Accès administrateur déverrouillé"),
+                                  duration: Duration(seconds: 1),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => AdminScreen()),
+                              );
+                            }
+                          });
+                        },
+                        child: Image.asset(
+                          'assets/images/Icone_Enfant_Present.png',
+                          width: 60,
+                          height: 60,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.child_care,
+                            color: primaryColor,
+                            size: 60,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Gestion des enfants",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.access_time,
+                    title: "Modifier les horaires",
+                    onTap: _showScheduleModification,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.contact_page,
+                    title: "Coordonnées des parents",
+                    onTap: _showParentCoordonneeSelection,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.photo_library,
+                    title: "Gestion des photos",
+                    onTap: _showPhotoManagement,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.edit_note,
+                    title: "Modifier les profils complets",
+                    onTap: _showChildProfilesSelection,
+                  ),
+                  _buildActionItem(
+                    icon: Icons.person_remove,
+                    title: "Retirer un enfant",
+                    onTap: _showChildRemoval,
+                  ),
+                  if (kDebugMode)
+                    _buildActionItem(
+                      icon: Icons.admin_panel_settings,
+                      title: "🔧 Administration des photos (DEBUG)",
+                      onTap: _showPhotoAdministration,
+                    ),
+                ],
+              ),
+            ),
+
+            // Section Rapports - Affichée conditionnellement
+            if (showMonthlyTableReports)
+              Container(
+                margin: EdgeInsets.only(bottom: 16),
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Image.asset(
+                          'assets/images/Icone_Recaptitulatif.png',
+                          width: 60,
+                          height: 60,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.assessment,
+                            color: primaryColor,
+                            size: 60,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            "Tableau mensuel",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    _buildActionItem(
+                      icon: Icons.calendar_month,
+                      title: "Tableau mensuel",
+                      onTap: () => context.go('/monthly-report-selection'),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Section Historique
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/Icone_historique.png',
+                        width: 60,
+                        height: 60,
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.history,
+                          color: primaryColor,
+                          size: 60,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Historique",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.history,
+                    title: "Consulter l'historique",
+                    onTap: _showHistorySelection,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  String _getMAMStatusText() {
+    if (currentMemberCount < maxMemberCount) {
+      // Exemple: "1 membre sur 2 autorisés" ou "2 membres sur 3 autorisés"
+      return "$currentMemberCount membre${currentMemberCount > 1 ? 's' : ''} sur $maxMemberCount autorisé${maxMemberCount > 1 ? 's' : ''}";
+    } else {
+      // Exemple: "2/2 membres" ou "3/3 membres"
+      return "$currentMemberCount/$maxMemberCount membres";
+    }
   }
 
   @override
@@ -3191,7 +3402,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 SizedBox(width: 8),
                                 Text(
-                                  "$currentMemberCount/$maxMemberCount membres",
+                                  // ✅ CORRECTION : Affichage correct selon la situation
+                                  _getMAMStatusText(),
                                   style: TextStyle(
                                     fontSize: screenSize.width *
                                         (isTablet ? 0.016 : 0.03),

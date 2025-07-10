@@ -33,12 +33,18 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _stats = {}; // Reset des stats en cas d'erreur
+        _lastCleanup = null; // Reset de la date
+        _isLoading = false;
+      });
       _showErrorSnackBar("Erreur lors du chargement: $e");
     }
   }
 
   Future<void> _forceCleanup() async {
+    if (_isLoading) return; // Empêche les appels multiples
+
     final confirmed = await _showConfirmDialog();
     if (!confirmed) return;
 
@@ -46,12 +52,16 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
 
     try {
       await PhotoCleanupService.forceCleanup();
-      _showSuccessSnackBar("Nettoyage terminé avec succès");
-      await _loadData(); // Recharger les données
+      if (mounted) {
+        // Vérification que le widget est toujours monté
+        _showSuccessSnackBar("Nettoyage terminé avec succès");
+        await _loadData();
+      }
     } catch (e) {
-      _showErrorSnackBar("Erreur lors du nettoyage: $e");
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar("Erreur lors du nettoyage: $e");
+      }
     }
   }
 
@@ -138,7 +148,7 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        padding: EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
@@ -173,13 +183,13 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: Colors.blue))
                 : Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Card(
                           child: Padding(
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -212,7 +222,7 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                         SizedBox(height: 24),
                         Card(
                           child: Padding(
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -224,17 +234,20 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                                   ),
                                 ),
                                 SizedBox(height: 16),
+                                // Dans la section Actions de la Card
                                 SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
-                                    onPressed: _forceCleanup,
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _forceCleanup, // Désactivé pendant loading
                                     icon: Icon(Icons.delete_sweep),
                                     label: Text("Forcer le nettoyage"),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.red,
                                       foregroundColor: Colors.white,
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
                                     ),
                                   ),
                                 ),
@@ -242,7 +255,9 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
-                                    onPressed: _loadData,
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _loadData, // Désactivé pendant loading
                                     icon: Icon(Icons.refresh),
                                     label: Text("Actualiser les données"),
                                   ),
@@ -255,7 +270,7 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                         Card(
                           color: Colors.orange.shade50,
                           child: Padding(
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -297,17 +312,17 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
 
   Widget _buildStatRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
-            style: TextStyle(fontWeight: FontWeight.w500),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontWeight: FontWeight.bold,
               color: Colors.blue,
             ),

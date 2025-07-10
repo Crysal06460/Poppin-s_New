@@ -254,14 +254,30 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
             "Cette fonctionnalité est uniquement disponible pour les MAM");
       }
 
-      // Récupérer le nombre maximum de membres
+      // ✅ CORRECTION : MAM minimum 2 membres
       if (data.containsKey('maxMemberCount')) {
-        _maxMemberCount = data['maxMemberCount'] ?? 3;
+        _maxMemberCount = data['maxMemberCount'] ?? 2;
+        // ✅ S'assurer que c'est au minimum 2 pour une MAM
+        if (_maxMemberCount < 2) {
+          _maxMemberCount = 2;
+          // Corriger en base de données
+          await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .update({'maxMemberCount': 2});
+        }
       } else if (data.containsKey('subscription') &&
           data['subscription'] != null) {
-        _maxMemberCount = data['subscription']['maxMembers'] ?? 3;
+        _maxMemberCount = data['subscription']['maxMembers'] ?? 2;
+        // ✅ S'assurer que c'est au minimum 2 pour une MAM
+        if (_maxMemberCount < 2) _maxMemberCount = 2;
       } else {
-        _maxMemberCount = 3; // Valeur par défaut pour une MAM
+        _maxMemberCount = 2; // ✅ MINIMUM 2 pour MAM
+        // Mettre à jour en base
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .update({'maxMemberCount': 2});
       }
 
       // Compter le nombre actuel de membres
@@ -272,13 +288,21 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
           .get();
 
       _currentMemberCount = membersSnapshot.docs.length;
+      // ✅ S'assurer qu'on a au minimum 1 membre même si la collection est vide
+      if (_currentMemberCount < 1) _currentMemberCount = 1;
 
       // Déterminer le prix actuel
       _currentPrice = _getPriceForMembers(_maxMemberCount);
 
-      // Proposer par défaut le niveau d'abonnement suivant
+      // ✅ CORRECTION : Proposer le niveau d'abonnement suivant approprié
       _selectedMemberCount = _maxMemberCount < 4 ? _maxMemberCount + 1 : 4;
       _newPrice = _getPriceForMembers(_selectedMemberCount);
+
+      print(
+          "💰 MAM - Abonnement actuel: $_maxMemberCount membres ($_currentPrice)");
+      print("👥 MAM - Membres actuels: $_currentMemberCount");
+      print(
+          "🔄 MAM - Proposition mise à niveau: $_selectedMemberCount membres ($_newPrice)");
 
       setState(() {
         _isLoading = false;
@@ -307,21 +331,26 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   String _getPriceForMembers(int memberCount) {
     switch (memberCount) {
       case 2:
-        return '22 € / mois';
+        return '24,99 € / mois';
       case 3:
-        return '32 € / mois';
+        return '34,99 € / mois';
       case 4:
-        return '40 € / mois';
+        return '44,99 € / mois';
       default:
-        return '22 € / mois';
+        // ✅ CORRECTION : Si < 2, renvoyer le prix pour 2 membres
+        if (memberCount < 2) return '24,99 € / mois';
+        return '44,99 € / mois'; // Pour > 4, utiliser le prix maximum
     }
   }
 
   // ✅ OBTENIR L'ID PRODUIT POUR LES ACHATS IN-APP
   String _getProductIdForMembers(int memberCount) {
+    // ✅ CORRECTION : Gérer le cas où memberCount < 2
+    int actualMemberCount = memberCount < 2 ? 2 : memberCount;
+
     if (Platform.isIOS) {
       // IDs iOS (définis dans subscription_service.dart)
-      switch (memberCount) {
+      switch (actualMemberCount) {
         case 2:
           return 'com.beylet.poppinsApp.subscription.mam_2_members';
         case 3:
@@ -333,7 +362,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       }
     } else {
       // IDs Android (définis dans subscription_service.dart)
-      switch (memberCount) {
+      switch (actualMemberCount) {
         case 2:
           return 'mam2';
         case 3:
@@ -510,17 +539,24 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     });
   }
 
-  // Widget pour les boutons de sélection du nombre de membres
+  // ✅ CORRECTION - SEULE VERSION de la méthode _buildMemberCountButton
   Widget _buildMemberCountButton({
     required int count,
     required bool isSelected,
     required Color color,
   }) {
-    // Désactiver les options inférieures au nombre actuel de membres
+    // ✅ CORRECTION : Pour une MAM, désactiver les options inférieures OU ÉGALES au nombre actuel
+    // MAIS s'assurer qu'on ne peut pas descendre en dessous de 2
     bool isDisabled = count <= _maxMemberCount;
 
+    // ✅ AJOUT : Indiquer si c'est l'abonnement actuel
+    bool isCurrent = count == _maxMemberCount;
+
+    // ✅ AJOUT : Validation pour MAM (minimum 2 membres)
+    bool isValidForMAM = count >= 2;
+
     return GestureDetector(
-      onTap: isDisabled
+      onTap: (isDisabled || !isValidForMAM)
           ? null
           : () {
               setState(() {
@@ -532,17 +568,21 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
         width: 90,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isDisabled
+          color: !isValidForMAM
               ? Colors.grey.shade200
-              : (isSelected ? color : Colors.white),
+              : isDisabled
+                  ? (isCurrent ? Colors.blue.shade50 : Colors.grey.shade200)
+                  : (isSelected ? color : Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isDisabled
+            color: !isValidForMAM
                 ? Colors.grey.shade300
-                : (isSelected ? color : Colors.grey.shade300),
+                : isDisabled
+                    ? (isCurrent ? Colors.blue.shade300 : Colors.grey.shade300)
+                    : (isSelected ? color : Colors.grey.shade300),
             width: 1.5,
           ),
-          boxShadow: isSelected && !isDisabled
+          boxShadow: isSelected && !isDisabled && isValidForMAM
               ? [
                   BoxShadow(
                     color: color.withOpacity(0.3),
@@ -559,9 +599,11 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: isDisabled
-                    ? Colors.grey
-                    : (isSelected ? Colors.white : Colors.grey.shade700),
+                color: !isValidForMAM
+                    ? Colors.grey.shade400
+                    : isDisabled
+                        ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
+                        : (isSelected ? Colors.white : Colors.grey.shade700),
               ),
             ),
             SizedBox(height: 4),
@@ -569,9 +611,11 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
               "membres",
               style: TextStyle(
                 fontSize: 12,
-                color: isDisabled
-                    ? Colors.grey
-                    : (isSelected ? Colors.white : Colors.grey.shade700),
+                color: !isValidForMAM
+                    ? Colors.grey.shade400
+                    : isDisabled
+                        ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
+                        : (isSelected ? Colors.white : Colors.grey.shade700),
               ),
             ),
             if (count == _maxMemberCount) ...[
@@ -581,8 +625,21 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                 style: TextStyle(
                   fontSize: 10,
                   fontStyle: FontStyle.italic,
-                  color:
-                      isSelected ? Colors.white.withOpacity(0.8) : Colors.grey,
+                  color: isSelected
+                      ? Colors.white.withOpacity(0.8)
+                      : Colors.blue.shade700,
+                ),
+              ),
+            ],
+            // ✅ AJOUT : Indiquer si en dessous du minimum MAM
+            if (!isValidForMAM) ...[
+              SizedBox(height: 4),
+              Text(
+                "min. 2",
+                style: TextStyle(
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey.shade500,
                 ),
               ),
             ],
@@ -659,7 +716,8 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  "$_maxMemberCount membres",
+                                  // ✅ CORRECTION : Affichage correct du nombre de membres
+                                  "$_maxMemberCount membre${_maxMemberCount > 1 ? 's' : ''}",
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -685,6 +743,25 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                 ),
                               ],
                             ),
+                            // ✅ AJOUT : Information sur les membres actuels vs autorisés
+                            if (_currentMemberCount != _maxMemberCount) ...[
+                              SizedBox(height: 8),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  "$_currentMemberCount membre${_currentMemberCount > 1 ? 's' : ''} sur $_maxMemberCount autorisé${_maxMemberCount > 1 ? 's' : ''}",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white.withOpacity(0.9),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -722,7 +799,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Nombre d'assistantes maternelles dans votre MAM",
+                                "Nombre d'assistant(e)s maternel(le)s dans votre MAM",
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -972,7 +1049,9 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                 ),
                                 SizedBox(height: 12),
                                 Text(
-                                  "Veuillez sélectionner un forfait supérieur à votre forfait actuel ($_maxMemberCount membres).",
+                                  // ✅ CORRECTION : Message plus précis
+                                  "Veuillez sélectionner un forfait supérieur à votre forfait actuel ($_maxMemberCount membres).\n\n" +
+                                      "Pour une MAM, l'abonnement minimum est de 2 membres.",
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 16,

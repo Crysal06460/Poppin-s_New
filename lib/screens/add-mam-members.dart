@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 class AddMAMMembersScreen extends StatefulWidget {
@@ -15,6 +14,11 @@ class AddMAMMembersScreen extends StatefulWidget {
 class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
   // Liste pour stocker les membres de la MAM
   final List<MAMMember> _members = [];
+
+  // Controllers pour les champs de texte
+  final Map<String, TextEditingController> _firstNameControllers = {};
+  final Map<String, TextEditingController> _lastNameControllers = {};
+  final Map<String, TextEditingController> _emailControllers = {};
 
   // Informations sur le fondateur (utilisateur actuel)
   String _founderFirstName = "";
@@ -32,6 +36,74 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     _loadCurrentUserInfo();
   }
 
+  @override
+  void dispose() {
+    // Dispose tous les controllers
+    _firstNameControllers.values.forEach((controller) => controller.dispose());
+    _lastNameControllers.values.forEach((controller) => controller.dispose());
+    _emailControllers.values.forEach((controller) => controller.dispose());
+    super.dispose();
+  }
+
+  // ===== MÉTHODES UTILITAIRES =====
+
+  // Méthode pour obtenir ou créer un controller
+  TextEditingController _getController(
+      Map<String, TextEditingController> controllers,
+      String key,
+      String initialValue) {
+    if (!controllers.containsKey(key)) {
+      controllers[key] = TextEditingController(text: initialValue);
+    }
+    return controllers[key]!;
+  }
+
+  // Synchroniser les controllers avec les données des membres
+  void _syncControllersWithMembers() {
+    for (int i = 0; i < _members.length; i++) {
+      final member = _members[i];
+      final String memberKey = 'member_$i';
+      final String tabletMemberKey = 'tablet_member_$i';
+
+      // Synchroniser pour téléphone
+      _getController(_firstNameControllers, memberKey, member.firstName).text =
+          member.firstName;
+      _getController(_lastNameControllers, memberKey, member.lastName).text =
+          member.lastName;
+      _getController(_emailControllers, memberKey, member.email).text =
+          member.email;
+
+      // Synchroniser pour tablette
+      _getController(_firstNameControllers, '${tabletMemberKey}_firstName',
+              member.firstName)
+          .text = member.firstName;
+      _getController(_lastNameControllers, '${tabletMemberKey}_lastName',
+              member.lastName)
+          .text = member.lastName;
+      _getController(
+              _emailControllers, '${tabletMemberKey}_email', member.email)
+          .text = member.email;
+    }
+  }
+
+  // Nettoyer les controllers d'un membre supprimé
+  void _cleanupMemberControllers(int index) {
+    final String memberKey = 'member_$index';
+    final String tabletMemberKey = 'tablet_member_$index';
+
+    // Nettoyer les controllers du téléphone
+    _firstNameControllers.remove(memberKey)?.dispose();
+    _lastNameControllers.remove(memberKey)?.dispose();
+    _emailControllers.remove(memberKey)?.dispose();
+
+    // Nettoyer les controllers de la tablette
+    _firstNameControllers.remove('${tabletMemberKey}_firstName')?.dispose();
+    _lastNameControllers.remove('${tabletMemberKey}_lastName')?.dispose();
+    _emailControllers.remove('${tabletMemberKey}_email')?.dispose();
+  }
+
+  // ===== MÉTHODES DE CHARGEMENT =====
+
   Future<void> _loadCurrentUserInfo() async {
     setState(() {
       _isLoading = true;
@@ -40,7 +112,7 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        context.go('/login');
+        if (mounted) context.go('/login');
         return;
       }
 
@@ -54,7 +126,6 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
         final structureData = structureDoc.data() as Map<String, dynamic>;
 
         // Récupérer maxMemberCount directement depuis le document de la structure
-        // Cette valeur est mise à jour par l'écran SubscriptionConfirmedScreen
         if (structureData.containsKey('maxMemberCount')) {
           setState(() {
             _maxMemberCount = structureData['maxMemberCount'] ?? 4;
@@ -81,6 +152,7 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
         // Vérifier si le document founder existe déjà
         final existingMembers = membersSnapshot.docs;
 
+        // ✅ LOGIQUE CORRIGÉE : Chercher d'abord le fondateur
         for (var doc in existingMembers) {
           final memberData = doc.data();
           // Si on trouve un membre avec isFounder = true, c'est le fondateur
@@ -88,7 +160,7 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
             firstName = memberData['firstName'] ?? "";
             lastName = memberData['lastName'] ?? "";
             founderFound = true;
-            break;
+            break; // Sortir dès qu'on trouve le premier fondateur
           }
         }
 
@@ -98,31 +170,58 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
           lastName = structureData['ownerLastName'] ?? "";
         }
 
-        setState(() {
-          _founderFirstName = firstName;
-          _founderLastName = lastName;
-          _founderEmail = user.email ?? "";
-          _structureName = structureData['structureName'] ?? "Notre MAM";
+        if (mounted) {
+          setState(() {
+            _founderFirstName = firstName;
+            _founderLastName = lastName;
+            _founderEmail = user.email ?? "";
+            _structureName = structureData['structureName'] ?? "Notre MAM";
 
-          // Ajouter le fondateur comme premier membre
-          _members.add(MAMMember(
-            firstName: _founderFirstName,
-            lastName: _founderLastName,
-            email: _founderEmail,
-            isFounder:
-                true, // On garde cette propriété pour l'interface utilisateur
-          ));
+            // ✅ Vider et reconstruire la liste des membres
+            _members.clear();
 
-          _isLoading = false;
-        });
+            // Ajouter le fondateur comme premier membre
+            _members.add(MAMMember(
+              firstName: _founderFirstName,
+              lastName: _founderLastName,
+              email: _founderEmail,
+              isFounder: true,
+            ));
+
+            // ✅ Ajouter les autres membres existants (non-fondateurs)
+            for (var doc in existingMembers) {
+              final memberData = doc.data();
+              if (memberData['isFounder'] != true) {
+                _members.add(MAMMember(
+                  firstName: memberData['firstName'] ?? "",
+                  lastName: memberData['lastName'] ?? "",
+                  email: memberData['email'] ?? "",
+                  isFounder: false,
+                ));
+              }
+            }
+
+            _isLoading = false;
+          });
+
+          // Synchroniser les controllers après chargement
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _syncControllersWithMembers();
+          });
+        }
       } else {
-        context.go('/create-structure');
+        if (mounted) {
+          context.go('/create-structure');
+          return; // Arrêter l'exécution ici
+        }
       }
     } catch (e) {
       print("🚨 Erreur lors du chargement des informations: $e");
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -166,6 +265,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     }
   }
 
+  // ===== MÉTHODES DE GESTION DES MEMBRES =====
+
   // Ajouter un nouveau membre à la liste
   void _addNewMember() {
     if (_members.length >= _maxMemberCount) {
@@ -193,12 +294,17 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
   // Supprimer un membre de la liste
   void _removeMember(int index) {
     if (index > 0) {
+      // Nettoyer les controllers avant de supprimer
+      _cleanupMemberControllers(index);
+
       // Ne pas supprimer le fondateur
       setState(() {
         _members.removeAt(index);
       });
     }
   }
+
+  // ===== MÉTHODES DE SAUVEGARDE =====
 
   Future<void> _saveMembers() async {
     // Vérifier que tous les champs sont remplis
@@ -207,36 +313,57 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
 
     for (int i = 1; i < _members.length; i++) {
       final member = _members[i];
-      if (member.firstName.isEmpty ||
-          member.lastName.isEmpty ||
-          member.email.isEmpty) {
+      if (member.firstName.trim().isEmpty ||
+          member.lastName.trim().isEmpty ||
+          member.email.trim().isEmpty) {
         isValid = false;
         errorMessage = "Veuillez remplir tous les champs pour chaque membre";
         break;
       }
 
-      // Vérifier le format de l'email
-      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(member.email)) {
+      // Vérifier le format de l'email avec une regex plus robuste
+      final emailRegex = RegExp(
+        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+        caseSensitive: false,
+      );
+      if (!emailRegex.hasMatch(member.email.trim())) {
         isValid = false;
         errorMessage =
-            "L'adresse email de ${member.firstName} n'est pas valide";
+            "L'adresse email de ${member.firstName.trim()} n'est pas valide";
         break;
       }
+
+      // Vérifier qu'il n'y a pas d'emails en double
+      for (int j = 0; j < _members.length; j++) {
+        if (i != j &&
+            _members[j].email.trim().toLowerCase() ==
+                member.email.trim().toLowerCase()) {
+          isValid = false;
+          errorMessage =
+              "L'adresse email ${member.email.trim()} est utilisée plusieurs fois";
+          break;
+        }
+      }
+      if (!isValid) break;
     }
 
     if (!isValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final User? user = FirebaseAuth.instance.currentUser;
@@ -244,16 +371,18 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
 
       // Vérifier que le nombre total de membres respecte la limite d'abonnement
       if (_members.length > _maxMemberCount) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                "Le nombre de membres dépasse la limite de votre abonnement ($_maxMemberCount membres)"),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  "Le nombre de membres dépasse la limite de votre abonnement ($_maxMemberCount membres)"),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -263,11 +392,17 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
           .doc(user.uid)
           .collection('members');
 
+      // Obtenir les membres existants avant suppression pour comparaison
+      final existingMembersSnapshot = await membersCollection.get();
+      final existingEmails = existingMembersSnapshot.docs
+          .map((doc) => doc.data()['email']?.toString().toLowerCase() ?? '')
+          .where((email) => email.isNotEmpty)
+          .toSet();
+
       // Supprimer tous les membres existants
-      final existingMembers = await membersCollection.get();
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
-      for (var doc in existingMembers.docs) {
+      for (var doc in existingMembersSnapshot.docs) {
         batch.delete(doc.reference);
       }
 
@@ -280,20 +415,21 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       // Ajouter tous les membres (y compris le fondateur) avec des ID séquentiels
       for (int i = 0; i < _members.length; i++) {
         final member = _members[i];
-        final memberId =
-            'member_${i + 1}'; // Créer des IDs séquentiels (member_1, member_2, etc.)
+        final memberId = 'member_${i + 1}';
+        final normalizedEmail = member.email.trim().toLowerCase();
 
         batch.set(membersCollection.doc(memberId), {
-          'firstName': member.firstName,
-          'lastName': member.lastName,
-          'email': member.email.toLowerCase(),
-          'isFounder': i == 0, // Le premier membre est le fondateur
-          'memberNumber': i + 1, // Numéro séquentiel du membre
+          'firstName': member.firstName.trim(),
+          'lastName': member.lastName.trim(),
+          'email': normalizedEmail,
+          'isFounder': i == 0,
+          'memberNumber': i + 1,
           'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
 
-        // Envoyer l'email d'invitation pour les membres autres que le fondateur
-        if (i > 0) {
+        // Envoyer l'email d'invitation pour les nouveaux membres (pas le fondateur et pas ceux déjà existants)
+        if (i > 0 && !existingEmails.contains(normalizedEmail)) {
           await _sendInvitationEmail(member);
         }
       }
@@ -303,67 +439,10 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
 
       print("✅ Tous les membres ont été enregistrés avec des IDs séquentiels");
 
-      // NOUVELLE PARTIE : Attribuer les enfants existants sans assignation aux membres de la MAM
-      try {
-        // Récupérer tous les enfants qui n'ont pas d'assistante maternelle assignée
-        final childrenSnapshot = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(user.uid)
-            .collection('children')
-            .where('assignedMemberEmail', isNull: true)
-            .get();
+      // Attribution des enfants existants sans assignation aux membres de la MAM
+      await _assignChildrenToMembers(user.uid);
 
-        print(
-            "🧒 Nombre d'enfants sans assignation: ${childrenSnapshot.docs.length}");
-
-        if (childrenSnapshot.docs.isNotEmpty) {
-          // Récupérer tous les membres pour la répartition (y compris le fondateur)
-          final List<MAMMember> allMembers = List.from(_members);
-          int memberIndex = 0;
-
-          // Créer des batches pour les mises à jour (pour optimiser les performances)
-          WriteBatch batch = FirebaseFirestore.instance.batch();
-          int batchCount = 0;
-
-          // Pour chaque enfant sans assignation, l'assigner à un membre de façon équilibrée
-          for (var childDoc in childrenSnapshot.docs) {
-            // Assigner l'enfant au membre actuel (distribution circulaire)
-            final MAMMember currentMember = allMembers[memberIndex];
-
-            batch.update(childDoc.reference, {
-              'assignedMemberEmail': currentMember.email.toLowerCase(),
-              'memberNumber':
-                  memberIndex + 1, // Ajouter également le numéro du membre
-            });
-
-            print(
-                "👶➡️👩‍⚕️ Assignation de l'enfant ${childDoc.id} à ${currentMember.firstName} ${currentMember.lastName}");
-
-            // Passer au membre suivant (de façon circulaire)
-            memberIndex = (memberIndex + 1) % allMembers.length;
-            batchCount++;
-
-            // Exécuter par lots de 500 maximum (limite Firestore)
-            if (batchCount >= 500) {
-              await batch.commit();
-              batch = FirebaseFirestore.instance.batch();
-              batchCount = 0;
-            }
-          }
-
-          // Exécuter le dernier batch s'il reste des opérations
-          if (batchCount > 0) {
-            await batch.commit();
-          }
-
-          print("✅ Tous les enfants ont été assignés aux membres de la MAM");
-        }
-      } catch (e) {
-        print("⚠️ Erreur lors de l'assignation des enfants aux membres: $e");
-        // Ne pas bloquer le processus en cas d'erreur
-      }
-
-      // Afficher un message de succès au lieu de rediriger
+      // Afficher un message de succès
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -378,19 +457,83 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Une erreur est survenue: $e"),
+            content: Text("Une erreur est survenue lors de la sauvegarde"),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-// Terminer l'ajout de membres et rediriger vers l'accueil
+  // Méthode séparée pour l'assignation des enfants
+  Future<void> _assignChildrenToMembers(String structureId) async {
+    try {
+      // Récupérer tous les enfants qui n'ont pas d'assistante maternelle assignée
+      final childrenSnapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .where('assignedMemberEmail', isNull: true)
+          .get();
+
+      print(
+          "🧒 Nombre d'enfants sans assignation: ${childrenSnapshot.docs.length}");
+
+      if (childrenSnapshot.docs.isNotEmpty && _members.isNotEmpty) {
+        // Récupérer tous les membres pour la répartition (y compris le fondateur)
+        final List<MAMMember> allMembers = List.from(_members);
+        int memberIndex = 0;
+
+        // Créer des batches pour les mises à jour
+        WriteBatch batch = FirebaseFirestore.instance.batch();
+        int batchCount = 0;
+
+        // Pour chaque enfant sans assignation, l'assigner à un membre de façon équilibrée
+        for (var childDoc in childrenSnapshot.docs) {
+          // Assigner l'enfant au membre actuel (distribution circulaire)
+          final MAMMember currentMember = allMembers[memberIndex];
+
+          batch.update(childDoc.reference, {
+            'assignedMemberEmail': currentMember.email.trim().toLowerCase(),
+            'memberNumber': memberIndex + 1,
+            'assignedAt': FieldValue.serverTimestamp(),
+          });
+
+          print(
+              "👶➡️👩‍⚕️ Assignation de l'enfant ${childDoc.id} à ${currentMember.firstName} ${currentMember.lastName}");
+
+          // Passer au membre suivant (de façon circulaire)
+          memberIndex = (memberIndex + 1) % allMembers.length;
+          batchCount++;
+
+          // Exécuter par lots de 500 maximum (limite Firestore)
+          if (batchCount >= 500) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            batchCount = 0;
+          }
+        }
+
+        // Exécuter le dernier batch s'il reste des opérations
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+
+        print("✅ Tous les enfants ont été assignés aux membres de la MAM");
+      }
+    } catch (e) {
+      print("⚠️ Erreur lors de l'assignation des enfants aux membres: $e");
+      // Ne pas bloquer le processus en cas d'erreur
+    }
+  }
+
+  // Terminer l'ajout de membres et rediriger vers l'accueil
   Future<void> _finishAndGoHome() async {
     await _saveMembers();
 
@@ -402,6 +545,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       context.go('/home');
     }
   }
+
+  // ===== MÉTHODES D'INVITATION =====
 
   // Envoyer un email d'invitation à un membre
   Future<void> _sendInvitationEmail(MAMMember member) async {
@@ -418,7 +563,7 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       final structureName = structureDoc.data()?['structureName'] ?? 'MAM';
 
       // Normaliser l'email (en minuscules)
-      final String normalizedEmail = member.email.toLowerCase();
+      final String normalizedEmail = member.email.trim().toLowerCase();
 
       // Définir la date d'expiration (30 jours à partir de maintenant)
       final DateTime expirationDate = DateTime.now().add(Duration(days: 30));
@@ -438,11 +583,11 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
 
       // Construire les données du template pour l'email
       final templateData = {
-        'firstName': member.firstName,
-        'lastName': member.lastName,
+        'firstName': member.firstName.trim(),
+        'lastName': member.lastName.trim(),
         'structureName': structureName,
         'structureId': user.uid,
-        'inviterName': _founderFirstName + ' ' + _founderLastName,
+        'inviterName': '${_founderFirstName.trim()} ${_founderLastName.trim()}',
         'androidLink':
             'https://play.google.com/store/apps/details?id=com.example.poppins_app',
         'iosLink': 'https://apps.apple.com/app/id123456789',
@@ -471,7 +616,7 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                "Invitation envoyée à ${member.firstName} ${member.lastName}"),
+                "Invitation envoyée à ${member.firstName.trim()} ${member.lastName.trim()}"),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -482,6 +627,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
       // Continue même si l'email échoue
     }
   }
+
+  // ===== MÉTHODES D'INTERFACE =====
 
   @override
   Widget build(BuildContext context) {
@@ -511,9 +658,21 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
+        // ✅ MEILLEURE SOLUTION : Navigation intelligente et robuste
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
+        ),
       ),
+      // ✅ CORRECTION : Syntaxe correcte pour le body
       body: isTablet ? _buildTabletContent(screenSize) : _buildPhoneContent(),
-    );
+    ); // ✅ Fermeture correcte du Scaffold
   }
 
   // Construire la liste des widgets de membres
@@ -1101,6 +1260,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
   Widget _buildTabletMemberCard(
       int index, MAMMember member, double maxWidth, double maxHeight) {
     final bool isFounder = member.isFounder;
+    final String memberKey =
+        'tablet_member_$index'; // Clé différente pour éviter les conflits
 
     return Container(
       decoration: BoxDecoration(
@@ -1211,8 +1372,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
                         ),
                         child: TextField(
                           enabled: !isFounder,
-                          controller:
-                              TextEditingController(text: member.firstName),
+                          controller: _getController(_firstNameControllers,
+                              '${memberKey}_firstName', member.firstName),
                           onChanged: (value) => member.firstName = value,
                           style: TextStyle(fontSize: maxWidth * 0.016),
                           decoration: InputDecoration(
@@ -1266,8 +1427,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
                         ),
                         child: TextField(
                           enabled: !isFounder,
-                          controller:
-                              TextEditingController(text: member.lastName),
+                          controller: _getController(_lastNameControllers,
+                              '${memberKey}_lastName', member.lastName),
                           onChanged: (value) => member.lastName = value,
                           style: TextStyle(fontSize: maxWidth * 0.016),
                           decoration: InputDecoration(
@@ -1321,7 +1482,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
                         ),
                         child: TextField(
                           enabled: !isFounder,
-                          controller: TextEditingController(text: member.email),
+                          controller: _getController(_emailControllers,
+                              '${memberKey}_email', member.email),
                           onChanged: (value) => member.email = value,
                           style: TextStyle(fontSize: maxWidth * 0.016),
                           keyboardType: TextInputType.emailAddress,
@@ -1352,9 +1514,10 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
     );
   }
 
-  // Construire une carte pour un membre
+  // Construire une carte pour un membre (téléphone)
   Widget _buildMemberCard(int index, MAMMember member) {
     final bool isFounder = member.isFounder;
+    final String memberKey = 'member_$index';
 
     return Card(
       elevation: 2,
@@ -1367,12 +1530,22 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  "Membre ${index + 1}",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isFounder ? const Color(0xFF16A085) : Colors.black87,
-                  ),
+                Row(
+                  children: [
+                    if (isFounder)
+                      Icon(Icons.star,
+                          color: const Color(0xFF16A085), size: 20),
+                    if (isFounder) const SizedBox(width: 8),
+                    Text(
+                      isFounder ? "Fondateur" : "Membre ${index + 1}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isFounder
+                            ? const Color(0xFF16A085)
+                            : Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
                 if (!isFounder)
                   IconButton(
@@ -1386,10 +1559,11 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
             // Champs pour le prénom
             TextField(
               enabled: !isFounder,
-              controller: TextEditingController(text: member.firstName),
+              controller: _getController(
+                  _firstNameControllers, memberKey, member.firstName),
               onChanged: (value) => member.firstName = value,
               decoration: InputDecoration(
-                labelText: isFounder ? member.firstName : "Prénom",
+                labelText: "Prénom",
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: isFounder,
@@ -1401,10 +1575,11 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
             // Champs pour le nom
             TextField(
               enabled: !isFounder,
-              controller: TextEditingController(text: member.lastName),
+              controller: _getController(
+                  _lastNameControllers, memberKey, member.lastName),
               onChanged: (value) => member.lastName = value,
               decoration: InputDecoration(
-                labelText: isFounder ? member.lastName : "Nom",
+                labelText: "Nom",
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 filled: isFounder,
@@ -1416,7 +1591,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
             // Champs pour l'email
             TextField(
               enabled: !isFounder,
-              controller: TextEditingController(text: member.email),
+              controller:
+                  _getController(_emailControllers, memberKey, member.email),
               onChanged: (value) => member.email = value,
               decoration: InputDecoration(
                 labelText: "Email",
@@ -1434,6 +1610,8 @@ class _AddMAMMembersScreenState extends State<AddMAMMembersScreen> {
   }
 }
 
+// ===== CLASSE MEMBRE MAM =====
+
 // Classe pour représenter un membre de la MAM
 class MAMMember {
   String firstName;
@@ -1447,4 +1625,24 @@ class MAMMember {
     required this.email,
     required this.isFounder,
   });
+
+  // Méthode pour obtenir le nom complet
+  String get fullName => '${firstName.trim()} ${lastName.trim()}';
+
+  // Méthode pour obtenir l'email normalisé
+  String get normalizedEmail => email.trim().toLowerCase();
+
+  // Méthode pour vérifier si les données sont valides
+  bool get isValid {
+    return firstName.trim().isNotEmpty &&
+        lastName.trim().isNotEmpty &&
+        email.trim().isNotEmpty &&
+        RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+            .hasMatch(email.trim());
+  }
+
+  @override
+  String toString() {
+    return 'MAMMember(firstName: $firstName, lastName: $lastName, email: $email, isFounder: $isFounder)';
+  }
 }

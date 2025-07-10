@@ -31,19 +31,19 @@ class AndroidSubscriptionService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
 
-  // IDs des produits Android (Google Play)
+  // 🔧 CORRIGÉ : IDs des produits Android (Google Play) - CORRESPONDENT À GOOGLE PLAY CONSOLE
   static const Map<String, String> _androidProductIds = {
-    'assistante_maternelle': 'subscription_assistant_maternel_android',
-    'mam_2_members': 'subscription_mam_2_members_android',
-    'mam_3_members': 'subscription_mam_3_members_android',
-    'mam_4_members': 'subscription_mam_4_members_android',
+    'assistante_maternelle': 'assmat', // ← CORRIGÉ
+    'mam_2_members': 'mam2', // ← CORRIGÉ
+    'mam_3_members': 'mam3', // ← CORRIGÉ
+    'mam_4_members': 'mam4', // ← CORRIGÉ
   };
 
   static const Set<String> _allProductIds = {
-    'subscription_assistant_maternel_android',
-    'subscription_mam_2_members_android',
-    'subscription_mam_3_members_android',
-    'subscription_mam_4_members_android',
+    'assmat', // ← CORRIGÉ
+    'mam2', // ← CORRIGÉ
+    'mam3', // ← CORRIGÉ
+    'mam4', // ← CORRIGÉ
   };
 
   /// Initialise le service Android
