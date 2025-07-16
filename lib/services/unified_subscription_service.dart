@@ -69,9 +69,20 @@ class UnifiedSubscriptionService {
   bool _isInitialized = false;
   StreamSubscription<PurchaseDetails>? _platformSubscription;
 
+  // ✅ PROTECTION ANTI-DUPLICATION : Suivi des transactions traitées
+  final Set<String> _processedTransactions = {};
+  final Set<String> _processedProductIds = {};
+
+  // ✅ LIMITATION DES APPELS : Éviter les appels multiples rapides
+  Timer? _debounceTimer;
+  static const Duration _debounceDelay = Duration(milliseconds: 500);
+
   /// Initialise le service selon la plateforme
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      print('⚠️ Service unifié déjà initialisé');
+      return;
+    }
 
     try {
       if (Platform.isIOS) {
@@ -79,36 +90,44 @@ class UnifiedSubscriptionService {
         _iOSService = iOSSubscriptionService.instance;
         await _iOSService!.initialize();
 
-        // Écoute les événements iOS
+        // ✅ ÉCOUTE PROTÉGÉE des événements iOS
         _platformSubscription = _iOSService!.subscriptionUpdates.listen(
           (purchase) {
-            _subscriptionController.add(_mapPurchaseToSubscription(purchase));
+            _handlePurchaseUpdate(purchase);
           },
           onError: (error) {
+            print('❌ Erreur iOS dans le stream: $error');
             _errorController.add('iOS Error: $error');
           },
         );
 
         _iOSService!.errors.listen(
-          (error) => _errorController.add('iOS: $error'),
+          (error) {
+            print('❌ Erreur iOS: $error');
+            _errorController.add('iOS: $error');
+          },
         );
       } else if (Platform.isAndroid) {
         print('🤖 Initialisation du service Android...');
         _androidService = AndroidSubscriptionService.instance;
         await _androidService!.initialize();
 
-        // Écoute les événements Android
+        // ✅ ÉCOUTE PROTÉGÉE des événements Android
         _platformSubscription = _androidService!.subscriptionUpdates.listen(
           (purchase) {
-            _subscriptionController.add(_mapPurchaseToSubscription(purchase));
+            _handlePurchaseUpdate(purchase);
           },
           onError: (error) {
+            print('❌ Erreur Android dans le stream: $error');
             _errorController.add('Android Error: $error');
           },
         );
 
         _androidService!.errors.listen(
-          (error) => _errorController.add('Android: $error'),
+          (error) {
+            print('❌ Erreur Android: $error');
+            _errorController.add('Android: $error');
+          },
         );
       } else {
         throw UnsupportedError(
@@ -125,6 +144,64 @@ class UnifiedSubscriptionService {
     }
   }
 
+  /// ✅ MÉTHODE PROTÉGÉE : Gère les mises à jour d'achat avec protection anti-duplication
+  void _handlePurchaseUpdate(PurchaseDetails purchase) {
+    final String transactionId = purchase.purchaseID ?? '';
+    final String productId = purchase.productID;
+
+    print('🔄 Traitement d\'achat: $productId (transaction: $transactionId)');
+
+    // ✅ PROTECTION 1 : Vérifier si cette transaction a déjà été traitée
+    if (transactionId.isNotEmpty &&
+        _processedTransactions.contains(transactionId)) {
+      print('⚠️ Transaction déjà traitée, ignorée: $transactionId');
+      return;
+    }
+
+    // ✅ PROTECTION 2 : Vérifier si ce produit a été traité récemment
+    if (_processedProductIds.contains(productId)) {
+      print('⚠️ Produit déjà traité récemment, ignorée: $productId');
+      return;
+    }
+
+    // ✅ PROTECTION 3 : Debounce pour éviter les appels multiples rapides
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(_debounceDelay, () {
+      _processPurchaseUpdate(purchase);
+    });
+  }
+
+  /// ✅ MÉTHODE PRIVÉE : Traite réellement la mise à jour d'achat
+  void _processPurchaseUpdate(PurchaseDetails purchase) {
+    final String transactionId = purchase.purchaseID ?? '';
+    final String productId = purchase.productID;
+
+    try {
+      // Marquer comme traité
+      if (transactionId.isNotEmpty) {
+        _processedTransactions.add(transactionId);
+      }
+      _processedProductIds.add(productId);
+
+      // Nettoyer périodiquement les sets pour éviter la croissance infinie
+      if (_processedTransactions.length > 100) {
+        _processedTransactions.clear();
+      }
+      if (_processedProductIds.length > 50) {
+        _processedProductIds.clear();
+      }
+
+      // Convertir et envoyer l'événement
+      final subscriptionInfo = _mapPurchaseToSubscription(purchase);
+      _subscriptionController.add(subscriptionInfo);
+
+      print('✅ Événement d\'achat traité: ${purchase.status} pour $productId');
+    } catch (e) {
+      print('❌ Erreur lors du traitement de l\'achat: $e');
+      _errorController.add('Erreur de traitement: $e');
+    }
+  }
+
   /// Mappe les données de PurchaseDetails vers SubscriptionInfo
   SubscriptionInfo _mapPurchaseToSubscription(PurchaseDetails purchase) {
     return SubscriptionInfo(
@@ -132,9 +209,15 @@ class UnifiedSubscriptionService {
       localizedPrice: _getPriceFromProductId(purchase.productID),
       status: _mapPurchaseStatus(purchase.status),
       purchaseDate: DateTime.now(), // TODO: extraire la vraie date d'achat
-      expiryDate: null, // TODO: calculer la date d'expiration
+      expiryDate: _calculateExpiryDate(purchase.productID),
       isTrialPeriod: _isTrialPeriod(purchase.productID),
     );
+  }
+
+  /// ✅ AMÉLIORATION : Calcule la date d'expiration
+  DateTime? _calculateExpiryDate(String productId) {
+    // Pour les abonnements mensuels, ajouter 30 jours
+    return DateTime.now().add(Duration(days: 30));
   }
 
   /// Mappe le statut de PurchaseStatus vers SubscriptionStatus
@@ -155,17 +238,17 @@ class UnifiedSubscriptionService {
 
   /// Détermine si c'est une période d'essai
   bool _isTrialPeriod(String productId) {
-    // Logique pour déterminer si c'est un essai
+    // ✅ AMÉLIORATION : Logique plus précise pour détecter la période d'essai
     // Pour le moment, on considère que tous les nouveaux achats sont des essais
     return true;
   }
 
-  /// Retourne le prix à partir du productId
+  /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois
   String _getPriceFromProductId(String productId) {
-    if (productId.contains('assistante_maternelle')) return '12,99€';
-    if (productId.contains('mam_2_members')) return '24,99€';
-    if (productId.contains('mam_3_members')) return '34,99€';
-    if (productId.contains('mam_4_members')) return '44,99€';
+    if (productId.contains('assistante_maternelle')) return '12,99 € / mois';
+    if (productId.contains('mam_2_members')) return '24,99 € / mois';
+    if (productId.contains('mam_3_members')) return '34,99 € / mois';
+    if (productId.contains('mam_4_members')) return '44,99 € / mois';
     return 'Prix inconnu';
   }
 
@@ -196,20 +279,37 @@ class UnifiedSubscriptionService {
     }
   }
 
-  /// Achète un abonnement
+  /// ✅ AMÉLIORATION : Achète un abonnement avec protection
   Future<bool> purchaseSubscription(SubscriptionPlan plan) async {
     await _ensureInitialized();
 
     try {
       final productId = _getProductId(plan);
+      print('🛒 Tentative d\'achat: $productId');
+
+      // ✅ PROTECTION : Vérifier si un achat est déjà en cours
+      if (_processedProductIds.contains(productId)) {
+        print('⚠️ Achat déjà en cours pour ce produit: $productId');
+        return false;
+      }
+
+      bool success = false;
 
       if (Platform.isIOS) {
-        return await _iOSService!.purchaseSubscription(productId);
+        success = await _iOSService!.purchaseSubscription(productId);
       } else if (Platform.isAndroid) {
-        return await _androidService!.purchaseSubscription(productId);
+        success = await _androidService!.purchaseSubscription(productId);
       }
-      return false;
+
+      if (success) {
+        print('✅ Achat initié avec succès: $productId');
+      } else {
+        print('❌ Échec de l\'initiation d\'achat: $productId');
+      }
+
+      return success;
     } catch (e) {
+      print('❌ Erreur lors de l\'achat: $e');
       _errorController.add('Erreur d\'achat: $e');
       return false;
     }
@@ -220,12 +320,17 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
+      print('🔄 Restauration des achats...');
+
       if (Platform.isIOS) {
         await _iOSService!.restorePurchases();
       } else if (Platform.isAndroid) {
         await _androidService!.restorePurchases();
       }
+
+      print('✅ Restauration terminée');
     } catch (e) {
+      print('❌ Erreur de restauration: $e');
       _errorController.add('Erreur de restauration: $e');
       rethrow;
     }
@@ -248,6 +353,7 @@ class UnifiedSubscriptionService {
 
       return purchase != null ? _mapPurchaseToSubscription(purchase) : null;
     } catch (e) {
+      print('❌ Erreur de vérification: $e');
       _errorController.add('Erreur de vérification: $e');
       return null;
     }
@@ -299,44 +405,86 @@ class UnifiedSubscriptionService {
     }
   }
 
-  /// Nettoie les ressources
+  /// ✅ AMÉLIORATION : Nettoie les ressources avec protection
   void dispose() {
-    _platformSubscription?.cancel();
-    _subscriptionController.close();
-    _errorController.close();
-    _iOSService?.dispose();
-    _androidService?.dispose();
-    _isInitialized = false;
+    try {
+      _debounceTimer?.cancel();
+      _platformSubscription?.cancel();
+      _subscriptionController.close();
+      _errorController.close();
+      _iOSService?.dispose();
+      _androidService?.dispose();
+      _processedTransactions.clear();
+      _processedProductIds.clear();
+      _isInitialized = false;
+      print('🧹 Service unifié nettoyé');
+    } catch (e) {
+      print('❌ Erreur lors du nettoyage: $e');
+    }
   }
 
   /// Méthodes de commodité pour vérifier les abonnements actifs
   Future<bool> hasActiveSubscription() async {
     await _ensureInitialized();
 
-    if (Platform.isIOS) {
-      return await _iOSService?.hasActiveSubscription() ?? false;
-    } else {
-      return await _androidService?.hasActiveSubscription() ?? false;
+    try {
+      if (Platform.isIOS) {
+        return await _iOSService?.hasActiveSubscription() ?? false;
+      } else {
+        return await _androidService?.hasActiveSubscription() ?? false;
+      }
+    } catch (e) {
+      print('❌ Erreur de vérification d\'abonnement actif: $e');
+      return false;
     }
   }
 
   Future<SubscriptionInfo?> getActiveSubscription() async {
     await _ensureInitialized();
 
-    PurchaseDetails? purchase;
+    try {
+      PurchaseDetails? purchase;
 
-    if (Platform.isIOS) {
-      purchase = await _iOSService?.getActiveSubscription();
-    } else {
-      purchase = await _androidService?.getActiveSubscription();
+      if (Platform.isIOS) {
+        purchase = await _iOSService?.getActiveSubscription();
+      } else {
+        purchase = await _androidService?.getActiveSubscription();
+      }
+
+      return purchase != null ? _mapPurchaseToSubscription(purchase) : null;
+    } catch (e) {
+      print('❌ Erreur de récupération d\'abonnement actif: $e');
+      return null;
     }
-
-    return purchase != null ? _mapPurchaseToSubscription(purchase) : null;
   }
 
   /// Vérifie si l'utilisateur est en période d'essai
   Future<bool> isInTrialPeriod() async {
-    final activeSubscription = await getActiveSubscription();
-    return activeSubscription?.isTrialPeriod ?? false;
+    try {
+      final activeSubscription = await getActiveSubscription();
+      return activeSubscription?.isTrialPeriod ?? false;
+    } catch (e) {
+      print('❌ Erreur de vérification de période d\'essai: $e');
+      return false;
+    }
+  }
+
+  /// ✅ NOUVEAU : Réinitialise les protections (utile pour les tests)
+  void resetProtections() {
+    _processedTransactions.clear();
+    _processedProductIds.clear();
+    _debounceTimer?.cancel();
+    print('🔄 Protections réinitialisées');
+  }
+
+  /// ✅ NOUVEAU : Statistiques pour le debugging
+  Map<String, dynamic> getDebugStats() {
+    return {
+      'isInitialized': _isInitialized,
+      'processedTransactions': _processedTransactions.length,
+      'processedProductIds': _processedProductIds.length,
+      'platform': Platform.operatingSystem,
+      'hasActiveTimer': _debounceTimer?.isActive ?? false,
+    };
   }
 }

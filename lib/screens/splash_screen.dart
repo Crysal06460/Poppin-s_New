@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ AJOUT : Import manquant
 import '../services/subscription_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -117,33 +118,98 @@ class _SplashScreenState extends State<SplashScreen>
       _updateProgress(0.95, "Mise en place des petits chaussons 👟...");
       await Future.delayed(Duration(milliseconds: 400));
 
-      _updateProgress(1.0, "Abracadabra... Bienvenue dans Poppin’s ! 🎉");
+      _updateProgress(1.0, "Abracadabra... Bienvenue dans Poppin's ! 🎉");
       await Future.delayed(Duration(milliseconds: 300));
 
-      // 5. Navigation
+      // 5. Navigation avec fallback robuste
       _pulseController.stop();
       _fadeController.reverse();
-
       await Future.delayed(Duration(milliseconds: 200));
 
-      if (user != null) {
-        context.go('/dashboard');
-      } else {
-        context.go('/welcome');
-      }
+      // Navigation avec gestion d'erreur
+      await _navigateAfterSplash(user);
     } catch (e) {
       print('❌ Erreur critique: $e');
       _handleError();
     }
   }
 
+  // ✅ MÉTHODE AMÉLIORÉE : Navigation après splash avec gestion d'erreur robuste
+  Future<void> _navigateAfterSplash(User? user) async {
+    try {
+      if (user != null) {
+        print("✅ Utilisateur connecté: ${user.email}");
+
+        // ✅ AMÉLIORATION : Vérification avec timeout pour éviter les blocages
+        try {
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(user.uid)
+              .get()
+              .timeout(
+            Duration(seconds: 5), // Timeout de 5 secondes
+            onTimeout: () {
+              print("⚠️ Timeout vérification structure");
+              throw TimeoutException('Vérification structure lente');
+            },
+          );
+
+          if (structureDoc.exists) {
+            print("✅ Structure trouvée, redirection vers dashboard");
+            if (mounted) context.go('/dashboard');
+          } else {
+            print("⚠️ Structure non trouvée pour uid: ${user.uid}");
+
+            // ✅ NOUVEAU : Vérifier si c'est un utilisateur parent
+            try {
+              final userDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.email?.toLowerCase() ?? '')
+                  .get()
+                  .timeout(Duration(seconds: 3));
+
+              if (userDoc.exists && userDoc.data()?['role'] == 'parent') {
+                print(
+                    "✅ Utilisateur parent détecté, redirection vers parent home");
+                if (mounted) context.go('/parent/home');
+              } else {
+                print(
+                    "⚠️ Utilisateur sans structure définie, redirection vers Welcome");
+                if (mounted) context.go('/');
+              }
+            } catch (e) {
+              print("⚠️ Erreur vérification utilisateur parent: $e");
+              if (mounted) context.go('/');
+            }
+          }
+        } catch (e) {
+          print("⚠️ Erreur vérification structure: $e");
+          // En cas d'erreur Firestore, rediriger vers Welcome pour être sûr
+          if (mounted) context.go('/');
+        }
+      } else {
+        print("ℹ️ Utilisateur non connecté, redirection vers Welcome");
+        if (mounted) context.go('/');
+      }
+    } catch (e) {
+      print("❌ Erreur navigation critique: $e, fallback vers Welcome");
+      // En cas d'erreur, toujours rediriger vers Welcome
+      if (mounted) {
+        context.go('/');
+      }
+    }
+  }
+
+  // ✅ MÉTHODE AMÉLIORÉE : Gestion d'erreur avec retry automatique
   void _handleError() {
+    if (!mounted) return;
+
     setState(() {
       _hasError = true;
       _statusText = "Connexion difficile...";
     });
 
-    // Retry automatique après 3 secondes
+    // Retry automatique avec fallback vers Welcome
     Future.delayed(Duration(seconds: 3), () {
       if (mounted) {
         _retryOrContinue();
@@ -151,7 +217,10 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
+  // ✅ MÉTHODE AMÉLIORÉE : Retry avec fallback garanti
   Future<void> _retryOrContinue() async {
+    if (!mounted) return;
+
     setState(() {
       _hasError = false;
       _statusText = "Nouvelle tentative...";
@@ -161,14 +230,12 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(Duration(milliseconds: 500));
 
     try {
-      _initializeServices();
+      await _initializeServices();
     } catch (e) {
-      // Continuer en mode dégradé
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        context.go('/dashboard');
-      } else {
-        context.go('/welcome');
+      print("❌ Échec retry définitif: $e, redirection vers Welcome");
+      // En cas d'échec définitif, toujours aller vers Welcome
+      if (mounted) {
+        context.go('/');
       }
     }
   }
@@ -258,6 +325,23 @@ class _SplashScreenState extends State<SplashScreen>
         width: 130, // 🎨 TAILLE PERSONNALISABLE
         height: 130,
         fit: BoxFit.contain, // Garde les proportions
+        // ✅ NOUVEAU : Gestion d'erreur si l'image n'existe pas
+        errorBuilder: (context, error, stackTrace) {
+          print("⚠️ Erreur chargement logo: $error");
+          return Container(
+            width: 130,
+            height: 130,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.umbrella,
+              size: 60,
+              color: Colors.white,
+            ),
+          );
+        },
       ),
     );
   }

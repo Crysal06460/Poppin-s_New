@@ -67,6 +67,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:poppins_app/screens/parent_second_address_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import 'package:poppins_app/screens/splash_screen.dart';
+import 'package:poppins_app/screens/account_deletion_screen.dart';
 
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
@@ -93,24 +94,100 @@ Future<String> _getStructureId() async {
 final GoRouter router = GoRouter(
   initialLocation: '/splash',
   redirect: _handleRedirect,
-  errorBuilder: (context, state) => Scaffold(
-    body: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            "Page non trouvée",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => context.go('/home'),
-            child: const Text("Retour à l'accueil"),
-          ),
-        ],
+  errorBuilder: (context, state) {
+    print("❌ ERREUR ROUTE: ${state.uri.toString()}");
+    print("❌ ERREUR: ${state.error}");
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text("Page non trouvée"),
+        backgroundColor: Color(0xFF3D9DF2),
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
       ),
-    ),
-  ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 80,
+              color: Color(0xFF3D9DF2),
+            ),
+            SizedBox(height: 20),
+            Text(
+              "Page non trouvée",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3D9DF2),
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              "La page demandée n'existe pas ou il manque des paramètres",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 30),
+
+            // Bouton principal - Retour vers Welcome
+            ElevatedButton(
+              onPressed: () {
+                print("🔄 Redirection forcée vers Welcome");
+                try {
+                  context.go('/'); // Toujours rediriger vers Welcome
+                } catch (e) {
+                  print("❌ Erreur redirection vers Welcome: $e");
+                  // En cas d'échec total, redémarrer l'app
+                  context.go('/splash');
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF3D9DF2),
+                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              ),
+              child: Text(
+                "RETOUR À L'ACCUEIL",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+
+            SizedBox(height: 20),
+
+            // Bouton secondaire - Redémarrer
+            TextButton(
+              onPressed: () {
+                print("🔄 Redémarrage de l'application");
+                try {
+                  context.go('/splash');
+                } catch (e) {
+                  print("❌ Erreur redémarrage: $e");
+                  // Forcer le retour à la racine
+                  context.go('/');
+                }
+              },
+              child: Text(
+                "Redémarrer l'application",
+                style: TextStyle(
+                  color: Color(0xFF3D9DF2),
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  },
   routes: [
     // Écran d'accueil principal (premier écran)
     GoRoute(path: '/', builder: (context, state) => const WelcomeScreen()),
@@ -156,6 +233,10 @@ final GoRouter router = GoRouter(
       path: '/splash',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/account-deletion',
+      builder: (context, state) => const AccountDeletionScreen(),
     ),
     GoRoute(
       path: '/subscription-confirmed',
@@ -228,7 +309,20 @@ final GoRouter router = GoRouter(
         return StructureInfoScreen(extraData: extraData);
       },
     ),
-    GoRoute(path: '/home', builder: (context, state) => HomeScreen()),
+    GoRoute(
+      path: '/home',
+      builder: (context, state) {
+        try {
+          return HomeScreen();
+        } catch (e) {
+          print("❌ Erreur dans HomeScreen: $e");
+          return _createErrorScreen(
+            "Une erreur s'est produite lors du chargement de l'accueil.\nVeuillez reprendre depuis l'écran de bienvenue.",
+            context,
+          );
+        }
+      },
+    ),
     GoRoute(
       path: '/child-info',
       builder: (context, state) => ChildInfoScreen(),
@@ -435,7 +529,17 @@ final GoRouter router = GoRouter(
     GoRoute(path: '/stock', builder: (context, state) => const StockScreen()),
     GoRoute(
       path: '/dashboard',
-      builder: (context, state) => const DashboardScreen(),
+      builder: (context, state) {
+        try {
+          return const DashboardScreen();
+        } catch (e) {
+          print("❌ Erreur dans DashboardScreen: $e");
+          return _createErrorScreen(
+            "Une erreur s'est produite lors du chargement du tableau de bord.\nVeuillez reprendre depuis l'écran de bienvenue.",
+            context,
+          );
+        }
+      },
     ),
     GoRoute(
       path: '/photo-management/:childId?', // Le ? rend le paramètre optionnel
@@ -505,8 +609,19 @@ final GoRouter router = GoRouter(
     ),
     GoRoute(
       path: '/parent/home',
-      builder: (context, state) => const ParentHomeScreen(),
+      builder: (context, state) {
+        try {
+          return const ParentHomeScreen();
+        } catch (e) {
+          print("❌ Erreur dans ParentHomeScreen: $e");
+          return _createErrorScreen(
+            "Une erreur s'est produite lors du chargement de l'espace parent.\nVeuillez reprendre depuis l'écran de bienvenue.",
+            context,
+          );
+        }
+      },
     ),
+
     GoRoute(
       path: '/cleaning-schedule',
       builder: (context, state) => const CleaningScheduleScreen(),
@@ -549,17 +664,84 @@ final GoRouter router = GoRouter(
         upgradeInfo: state.extra as Map<String, dynamic>,
       ),
     ),
+    GoRoute(
+      path: '/create-structure',
+      builder: (context, state) =>
+          const StructureDetailsScreen(), // Utilisez l'écran existant
+    ),
   ],
 );
+Widget _createErrorScreen(String message, BuildContext context) {
+  return Scaffold(
+    backgroundColor: Colors.white,
+    appBar: AppBar(
+      title: Text("Erreur"),
+      backgroundColor: Color(0xFF3D9DF2),
+      foregroundColor: Colors.white,
+      automaticallyImplyLeading: false,
+    ),
+    body: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 60,
+            color: Color(0xFF3D9DF2),
+          ),
+          SizedBox(height: 20),
+          Text(
+            "Oops !",
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF3D9DF2),
+            ),
+          ),
+          SizedBox(height: 10),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(height: 30),
+          ElevatedButton(
+            onPressed: () {
+              context.go('/'); // Retour vers Welcome
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF3D9DF2),
+              padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+            ),
+            child: Text(
+              "RETOUR À L'ACCUEIL",
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 // Fonction de redirection pour gérer l'authentification
 String? _handleRedirect(BuildContext context, GoRouterState state) {
+  print("🔄 _handleRedirect appelée pour: ${state.uri.toString()}");
+
   // Obtenir l'utilisateur actuel
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   // Liste des routes accessibles sans authentification
   final List<String> publicRoutes = [
     '/',
+    '/splash',
     '/signup',
     '/login',
     '/register',
@@ -569,18 +751,66 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
     '/pricing',
     '/structure-confirmation',
     '/subscription-confirmed',
+    '/welcome', // Au cas où cette route serait ajoutée
   ];
 
   // Si la route est publique, ne pas rediriger
   if (publicRoutes.contains(state.matchedLocation)) {
+    print("✅ Route publique autorisée: ${state.matchedLocation}");
     return null;
   }
 
   // Si l'utilisateur n'est pas connecté et tente d'accéder à une route protégée
   if (currentUser == null) {
-    return '/';
+    print("❌ Utilisateur non connecté, redirection vers Welcome");
+    return '/'; // Redirection vers Welcome
   }
 
-  // L'utilisateur est connecté et accède à une route protégée, pas de redirection
+  // Vérifier si la route nécessite des paramètres spécifiques
+  final String location = state.matchedLocation;
+
+  // Routes qui nécessitent un childId
+  final List<String> childRoutes = [
+    '/parent-info',
+    '/parent-address',
+    '/parent-second-info',
+    '/parent-second-address',
+    '/add-second-parent',
+    '/schedule-info',
+    '/child-documents',
+    '/child-pickup-auth',
+    '/child-meal-info',
+    '/child-financial-info',
+    '/child-salary-info',
+  ];
+
+  // Si c'est une route enfant mais qu'il manque des paramètres
+  if (childRoutes.contains(location) && state.extra == null) {
+    print("❌ Route enfant sans paramètres, redirection vers Dashboard");
+    return '/dashboard'; // Ou vers Welcome si pas de dashboard
+  }
+
+  // L'utilisateur est connecté et accède à une route protégée valide
+  // Routes protégées spéciales qui nécessitent une authentification
+  final List<String> protectedRoutes = [
+    '/dashboard',
+    '/home',
+    '/account-deletion', // ← AJOUTER CETTE LIGNE
+    '/structure-management',
+    '/photo-management',
+    '/stock',
+    '/exchanges',
+    '/admin',
+    '/test-data-generator',
+  ];
+
+// Si c'est une route protégée spéciale, autoriser l'accès
+  if (protectedRoutes.contains(location) || location.startsWith('/parent/')) {
+    print("✅ Utilisateur connecté, route protégée autorisée: ${location}");
+    return null;
+  }
+
+// L'utilisateur est connecté et accède à une route protégée valide
+  print("✅ Utilisateur connecté, route autorisée: ${location}");
   return null;
 }

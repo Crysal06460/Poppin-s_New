@@ -22,6 +22,7 @@ import '../screens/admin_cleanup_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import '../services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -588,6 +589,162 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print(
           "Erreur lors de la vérification du statut de température du réfrigérateur AssistanteMaternelle: $e");
     }
+  }
+
+// Méthode pour ouvrir les liens légaux
+  Future<void> _launchURL(String url) async {
+    try {
+      final Uri uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Impossible d'ouvrir le lien"),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print("Erreur lors de l'ouverture du lien: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de l'ouverture du lien"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
+// Widget moderne pour les liens légaux (Design 2025)
+  Widget _buildLegalButtons({required bool isTablet}) {
+    final double fontSize = isTablet ? 14 : 16;
+    final double buttonHeight = isTablet ? 45 : 52;
+    final double spacing = isTablet ? 12 : 16;
+
+    return Column(
+      children: [
+        // Bouton Politique de Confidentialité
+        Container(
+          width: double.infinity,
+          height: buttonHeight,
+          margin: EdgeInsets.only(bottom: spacing),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _launchURL(
+                  'https://www.poppin-s.fr/wp-content/administratif/Politique-de-confidentialite.pdf'),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      brightCyan,
+                      brightCyan.withOpacity(0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: brightCyan.withOpacity(0.3),
+                      offset: const Offset(0, 4),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.privacy_tip_outlined,
+                      color: Colors.white,
+                      size: isTablet ? 18 : 20,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      "Politique de Confidentialité",
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Bouton Conditions d'Utilisation
+        Container(
+          width: double.infinity,
+          height: buttonHeight,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _launchURL(
+                  'https://www.poppin-s.fr/wp-content/administratif/Condition-d-utilisation.pdf'),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      primaryBlue,
+                      primaryBlue.withOpacity(0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryBlue.withOpacity(0.3),
+                      offset: const Offset(0, 4),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.description_outlined,
+                      color: Colors.white,
+                      size: isTablet ? 18 : 20,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      "Conditions d'Utilisation",
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _checkAssmatFreezerTemperatureStatus(String structureId) async {
@@ -1930,8 +2087,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Nouvelle méthode pour le contenu tablette
-  // Modifier la méthode _buildTabletContent pour inclure la section Historique
   Widget _buildTabletContent() {
     return LayoutBuilder(builder: (context, constraints) {
       final double maxWidth = constraints.maxWidth;
@@ -2040,11 +2195,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             _buildSectionItem(
                               title: "Historique",
                               icon: Icons.history,
-                              imagePath:
-                                  'assets/images/Icone_historique.png', // Vous pouvez créer une icône spécifique
+                              imagePath: 'assets/images/Icone_historique.png',
                               index: 3,
                               maxWidth: maxWidth,
                             ),
+                          ],
+                        ),
+                      ),
+
+                      // 🆕 SECTION LÉGALE - TABLET
+                      SizedBox(height: maxHeight * 0.02),
+                      Container(
+                        padding: EdgeInsets.all(maxWidth * 0.02),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.grey.shade200,
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Informations légales",
+                              style: TextStyle(
+                                fontSize: maxWidth * 0.018,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            SizedBox(height: maxHeight * 0.015),
+                            _buildLegalButtons(isTablet: true),
                           ],
                         ),
                       ),
@@ -2835,6 +3018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onTap:
                           _showMemberManagement, // MENU ORIGINAL avec logique intelligente
                     ),
+
                     _buildActionItem(
                       icon: Icons.settings,
                       title: "Fonctionnement de la MAM",
@@ -3119,6 +3303,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: "Consulter l'historique",
                     onTap: _showHistorySelection,
                   ),
+                ],
+              ),
+            ),
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    offset: const Offset(0, 3),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/Icone_historique.png',
+                        width: 60,
+                        height: 60,
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.history,
+                          color: primaryColor,
+                          size: 60,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Historique",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  _buildActionItem(
+                    icon: Icons.history,
+                    title: "Consulter l'historique",
+                    onTap: _showHistorySelection,
+                  ),
+                ],
+              ),
+            ),
+
+// 🆕 SECTION LÉGALE - PHONE
+            Container(
+              margin: EdgeInsets.only(bottom: 24),
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.grey.shade50,
+                    Colors.white,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.grey.shade200,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    offset: const Offset(0, 2),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.policy_outlined,
+                          color: primaryColor,
+                          size: 24,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        "Informations légales",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  _buildLegalButtons(isTablet: false),
                 ],
               ),
             ),

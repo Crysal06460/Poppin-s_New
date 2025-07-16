@@ -176,13 +176,68 @@ class iOSSubscriptionService {
     }
   }
 
-  /// Sauvegarder l'abonnement dans Firestore
+  /// Sauvegarder l'abonnement dans Firestore avec protection anti-duplication
   Future<void> _saveSubscriptionToFirestore(PurchaseDetails purchase) async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        print(
+            '❌ Utilisateur non connecté, impossible de sauvegarder l\'abonnement');
+        return;
+      }
 
       final String productId = purchase.productID;
+      final String transactionId = purchase.purchaseID ?? '';
+
+      print(
+          '🍎 Tentative de sauvegarde pour: $productId (transaction: $transactionId)');
+
+      // ✅ VÉRIFICATION 1 : Éviter les doublons basés sur le transactionId
+      if (transactionId.isNotEmpty) {
+        final existingByTransaction = await FirebaseFirestore.instance
+            .collection('subscriptions')
+            .where('transactionId', isEqualTo: transactionId)
+            .limit(1)
+            .get();
+
+        if (existingByTransaction.docs.isNotEmpty) {
+          print(
+              '✅ Abonnement déjà existant avec cette transaction, pas de duplication');
+          return;
+        }
+      }
+
+      // ✅ VÉRIFICATION 2 : Éviter les doublons basés sur productId + structureId
+      final existingByProduct = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('productId', isEqualTo: productId)
+          .where('status', isEqualTo: 'active')
+          .limit(1)
+          .get();
+
+      if (existingByProduct.docs.isNotEmpty) {
+        print(
+            '✅ Abonnement actif déjà existant pour ce produit, pas de duplication');
+        return;
+      }
+
+      // ✅ VÉRIFICATION 3 : Éviter les abonnements créés dans les dernières minutes
+      final DateTime now = DateTime.now();
+      final DateTime recentThreshold = now.subtract(Duration(minutes: 5));
+
+      final recentSubscriptions = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('createdAt',
+              isGreaterThan: Timestamp.fromDate(recentThreshold))
+          .limit(1)
+          .get();
+
+      if (recentSubscriptions.docs.isNotEmpty) {
+        print('✅ Abonnement récent déjà créé, pas de duplication');
+        return;
+      }
 
       // Déterminer le type de structure et nombre de membres
       String structureType = 'assistante_maternelle';
@@ -190,6 +245,7 @@ class iOSSubscriptionService {
       double priceAmount = 12.99;
       String priceDisplay = '12,99 € / mois';
 
+      // ✅ AMÉLIORATION : Mapping plus robuste des productId
       if (productId.contains('mam')) {
         structureType = 'MAM';
         if (productId.contains('2_members')) {
@@ -204,43 +260,90 @@ class iOSSubscriptionService {
           memberCount = 4;
           priceAmount = 44.99;
           priceDisplay = '44,99 € / mois';
+        } else {
+          // Fallback pour MAM non spécifié
+          memberCount = 2;
+          priceAmount = 24.99;
+          priceDisplay = '24,99 € / mois';
         }
       }
 
-      // Sauvegarder dans Firestore
-      await FirebaseFirestore.instance.collection('subscriptions').add({
+      // ✅ AMÉLIORATION : Dates plus précises
+      final DateTime purchaseDate = DateTime.now();
+      final DateTime expirationDate = purchaseDate.add(Duration(days: 30));
+      final DateTime trialEndDate = purchaseDate.add(Duration(days: 7));
+
+      // ✅ DÉSACTIVER les anciens abonnements actifs avant d'en créer un nouveau
+      final oldActiveSubscriptions = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      // Désactiver les anciens abonnements
+      for (final doc in oldActiveSubscriptions.docs) {
+        await doc.reference.update({
+          'status': 'replaced',
+          'replacedAt': FieldValue.serverTimestamp(),
+        });
+        print('📝 Ancien abonnement ${doc.id} désactivé');
+      }
+
+      // ✅ CRÉER le nouvel abonnement avec toutes les données nécessaires
+      final Map<String, dynamic> subscriptionData = {
         'structureId': user.uid,
         'structureType': structureType,
         'memberCount': memberCount,
         'status': 'active',
         'productId': productId,
-        'transactionId': purchase.purchaseID,
-        'purchaseDate': DateTime.now().toIso8601String(),
-        'expirationDate':
-            DateTime.now().add(Duration(days: 30)).toIso8601String(),
+        'transactionId': transactionId,
+        'purchaseDate': purchaseDate.toIso8601String(),
+        'expirationDate': expirationDate.toIso8601String(),
+        'trialEndsAt': Timestamp.fromDate(trialEndDate),
         'priceAmount': priceAmount,
         'priceDisplay': priceDisplay,
         'currency': 'EUR',
         'billingPeriod': 'monthly',
+        'platform': 'ios',
+        'isTrialPeriod': true,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      // Mettre à jour la structure
+      // Sauvegarder dans Firestore
+      final docRef = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .add(subscriptionData);
+
+      print('✅ Abonnement iOS sauvegardé avec succès: ${docRef.id}');
+      print('   - Type: $structureType');
+      print('   - Membres: $memberCount');
+      print('   - Prix: $priceAmount EUR');
+      print('   - Transaction: $transactionId');
+
+      // ✅ METTRE À JOUR la structure principale
       await FirebaseFirestore.instance
           .collection('structures')
           .doc(user.uid)
           .update({
         'maxMemberCount': memberCount,
         'subscriptionActive': true,
+        'subscriptionDocId': docRef.id,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
         'currentPriceAmount': priceAmount,
         'currentPriceDisplay': priceDisplay,
       });
 
-      print('✅ Abonnement iOS sauvegardé dans Firestore');
+      print('✅ Structure mise à jour avec maxMemberCount=$memberCount');
     } catch (e) {
-      print('❌ Erreur sauvegarde Firestore: $e');
+      print(
+          '❌ Erreur lors de la sauvegarde de l\'abonnement dans Firestore: $e');
+      print('   - ProductId: ${purchase.productID}');
+      print('   - TransactionId: ${purchase.purchaseID}');
+      print('   - Status: ${purchase.status}');
+
+      // ✅ AJOUTER l'erreur au stream d'erreurs
+      _errorController.add('Erreur de sauvegarde: $e');
     }
   }
 

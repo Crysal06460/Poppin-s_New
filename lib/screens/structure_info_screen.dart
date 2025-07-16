@@ -1044,10 +1044,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
           const SizedBox(height: 15),
 
-          _buildTextField(cityController, "Ville",
-              icon: Icons.location_city_outlined,
-              isReadOnly: true,
-              color: primaryColor),
+          _buildPhoneCityField(),
 
           const SizedBox(height: 15),
 
@@ -1131,6 +1128,222 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  Widget _buildPhoneCityField() {
+    return GestureDetector(
+      onTap: citySuggestions.length > 1
+          ? () {
+              _showCitySelectionDialog();
+            }
+          : null,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: primaryColor.withOpacity(0.5)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: TextField(
+          controller: cityController,
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: "Ville",
+            labelStyle: TextStyle(color: primaryColor.withOpacity(0.8)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            prefixIcon: Icon(Icons.location_city_outlined, color: primaryColor),
+            suffixIcon: citySuggestions.length > 1
+                ? Icon(Icons.arrow_drop_down, color: primaryColor)
+                : null,
+            counterText: "",
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            hintText: cityController.text.isEmpty
+                ? "Entrez d'abord un code postal"
+                : null,
+            hintStyle: TextStyle(color: Colors.grey.shade500),
+          ),
+          style: TextStyle(
+            fontSize: 16,
+            color: cityController.text.isEmpty ? Colors.grey : Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+
+// ET AJOUTER cette méthode pour afficher le dialog de sélection :
+
+  void _showCitySelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.location_city,
+                color: primaryColor,
+                size: 28,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Choisissez votre ville",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: primaryColor.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: primaryColor,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Code postal ${postalCodeController.text}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16),
+                Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: citySuggestions.length,
+                    itemBuilder: (context, index) {
+                      final city = citySuggestions[index];
+                      final isSelected = cityController.text == city;
+
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? primaryColor.withOpacity(0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? primaryColor.withOpacity(0.5)
+                                : Colors.grey.shade300,
+                            width: 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          title: Text(
+                            city,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: isSelected ? primaryColor : Colors.black87,
+                            ),
+                          ),
+                          leading: Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? primaryColor.withOpacity(0.2)
+                                  : Colors.grey.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isSelected
+                                  ? Icons.check_circle
+                                  : Icons.location_on_outlined,
+                              color: isSelected
+                                  ? primaryColor
+                                  : Colors.grey.shade600,
+                              size: 20,
+                            ),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              cityController.text = city;
+                            });
+                            Navigator.pop(context);
+
+                            // Petit feedback visuel
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Ville sélectionnée : $city"),
+                                duration: Duration(seconds: 2),
+                                backgroundColor: primaryColor,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Annuler',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

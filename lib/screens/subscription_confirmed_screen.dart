@@ -30,80 +30,10 @@ class _SubscriptionConfirmedScreenState
   @override
   void initState() {
     super.initState();
-    // Sauvegarder les informations d'abonnement dans Firestore dès l'affichage de l'écran
-    _saveSubscriptionInfo();
+    // ✅ CORRIGÉ : Plus d'appel à _saveSubscriptionInfo() - la sauvegarde est faite par le service d'abonnement
   }
 
-  // FONCTION MODIFIÉE : Sauvegarder les informations d'abonnement avec les prix
-  Future<void> _saveSubscriptionInfo() async {
-    try {
-      setState(() {
-        _isSaving = true;
-      });
-
-      final String structureType =
-          widget.structureInfo['structureType'] ?? 'assistante_maternelle';
-      final String structureId = widget.structureInfo['structureId'] ?? '';
-      final int memberCount = widget.structureInfo['memberCount'] ?? 1;
-
-      // NOUVELLES DONNÉES : Récupérer les informations de prix
-      final double priceAmount = widget.structureInfo['priceAmount'] ?? 0.0;
-      final String priceDisplay = widget.structureInfo['priceDisplay'] ?? '';
-      final String currency = widget.structureInfo['currency'] ?? 'EUR';
-      final String billingPeriod =
-          widget.structureInfo['billingPeriod'] ?? 'monthly';
-
-      // Obtenir l'utilisateur courant
-      final User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
-
-      // 1. Créer ou mettre à jour l'abonnement dans la collection 'subscriptions'
-      await FirebaseFirestore.instance.collection('subscriptions').add({
-        'structureId': currentUser.uid,
-        'structureType': structureType,
-        'memberCount': memberCount,
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-        'trialEndsAt':
-            Timestamp.fromDate(DateTime.now().add(Duration(days: 7))),
-        // NOUVELLES DONNÉES DE PRIX AJOUTÉES
-        'priceAmount': priceAmount, // Prix en nombre (ex: 22.0)
-        'priceDisplay': priceDisplay, // Prix formaté (ex: "22 € / mois")
-        'currency': currency, // Devise (ex: "EUR")
-        'billingPeriod': billingPeriod, // Période (ex: "monthly")
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print(
-          "✅ Abonnement enregistré dans Firestore: type=$structureType, membres=$memberCount, prix=$priceAmount $currency");
-
-      // 2. Mettre à jour le document principal de la structure avec le maxMemberCount
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(currentUser.uid)
-          .update({
-        'maxMemberCount': memberCount,
-        'subscriptionActive': true,
-        'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
-        // OPTIONNEL : Ajouter aussi les infos de prix dans la structure
-        'currentPriceAmount': priceAmount,
-        'currentPriceDisplay': priceDisplay,
-      });
-
-      print(
-          "✅ Structure mise à jour avec maxMemberCount=$memberCount et prix=$priceAmount");
-
-      setState(() {
-        _isSaving = false;
-      });
-    } catch (e) {
-      print("❌ Erreur lors de l'enregistrement de l'abonnement: $e");
-      setState(() {
-        _isSaving = false;
-      });
-    }
-  }
-
+  // ✅ CORRIGÉ : Commentaire déplacé au bon endroit
   // MÉTHODE MODIFIÉE : Calculer le prix pour l'affichage (si les données ne sont pas passées)
   String _getPrice(String structureType, int memberCount) {
     // Vérifier d'abord si le prix formaté est disponible dans les données

@@ -298,6 +298,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return "Aucun compte trouvé pour cet email.";
       case "wrong-password":
         return "Mot de passe incorrect.";
+      case "invalid-credential": // ← NOUVEAU CODE D'ERREUR
+        return "Email inconnu ou mot de passe incorrect.";
       case "user-disabled":
         return "Ce compte utilisateur a été désactivé.";
       case "too-many-requests":
@@ -308,6 +310,10 @@ class _LoginScreenState extends State<LoginScreen> {
         return "Cette adresse email est déjà utilisée par un autre compte.";
       case "network-request-failed":
         return "Vérifiez votre connexion internet.";
+      case "weak-password":
+        return "Le mot de passe est trop faible.";
+      case "account-exists-with-different-credential":
+        return "Un compte existe déjà avec cette adresse email.";
       default:
         return "Une erreur est survenue: $errorCode";
     }

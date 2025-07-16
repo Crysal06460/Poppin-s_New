@@ -493,7 +493,67 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                               ),
 
                               SizedBox(height: maxHeight * 0.04),
+                              SizedBox(height: maxHeight * 0.03),
 
+// Bouton Supprimer mon compte - Version iPad
+                              Center(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.red.withOpacity(0.2),
+                                        offset: const Offset(0, 3),
+                                        blurRadius: 10,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () =>
+                                          context.go('/account-deletion'),
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: maxWidth * 0.06,
+                                          vertical: maxHeight * 0.018,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: Colors.red.shade300,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.delete_forever,
+                                              color: Colors.red.shade600,
+                                              size: maxWidth * 0.022,
+                                            ),
+                                            SizedBox(width: maxWidth * 0.015),
+                                            Text(
+                                              'Supprimer mon compte',
+                                              style: TextStyle(
+                                                fontSize: maxWidth * 0.018,
+                                                color: Colors.red.shade600,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(height: maxHeight * 0.03),
                               // Bouton d'enregistrement stylé pour iPad
                               Center(
                                 child: Material(
@@ -866,7 +926,61 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
               },
             ),
             SizedBox(height: 32),
+            SizedBox(height: 24),
 
+// Bouton Supprimer mon compte - Version iPhone
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.2),
+                    offset: const Offset(0, 2),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.go('/account-deletion'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.red.shade300,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.delete_forever,
+                          color: Colors.red.shade600,
+                          size: 20,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Supprimer mon compte',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.red.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: 24),
             // Bouton d'enregistrement amélioré pour iPhone
             Center(
               child: Container(

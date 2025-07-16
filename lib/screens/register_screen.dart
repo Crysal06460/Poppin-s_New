@@ -97,6 +97,81 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
+  // Widget pour l'indication d'essai gratuit
+  Widget _buildTrialIndicator(bool isTablet, {double? maxWidth}) {
+    return Container(
+      margin: EdgeInsets.only(
+        bottom: isTablet ? (maxWidth! * 0.025) : 16,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: isTablet ? (maxWidth! * 0.025) : 16,
+        vertical: isTablet ? (maxWidth! * 0.015) : 12,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            primaryYellow.withOpacity(0.1),
+            primaryYellow.withOpacity(0.05),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(isTablet ? 16 : 12),
+        border: Border.all(
+          color: primaryYellow.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(isTablet ? 8 : 6),
+            decoration: BoxDecoration(
+              color: primaryYellow.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.star_rounded,
+              color: primaryYellow,
+              size: isTablet ? (maxWidth! * 0.02) : 18,
+            ),
+          ),
+          SizedBox(width: isTablet ? (maxWidth! * 0.015) : 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Première étape",
+                  style: TextStyle(
+                    fontSize: isTablet ? (maxWidth! * 0.014) : 12,
+                    fontWeight: FontWeight.w600,
+                    color: primaryYellow,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  "Choix de votre abonnement mensuel sur l'écran suivant avec 7 jours d'essai gratuit",
+                  style: TextStyle(
+                    fontSize: isTablet ? (maxWidth! * 0.016) : 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF455A64),
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios_rounded,
+            color: primaryYellow.withOpacity(0.7),
+            size: isTablet ? (maxWidth! * 0.018) : 14,
+          ),
+        ],
+      ),
+    );
+  }
+
   // Version iPhone (garde le code original)
   Widget _buildPhoneContent() {
     return Center(
@@ -129,7 +204,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 20),
 
-              // Sélection du type de structure
+              // Indication d'essai gratuit
+              _buildTrialIndicator(false),
+
               // Sélection du type de structure
               IntrinsicHeight(
                 child: Row(
@@ -542,6 +619,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           textAlign: TextAlign.center,
         ),
+
+        SizedBox(height: maxHeight * 0.02),
+
+        // Indication d'essai gratuit
+        _buildTrialIndicator(true, maxWidth: maxWidth),
       ],
     );
   }
