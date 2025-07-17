@@ -7,7 +7,11 @@ class ReceiptValidationService {
   static http.Client client = http.Client();
 
   /// Endpoint called to validate receipts.
-  static const String endpoint = 'https://example.com/verifyReceipt';
+  // Endpoint for the Cloud Function handling receipt verification.
+  // This function should return a JSON object like `{ valid: true }` when the
+  // receipt is valid or `{ valid: false }` otherwise.
+  static const String endpoint =
+      'https://europe-west1-poppin-s-app.cloudfunctions.net/verifyReceipt';
 
   /// Send receipt data to backend and return whether it is valid.
   static Future<bool> validateReceipt({
