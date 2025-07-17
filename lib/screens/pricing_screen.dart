@@ -123,17 +123,27 @@ class _PricingScreenState extends State<PricingScreen> {
   }
 
   /// Gère les mises à jour d'abonnement
-  void _handleSubscriptionUpdate(SubscriptionInfo subscription) {
-    setState(() {
-      if (subscription.status == SubscriptionStatus.purchased) {
-        _activeSubscription = subscription;
+  void _handleSubscriptionUpdate(SubscriptionInfo info) {
+    print('📥 Subscription update: ${info.status}');
+
+    if (info.status == SubscriptionStatus.purchased) {
+      setState(() {
         _isPurchasing = false;
-        _showSuccessDialog();
-      } else if (subscription.status == SubscriptionStatus.error) {
+        _activeSubscription = info;
+      });
+
+      // Naviguer automatiquement vers la page de confirmation
+      GoRouter.of(context).go('/subscription-confirmed', extra: {
+        'structureType': widget.structureType,
+        'priceDisplay': info.localizedPrice,
+        'memberCount': _selectedMamMembers,
+      });
+    } else if (info.status == SubscriptionStatus.error) {
+      setState(() {
         _isPurchasing = false;
-        _showErrorDialog('Erreur d\'achat');
-      }
-    });
+      });
+      _showErrorDialog("Erreur d'achat");
+    }
   }
 
   /// Détermine le plan selon la configuration
