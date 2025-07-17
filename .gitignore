@@ -11,3 +11,4 @@ android/*.hprof
 build/
 .pub/
 android_backup/
+.env

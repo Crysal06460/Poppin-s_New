@@ -58,6 +58,7 @@ dependencies:
   # Ajouts pour le support d'email
   mailer: ^6.0.1
   html: ^0.15.4
+  flutter_dotenv: ^5.2.1
 
 dev_dependencies:
   flutter_test:
