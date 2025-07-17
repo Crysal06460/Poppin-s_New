@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Fi
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'routes.dart';
 
@@ -28,6 +29,9 @@ const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Charge les variables d'environnement depuis le fichier .env
+  await dotenv.load(fileName: '.env');
 
   // NOUVEAU : Forcer l'orientation portrait pour toute l'application
   await SystemChrome.setPreferredOrientations([

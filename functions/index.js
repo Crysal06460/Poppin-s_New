@@ -5,6 +5,7 @@ const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 const {getAuth} = require('firebase-admin/auth'); // AJOUT pour l'authentification
+const functions = require('firebase-functions');
 
 // ===== IMPORTS POUR LES EMAILS AVEC MAILJET =====
 const Mailjet = require('node-mailjet');
@@ -19,10 +20,10 @@ const db = getFirestore();
 const messaging = getMessaging();
 
 // ===== CONFIGURATION MAILJET =====
-const mailjet = Mailjet.apiConnect(
-  '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
-  '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
-);
+// Les clés API sont chargées depuis les variables d'environnement ou la config Firebase Functions
+const mailjetApiKey = process.env.MAILJET_API_KEY || functions.config().mailjet?.api_key;
+const mailjetSecret = process.env.MAILJET_SECRET_KEY || functions.config().mailjet?.secret_key;
+const mailjet = Mailjet.apiConnect(mailjetApiKey, mailjetSecret);
 
 // ===== NOUVELLE FONCTION : Envoyer un email depuis l'app =====
 exports.sendEmailToParent = onCall({

@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -40,50 +41,50 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBuKWVCP9o6gV8R5MXZASlwzDFdByjHtFQ',
-    appId: '1:402812477660:web:5ad53f71cbe86f3afdd419',
-    messagingSenderId: '402812477660',
-    projectId: 'poppin-s-app',
-    authDomain: 'poppin-s-app.firebaseapp.com',
-    storageBucket: 'poppin-s-app.firebasestorage.app',
+  static final FirebaseOptions web = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_WEB_API_KEY'] ?? '',
+    appId: dotenv.env['FIREBASE_WEB_APP_ID'] ?? '',
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+    projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+    authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN'],
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
   );
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBxdEEe5NeYQW9h3Yp8nTBWXVBFyqbZV8c',
-    appId: '1:402812477660:android:56f42037b1299fadfdd419',
-    messagingSenderId: '402812477660',
-    projectId: 'poppin-s-app',
-    storageBucket: 'poppin-s-app.firebasestorage.app',
+  static final FirebaseOptions android = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_ANDROID_API_KEY'] ?? '',
+    appId: dotenv.env['FIREBASE_ANDROID_APP_ID'] ?? '',
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+    projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCWoDgjPjMWGVSZAEgoKHTBVri8BtB4J-k',
-    appId: '1:402812477660:ios:1215769eece54217fdd419',
-    messagingSenderId: '402812477660',
-    projectId: 'poppin-s-app',
-    storageBucket: 'poppin-s-app.firebasestorage.app',
-    iosClientId: '402812477660-m78fj12if3c9639k6vtlosq1agrg5liv.apps.googleusercontent.com',
-    iosBundleId: 'com.beylet.poppinsApp',
+  static final FirebaseOptions ios = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_IOS_API_KEY'] ?? '',
+    appId: dotenv.env['FIREBASE_IOS_APP_ID'] ?? '',
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+    projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
+    iosClientId: dotenv.env['FIREBASE_IOS_CLIENT_ID'],
+    iosBundleId: dotenv.env['FIREBASE_IOS_BUNDLE_ID'],
   );
 
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCWoDgjPjMWGVSZAEgoKHTBVri8BtB4J-k',
-    appId: '1:402812477660:ios:1215769eece54217fdd419',
-    messagingSenderId: '402812477660',
-    projectId: 'poppin-s-app',
-    storageBucket: 'poppin-s-app.firebasestorage.app',
-    iosClientId: '402812477660-m78fj12if3c9639k6vtlosq1agrg5liv.apps.googleusercontent.com',
-    iosBundleId: 'com.beylet.poppinsApp',
+  static final FirebaseOptions macos = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_IOS_API_KEY'] ?? '',
+    appId: dotenv.env['FIREBASE_IOS_APP_ID'] ?? '',
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+    projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
+    iosClientId: dotenv.env['FIREBASE_IOS_CLIENT_ID'],
+    iosBundleId: dotenv.env['FIREBASE_IOS_BUNDLE_ID'],
   );
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBuKWVCP9o6gV8R5MXZASlwzDFdByjHtFQ',
-    appId: '1:402812477660:web:28c80646cb292f87fdd419',
-    messagingSenderId: '402812477660',
-    projectId: 'poppin-s-app',
-    authDomain: 'poppin-s-app.firebaseapp.com',
-    storageBucket: 'poppin-s-app.firebasestorage.app',
+  static final FirebaseOptions windows = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_WEB_API_KEY'] ?? '',
+    appId: dotenv.env['FIREBASE_WINDOWS_APP_ID'] ?? '',
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+    projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
+    authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN'],
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'],
   );
 
 }
