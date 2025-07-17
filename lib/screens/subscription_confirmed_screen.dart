@@ -11,6 +11,14 @@ class SubscriptionConfirmedScreen extends StatefulWidget {
     required this.structureInfo,
   }) : super(key: key);
 
+  /// Crée une instance depuis les extras de navigation
+  static SubscriptionConfirmedScreen fromRouteExtras(BuildContext context) {
+    final extras =
+        GoRouter.of(context).routerDelegate.currentConfiguration?.extra;
+    return SubscriptionConfirmedScreen(
+        structureInfo: (extras ?? {}) as Map<String, dynamic>);
+  }
+
   @override
   _SubscriptionConfirmedScreenState createState() =>
       _SubscriptionConfirmedScreenState();
