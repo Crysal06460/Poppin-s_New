@@ -3,13 +3,8 @@
 <plist version="1.0">
 <dict>
 	<!-- ✅ Configuration existante pour les notifications push -->
-	<key>aps-environment</key>
-	<string>development</string>
+        <key>aps-environment</key>
+        <string>production</string>
 	
-	<!-- ✅ NOUVEAU : Configuration pour les achats intégrés -->
-	<key>com.apple.developer.in-app-payments</key>
-	<array>
-		<string>merchant.com.beylet.poppinsApp</string>
-	</array>
 </dict>
 </plist>
