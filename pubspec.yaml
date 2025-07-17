@@ -43,7 +43,7 @@ dependencies:
   build_runner: ^2.4.6
   
   # 🛒 IN-APP PURCHASE - Version mise à jour pour les abonnements
-  in_app_purchase: ^3.1.11
+  in_app_purchase: ^3.2.1
   
   # 🔥 BADGES - Versions compatibles
   # 🔥 SOLUTION TEMPORAIRE : Utilise seulement app_badge_plus pour Android
