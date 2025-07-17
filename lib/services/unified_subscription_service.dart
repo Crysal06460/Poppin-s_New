@@ -177,13 +177,12 @@ class UnifiedSubscriptionService {
     final String productId = purchase.productID;
 
     try {
-      // Marquer comme traité
       if (transactionId.isNotEmpty) {
         _processedTransactions.add(transactionId);
       }
       _processedProductIds.add(productId);
 
-      // Nettoyer périodiquement les sets pour éviter la croissance infinie
+      // Nettoyage
       if (_processedTransactions.length > 100) {
         _processedTransactions.clear();
       }
@@ -191,11 +190,17 @@ class UnifiedSubscriptionService {
         _processedProductIds.clear();
       }
 
-      // Convertir et envoyer l'événement
-      final subscriptionInfo = _mapPurchaseToSubscription(purchase);
-      _subscriptionController.add(subscriptionInfo);
+      if (purchase.pendingCompletePurchase) {
+        InAppPurchase.instance.completePurchase(purchase);
+        print('✅ Achat complété : ${purchase.purchaseID}');
+      }
 
-      print('✅ Événement d\'achat traité: ${purchase.status} pour $productId');
+      final subscriptionInfo = _mapPurchaseToSubscription(purchase);
+
+      print('✅ Achat traité : ${purchase.status} / ${purchase.productID}');
+
+      // 🔁 Emit pour UI (PricingScreen écoute et redirige)
+      _subscriptionController.add(subscriptionInfo);
     } catch (e) {
       print('❌ Erreur lors du traitement de l\'achat: $e');
       _errorController.add('Erreur de traitement: $e');
