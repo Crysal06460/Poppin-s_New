@@ -85,6 +85,10 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   void _handlePurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) {
     for (final PurchaseDetails purchase in purchaseDetailsList) {
       print('🛒 Mise à jour achat: ${purchase.productID} - ${purchase.status}');
+      // 🔎 Logs détaillés pour TestFlight
+      print('🧾 Produit sélectionné : ${purchase.productID}');
+      print('🔐 Status : ${purchase.status}');
+      print('⏳ pendingCompletePurchase : ${purchase.pendingCompletePurchase}');
 
       switch (purchase.status) {
         case PurchaseStatus.purchased:
