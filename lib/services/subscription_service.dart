@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'dart:async';
+import 'receipt_validation_service.dart';
 
 class SubscriptionService {
   static bool get _isProduction {
@@ -359,11 +360,7 @@ class SubscriptionService {
 
       if (purchaseDetails.status == PurchaseStatus.purchased ||
           purchaseDetails.status == PurchaseStatus.restored) {
-        // ✅ Abonnement activé → débloquer les fonctionnalités
-        print('✅ Abonnement activé pour: ${purchaseDetails.productID}');
-        _unlockPremiumFeatures(purchaseDetails);
-
-        // Vérifier la validité de l'achat avec votre serveur backend
+        // Vérifier la validité de l'achat auprès du backend avant activation
         _verifyPurchase(purchaseDetails);
       } else if (purchaseDetails.status == PurchaseStatus.error) {
         print('❌ Erreur d\'achat: ${purchaseDetails.error}');
@@ -432,14 +429,23 @@ class SubscriptionService {
   }
 
   static Future<void> _verifyPurchase(PurchaseDetails purchaseDetails) async {
-    // TODO: Vérifier l'achat avec votre serveur backend
-    // Cette étape est cruciale pour la sécurité
-    print('✅ Achat vérifié: ${purchaseDetails.productID}');
+    try {
+      final bool valid = await ReceiptValidationService.validateReceipt(
+        platform: Platform.isIOS ? 'ios' : 'android',
+        receiptData: purchaseDetails.verificationData.serverVerificationData,
+      );
 
-    // En production, vous devriez :
-    // 1. Envoyer le reçu à votre serveur backend
-    // 2. Votre serveur vérifie avec Apple/Google
-    // 3. Si valide → confirmer l'abonnement dans votre base de données
+      if (valid) {
+        print('✅ Achat vérifié: ${purchaseDetails.productID}');
+        await _unlockPremiumFeatures(purchaseDetails);
+      } else {
+        print('❌ Vérification échouée pour ${purchaseDetails.productID}');
+        await _lockPremiumFeatures();
+      }
+    } catch (e) {
+      print('❌ Erreur vérification achat: $e');
+      await _lockPremiumFeatures();
+    }
   }
 
   // 🆕 NOUVELLE MÉTHODE : Restaurer les achats
