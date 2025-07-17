@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     projectId: 'poppin-s-app',
     storageBucket: 'poppin-s-app.firebasestorage.app',
     iosClientId: '402812477660-m78fj12if3c9639k6vtlosq1agrg5liv.apps.googleusercontent.com',
-    iosBundleId: 'com.example.poppinsApp',
+    iosBundleId: 'com.beylet.poppinsApp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -74,7 +74,7 @@ class DefaultFirebaseOptions {
     projectId: 'poppin-s-app',
     storageBucket: 'poppin-s-app.firebasestorage.app',
     iosClientId: '402812477660-m78fj12if3c9639k6vtlosq1agrg5liv.apps.googleusercontent.com',
-    iosBundleId: 'com.example.poppinsApp',
+    iosBundleId: 'com.beylet.poppinsApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
