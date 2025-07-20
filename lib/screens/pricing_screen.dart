@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:go_router/go_router.dart';
 // Import du nouveau service unifié
 import '../services/unified_subscription_service.dart';
+import 'dart:async';
 
 class PricingScreen extends StatefulWidget {
   final String structureType;
@@ -61,6 +62,16 @@ class _PricingScreenState extends State<PricingScreen> {
       // Initialiser le service
       await _subscriptionService.initialize();
 
+      // ✅ AJOUT CRITIQUE : Vérifier d'abord si déjà abonné
+      final activeSubscription =
+          await _subscriptionService.getActiveSubscription();
+      if (activeSubscription != null) {
+        print('✅ Utilisateur déjà abonné, redirection vers confirmation');
+        // Rediriger directement vers l'écran de confirmation
+        _redirectToConfirmationScreen();
+        return;
+      }
+
       // Écouter les mises à jour
       _subscriptionService.subscriptionUpdates.listen(
         _handleSubscriptionUpdate,
@@ -90,6 +101,8 @@ class _PricingScreenState extends State<PricingScreen> {
       _showErrorDialog(_errorMessage);
     }
   }
+// 🔧 AJOUTEZ cette méthode manquante dans pricing_screen.dart
+// Placez-la après la méthode _handleSubscriptionUpdate()
 
   /// Charge les abonnements disponibles
   Future<void> _loadSubscriptions() async {
@@ -98,10 +111,14 @@ class _PricingScreenState extends State<PricingScreen> {
       final subscriptions =
           await _subscriptionService.getAvailableSubscriptions();
 
-      // Vérifier l'abonnement actif (seulement en production, pas en mode dev)
+      // ✅ TOUJOURS vérifier l'abonnement actif (même en debug)
       SubscriptionInfo? activeSubscription;
-      if (!kDebugMode) {
+      try {
         activeSubscription = await _subscriptionService.getActiveSubscription();
+        print(
+            '🔍 Vérification abonnement actif: ${activeSubscription?.productId}');
+      } catch (e) {
+        print('⚠️ Erreur vérification abonnement actif: $e');
       }
 
       setState(() {
@@ -112,7 +129,9 @@ class _PricingScreenState extends State<PricingScreen> {
 
       print('📱 ${subscriptions.length} abonnements chargés');
       if (activeSubscription != null) {
-        print('✅ Abonnement actif: ${activeSubscription.productId}');
+        print('✅ Abonnement actif détecté: ${activeSubscription.productId}');
+        // ✅ AJOUT : Si abonnement trouvé pendant le chargement, rediriger
+        _redirectToConfirmationScreen();
       }
     } catch (e) {
       setState(() {
@@ -124,15 +143,24 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Gère les mises à jour d'abonnement
   void _handleSubscriptionUpdate(SubscriptionInfo subscription) {
+    print('📥 Mise à jour abonnement reçue: ${subscription.status}');
+
     setState(() {
       if (subscription.status == SubscriptionStatus.purchased) {
         _activeSubscription = subscription;
         _isPurchasing = false;
-        _showSuccessDialog();
+
+        print('✅ Achat réussi, redirection automatique vers confirmation');
+        _redirectToConfirmationScreen();
       } else if (subscription.status == SubscriptionStatus.error) {
         _isPurchasing = false;
         _showErrorDialog('Erreur d\'achat');
+      } else if (subscription.status == SubscriptionStatus.pending) {
+        print('⏳ Achat en cours...');
+        // Garder _isPurchasing = true
       }
+      // ✅ SUPPRIMÉ : SubscriptionStatus.canceled n'existe pas
+      // Les annulations sont gérées automatiquement par le système
     });
   }
 
@@ -164,6 +192,19 @@ class _PricingScreenState extends State<PricingScreen> {
     });
 
     try {
+      // ✅ AJOUT : Vérification préalable
+      final existingSubscription =
+          await _subscriptionService.getActiveSubscription();
+      if (existingSubscription != null) {
+        print('✅ Abonnement déjà actif détecté');
+        setState(() {
+          _isPurchasing = false;
+          _activeSubscription = existingSubscription;
+        });
+        _redirectToConfirmationScreen();
+        return;
+      }
+
       final plan = _getCurrentPlan();
       final success = await _subscriptionService.purchaseSubscription(plan);
 
@@ -173,14 +214,58 @@ class _PricingScreenState extends State<PricingScreen> {
           _errorMessage = 'Échec de l\'achat';
         });
         _showErrorDialog('L\'achat n\'a pas pu être finalisé');
+        return;
       }
-      // Le succès sera géré par _handleSubscriptionUpdate
+
+      // ✅ AJOUT CRITIQUE : Timeout pour débloquer l'UI
+      Timer(Duration(seconds: 3), () {
+        if (_isPurchasing) {
+          print('⏰ Timeout : vérification manuelle du statut d\'achat');
+          _checkPurchaseStatus();
+        }
+      });
     } catch (e) {
       setState(() {
         _isPurchasing = false;
         _errorMessage = 'Erreur: $e';
       });
       _showErrorDialog('Erreur lors de l\'achat: $e');
+    }
+  }
+
+  Future<void> _checkPurchaseStatus() async {
+    try {
+      final activeSubscription =
+          await _subscriptionService.getActiveSubscription();
+      if (activeSubscription != null) {
+        setState(() {
+          _isPurchasing = false;
+          _activeSubscription = activeSubscription;
+        });
+        print('✅ Abonnement détecté via vérification manuelle');
+        _redirectToConfirmationScreen();
+      } else {
+        // Encore en cours ou échec
+        final hasActive = await _subscriptionService.hasActiveSubscription();
+        if (hasActive) {
+          setState(() {
+            _isPurchasing = false;
+          });
+          print('✅ Abonnement actif confirmé');
+          _redirectToConfirmationScreen();
+        } else if (_isPurchasing) {
+          // Toujours en cours après timeout
+          setState(() {
+            _isPurchasing = false;
+            _errorMessage = 'Vérification en cours...';
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur vérification statut: $e');
+      setState(() {
+        _isPurchasing = false;
+      });
     }
   }
 
@@ -196,8 +281,13 @@ class _PricingScreenState extends State<PricingScreen> {
       await _loadSubscriptions();
 
       if (_activeSubscription != null) {
-        _showSuccessDialog('Abonnement restauré avec succès !');
+        // ✅ CORRECTION : Redirection directe au lieu de dialog
+        print('✅ Abonnement restauré avec succès !');
+        _redirectToConfirmationScreen();
       } else {
+        setState(() {
+          _isLoading = false;
+        });
         _showErrorDialog('Aucun abonnement à restaurer');
       }
     } catch (e) {
@@ -209,65 +299,30 @@ class _PricingScreenState extends State<PricingScreen> {
     }
   }
 
-  /// Affiche le dialog de succès
   void _showSuccessDialog([String? message]) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Succès'),
-          ],
-        ),
-        content: Text(message ?? 'Abonnement activé avec succès !'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Fermer le dialog
-
-              // Rediriger vers l'écran de confirmation avec les bonnes données
-              _redirectToConfirmationScreen();
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    print('✅ ${message ?? "Abonnement activé avec succès !"}');
+    _redirectToConfirmationScreen();
   }
 
   void _redirectToConfirmationScreen() {
-    // Déterminer le type de structure et le nombre de membres
-    final String structureType = widget.structureType == 'assistante_maternelle'
-        ? 'assistante_maternelle'
-        : 'MAM';
+    final bool isAssMat = widget.structureType == 'assistante_maternelle';
 
-    final int memberCount = widget.structureType == 'assistante_maternelle'
-        ? 1
-        : _selectedMamMembers;
-
-    // Calculer le prix
-    final double priceAmount = widget.structureType == 'assistante_maternelle'
+    final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
+    final int memberCount = isAssMat ? 1 : _selectedMamMembers;
+    final double priceAmount = isAssMat
         ? 12.99
-        : _selectedMamMembers == 2
+        : (_selectedMamMembers == 2
             ? 24.99
-            : _selectedMamMembers == 3
-                ? 34.99
-                : 44.99;
-
-    final String priceDisplay = widget.structureType == 'assistante_maternelle'
+            : (_selectedMamMembers == 3 ? 34.99 : 44.99));
+    final String priceDisplay = isAssMat
         ? '12,99 € / mois'
-        : _selectedMamMembers == 2
+        : (_selectedMamMembers == 2
             ? '24,99 € / mois'
-            : _selectedMamMembers == 3
-                ? '34,99 € / mois'
-                : '44,99 € / mois';
+            : (_selectedMamMembers == 3 ? '34,99 € / mois' : '44,99 € / mois'));
 
-    // Naviguer vers l'écran de confirmation
     context.go('/subscription-confirmed', extra: {
       'structureType': structureType,
-      'structureId': '', // Sera rempli automatiquement
+      'structureId': '', // à remplir si tu l’as
       'memberCount': memberCount,
       'priceAmount': priceAmount,
       'priceDisplay': priceDisplay,

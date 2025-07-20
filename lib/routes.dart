@@ -240,10 +240,9 @@ final GoRouter router = GoRouter(
     ),
     GoRoute(
       path: '/subscription-confirmed',
-      builder: (context, state) {
-        final data = state.extra as Map<String, dynamic>? ?? {};
-        return SubscriptionConfirmedScreen(structureInfo: data);
-      },
+      builder: (context, state) => SubscriptionConfirmedScreen(
+        structureInfo: state.extra as Map<String, dynamic>? ?? {},
+      ),
     ),
     GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
     // Ajout de la route pour l'écran de tarification

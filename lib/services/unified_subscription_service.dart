@@ -149,18 +149,34 @@ class UnifiedSubscriptionService {
     final String transactionId = purchase.purchaseID ?? '';
     final String productId = purchase.productID;
 
-    print('🔄 Traitement d\'achat: $productId (transaction: $transactionId)');
+    print('🔄 Traitement d\'achat: ${purchase.productID} - ${purchase.status}');
 
-    // ✅ PROTECTION 1 : Vérifier si cette transaction a déjà été traitée
+    // ✅ PROTECTION 1 : Éviter les doublons de transaction
     if (transactionId.isNotEmpty &&
         _processedTransactions.contains(transactionId)) {
-      print('⚠️ Transaction déjà traitée, ignorée: $transactionId');
+      print(
+          '⚠️ Transaction déjà traitée, mais on notifie quand même l\'UI: $transactionId');
+
+      // ✅ AJOUT CRITIQUE : Émettre un événement UI même si déjà traité
+      if (purchase.status == PurchaseStatus.purchased) {
+        final subscriptionInfo = _mapPurchaseToSubscription(purchase);
+        _subscriptionController.add(subscriptionInfo);
+        print('📱 Notification UI émise pour transaction déjà traitée');
+      }
       return;
     }
 
     // ✅ PROTECTION 2 : Vérifier si ce produit a été traité récemment
     if (_processedProductIds.contains(productId)) {
-      print('⚠️ Produit déjà traité récemment, ignorée: $productId');
+      print(
+          '⚠️ Produit déjà traité récemment, mais on notifie quand même l\'UI: $productId');
+
+      // ✅ AJOUT CRITIQUE : Émettre un événement UI même si produit déjà traité
+      if (purchase.status == PurchaseStatus.purchased) {
+        final subscriptionInfo = _mapPurchaseToSubscription(purchase);
+        _subscriptionController.add(subscriptionInfo);
+        print('📱 Notification UI émise pour produit déjà traité');
+      }
       return;
     }
 
@@ -191,15 +207,66 @@ class UnifiedSubscriptionService {
         _processedProductIds.clear();
       }
 
-      // Convertir et envoyer l'événement
-      final subscriptionInfo = _mapPurchaseToSubscription(purchase);
-      _subscriptionController.add(subscriptionInfo);
+      // ✅ AJOUT CRITIQUE : Compléter l'achat
+      if (purchase.pendingCompletePurchase) {
+        InAppPurchase.instance.completePurchase(purchase);
+        print('✅ Achat complété : ${purchase.purchaseID}');
+      }
 
-      print('✅ Événement d\'achat traité: ${purchase.status} pour $productId');
+      final subscriptionInfo = _mapPurchaseToSubscription(purchase);
+      print('✅ Achat traité : ${purchase.status} / ${purchase.productID}');
+
+      // 🔁 Emit pour UI (PricingScreen écoute et redirige)
+      _subscriptionController.add(subscriptionInfo);
+      print('📱 Événement UI émis pour nouvel achat');
     } catch (e) {
       print('❌ Erreur lors du traitement de l\'achat: $e');
       _errorController.add('Erreur de traitement: $e');
     }
+  }
+
+  void _validateReceipt(PurchaseDetails purchase) {
+    try {
+      // Déterminer l'environnement
+      final bool isSandbox = _isSandboxEnvironment();
+
+      if (isSandbox) {
+        print('🧪 Environnement sandbox détecté pour: ${purchase.productID}');
+        // Valider contre sandbox
+        _validateSandboxReceipt(purchase);
+      } else {
+        print(
+            '🏪 Environnement production détecté pour: ${purchase.productID}');
+        // Valider contre production d'abord, puis sandbox si échec
+        _validateProductionReceipt(purchase);
+      }
+    } catch (e) {
+      print('❌ Erreur de validation du reçu: $e');
+    }
+  }
+
+  bool _isSandboxEnvironment() {
+    // En mode debug, considérer comme sandbox
+    if (kDebugMode) return true;
+
+    // Autres vérifications possibles
+    // TODO: Ajouter d'autres méthodes de détection si nécessaire
+    return false;
+  }
+
+  void _validateSandboxReceipt(PurchaseDetails purchase) {
+    print('🧪 Validation sandbox pour: ${purchase.productID}');
+    // TODO: Implémenter la validation sandbox
+    // Votre logique de validation sandbox ici
+  }
+
+  // ✅ AMÉLIORATION 6 : Validation production
+  void _validateProductionReceipt(PurchaseDetails purchase) {
+    print('🏪 Validation production pour: ${purchase.productID}');
+    // TODO: Implémenter la validation production
+    // Votre logique de validation production ici
+    // Si échec avec "Sandbox receipt used in production",
+    // alors appeler _validateSandboxReceipt()
   }
 
   /// Mappe les données de PurchaseDetails vers SubscriptionInfo
@@ -279,7 +346,7 @@ class UnifiedSubscriptionService {
     }
   }
 
-  /// ✅ AMÉLIORATION : Achète un abonnement avec protection
+  /// ✅ AMÉLIORATION : Achète un abonnement avec protection et timeout
   Future<bool> purchaseSubscription(SubscriptionPlan plan) async {
     await _ensureInitialized();
 
@@ -295,10 +362,21 @@ class UnifiedSubscriptionService {
 
       bool success = false;
 
-      if (Platform.isIOS) {
-        success = await _iOSService!.purchaseSubscription(productId);
-      } else if (Platform.isAndroid) {
-        success = await _androidService!.purchaseSubscription(productId);
+      // ✅ AJOUT CRITIQUE : Timeout pour éviter le chargement infini
+      try {
+        if (Platform.isIOS) {
+          success = await _iOSService!
+              .purchaseSubscription(productId)
+              .timeout(Duration(seconds: 30));
+        } else if (Platform.isAndroid) {
+          success = await _androidService!
+              .purchaseSubscription(productId)
+              .timeout(Duration(seconds: 30));
+        }
+      } on TimeoutException {
+        print('⏰ Timeout d\'achat pour: $productId');
+        _errorController.add('Timeout d\'achat - veuillez réessayer');
+        return false;
       }
 
       if (success) {

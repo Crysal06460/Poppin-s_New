@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Service d'abonnement spécifique à Android utilisant in_app_purchase
 class AndroidSubscriptionService {
@@ -124,6 +126,9 @@ class AndroidSubscriptionService {
         // Vérifier la transaction
         await _verifyPurchase(purchase);
 
+        // ✅ AJOUT : Sauvegarder dans Firestore
+        await _saveSubscriptionToFirestore(purchase);
+
         // Finaliser l'achat si nécessaire
         if (purchase.pendingCompletePurchase) {
           await _inAppPurchase.completePurchase(purchase);
@@ -145,6 +150,10 @@ class AndroidSubscriptionService {
 
       case PurchaseStatus.restored:
         print('🔄 Achat Android restauré: ${purchase.productID}');
+
+        // ✅ AJOUT : Sauvegarder lors de la restauration aussi
+        await _saveSubscriptionToFirestore(purchase);
+
         _subscriptionController.add(purchase);
         break;
 
@@ -166,6 +175,128 @@ class AndroidSubscriptionService {
     } catch (e) {
       print('❌ Erreur de vérification: $e');
       _errorController.add('Erreur de vérification: $e');
+    }
+  }
+
+  /// ✅ NOUVELLE MÉTHODE : Sauvegarder l'abonnement dans Firestore (Android)
+  Future<void> _saveSubscriptionToFirestore(PurchaseDetails purchase) async {
+    try {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print(
+            '❌ Utilisateur non connecté, impossible de sauvegarder l\'abonnement');
+        return;
+      }
+
+      final String productId = purchase.productID;
+      final String transactionId = purchase.purchaseID ?? '';
+
+      print(
+          '🤖 Tentative de sauvegarde Android pour: $productId (transaction: $transactionId)');
+
+      // Vérification anti-duplication (même logique que iOS)
+      if (transactionId.isNotEmpty) {
+        final existingByTransaction = await FirebaseFirestore.instance
+            .collection('subscriptions')
+            .where('transactionId', isEqualTo: transactionId)
+            .limit(1)
+            .get();
+
+        if (existingByTransaction.docs.isNotEmpty) {
+          print('✅ Abonnement déjà existant avec cette transaction');
+          return;
+        }
+      }
+
+      // Déterminer type et prix (logique Android avec IDs courts)
+      String structureType = 'assistante_maternelle';
+      int memberCount = 1;
+      double priceAmount = 12.99;
+      String priceDisplay = '12,99 € / mois';
+
+      switch (productId) {
+        case 'mam2':
+          structureType = 'MAM';
+          memberCount = 2;
+          priceAmount = 24.99;
+          priceDisplay = '24,99 € / mois';
+          break;
+        case 'mam3':
+          structureType = 'MAM';
+          memberCount = 3;
+          priceAmount = 34.99;
+          priceDisplay = '34,99 € / mois';
+          break;
+        case 'mam4':
+          structureType = 'MAM';
+          memberCount = 4;
+          priceAmount = 44.99;
+          priceDisplay = '44,99 € / mois';
+          break;
+        case 'assmat':
+        default:
+          // Garde les valeurs par défaut
+          break;
+      }
+
+      // Désactiver anciens abonnements
+      final oldActiveSubscriptions = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      for (final doc in oldActiveSubscriptions.docs) {
+        await doc.reference.update({
+          'status': 'replaced',
+          'replacedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Créer nouvel abonnement
+      final DateTime purchaseDate = DateTime.now();
+      final DateTime expirationDate = purchaseDate.add(Duration(days: 30));
+      final DateTime trialEndDate = purchaseDate.add(Duration(days: 7));
+
+      final Map<String, dynamic> subscriptionData = {
+        'structureId': user.uid,
+        'structureType': structureType,
+        'memberCount': memberCount,
+        'status': 'active',
+        'productId': productId,
+        'transactionId': transactionId,
+        'purchaseDate': purchaseDate.toIso8601String(),
+        'expirationDate': expirationDate.toIso8601String(),
+        'trialEndsAt': Timestamp.fromDate(trialEndDate),
+        'priceAmount': priceAmount,
+        'priceDisplay': priceDisplay,
+        'currency': 'EUR',
+        'billingPeriod': 'monthly',
+        'platform': 'android',
+        'isTrialPeriod': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .add(subscriptionData);
+
+      print('✅ Abonnement Android sauvegardé: ${docRef.id}');
+
+      // Mettre à jour structure
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(user.uid)
+          .update({
+        'maxMemberCount': memberCount,
+        'subscriptionActive': true,
+        'subscriptionDocId': docRef.id,
+        'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('❌ Erreur sauvegarde Android: $e');
+      _errorController.add('Erreur de sauvegarde: $e');
     }
   }
 
@@ -274,32 +405,90 @@ class AndroidSubscriptionService {
     _isInitialized = false;
   }
 
-  /// Vérifie si un abonnement est actif
+  /// Vérifie si un abonnement est actif - VERSION IMPLÉMENTÉE
   Future<bool> hasActiveSubscription() async {
     try {
-      // Pour une implémentation complète, il faudrait vérifier côté serveur
-      // avec l'API Google Play Developer
-      print('🤖 Vérification d\'abonnement actif');
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('🤖 Utilisateur non connecté pour vérification abonnement');
+        return false;
+      }
 
-      // TODO: Implémenter avec votre backend
-      return false;
+      print('🤖 Vérification abonnement actif pour: ${user.uid}');
+
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      final bool hasActive = subscriptionQuery.docs.isNotEmpty;
+      print('🤖 Résultat vérification abonnement: $hasActive');
+
+      return hasActive;
     } catch (e) {
-      print('❌ Erreur de vérification d\'abonnement actif: $e');
+      print('❌ Erreur vérification abonnement actif Android: $e');
       return false;
     }
   }
 
-  /// Retourne l'abonnement actif
+  /// Retourne l'abonnement actif - VERSION IMPLÉMENTÉE
   Future<PurchaseDetails?> getActiveSubscription() async {
     try {
-      // Pour une implémentation complète, il faudrait vérifier côté serveur
-      print('🤖 Récupération de l\'abonnement actif');
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('🤖 Utilisateur non connecté pour récupération abonnement');
+        return null;
+      }
 
-      // TODO: Implémenter avec votre backend
-      return null;
+      print('🤖 Récupération abonnement actif pour: ${user.uid}');
+
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (subscriptionQuery.docs.isEmpty) {
+        print('🤖 Aucun abonnement actif trouvé');
+        return null;
+      }
+
+      final subscriptionData = subscriptionQuery.docs.first.data();
+      print('🤖 Abonnement actif récupéré: ${subscriptionData['productId']}');
+
+      // Créer un PurchaseDetails fictif basé sur Firestore
+      final fakePurchaseDetails =
+          _createPurchaseDetailsFromFirestore(subscriptionData);
+
+      return fakePurchaseDetails;
     } catch (e) {
-      print('❌ Erreur de récupération d\'abonnement actif: $e');
+      print('❌ Erreur récupération abonnement actif Android: $e');
       return null;
     }
+  }
+
+  /// ✅ MÉTHODE : Créer un PurchaseDetails depuis Firestore
+  PurchaseDetails _createPurchaseDetailsFromFirestore(
+      Map<String, dynamic> data) {
+    return PurchaseDetails(
+      productID: data['productId'] ?? '',
+      purchaseID: data['transactionId'] ?? '',
+      verificationData: PurchaseVerificationData(
+        localVerificationData: '',
+        serverVerificationData: '',
+        source: 'firestore',
+      ),
+      transactionDate: data['purchaseDate'] != null
+          ? DateTime.parse(data['purchaseDate'])
+              .millisecondsSinceEpoch
+              .toString()
+          : DateTime.now().millisecondsSinceEpoch.toString(),
+      status: PurchaseStatus.purchased,
+    );
   }
 }

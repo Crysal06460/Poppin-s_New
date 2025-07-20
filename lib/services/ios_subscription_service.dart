@@ -455,14 +455,33 @@ class iOSSubscriptionService {
   /// Vérifie si un abonnement est actif
   Future<bool> hasActiveSubscription() async {
     try {
-      // Pour une implémentation complète, il faudrait vérifier côté serveur
-      // avec l'API App Store
-      print('🍎 Vérification d\'abonnement actif');
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('🍎 Utilisateur non connecté pour vérification abonnement');
+        return false;
+      }
 
-      // TODO: Implémenter avec votre backend
-      return false;
+      print('🍎 Vérification abonnement actif pour: ${user.uid}');
+
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      final bool hasActive = subscriptionQuery.docs.isNotEmpty;
+      print('🍎 Résultat vérification abonnement: $hasActive');
+
+      if (hasActive) {
+        final doc = subscriptionQuery.docs.first;
+        print('🍎 Abonnement trouvé: ${doc.data()}');
+      }
+
+      return hasActive;
     } catch (e) {
-      print('❌ Erreur de vérification d\'abonnement actif: $e');
+      print('❌ Erreur vérification abonnement actif: $e');
       return false;
     }
   }
@@ -470,13 +489,91 @@ class iOSSubscriptionService {
   /// Retourne l'abonnement actif
   Future<PurchaseDetails?> getActiveSubscription() async {
     try {
-      // Pour une implémentation complète, il faudrait vérifier côté serveur
-      print('🍎 Récupération de l\'abonnement actif');
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('🍎 Utilisateur non connecté pour récupération abonnement');
+        return null;
+      }
 
-      // TODO: Implémenter avec votre backend
-      return null;
+      print('🍎 Récupération abonnement actif pour: ${user.uid}');
+
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (subscriptionQuery.docs.isEmpty) {
+        print('🍎 Aucun abonnement actif trouvé');
+        return null;
+      }
+
+      final subscriptionData = subscriptionQuery.docs.first.data();
+      print('🍎 Abonnement actif récupéré: ${subscriptionData['productId']}');
+
+      // ✅ CRÉER un PurchaseDetails fictif basé sur les données Firestore
+      // Ceci permet de maintenir la compatibilité avec le système existant
+      final fakePurchaseDetails =
+          _createPurchaseDetailsFromFirestore(subscriptionData);
+
+      return fakePurchaseDetails;
     } catch (e) {
-      print('❌ Erreur de récupération d\'abonnement actif: $e');
+      print('❌ Erreur récupération abonnement actif: $e');
+      return null;
+    }
+  }
+
+  PurchaseDetails _createPurchaseDetailsFromFirestore(
+      Map<String, dynamic> data) {
+    // Cette méthode crée un objet PurchaseDetails compatible
+    // basé sur les données sauvegardées dans Firestore
+
+    return PurchaseDetails(
+      productID: data['productId'] ?? '',
+      purchaseID: data['transactionId'] ?? '',
+      verificationData: PurchaseVerificationData(
+        localVerificationData: '',
+        serverVerificationData: '',
+        source: 'firestore', // Source personnalisée
+      ),
+      transactionDate: data['purchaseDate'] != null
+          ? DateTime.parse(data['purchaseDate'])
+              .millisecondsSinceEpoch
+              .toString()
+          : DateTime.now().millisecondsSinceEpoch.toString(),
+      status: PurchaseStatus.purchased, // Toujours purchased depuis Firestore
+    );
+  }
+
+  Future<Map<String, dynamic>?> getSubscriptionInfoDetailed() async {
+    try {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+
+      print('🍎 Récupération infos détaillées abonnement pour: ${user.uid}');
+
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (subscriptionQuery.docs.isEmpty) {
+        print('🍎 Aucun abonnement actif trouvé');
+        return null;
+      }
+
+      final data = subscriptionQuery.docs.first.data();
+      print(
+          '🍎 Infos abonnement récupérées: ${data['structureType']} - ${data['memberCount']} membres');
+
+      return data;
+    } catch (e) {
+      print('❌ Erreur récupération infos abonnement: $e');
       return null;
     }
   }
