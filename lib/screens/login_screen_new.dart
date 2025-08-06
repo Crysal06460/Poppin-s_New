@@ -34,10 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
     // Charger l'email sauvegardé si disponible
     _loadSavedEmail();
 
-    // Pour récupérer les paramètres de l'URL
+    // Pour récupérer les paramètres de l'URL - GARDEZ CE CODE
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        // Méthode plus sûre pour vérifier les paramètres d'URL
         final routerState =
             GoRouter.of(context).routerDelegate.currentConfiguration;
         if (routerState != null) {
@@ -50,7 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
 
-        // Vérifier s'il y a des paramètres spécifiques
         if (ModalRoute.of(context)?.settings.arguments != null) {
           final args = ModalRoute.of(context)?.settings.arguments
               as Map<String, dynamic>?;
@@ -64,51 +62,19 @@ class _LoginScreenState extends State<LoginScreen> {
         print("Erreur lors de la récupération des paramètres: $e");
       }
     });
+  } // ✅ FERMETURE MANQUANTE AJOUTÉE
 
-    // Vérifier s'il existe déjà une session active
-    _checkExistingSession();
-  }
-
-  // Fonction pour vérifier s'il existe une session active
-  Future<void> _checkExistingSession() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastSessionTime = prefs.getInt('lastSessionTime') ?? 0;
-      final currentUser = FirebaseAuth.instance.currentUser;
-
-      // Si l'utilisateur est déjà connecté et la dernière session est récente (moins de 24h)
-      if (currentUser != null &&
-          (DateTime.now().millisecondsSinceEpoch - lastSessionTime <
-              24 * 60 * 60 * 1000)) {
-        print("Session active détectée, redirection automatique...");
-
-        // Déterminer le rôle pour la redirection
-        final userRole = await _determineUserRole();
-
-        if (mounted) {
-          if (userRole == "parent") {
-            context.go('/parent/home');
-          } else {
-            context.go('/home'); // Pour l'assistante maternelle
-          }
-        }
-      }
-    } catch (e) {
-      print("Erreur lors de la vérification de session: $e");
-      // En cas d'erreur, on continue simplement sans redirection
-    }
-  }
-
-  // Fonction pour charger l'email sauvegardé
+  // ✅ FONCTION _loadSavedEmail() AJOUTÉE
   Future<void> _loadSavedEmail() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedEmail = prefs.getString('savedEmail');
+      final savedEmail = prefs
+          .getString('saved_email'); // ← Changé de 'savedEmail' à 'saved_email'
 
       if (savedEmail != null && savedEmail.isNotEmpty) {
         setState(() {
           emailController.text = savedEmail;
-          _rememberMe = true; // Activer l'option si un email est sauvegardé
+          _rememberMe = true;
         });
       }
     } catch (e) {
@@ -116,30 +82,21 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Fonction pour sauvegarder l'email si l'option est activée
+  // ✅ FONCTION _saveEmail() CORRIGÉE (UNE SEULE VERSION)
   Future<void> _saveEmail() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       if (_rememberMe && emailController.text.isNotEmpty) {
-        await prefs.setString('savedEmail', emailController.text.trim());
+        await prefs.setString(
+            'saved_email', emailController.text.trim()); // ← Changé
+        await prefs.setBool('remember_email', true); // ← Ajouté
       } else {
-        // Si l'option est désactivée, supprimer l'email sauvegardé
-        await prefs.remove('savedEmail');
+        await prefs.remove('saved_email'); // ← Changé
+        await prefs.setBool('remember_email', false); // ← Ajouté
       }
     } catch (e) {
       print("Erreur lors de la sauvegarde de l'email: $e");
-    }
-  }
-
-  // Fonction pour enregistrer la session active
-  Future<void> _saveSessionTime() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-          'lastSessionTime', DateTime.now().millisecondsSinceEpoch);
-    } catch (e) {
-      print("Erreur lors de la sauvegarde de la session: $e");
     }
   }
 
@@ -158,27 +115,36 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // Tentative de connexion normale
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
+      // ✅ NOUVELLES SAUVEGARDES
+      final prefs = await SharedPreferences.getInstance();
+
       // Sauvegarder l'email si l'option est activée
       await _saveEmail();
 
-      // Enregistrer l'heure de session
-      await _saveSessionTime();
+      // Marquer comme connecté
+      await prefs.setBool('is_logged_in', true);
 
-      // Déterminer le rôle de l'utilisateur
+      // 🔒 NOUVEAU : Marquer la date de connexion d'aujourd'hui
+      final String today = DateTime.now().toIso8601String().split('T')[0];
+      await prefs.setString('last_login_date', today);
+
+      // Enregistrer l'heure de session pour gestion arrière-plan
+      await prefs.setInt(
+          'lastSessionTime', DateTime.now().millisecondsSinceEpoch);
+
+      // Déterminer le rôle de l'utilisateur et naviguer
       final userRole = await _determineUserRole();
 
       if (mounted) {
-        // Rediriger selon le rôle
         if (userRole == "parent") {
           context.go('/parent/home');
         } else {
-          context.go('/home'); // Pour l'assistante maternelle
+          context.go('/home');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -349,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 _isForgotPassword = false;
               });
             } else {
-              context.go('/');
+              context.go('/welcome'); // ✅ CHANGÉ DE '/' vers '/welcome'
             }
           },
         ),
@@ -369,8 +335,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 30), // Légèrement plus petit pour iPad
 
                     // Logo ou image de l'application
-                    Image.asset('assets/images/parapluie.png',
-                        height: logoSize),
+                    Image.asset(
+                      'assets/images/parapluie.png',
+                      height: logoSize,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.umbrella,
+                        size: logoSize,
+                        color: primaryBlue,
+                      ),
+                    ),
 
                     const SizedBox(
                         height: 25), // Légèrement plus petit pour iPad

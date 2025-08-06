@@ -352,13 +352,13 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       // IDs iOS (définis dans subscription_service.dart)
       switch (actualMemberCount) {
         case 2:
-          return 'com.beylet.poppinsApp.subscription.mam_2_members';
+          return 'com.beylet.poppinsApp.subscription.mam_2_membres';
         case 3:
-          return 'com.beylet.poppinsApp.subscription.mam_3_members';
+          return 'com.beylet.poppinsApp.subscription.mam_3_membres';
         case 4:
-          return 'com.beylet.poppinsApp.subscription.mam_4_members';
+          return 'com.beylet.poppinsApp.subscription.mam_4_membres';
         default:
-          return 'com.beylet.poppinsApp.subscription.mam_2_members';
+          return 'com.beylet.poppinsApp.subscription.mam_2_membres';
       }
     } else {
       // IDs Android (définis dans subscription_service.dart)

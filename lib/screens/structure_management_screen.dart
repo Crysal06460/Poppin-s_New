@@ -23,6 +23,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _postalCodeController = TextEditingController();
   String? _logoUrl;
   bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
@@ -43,6 +45,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
+    _cityController.dispose();
+    _postalCodeController.dispose();
     super.dispose();
   }
 
@@ -71,7 +75,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     try {
       setState(() => _isLoading = true);
 
-      // Obtenir le bon ID de structure pour n'importe quel membre
       final structureId = await _getStructureId();
       if (structureId.isEmpty) {
         setState(() => _isLoading = false);
@@ -90,6 +93,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
           _phoneController.text = data['phone'] ?? '';
           _emailController.text = data['email'] ?? '';
           _addressController.text = data['address'] ?? '';
+          _cityController.text = data['city'] ?? '';
+          _postalCodeController.text = data['postalCode'] ?? '';
           _logoUrl = data['logoUrl'];
           _isLoading = false;
         });
@@ -110,7 +115,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
       setState(() => _isLoading = true);
 
-      // Obtenir le bon ID de structure
       final structureId = await _getStructureId();
       if (structureId.isEmpty) {
         setState(() => _isLoading = false);
@@ -161,7 +165,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // Obtenir le bon ID de structure
       final structureId = await _getStructureId();
       if (structureId.isEmpty) {
         setState(() => _isLoading = false);
@@ -176,6 +179,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         'phone': _phoneController.text,
         'email': _emailController.text,
         'address': _addressController.text,
+        'city': _cityController.text,
+        'postalCode': _postalCodeController.text,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -191,7 +196,24 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     }
   }
 
-// Nouvelle méthode pour le contenu tablette
+  String _getFullAddress() {
+    final address = _addressController.text.trim();
+    final postalCode = _postalCodeController.text.trim();
+    final city = _cityController.text.trim();
+
+    List<String> addressParts = [];
+
+    if (address.isNotEmpty) addressParts.add(address);
+    if (postalCode.isNotEmpty && city.isNotEmpty) {
+      addressParts.add('$postalCode $city');
+    } else {
+      if (postalCode.isNotEmpty) addressParts.add(postalCode);
+      if (city.isNotEmpty) addressParts.add(city);
+    }
+
+    return addressParts.join(', ');
+  }
+
   Widget _buildTabletContent() {
     return LayoutBuilder(builder: (context, constraints) {
       final double maxWidth = constraints.maxWidth;
@@ -254,7 +276,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                       SizedBox(height: maxHeight * 0.04),
 
-                      // Logo de la structure - Plus grand sur iPad
+                      // Logo de la structure
                       GestureDetector(
                         onTap: _updateLogo,
                         child: Container(
@@ -298,7 +320,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                       SizedBox(height: maxHeight * 0.02),
 
-                      // Texte "Modifier le logo" plus stylé
+                      // Bouton "Modifier le logo"
                       Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -342,7 +364,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                       SizedBox(height: maxHeight * 0.04),
 
-                      // Informations actuelles en lecture seule avec style
+                      // Informations actuelles
                       _buildInfoCard(
                         icon: Icons.business,
                         label: "Nom actuel",
@@ -373,6 +395,17 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                             : "Non défini",
                         maxWidth: maxWidth,
                       ),
+
+                      SizedBox(height: maxHeight * 0.02),
+
+                      _buildInfoCard(
+                        icon: Icons.location_on,
+                        label: "Adresse actuelle",
+                        value: _getFullAddress().isNotEmpty
+                            ? _getFullAddress()
+                            : "Non définie",
+                        maxWidth: maxWidth,
+                      ),
                     ],
                   ),
                 ),
@@ -399,7 +432,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Titre de la section
+                      // Titre
                       Text(
                         "Modifier les informations",
                         style: TextStyle(
@@ -411,12 +444,13 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                       SizedBox(height: maxHeight * 0.03),
 
-                      // Formulaire de modification
+                      // Formulaire
                       Expanded(
                         child: Form(
                           key: _formKey,
                           child: ListView(
                             children: [
+                              // Nom de la structure
                               _buildTabletFormField(
                                 controller: _nameController,
                                 label: 'Nom de la structure',
@@ -432,6 +466,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                               SizedBox(height: maxHeight * 0.025),
 
+                              // Téléphone
                               _buildTabletFormField(
                                 controller: _phoneController,
                                 label: 'Téléphone',
@@ -456,6 +491,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                               SizedBox(height: maxHeight * 0.025),
 
+                              // Email
                               _buildTabletFormField(
                                 controller: _emailController,
                                 label: 'Email',
@@ -478,12 +514,12 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
                               SizedBox(height: maxHeight * 0.025),
 
+                              // Adresse (rue, numéro)
                               _buildTabletFormField(
                                 controller: _addressController,
-                                label: 'Adresse',
+                                label: 'Adresse (rue, numéro)',
                                 icon: Icons.location_on,
                                 maxWidth: maxWidth,
-                                maxLines: 3,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
                                     return 'Veuillez entrer une adresse';
@@ -492,10 +528,51 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                                 },
                               ),
 
-                              SizedBox(height: maxHeight * 0.04),
-                              SizedBox(height: maxHeight * 0.03),
+                              SizedBox(height: maxHeight * 0.025),
 
-// Bouton Supprimer mon compte - Version iPad
+                              // Code postal
+                              _buildTabletFormField(
+                                controller: _postalCodeController,
+                                label: 'Code postal',
+                                icon: Icons.markunread_mailbox,
+                                maxWidth: maxWidth,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly
+                                ],
+                                maxLength: 5,
+                                hintText: 'Ex: 06600',
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Veuillez entrer un code postal';
+                                  }
+                                  if (value.length != 5) {
+                                    return 'Le code postal doit contenir 5 chiffres';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              SizedBox(height: maxHeight * 0.025),
+
+                              // Ville
+                              _buildTabletFormField(
+                                controller: _cityController,
+                                label: 'Ville',
+                                icon: Icons.location_city,
+                                maxWidth: maxWidth,
+                                hintText: 'Ex: Antibes',
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Veuillez entrer une ville';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              SizedBox(height: maxHeight * 0.04),
+
+                              // Bouton Supprimer mon compte
                               Center(
                                 child: Container(
                                   decoration: BoxDecoration(
@@ -554,7 +631,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                               ),
 
                               SizedBox(height: maxHeight * 0.03),
-                              // Bouton d'enregistrement stylé pour iPad
+
+                              // Bouton d'enregistrement
                               Center(
                                 child: Material(
                                   color: Colors.transparent,
@@ -623,7 +701,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     });
   }
 
-// Nouvelle méthode pour créer une carte d'information
   Widget _buildInfoCard({
     required IconData icon,
     required String label,
@@ -670,7 +747,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
               color: Colors.black87,
               fontWeight: FontWeight.w600,
             ),
-            maxLines: 2,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -678,7 +755,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     );
   }
 
-// Nouvelle méthode pour créer un champ de formulaire stylé pour iPad
   Widget _buildTabletFormField({
     required TextEditingController controller,
     required String label,
@@ -767,7 +843,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     );
   }
 
-// Méthode pour le contenu iPhone (améliorée mais gardant l'esprit original)
   Widget _buildPhoneContent() {
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(16, 20, 16, 16),
@@ -776,7 +851,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Logo section améliorée pour iPhone
+            // Logo section
             Center(
               child: Column(
                 children: [
@@ -861,7 +936,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
             ),
             SizedBox(height: 32),
 
-            // Formulaire avec style amélioré
+            // Formulaire
             _buildPhoneFormField(
               controller: _nameController,
               label: 'Nom de la structure',
@@ -915,9 +990,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
             _buildPhoneFormField(
               controller: _addressController,
-              label: 'Adresse',
+              label: 'Adresse (rue, numéro)',
               icon: Icons.location_on,
-              maxLines: 3,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Veuillez entrer une adresse';
@@ -925,10 +999,42 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                 return null;
               },
             ),
-            SizedBox(height: 32),
-            SizedBox(height: 24),
+            SizedBox(height: 20),
 
-// Bouton Supprimer mon compte - Version iPhone
+            _buildPhoneFormField(
+              controller: _postalCodeController,
+              label: 'Code postal',
+              icon: Icons.markunread_mailbox,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 5,
+              hintText: 'Ex: 06600',
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Veuillez entrer un code postal';
+                }
+                if (value.length != 5) {
+                  return 'Le code postal doit contenir 5 chiffres';
+                }
+                return null;
+              },
+            ),
+
+            _buildPhoneFormField(
+              controller: _cityController,
+              label: 'Ville',
+              icon: Icons.location_city,
+              hintText: 'Ex: Antibes',
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Veuillez entrer une ville';
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: 32),
+
+            // Bouton Supprimer mon compte
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
@@ -981,7 +1087,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
             ),
 
             SizedBox(height: 24),
-            // Bouton d'enregistrement amélioré pour iPhone
+
+            // Bouton d'enregistrement
             Center(
               child: Container(
                 decoration: BoxDecoration(
@@ -1041,7 +1148,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     );
   }
 
-// Nouvelle méthode pour créer un champ de formulaire stylé pour iPhone
   Widget _buildPhoneFormField({
     required TextEditingController controller,
     required String label,
@@ -1128,7 +1234,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Récupérer les dimensions de l'écran
     final Size screenSize = MediaQuery.of(context).size;
     final bool isTablet = screenSize.shortestSide >= 600;
 
@@ -1136,7 +1241,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // En-tête avec fond de couleur - Responsive
+          // En-tête
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -1170,7 +1275,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                 ),
                 child: Row(
                   children: [
-                    // Bouton retour avec meilleur contraste
                     GestureDetector(
                       onTap: () => context.go('/dashboard'),
                       child: Container(
@@ -1189,7 +1293,6 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                     ),
                     SizedBox(
                         width: screenSize.width * (isTablet ? 0.02 : 0.04)),
-                    // Titre avec meilleur style
                     Expanded(
                       child: Text(
                         "Gestion de la structure",
@@ -1207,7 +1310,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
             ),
           ),
 
-          // Contenu principal avec adaptation pour iPad
+          // Contenu principal
           _isLoading
               ? Expanded(
                   child: Center(

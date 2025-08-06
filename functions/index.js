@@ -353,7 +353,7 @@ exports.processEmailQueue = onDocumentCreated({
         const mailjetMessage = {
             From: {
                 Email: "noreply@poppin-s.app",
-                Name: "Les Lutins - Application Poppins"
+                Name: "Application Poppins"
             },
             To: [
                 {

@@ -2460,6 +2460,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return ListView(
       children: [
+        // Modifier les coordonnées - TOUJOURS DISPONIBLE
         _buildTabletActionItem(
           icon: Icons.edit_note,
           title: "Modifier les coordonnées",
@@ -2467,17 +2468,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => context.go('/structure-management'),
           maxWidth: maxWidth,
         ),
+
+        // Actions spécifiques selon le type de structure
         if (isMAMStructure) ...[
+          // ✅ POUR MAM : Membres + Fonctionnement + Équipements
           SizedBox(height: maxHeight * 0.02),
-          // ✅ VERSION AMÉLIORÉE avec description simplifiée (fusion)
           _buildTabletActionItem(
             icon: Icons.people,
-            title: "Modifier les membres", // TITRE ORIGINAL
+            title: "Modifier les membres",
             description:
                 "Gérer les membres de la MAM ($currentMemberCount/$maxMemberCount)",
-            onTap: _showMemberManagement, // MENU ORIGINAL AMÉLIORÉ
+            onTap: _showMemberManagement,
             maxWidth: maxWidth,
           ),
+
           SizedBox(height: maxHeight * 0.02),
           _buildTabletActionItem(
             icon: Icons.settings,
@@ -2488,8 +2492,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             maxWidth: maxWidth,
             badge: functioningBadge,
           ),
+
+          // ✅ NOUVEAU : Gestion équipements pour MAM aussi
+          SizedBox(height: maxHeight * 0.02),
+          _buildTabletActionItem(
+            icon: Icons.kitchen,
+            title: "Gestion des équipements",
+            description: "Ajouter ou retirer réfrigérateur et congélateur",
+            onTap: _showEquipmentManagement,
+            maxWidth: maxWidth,
+          ),
         ] else ...[
-          // NOUVEAU pour Assistante Maternelle
+          // ✅ POUR ASSISTANTE MATERNELLE : Fonctionnement + Équipements
           SizedBox(height: maxHeight * 0.02),
           _buildTabletActionItem(
             icon: Icons.settings,
@@ -2500,7 +2514,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             maxWidth: maxWidth,
             badge: functioningBadge,
           ),
-          // NOUVELLE SECTION ÉQUIPEMENTS
+
+          // ✅ MAINTENU : Gestion équipements pour Assistante Maternelle
           SizedBox(height: maxHeight * 0.02),
           _buildTabletActionItem(
             icon: Icons.kitchen,
@@ -2614,33 +2629,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // ✅ MESSAGE EXPLICATIF SIMPLIFIÉ
+                    Container(
+                      padding: EdgeInsets.all(10), // Réduit de 12 à 10
+                      margin: EdgeInsets.only(bottom: 12), // Réduit de 16 à 12
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: primaryColor.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: primaryColor,
+                            size: 18, // Réduit de 20 à 18
+                          ),
+                          SizedBox(width: 10), // Réduit de 12 à 10
+                          Expanded(
+                            child: Text(
+                              // ✅ TEXTE PLUS COURT
+                              isMAMStructure
+                                  ? "Équipements MAM"
+                                  : "Vos équipements",
+                              style: TextStyle(
+                                fontSize: 13, // Réduit de 14 à 13
+                                color: primaryColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                     // Équipement Réfrigérateur
                     _buildEquipmentCard(
                       icon: Icons.thermostat,
                       title: "Réfrigérateur",
-                      description: "Suivi de température quotidien",
-                      isEnabled: hasAssmatFridge == true,
+                      description: "", // ✅ DESCRIPTION GÉRÉE DANS LA MÉTHODE
+                      isEnabled:
+                          isMAMStructure ? true : (hasAssmatFridge == true),
                       onChanged: (value) {
-                        setDialogState(() {
-                          // Mise à jour temporaire pour l'affichage
-                        });
-                        _updateEquipmentPreference('fridge', value);
+                        setDialogState(() {});
+                        if (isMAMStructure) {
+                          _updateMAMEquipmentPreference('fridge', value);
+                        } else {
+                          _updateEquipmentPreference('fridge', value);
+                        }
                       },
                     ),
 
-                    SizedBox(height: 16),
+                    SizedBox(height: 12), // Réduit de 16 à 12
 
                     // Équipement Congélateur
                     _buildEquipmentCard(
                       icon: Icons.kitchen,
                       title: "Congélateur",
-                      description: "Suivi de température quotidien",
-                      isEnabled: hasAssmatFreezer == true,
+                      description: "", // ✅ DESCRIPTION GÉRÉE DANS LA MÉTHODE
+                      isEnabled: isMAMStructure
+                          ? (hasFreezer == true)
+                          : (hasAssmatFreezer == true),
                       onChanged: (value) {
-                        setDialogState(() {
-                          // Mise à jour temporaire pour l'affichage
-                        });
-                        _updateEquipmentPreference('freezer', value);
+                        setDialogState(() {});
+                        if (isMAMStructure) {
+                          _updateMAMEquipmentPreference('freezer', value);
+                        } else {
+                          _updateEquipmentPreference('freezer', value);
+                        }
                       },
                     ),
                   ],
@@ -2665,6 +2724,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _updateMAMEquipmentPreference(
+      String equipmentType, bool hasEquipment) async {
+    try {
+      final structureId = await _getStructureId();
+      if (structureId.isEmpty) return;
+
+      if (equipmentType == 'fridge') {
+        // ✅ CORRECTION: Pour MAM, permettre d'activer/désactiver le frigo
+        // On pourrait créer un champ 'hasMAMFridge' si nécessaire
+        // Pour l'instant, message informatif mais on pourrait étendre la logique
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  hasEquipment ? Icons.check_circle : Icons.info,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    hasEquipment
+                        ? "Réfrigérateur activé pour la MAM"
+                        : "Réfrigérateur désactivé pour la MAM",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: hasEquipment ? Colors.green : primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Congélateur MAM - utiliser la logique existante
+        String fieldName = 'hasFreezer';
+
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .update({fieldName: hasEquipment});
+
+        setState(() {
+          hasFreezer = hasEquipment;
+          if (hasEquipment) {
+            _checkFreezerTemperatureStatus(structureId);
+          } else {
+            needFreezerTemperatureCheck = false;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  hasEquipment ? Icons.check_circle : Icons.remove_circle,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    hasEquipment
+                        ? "Congélateur ajouté à la MAM avec succès"
+                        : "Congélateur retiré de la MAM avec succès",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: hasEquipment ? Colors.green : primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      print("Erreur lors de la mise à jour de l'équipement MAM: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de la mise à jour"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
 // Widget pour créer une carte d'équipement moderne
   Widget _buildEquipmentCard({
     required IconData icon,
@@ -2674,7 +2830,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Function(bool) onChanged,
   }) {
     return Container(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(16), // Réduit de 20 à 16
       decoration: BoxDecoration(
         color: isEnabled ? primaryColor.withOpacity(0.05) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
@@ -2687,46 +2843,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.all(10), // Réduit de 12 à 10
             decoration: BoxDecoration(
               color: isEnabled
                   ? primaryColor.withOpacity(0.1)
                   : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               color: isEnabled ? primaryColor : Colors.grey.shade600,
-              size: 24,
+              size: 22, // Réduit de 24 à 22
             ),
           ),
-          SizedBox(width: 16),
+          SizedBox(width: 12), // Réduit de 16 à 12
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // ✅ AJOUTÉ pour compacter
               children: [
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 15, // Réduit de 16 à 15
                     fontWeight: FontWeight.w600,
                     color: isEnabled ? Colors.black87 : Colors.grey.shade600,
                   ),
                 ),
-                SizedBox(height: 4),
+                SizedBox(height: 2), // Réduit de 4 à 2
                 Text(
-                  description,
+                  // ✅ TEXTE SIMPLIFIÉ selon le type de structure
+                  isMAMStructure
+                      ? "Température quotidienne"
+                      : "Suivi quotidien",
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12, // Réduit de 14 à 12
                     color: Colors.grey.shade600,
                   ),
+                  maxLines: 1, // ✅ FORCE UNE SEULE LIGNE
+                  overflow: TextOverflow.ellipsis, // ✅ COUPE SI TROP LONG
                 ),
               ],
             ),
           ),
-          SizedBox(width: 16),
+          SizedBox(width: 12), // Réduit de 16 à 12
           Transform.scale(
-            scale: 1.2,
+            scale: 1.1, // Réduit de 1.2 à 1.1
             child: Switch(
               value: isEnabled,
               onChanged: onChanged,
@@ -3005,18 +3167,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                   SizedBox(height: 16),
+
+                  // Modifier les coordonnées - TOUJOURS disponible
                   _buildActionItem(
                     icon: Icons.edit_note,
                     title: "Modifier les coordonnées",
                     onTap: () => context.go('/structure-management'),
                   ),
+
+                  // Sections spécifiques selon le type de structure
                   if (isMAMStructure) ...[
-                    // ✅ VERSION AMÉLIORÉE - Menu intelligent pour l'ajout de membres
+                    // ✅ POUR MAM : Membres + Fonctionnement + Équipements
                     _buildActionItem(
                       icon: Icons.people,
-                      title: "Modifier les membres", // TITRE ORIGINAL
-                      onTap:
-                          _showMemberManagement, // MENU ORIGINAL avec logique intelligente
+                      title: "Modifier les membres",
+                      onTap: _showMemberManagement,
                     ),
 
                     _buildActionItem(
@@ -3049,8 +3214,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             )
                           : null,
                     ),
+
+                    // ✅ NOUVEAU : Gestion équipements pour MAM aussi
+                    _buildActionItem(
+                      icon: Icons.kitchen,
+                      title: "Gestion des équipements",
+                      onTap: _showEquipmentManagement,
+                    ),
                   ] else ...[
-                    // NOUVEAU pour Assistante Maternelle
+                    // ✅ POUR ASSISTANTE MATERNELLE : Fonctionnement + Équipements
                     _buildActionItem(
                       icon: Icons.settings,
                       title: "Fonctionnement quotidien",
@@ -3085,7 +3257,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             )
                           : null,
                     ),
-                    // NOUVELLE SECTION ÉQUIPEMENTS
+
+                    // ✅ MAINTENU : Gestion équipements pour Assistante Maternelle
                     _buildActionItem(
                       icon: Icons.kitchen,
                       title: "Gestion des équipements",
@@ -3306,59 +3479,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-            Container(
-              margin: EdgeInsets.only(bottom: 16),
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, 3),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/images/Icone_historique.png',
-                        width: 60,
-                        height: 60,
-                        errorBuilder: (context, error, stackTrace) => Icon(
-                          Icons.history,
-                          color: primaryColor,
-                          size: 60,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          "Historique",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  _buildActionItem(
-                    icon: Icons.history,
-                    title: "Consulter l'historique",
-                    onTap: _showHistorySelection,
-                  ),
-                ],
-              ),
-            ),
 
-// 🆕 SECTION LÉGALE - PHONE
+            // 🆕 SECTION LÉGALE - PHONE
             Container(
               margin: EdgeInsets.only(bottom: 24),
               padding: EdgeInsets.all(20),

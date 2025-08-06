@@ -69,6 +69,10 @@ import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import 'package:poppins_app/screens/splash_screen.dart';
 import 'package:poppins_app/screens/account_deletion_screen.dart';
 
+// 🔒 NOUVEAUX IMPORTS POUR LE SYSTÈME DE SÉCURITÉ
+import 'package:poppins_app/screens/auth_check_screen.dart';
+import 'package:poppins_app/screens/quick_login_screen.dart';
+
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
   final user = FirebaseAuth.instance.currentUser;
@@ -92,8 +96,12 @@ Future<String> _getStructureId() async {
 }
 
 final GoRouter router = GoRouter(
-  initialLocation: '/splash',
+  // 🔒 CHANGEMENT CRITIQUE : Démarrer par AuthCheckScreen
+  initialLocation: '/', // AuthCheckScreen gère tout maintenant
+
+  // 🔒 SIMPLIFICATION : Plus de redirection complexe nécessaire
   redirect: _handleRedirect,
+
   errorBuilder: (context, state) {
     print("❌ ERREUR ROUTE: ${state.uri.toString()}");
     print("❌ ERREUR: ${state.error}");
@@ -135,14 +143,14 @@ final GoRouter router = GoRouter(
             ),
             SizedBox(height: 30),
 
-            // Bouton principal - Retour vers Welcome
+            // Bouton principal - Retour vers AuthCheck
             ElevatedButton(
               onPressed: () {
-                print("🔄 Redirection forcée vers Welcome");
+                print("🔄 Redirection forcée vers AuthCheck");
                 try {
-                  context.go('/'); // Toujours rediriger vers Welcome
+                  context.go('/'); // Rediriger vers AuthCheck
                 } catch (e) {
-                  print("❌ Erreur redirection vers Welcome: $e");
+                  print("❌ Erreur redirection vers AuthCheck: $e");
                   // En cas d'échec total, redémarrer l'app
                   context.go('/splash');
                 }
@@ -189,11 +197,37 @@ final GoRouter router = GoRouter(
     );
   },
   routes: [
-    // Écran d'accueil principal (premier écran)
-    GoRoute(path: '/', builder: (context, state) => const WelcomeScreen()),
+    // 🔒 NOUVEAUX ÉCRANS DE SÉCURITÉ (EN PREMIER)
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const AuthCheckScreen(),
+    ),
+
+    GoRoute(
+      path: '/welcome',
+      builder: (context, state) => const WelcomeScreen(),
+    ),
+
+    GoRoute(
+      path: '/quick-login',
+      builder: (context, state) => QuickLoginScreen(
+        data: state.extra as Map<String, String>,
+      ),
+    ),
+
+    // 🔄 ÉCRANS EXISTANTS (GARDÉS TELS QUELS)
+
+    // Splash screen - maintenant utilisé pour chargement post-authentification
+    GoRoute(
+      path: '/splash',
+      name: 'splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
+
     // Conserver l'ancienne route pour compatibilité
     GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+
     // Nouvelles routes pour le système d'authentification
     GoRoute(
       path: '/invitation-code',
@@ -220,6 +254,7 @@ final GoRouter router = GoRouter(
         return InvitationSignupScreen(invitationInfo: invitationInfo);
       },
     ),
+
     // Routes existantes
     GoRoute(
       path: '/register',
@@ -228,11 +263,6 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/freezer-temperature',
       builder: (context, state) => const FreezerTemperatureScreen(),
-    ),
-    GoRoute(
-      path: '/splash',
-      name: 'splash',
-      builder: (context, state) => const SplashScreen(),
     ),
     GoRoute(
       path: '/account-deletion',
@@ -245,6 +275,7 @@ final GoRouter router = GoRouter(
       ),
     ),
     GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
+
     // Ajout de la route pour l'écran de tarification
     GoRoute(
       path: '/pricing',
@@ -670,6 +701,7 @@ final GoRouter router = GoRouter(
     ),
   ],
 );
+
 Widget _createErrorScreen(String message, BuildContext context) {
   return Scaffold(
     backgroundColor: Colors.white,
@@ -712,7 +744,7 @@ Widget _createErrorScreen(String message, BuildContext context) {
           SizedBox(height: 30),
           ElevatedButton(
             onPressed: () {
-              context.go('/'); // Retour vers Welcome
+              context.go('/'); // Retour vers AuthCheck
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Color(0xFF3D9DF2),
@@ -730,86 +762,53 @@ Widget _createErrorScreen(String message, BuildContext context) {
   );
 }
 
-// Fonction de redirection pour gérer l'authentification
+// 🔒 FONCTION DE REDIRECTION SIMPLIFIÉE
 String? _handleRedirect(BuildContext context, GoRouterState state) {
   print("🔄 _handleRedirect appelée pour: ${state.uri.toString()}");
 
-  // Obtenir l'utilisateur actuel
-  final User? currentUser = FirebaseAuth.instance.currentUser;
+  // 🎯 STRATÉGIE SIMPLIFIÉE: AuthCheckScreen gère TOUT
+  // Cette fonction ne fait plus que vérifier les routes publiques de base
 
-  // Liste des routes accessibles sans authentification
-  final List<String> publicRoutes = [
-    '/',
-    '/splash',
-    '/signup',
+  final String path = state.matchedLocation;
+
+  // Routes qui ne nécessitent AUCUNE vérification
+  final List<String> absolutelyPublicRoutes = [
+    '/', // AuthCheckScreen
+    '/welcome',
+    '/quick-login',
     '/login',
     '/register',
+    '/signup',
     '/invitation-code',
     '/invitation-validated',
     '/invitation-signup',
     '/pricing',
+    '/structure-details',
     '/structure-confirmation',
     '/subscription-confirmed',
-    '/welcome', // Au cas où cette route serait ajoutée
+    '/splash',
   ];
 
-  // Si la route est publique, ne pas rediriger
-  if (publicRoutes.contains(state.matchedLocation)) {
-    print("✅ Route publique autorisée: ${state.matchedLocation}");
+  // Si c'est une route absolument publique, laisser passer
+  if (absolutelyPublicRoutes.contains(path)) {
+    print("✅ Route publique autorisée: $path");
     return null;
   }
 
-  // Si l'utilisateur n'est pas connecté et tente d'accéder à une route protégée
-  if (currentUser == null) {
-    print("❌ Utilisateur non connecté, redirection vers Welcome");
-    return '/'; // Redirection vers Welcome
+  // 🔄 POUR TOUTES LES AUTRES ROUTES: Laisser AuthCheckScreen décider
+  // AuthCheckScreen vérifiera l'authentification et redirigera si nécessaire
+
+  print("🔄 Route protégée potentielle, laissons AuthCheck décider: $path");
+
+  // Vérification rapide: si pas d'utilisateur connecté, rediriger vers AuthCheck
+  final User? user = FirebaseAuth.instance.currentUser;
+  if (user == null && !absolutelyPublicRoutes.contains(path)) {
+    print(
+        "❌ Utilisateur non connecté pour route protégée, redirection vers AuthCheck");
+    return '/';
   }
 
-  // Vérifier si la route nécessite des paramètres spécifiques
-  final String location = state.matchedLocation;
-
-  // Routes qui nécessitent un childId
-  final List<String> childRoutes = [
-    '/parent-info',
-    '/parent-address',
-    '/parent-second-info',
-    '/parent-second-address',
-    '/add-second-parent',
-    '/schedule-info',
-    '/child-documents',
-    '/child-pickup-auth',
-    '/child-meal-info',
-    '/child-financial-info',
-    '/child-salary-info',
-  ];
-
-  // Si c'est une route enfant mais qu'il manque des paramètres
-  if (childRoutes.contains(location) && state.extra == null) {
-    print("❌ Route enfant sans paramètres, redirection vers Dashboard");
-    return '/dashboard'; // Ou vers Welcome si pas de dashboard
-  }
-
-  // L'utilisateur est connecté et accède à une route protégée valide
-  // Routes protégées spéciales qui nécessitent une authentification
-  final List<String> protectedRoutes = [
-    '/dashboard',
-    '/home',
-    '/account-deletion', // ← AJOUTER CETTE LIGNE
-    '/structure-management',
-    '/photo-management',
-    '/stock',
-    '/exchanges',
-    '/admin',
-    '/test-data-generator',
-  ];
-
-// Si c'est une route protégée spéciale, autoriser l'accès
-  if (protectedRoutes.contains(location) || location.startsWith('/parent/')) {
-    print("✅ Utilisateur connecté, route protégée autorisée: ${location}");
-    return null;
-  }
-
-// L'utilisateur est connecté et accède à une route protégée valide
-  print("✅ Utilisateur connecté, route autorisée: ${location}");
+  // Sinon, laisser passer - AuthCheckScreen a déjà fait son travail
+  print("✅ Utilisateur connecté ou route autorisée: $path");
   return null;
 }

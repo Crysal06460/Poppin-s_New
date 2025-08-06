@@ -357,7 +357,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print("🔍 Dans build - isMAM = $isMAM, structureType = $structureType");
+    //print("🔍 Dans build - isMAM = $isMAM, structureType = $structureType");
 
     // Récupérer les dimensions de l'écran
     final Size screenSize = MediaQuery.of(context).size;
@@ -1132,53 +1132,55 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
   }
 
   Widget _buildPhoneCityField() {
-    return GestureDetector(
-      onTap: citySuggestions.length > 1
-          ? () {
-              _showCitySelectionDialog();
-            }
-          : null,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: primaryColor.withOpacity(0.5)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: TextField(
-          controller: cityController,
-          readOnly: true,
-          decoration: InputDecoration(
-            labelText: "Ville",
-            labelStyle: TextStyle(color: primaryColor.withOpacity(0.8)),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            prefixIcon: Icon(Icons.location_city_outlined, color: primaryColor),
-            suffixIcon: citySuggestions.length > 1
-                ? Icon(Icons.arrow_drop_down, color: primaryColor)
-                : null,
-            counterText: "",
-            contentPadding:
-                const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-            hintText: cityController.text.isEmpty
-                ? "Entrez d'abord un code postal"
-                : null,
-            hintStyle: TextStyle(color: Colors.grey.shade500),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          "Ville",
           style: TextStyle(
             fontSize: 16,
-            color: cityController.text.isEmpty ? Colors.grey : Colors.black,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
           ),
         ),
-      ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: citySuggestions.length > 1
+              ? () {
+                  _showCitySelectionDialog();
+                }
+              : null,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: primaryColor.withOpacity(0.5)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            child: Row(
+              children: [
+                Icon(Icons.location_city_outlined, color: primaryColor),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    cityController.text.isEmpty
+                        ? "Entrez d'abord un code postal"
+                        : cityController.text,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: cityController.text.isEmpty
+                          ? Colors.grey.shade500
+                          : Colors.black,
+                    ),
+                  ),
+                ),
+                if (citySuggestions.length > 1)
+                  Icon(Icons.arrow_drop_down, color: primaryColor),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1196,7 +1198,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
             children: [
               Icon(
                 Icons.location_city,
-                color: primaryColor,
+                color: primaryBlue,
                 size: 28,
               ),
               SizedBox(width: 12),
@@ -1206,7 +1208,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: primaryColor,
+                    color: primaryBlue,
                   ),
                 ),
               ),
@@ -1220,10 +1222,10 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.1),
+                    color: primaryBlue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: primaryColor.withOpacity(0.3),
+                      color: primaryBlue.withOpacity(0.3),
                       width: 1,
                     ),
                   ),
@@ -1231,7 +1233,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                     children: [
                       Icon(
                         Icons.info_outline,
-                        color: primaryColor,
+                        color: primaryBlue,
                         size: 20,
                       ),
                       SizedBox(width: 8),
@@ -1264,12 +1266,12 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                         margin: EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? primaryColor.withOpacity(0.1)
+                              ? primaryBlue.withOpacity(0.1)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isSelected
-                                ? primaryColor.withOpacity(0.5)
+                                ? primaryBlue.withOpacity(0.5)
                                 : Colors.grey.shade300,
                             width: 1,
                           ),
@@ -1282,14 +1284,14 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                               fontWeight: isSelected
                                   ? FontWeight.w600
                                   : FontWeight.normal,
-                              color: isSelected ? primaryColor : Colors.black87,
+                              color: isSelected ? primaryBlue : Colors.black87,
                             ),
                           ),
                           leading: Container(
                             padding: EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? primaryColor.withOpacity(0.2)
+                                  ? primaryBlue.withOpacity(0.2)
                                   : Colors.grey.shade100,
                               shape: BoxShape.circle,
                             ),
@@ -1298,7 +1300,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                                   ? Icons.check_circle
                                   : Icons.location_on_outlined,
                               color: isSelected
-                                  ? primaryColor
+                                  ? primaryBlue
                                   : Colors.grey.shade600,
                               size: 20,
                             ),
@@ -1308,19 +1310,6 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                               cityController.text = city;
                             });
                             Navigator.pop(context);
-
-                            // Petit feedback visuel
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("Ville sélectionnée : $city"),
-                                duration: Duration(seconds: 2),
-                                backgroundColor: primaryColor,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
                           },
                         ),
                       );
@@ -1344,6 +1333,163 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCityDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          "Ville",
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: citySuggestions.length > 1
+              ? () {
+                  _showCitySelectionDialog();
+                }
+              : null,
+          child: Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  offset: const Offset(0, 3),
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: cityController,
+              enabled: false, // Changé de readOnly à enabled: false
+              decoration: InputDecoration(
+                prefixIcon: Icon(Icons.location_city, color: primaryColor),
+                suffixIcon: citySuggestions.length > 1
+                    ? Icon(Icons.arrow_drop_down, color: primaryColor)
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: primaryBlue, width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                hintText: citySuggestions.isEmpty
+                    ? "Entrez d'abord un code postal"
+                    : null,
+                hintStyle: TextStyle(color: Colors.grey.shade500),
+              ),
+              style: TextStyle(
+                fontSize: 16,
+                color: cityController.text.isEmpty
+                    ? Colors.grey.shade500
+                    : Colors.black87,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCityDropdownTablet(double maxWidth, double maxHeight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Ville",
+          style: TextStyle(
+            fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: (maxHeight * 0.015).clamp(8.0, 15.0)),
+        InkWell(
+          onTap: citySuggestions.length > 1
+              ? () {
+                  _showCitySelectionDialog();
+                }
+              : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  offset: const Offset(0, 3),
+                  blurRadius: 5,
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: cityController,
+              enabled: false, // Changé de readOnly à enabled: false
+              onChanged: (value) => setState(() {}), // Pour rafraîchir l'aperçu
+              decoration: InputDecoration(
+                prefixIcon: Icon(Icons.location_city, color: primaryBlue),
+                suffixIcon: citySuggestions.length > 1
+                    ? Icon(Icons.arrow_drop_down, color: primaryBlue)
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: primaryColor, width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: (maxWidth * 0.02).clamp(12.0, 20.0),
+                  vertical: (maxHeight * 0.02).clamp(12.0, 20.0),
+                ),
+                hintText: citySuggestions.isEmpty
+                    ? "Entrez d'abord un code postal"
+                    : null,
+                hintStyle: TextStyle(color: Colors.grey.shade500),
+              ),
+              style: TextStyle(
+                fontSize: (maxWidth * 0.018).clamp(14.0, 20.0),
+                color: cityController.text.isEmpty
+                    ? Colors.grey.shade500
+                    : Colors.black87,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

@@ -279,22 +279,40 @@ class _HomeScreenState extends State<HomeScreen> {
             .collection('members')
             .get();
 
-        // Compter le nombre de membres (y compris le fondateur)
-        final bool hasNoMembers = membersSnapshot.docs.isEmpty;
-        final bool hasOnlyOneMember = membersSnapshot.docs.length <= 1;
+        // Compter le nombre de membres
+        final int memberCount = membersSnapshot.docs.length;
 
-        if (hasNoMembers || hasOnlyOneMember) {
-          // PRIORITÉ 1 : S'il n'y a qu'un seul membre, d'abord ajouter des membres
+        print(
+            "🔍 DEBUG: Nombre de membres trouvés dans la collection: $memberCount");
+
+        // ✅ CORRECTION: Vérifier si le popup membres a déjà été affiché
+        final prefs = await SharedPreferences.getInstance();
+        final String mamMembersPopupKey =
+            'mam_members_popup_shown_${structureDocId}';
+        final bool mamMembersPopupAlreadyShown =
+            prefs.getBool(mamMembersPopupKey) ?? false;
+
+        print(
+            "🔍 DEBUG: Popup membres déjà affiché? $mamMembersPopupAlreadyShown");
+
+        if (memberCount == 1 && !mamMembersPopupAlreadyShown) {
+          // PRIORITÉ 1 : Premier lancement avec un seul membre, afficher le popup UNE FOIS
           shouldShowPopup = true;
           popupType = "addMAMMembers";
           print(
-              "⚠️ MAM avec peu de membres, affichage du popup pour ajouter des membres...");
+              "⚠️ Premier lancement MAM avec 1 seul membre, affichage du popup...");
+
+          // Marquer le popup comme affiché pour ne plus jamais le montrer
+          await prefs.setBool(mamMembersPopupKey, true);
         } else if (!hasChildren) {
-          // PRIORITÉ 2 : S'il y a plusieurs membres mais pas d'enfants, ajouter des enfants
+          // PRIORITÉ 2 : S'il y a des membres mais pas d'enfants, ajouter des enfants
           shouldShowPopup = true;
           popupType = "addChild";
           print(
-              "⚠️ MAM avec plusieurs membres mais aucun enfant trouvé, affichage du popup...");
+              "⚠️ MAM avec membre(s) mais aucun enfant trouvé, affichage du popup...");
+        } else {
+          print(
+              "✅ MAM avec $memberCount membre(s) - popup membres ${mamMembersPopupAlreadyShown ? 'déjà affiché' : 'pas nécessaire'}");
         }
       } else {
         // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants

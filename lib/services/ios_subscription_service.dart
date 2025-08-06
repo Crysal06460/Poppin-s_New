@@ -37,16 +37,16 @@ class iOSSubscriptionService {
   static const Map<String, String> _iOSProductIds = {
     'assistante_maternelle':
         'com.beylet.poppinsApp.subscription.assistante_maternelle',
-    'mam_2_members': 'com.beylet.poppinsApp.subscription.mam_2_members',
-    'mam_3_members': 'com.beylet.poppinsApp.subscription.mam_3_members',
-    'mam_4_members': 'com.beylet.poppinsApp.subscription.mam_4_members',
+    'mam_2_members': 'com.beylet.poppinsApp.subscription.mam_2_membres',
+    'mam_3_members': 'com.beylet.poppinsApp.subscription.mam_3_membres',
+    'mam_4_members': 'com.beylet.poppinsApp.subscription.mam_4_membres',
   };
 
   static const Set<String> _allProductIds = {
     'com.beylet.poppinsApp.subscription.assistante_maternelle',
-    'com.beylet.poppinsApp.subscription.mam_2_members',
-    'com.beylet.poppinsApp.subscription.mam_3_members',
-    'com.beylet.poppinsApp.subscription.mam_4_members',
+    'com.beylet.poppinsApp.subscription.mam_2_membres',
+    'com.beylet.poppinsApp.subscription.mam_3_membres',
+    'com.beylet.poppinsApp.subscription.mam_4_membres',
   };
 
   /// Initialise le service iOS

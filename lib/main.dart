@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Fi
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ AJOUT CRUCIAL
 import 'firebase_options.dart';
 import 'routes.dart';
 
@@ -104,11 +105,46 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // 🔑 GESTION CRITIQUE DU CYCLE DE VIE - MODIFIÉE POUR LE SYSTÈME DE SÉCURITÉ
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    super.didChangeAppLifecycleState(state);
+
+    // Remettre en portrait si nécessaire
     if (state == AppLifecycleState.resumed) {
-      // Remettre en portrait quand l'app revient au premier plan
       _setPortraitOrientation();
+    }
+
+    // 🔒 GESTION DU CYCLE DE VIE POUR LA SÉCURITÉ
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      print("🔄 Cycle de vie changé: $state");
+
+      switch (state) {
+        case AppLifecycleState.paused:
+          // App mise en arrière-plan (pas fermée)
+          await prefs.setBool('app_killed', false);
+          print("📱 App mise en arrière-plan");
+          break;
+
+        case AppLifecycleState.detached:
+        case AppLifecycleState.inactive:
+          // App fermée complètement
+          await prefs.setBool('app_killed', true);
+          print("❌ App fermée complètement");
+          break;
+
+        case AppLifecycleState.resumed:
+          // App revenue au premier plan
+          print("✅ App revenue au premier plan");
+          break;
+
+        case AppLifecycleState.hidden:
+          break;
+      }
+    } catch (e) {
+      print("⚠️ Erreur sauvegarde cycle de vie: $e");
     }
   }
 
