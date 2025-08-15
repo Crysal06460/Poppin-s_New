@@ -384,14 +384,14 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Retourne la description des fonctionnalités
   List<String> _getFeatures() {
     return [
-      '📱 Transmissions temps réel',
-      '💬 Chat avec les parents',
-      '📊 Tableau de bord complet',
-      '📋 Gestion administrative',
-      '📸 Partage de photos sécurisé',
-      '🔔 Notifications push',
-      '☁️ Sauvegarde cloud',
-      '📞 Support client premium',
+      '📱 Transmissions en temps réel pour gagner du temps',
+      '💬 Chat instantané avec les parents',
+      '📸 Partage sécurisé des photos des enfants',
+      '🔔 Notifications push pour ne rien manquer',
+      '📊 Tableau de bord clair et complet',
+      '👥 Collaboration simplifiée en équipe',
+      '📋 Gestion administrative allégée',
+      '☁️ Sauvegarde automatique et sécurisée',
     ];
   }
 

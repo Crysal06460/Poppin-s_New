@@ -24,16 +24,36 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Cette application utilise les services Apple pour les abonnements.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre caméra pour prendre des photos</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre microphone pour certaines fonctionnalités</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre bibliothèque pour sélectionner des photos</string>
+	<key>NSUserNotificationAlertStyle</key>
+	<string>alert</string>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Cette app utilise des notifications pour vous informer des nouveaux messages.</string>
+	<key>SKStoreKitConfiguration</key>
+	<dict>
+		<key>SKAllowsHandlingOfNonRenewingSubscriptions</key>
+		<true/>
+		<key>SKBundleIdentifier</key>
+		<string>com.beylet.poppinsApp</string>
+	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
@@ -43,6 +63,8 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -51,33 +73,5 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>UIRequiresFullScreen</key>
-	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
-	<key>NSUserNotificationAlertStyle</key>
-	<string>alert</string>
-	<key>NSUserNotificationUsageDescription</key>
-	<string>Cette app utilise des notifications pour vous informer des nouveaux messages.</string>
-	
-	<!-- ✅ Configuration StoreKit pour une meilleure intégration -->
-	<key>SKStoreKitConfiguration</key>
-	<dict>
-		<key>SKBundleIdentifier</key>
-		<string>com.beylet.poppinsApp</string>
-		<key>SKAllowsHandlingOfNonRenewingSubscriptions</key>
-		<true/>
-	</dict>
-	
-	<!-- ✅ Configuration pour éviter les problèmes d'export -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	
-	<!-- ✅ Description pour les services Apple -->
-	<key>NSAppleMusicUsageDescription</key>
-	<string>Cette application utilise les services Apple pour les abonnements.</string>
 </dict>
 </plist>
