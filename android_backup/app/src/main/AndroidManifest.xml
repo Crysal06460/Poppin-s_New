@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="votre_app_name"
+        android:label="votre_Poppin's"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
