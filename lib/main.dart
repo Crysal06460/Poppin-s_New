@@ -128,8 +128,13 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
           print("📱 App mise en arrière-plan");
           break;
 
-        case AppLifecycleState.detached:
         case AppLifecycleState.inactive:
+          // App temporairement inactive (ex: bouton Home)
+          await prefs.setBool('app_killed', false);
+          print("⏸️ App temporairement inactive");
+          break;
+
+        case AppLifecycleState.detached:
           // App fermée complètement
           await prefs.setBool('app_killed', true);
           print("❌ App fermée complètement");
