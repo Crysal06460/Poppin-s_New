@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../utils/session_util.dart';
 
 class AccountDeletionScreen extends StatefulWidget {
   const AccountDeletionScreen({Key? key}) : super(key: key);
@@ -623,7 +624,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
                 Navigator.of(context).pop();
 
                 // Déconnecter l'utilisateur
-                await FirebaseAuth.instance.signOut();
+                await SessionUtil.signOut();
 
                 // Rediriger vers login
                 context.go('/login');

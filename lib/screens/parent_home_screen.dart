@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
+import '../utils/session_util.dart';
 import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
@@ -1804,7 +1805,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                         IconButton(
                           icon: Icon(Icons.logout, color: Colors.white),
                           onPressed: () async {
-                            await _auth.signOut();
+                            await SessionUtil.signOut();
                             context.go('/');
                           },
                         ),

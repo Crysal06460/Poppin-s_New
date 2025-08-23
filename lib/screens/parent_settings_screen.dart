@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/session_util.dart';
 
 class ParentSettingsScreen extends StatefulWidget {
   const ParentSettingsScreen({Key? key}) : super(key: key);
@@ -54,7 +55,7 @@ class _ParentSettingsScreenState extends State<ParentSettingsScreen> {
   }
   
   Future<void> _logout() async {
-    await _auth.signOut();
+    await SessionUtil.signOut();
     context.go('/login');
   }
   
