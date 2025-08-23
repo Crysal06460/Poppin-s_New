@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/message_badge_util.dart';
 import '../utils/stock_badge_util.dart';
+import '../utils/session_util.dart';
 
 class ParentStockScreen extends StatefulWidget {
   const ParentStockScreen({Key? key}) : super(key: key);
@@ -436,7 +437,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                         IconButton(
                           icon: Icon(Icons.logout, color: Colors.white),
                           onPressed: () async {
-                            await _auth.signOut();
+                            await SessionUtil.signOut();
                             context.go('/');
                           },
                         ),

@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/subscription_service.dart';
+import '../utils/session_util.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -84,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await prefs.remove('lastSessionTime');
 
       // Déconnexion Firebase
-      await FirebaseAuth.instance.signOut();
+      await SessionUtil.signOut();
 
       // Redirection vers l'écran de connexion
       if (mounted) {
