@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'dart:async';
 
 class AuthCheckScreen extends StatefulWidget {
   const AuthCheckScreen({Key? key}) : super(key: key);
@@ -14,6 +16,7 @@ class AuthCheckScreen extends StatefulWidget {
 class _AuthCheckScreenState extends State<AuthCheckScreen> {
   // Couleurs de l'app
   static const Color primaryBlue = Color(0xFF3D9DF2);
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -111,6 +114,19 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
         print("⚠️ Utilisateur sans rôle défini, redirection vers Welcome");
         context.go('/welcome');
       }
+    } on FirebaseException catch (e) {
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        setState(() {
+          _isOffline = true;
+        });
+      } else {
+        print("⚠️ Firebase erreur: ${e.code}");
+        context.go('/welcome');
+      }
+    } on TimeoutException {
+      setState(() {
+        _isOffline = true;
+      });
     } catch (e) {
       print("⚠️ Erreur navigation: $e, fallback vers Welcome");
       context.go('/welcome');
@@ -119,6 +135,46 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isOffline) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.wifi_off,
+                size: 80,
+                color: Colors.grey[600],
+              ),
+              SizedBox(height: 20),
+              Text(
+                "Connexion perdue",
+                style: TextStyle(
+                  color: Colors.grey[700],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _isOffline = false;
+                  });
+                  _navigateToCorrectHome();
+                },
+                child: Text('Réessayer'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
