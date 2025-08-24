@@ -346,8 +346,8 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                               label: "Température (°C)",
                               icon: Icons.thermostat,
                               maxWidth: maxWidth,
-                              keyboardType: TextInputType.numberWithOptions(
-                                  decimal: true),
+                              keyboardType:
+                                  TextInputType.numberWithOptions(decimal: true, signed: true),
                               suffixText: "°C",
                             ),
 
@@ -755,7 +755,8 @@ class _FridgeTemperatureScreenState extends State<FridgeTemperatureScreen> {
                   controller: _temperatureController,
                   label: "Température (°C)",
                   icon: Icons.thermostat,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.numberWithOptions(
+                      decimal: true, signed: true),
                   suffixText: "°C",
                 ),
                 SizedBox(height: 24),
