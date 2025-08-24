@@ -236,12 +236,6 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
     try {
       String normalizedInput = _temperatureController.text.replaceAll(',', '.');
       temperature = double.parse(normalizedInput);
-
-      if (temperature > -10 || temperature < -25) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("La température doit être entre -25°C et -10°C")));
-        return;
-      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Veuillez entrer une température valide")));
