@@ -29,6 +29,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool hasMinLength = false;
   bool hasUppercase = false;
   bool hasDigit = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void initState() {
@@ -309,7 +311,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               TextField(
                 controller: passwordController,
-                obscureText: true,
+                obscureText: !_showPassword,
                 decoration: InputDecoration(
                   labelText: "Mot de passe",
                   labelStyle: TextStyle(color: primaryBlue),
@@ -320,6 +322,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderSide: BorderSide(color: primaryBlue, width: 2)),
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPassword ? Icons.visibility_off : Icons.visibility,
+                      color: primaryBlue,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showPassword = !_showPassword;
+                      });
+                    },
+                  ),
                 ),
               ),
 
@@ -330,7 +343,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               TextField(
                 controller: confirmPasswordController,
-                obscureText: true,
+                obscureText: !_showConfirmPassword,
                 decoration: InputDecoration(
                   labelText: "Confirmer le mot de passe",
                   labelStyle: TextStyle(color: primaryBlue),
@@ -341,6 +354,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderSide: BorderSide(color: primaryBlue, width: 2)),
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      color: primaryBlue,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showConfirmPassword = !_showConfirmPassword;
+                      });
+                    },
+                  ),
                 ),
               ),
 
@@ -837,6 +863,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: "Min. 6 caractères, 1 majuscule, 1 chiffre",
           icon: Icons.lock_outline,
           isPassword: true,
+          showPassword: _showPassword,
+          onTogglePassword: () {
+            setState(() {
+              _showPassword = !_showPassword;
+            });
+          },
           maxWidth: maxWidth,
           maxHeight: maxHeight,
         ),
@@ -853,6 +885,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           hint: "Ressaisissez votre mot de passe",
           icon: Icons.lock_outline,
           isPassword: true,
+          showPassword: _showConfirmPassword,
+          onTogglePassword: () {
+            setState(() {
+              _showConfirmPassword = !_showConfirmPassword;
+            });
+          },
           maxWidth: maxWidth,
           maxHeight: maxHeight,
         ),
@@ -961,6 +999,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required String hint,
     required IconData icon,
     bool isPassword = false,
+    bool showPassword = false,
+    VoidCallback? onTogglePassword,
     TextInputType? keyboardType,
     required double maxWidth,
     required double maxHeight,
@@ -978,7 +1018,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: isPassword,
+        obscureText: isPassword ? !showPassword : false,
         keyboardType: keyboardType,
         style: TextStyle(fontSize: maxWidth * 0.018),
         decoration: InputDecoration(
@@ -989,6 +1029,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: primaryBlue,
             size: maxWidth * 0.022,
           ),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    showPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    color: primaryBlue,
+                  ),
+                  onPressed: onTogglePassword,
+                )
+              : null,
           labelStyle: TextStyle(
             color: primaryBlue,
             fontSize: maxWidth * 0.016,
