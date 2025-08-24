@@ -562,8 +562,8 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                               label: "Température (°C)",
                               icon: Icons.kitchen,
                               maxWidth: maxWidth,
-                              keyboardType: TextInputType.numberWithOptions(
-                                  decimal: true),
+                              keyboardType:
+                                  TextInputType.numberWithOptions(decimal: true, signed: true),
                               suffixText: "°C",
                             ),
 
@@ -968,7 +968,8 @@ class _FreezerTemperatureScreenState extends State<FreezerTemperatureScreen> {
                   controller: _temperatureController,
                   label: "Température (°C)",
                   icon: Icons.kitchen,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.numberWithOptions(
+                      decimal: true, signed: true),
                   suffixText: "°C",
                 ),
                 SizedBox(height: 24),
