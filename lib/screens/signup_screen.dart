@@ -682,18 +682,24 @@ class _SignupScreenState extends State<SignupScreen> {
     });
   }
   void _showRegistrationDialog() {
-  final TextEditingController emailRegController = TextEditingController(text: emailController.text);
+  final TextEditingController emailRegController =
+      TextEditingController(text: emailController.text);
   final TextEditingController passwordRegController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
-  
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
+  bool showPassword = false;
+  bool showConfirmPassword = false;
+
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) {
         return AlertDialog(
-          title: const Text("Inscription", 
-            style: TextStyle(color: Color(0xFF1A237E), fontWeight: FontWeight.bold),
+          title: const Text(
+            "Inscription",
+            style: TextStyle(
+                color: Color(0xFF1A237E), fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           content: SingleChildScrollView(
@@ -704,27 +710,46 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: emailRegController,
                   decoration: InputDecoration(
                     labelText: "Email",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: passwordRegController,
-                  obscureText: true,
+                  obscureText: !showPassword,
                   decoration: InputDecoration(
                     labelText: "Mot de passe",
                     helperText: "Minimum 6 caractères",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    suffixIcon: IconButton(
+                      icon: Icon(showPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () => setDialogState(() {
+                        showPassword = !showPassword;
+                      }),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: confirmPasswordController,
-                  obscureText: true,
+                  obscureText: !showConfirmPassword,
                   decoration: InputDecoration(
                     labelText: "Confirmer le mot de passe",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    suffixIcon: IconButton(
+                      icon: Icon(showConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () => setDialogState(() {
+                        showConfirmPassword = !showConfirmPassword;
+                      }),
+                    ),
                   ),
                 ),
               ],
@@ -733,21 +758,24 @@ class _SignupScreenState extends State<SignupScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text("ANNULER", style: TextStyle(color: Colors.grey)),
+              child:
+                  const Text("ANNULER", style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () async {
                 // Validation de base
-                if (emailRegController.text.isEmpty || 
+                if (emailRegController.text.isEmpty ||
                     passwordRegController.text.isEmpty ||
                     confirmPasswordController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Veuillez remplir tous les champs"))
-                  );
+                      const SnackBar(
+                          content:
+                              Text("Veuillez remplir tous les champs")));
                   return;
                 }
-                
-                if (passwordRegController.text != confirmPasswordController.text) {
+
+                if (passwordRegController.text !=
+                    confirmPasswordController.text) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Les mots de passe ne correspondent pas"))
                   );
@@ -1391,14 +1419,23 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildTextField(
-      TextEditingController controller, String label, bool isPassword) {
+      TextEditingController controller, String label, bool isPassword,
+      {bool showPassword = false, VoidCallback? togglePassword}) {
     return TextField(
       controller: controller,
-      obscureText: isPassword,
+      obscureText: isPassword ? !showPassword : false,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                    showPassword ? Icons.visibility_off : Icons.visibility),
+                onPressed: togglePassword,
+              )
+            : null,
       ),
     );
   }
