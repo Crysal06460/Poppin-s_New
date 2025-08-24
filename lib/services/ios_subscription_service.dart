@@ -245,27 +245,27 @@ class iOSSubscriptionService {
       double priceAmount = 12.99;
       String priceDisplay = '12,99 € / mois';
 
-      // ✅ AMÉLIORATION : Mapping plus robuste des productId
-      if (productId.contains('mam')) {
+      // ✅ MAPPING robuste basé sur les IDs produits iOS
+      if (productId == _iOSProductIds['mam_2_members']) {
         structureType = 'MAM';
-        if (productId.contains('2_members')) {
-          memberCount = 2;
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
-        } else if (productId.contains('3_members')) {
-          memberCount = 3;
-          priceAmount = 34.99;
-          priceDisplay = '34,99 € / mois';
-        } else if (productId.contains('4_members')) {
-          memberCount = 4;
-          priceAmount = 44.99;
-          priceDisplay = '44,99 € / mois';
-        } else {
-          // Fallback pour MAM non spécifié
-          memberCount = 2;
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
-        }
+        memberCount = 2;
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
+      } else if (productId == _iOSProductIds['mam_3_members']) {
+        structureType = 'MAM';
+        memberCount = 3;
+        priceAmount = 34.99;
+        priceDisplay = '34,99 € / mois';
+      } else if (productId == _iOSProductIds['mam_4_members']) {
+        structureType = 'MAM';
+        memberCount = 4;
+        priceAmount = 44.99;
+        priceDisplay = '44,99 € / mois';
+      } else if (productId == _iOSProductIds['assistante_maternelle']) {
+        // valeurs par défaut déjà correctes
+      } else {
+        // Fallback pour ID inconnu
+        print('⚠️ Produit iOS non reconnu: $productId');
       }
 
       // ✅ AMÉLIORATION : Dates plus précises
