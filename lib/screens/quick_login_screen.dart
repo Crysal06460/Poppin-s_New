@@ -17,6 +17,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _showPassword = false;
 
   // Couleurs de l'app
   static const Color primaryBlue = Color(0xFF3D9DF2);
@@ -252,7 +253,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                   // Champ mot de passe
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
+                    obscureText: !_showPassword,
                     autofocus: true,
                     decoration: InputDecoration(
                       labelText: "Mot de passe",
@@ -265,9 +266,26 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                         borderSide: BorderSide(color: primaryBlue, width: 2),
                       ),
                       prefixIcon: Icon(Icons.lock, color: primaryBlue),
-                      suffixIcon: reason == 'daily_security'
-                          ? Icon(Icons.security, color: Colors.orange[700])
-                          : null,
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (reason == 'daily_security')
+                            Icon(Icons.security, color: Colors.orange[700]),
+                          IconButton(
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: primaryBlue,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showPassword = !_showPassword;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                       contentPadding: EdgeInsets.symmetric(
                           horizontal: 16, vertical: isTablet ? 12 : 14),
                     ),
