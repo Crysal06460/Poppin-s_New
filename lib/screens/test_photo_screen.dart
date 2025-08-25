@@ -27,7 +27,7 @@ class TestPhotoScreen extends StatelessWidget {
                   Icon(Icons.error, color: Colors.red, size: 40),
                   SizedBox(height: 8),
                   Text(
-                    'Erreur de chargement',
+                    'Erreurs de chargement',
                     style: TextStyle(color: Colors.red),
                   ),
                 ],
