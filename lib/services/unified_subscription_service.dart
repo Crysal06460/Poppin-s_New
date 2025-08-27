@@ -439,7 +439,7 @@ class UnifiedSubscriptionService {
 
   /// Retourne l'ID produit selon la plateforme et le plan
   String _getProductId(SubscriptionPlan plan) {
-    final structureType = _planToStructureType(plan);
+    final structureType = _planToStructureType(plan).toLowerCase();
     final memberCount = _planToMemberCount(plan);
 
     if (Platform.isIOS) {

@@ -53,7 +53,8 @@ class SubscriptionService {
   }
 
   static String getProductId(String structureType, int memberCount) {
-    if (structureType == 'MAM') {
+    final normalizedType = structureType.toLowerCase();
+    if (normalizedType == 'mam') {
       return productIds['mam_${memberCount}_members'] ??
           productIds['mam_2_members']!;
     }
