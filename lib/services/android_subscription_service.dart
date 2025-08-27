@@ -302,7 +302,8 @@ class AndroidSubscriptionService {
 
   /// Retourne l'ID produit Android
   static String getProductId(String structureType, int mamMembersCount) {
-    switch (structureType) {
+    final normalizedType = structureType.toLowerCase();
+    switch (normalizedType) {
       case 'assistante_maternelle':
         return _androidProductIds['assistante_maternelle']!;
       case 'mam':
