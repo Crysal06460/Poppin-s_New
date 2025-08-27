@@ -323,12 +323,18 @@ class AndroidSubscriptionService {
         orElse: () => throw Exception('Produit non trouvé: $productId'),
       );
 
+      // Convertit en produit Google Play et vérifie qu'il s'agit d'un abonnement
+      final GooglePlayProductDetails gpProduct =
+          product as GooglePlayProductDetails;
+      if (gpProduct.subscriptionOffers.isEmpty) {
+        throw Exception('Produit non abonnement: $productId');
+      }
+
       final GooglePlayPurchaseParam purchaseParam = GooglePlayPurchaseParam(
-        productDetails: product,
-        offerToken: product.subscriptionOffers.first.offerToken,
+        productDetails: gpProduct,
+        offerToken: gpProduct.subscriptionOffers.first.offerToken,
       );
 
-      // Pour les abonnements, buyNonConsumable est utilisé
       final bool success = await _inAppPurchase.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
