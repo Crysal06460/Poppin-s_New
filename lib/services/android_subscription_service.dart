@@ -30,7 +30,6 @@ class AndroidSubscriptionService {
 
   // État
   bool _isInitialized = false;
-  StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
 
   // 🔧 CORRIGÉ : IDs des produits Android (Google Play) - CORRESPONDENT À GOOGLE PLAY CONSOLE
@@ -58,16 +57,6 @@ class AndroidSubscriptionService {
       if (!isAvailable) {
         throw Exception('Google Play Store n\'est pas disponible');
       }
-
-      // Écouter les mises à jour d'achat
-      _subscription = _inAppPurchase.purchaseStream.listen(
-        _handlePurchaseUpdates,
-        onDone: () => print('🤖 Stream d\'achat Android fermé'),
-        onError: (error) {
-          print('❌ Erreur stream Android: $error');
-          _errorController.add('Erreur de stream: $error');
-        },
-      );
 
       // Charger les produits disponibles
       await _loadProducts();
@@ -106,13 +95,6 @@ class AndroidSubscriptionService {
       print('❌ Erreur de chargement des produits: $e');
       _errorController.add('Erreur de chargement: $e');
       rethrow;
-    }
-  }
-
-  /// Gère les mises à jour d'achat
-  void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
-    for (final purchase in purchaseDetailsList) {
-      _handlePurchase(purchase);
     }
   }
 
@@ -163,6 +145,9 @@ class AndroidSubscriptionService {
         break;
     }
   }
+
+  /// Expose le traitement d'un achat pour le service unifié
+  Future<void> handlePurchase(PurchaseDetails purchase) => _handlePurchase(purchase);
 
   /// Vérifie un achat (validation côté serveur recommandée)
   Future<void> _verifyPurchase(PurchaseDetails purchase) async {
@@ -400,7 +385,6 @@ class AndroidSubscriptionService {
 
   /// Nettoie les ressources
   void dispose() {
-    _subscription?.cancel();
     _subscriptionController.close();
     _errorController.close();
     _isInitialized = false;

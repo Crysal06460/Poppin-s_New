@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'dart:async';
+import 'unified_subscription_service.dart';
 
 class SubscriptionService {
   static bool get _isProduction {
@@ -102,13 +103,15 @@ class SubscriptionService {
       }
 
       // 🔧 CORRIGÉ : Utiliser la nouvelle API
-      await inAppPurchase.restorePurchases();
+      final unifiedService = UnifiedSubscriptionService.instance;
+      await unifiedService.initialize();
+      await unifiedService.restorePurchases();
 
       // Écouter le stream des achats pour vérifier
       final completer = Completer<bool>();
       late StreamSubscription subscription;
 
-      subscription = inAppPurchase.purchaseStream.listen((purchaseDetailsList) {
+      subscription = unifiedService.purchaseUpdates.listen((purchaseDetailsList) {
         bool hasActiveSubscription = false;
 
         for (PurchaseDetails purchase in purchaseDetailsList) {
@@ -342,10 +345,11 @@ class SubscriptionService {
   static Future<void> handlePurchaseUpdates() async {
     if (!_isProduction) return;
 
-    final InAppPurchase inAppPurchase = InAppPurchase.instance;
+    final unifiedService = UnifiedSubscriptionService.instance;
+    await unifiedService.initialize();
 
-    // Écouter les mises à jour d'achat
-    _subscription = inAppPurchase.purchaseStream
+    // Écouter les mises à jour d'achat via le service unifié
+    _subscription = unifiedService.purchaseUpdates
         .listen((List<PurchaseDetails> purchaseDetailsList) {
       _handlePurchaseUpdates(purchaseDetailsList);
     });
@@ -453,15 +457,16 @@ class SubscriptionService {
 
       final InAppPurchase inAppPurchase = InAppPurchase.instance;
 
-      // 🔧 CORRIGÉ : Utiliser la nouvelle API sans attendre de réponse
-      await inAppPurchase.restorePurchases();
+      final unifiedService = UnifiedSubscriptionService.instance;
+      await unifiedService.initialize();
+      await unifiedService.restorePurchases();
 
       // Écouter le stream pour capturer les achats restaurés
       final completer = Completer<bool>();
       late StreamSubscription subscription;
       bool hasActiveSubscription = false;
 
-      subscription = inAppPurchase.purchaseStream.listen((purchaseDetailsList) {
+      subscription = unifiedService.purchaseUpdates.listen((purchaseDetailsList) {
         for (PurchaseDetails purchase in purchaseDetailsList) {
           if (productIds.values.contains(purchase.productID)) {
             if (purchase.status == PurchaseStatus.purchased ||

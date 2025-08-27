@@ -60,14 +60,18 @@ class UnifiedSubscriptionService {
       StreamController<SubscriptionInfo>.broadcast();
   final StreamController<String> _errorController =
       StreamController<String>.broadcast();
+  final StreamController<List<PurchaseDetails>> _purchaseController =
+      StreamController<List<PurchaseDetails>>.broadcast();
 
   // Streams publics
   Stream<SubscriptionInfo> get subscriptionUpdates =>
       _subscriptionController.stream;
   Stream<String> get errors => _errorController.stream;
+  Stream<List<PurchaseDetails>> get purchaseUpdates =>
+      _purchaseController.stream;
 
   bool _isInitialized = false;
-  StreamSubscription<PurchaseDetails>? _platformSubscription;
+  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
   // ✅ PROTECTION ANTI-DUPLICATION : Suivi des transactions traitées
   final Set<String> _processedTransactions = {};
@@ -90,17 +94,6 @@ class UnifiedSubscriptionService {
         _iOSService = iOSSubscriptionService.instance;
         await _iOSService!.initialize();
 
-        // ✅ ÉCOUTE PROTÉGÉE des événements iOS
-        _platformSubscription = _iOSService!.subscriptionUpdates.listen(
-          (purchase) {
-            _handlePurchaseUpdate(purchase);
-          },
-          onError: (error) {
-            print('❌ Erreur iOS dans le stream: $error');
-            _errorController.add('iOS Error: $error');
-          },
-        );
-
         _iOSService!.errors.listen(
           (error) {
             print('❌ Erreur iOS: $error');
@@ -112,17 +105,6 @@ class UnifiedSubscriptionService {
         _androidService = AndroidSubscriptionService.instance;
         await _androidService!.initialize();
 
-        // ✅ ÉCOUTE PROTÉGÉE des événements Android
-        _platformSubscription = _androidService!.subscriptionUpdates.listen(
-          (purchase) {
-            _handlePurchaseUpdate(purchase);
-          },
-          onError: (error) {
-            print('❌ Erreur Android dans le stream: $error');
-            _errorController.add('Android Error: $error');
-          },
-        );
-
         _androidService!.errors.listen(
           (error) {
             print('❌ Erreur Android: $error');
@@ -133,6 +115,25 @@ class UnifiedSubscriptionService {
         throw UnsupportedError(
             'Plateforme non supportée: ${Platform.operatingSystem}');
       }
+
+      // Écoute centralisée des achats
+      _purchaseSubscription =
+          InAppPurchase.instance.purchaseStream.listen((purchases) {
+        for (final purchase in purchases) {
+          if (Platform.isIOS) {
+            _iOSService?.handlePurchase(purchase);
+          } else if (Platform.isAndroid) {
+            _androidService?.handlePurchase(purchase);
+          }
+          _handlePurchaseUpdate(purchase);
+        }
+        _purchaseController.add(purchases);
+      }, onError: (error) {
+        print('❌ Erreur dans le stream d\'achat: $error');
+        _errorController.add('Stream Error: $error');
+      }, onDone: () {
+        print('Stream d\'achat fermé');
+      });
 
       _isInitialized = true;
       print(
@@ -487,9 +488,10 @@ class UnifiedSubscriptionService {
   void dispose() {
     try {
       _debounceTimer?.cancel();
-      _platformSubscription?.cancel();
+      _purchaseSubscription?.cancel();
       _subscriptionController.close();
       _errorController.close();
+      _purchaseController.close();
       _iOSService?.dispose();
       _androidService?.dispose();
       _processedTransactions.clear();

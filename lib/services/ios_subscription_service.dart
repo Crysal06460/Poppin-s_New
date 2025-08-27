@@ -30,7 +30,6 @@ class iOSSubscriptionService {
 
   // État
   bool _isInitialized = false;
-  StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
 
   // IDs des produits iOS (App Store)
@@ -59,16 +58,6 @@ class iOSSubscriptionService {
       if (!isAvailable) {
         throw Exception('App Store n\'est pas disponible');
       }
-
-      // Écouter les mises à jour d'achat
-      _subscription = _inAppPurchase.purchaseStream.listen(
-        _handlePurchaseUpdates,
-        onDone: () => print('🍎 Stream d\'achat iOS fermé'),
-        onError: (error) {
-          print('❌ Erreur stream iOS: $error');
-          _errorController.add('Erreur de stream: $error');
-        },
-      );
 
       // Charger les produits disponibles
       await _loadProducts();
@@ -107,13 +96,6 @@ class iOSSubscriptionService {
       print('❌ Erreur de chargement des produits: $e');
       _errorController.add('Erreur de chargement: $e');
       rethrow;
-    }
-  }
-
-  /// Gère les mises à jour d'achat
-  void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
-    for (final purchase in purchaseDetailsList) {
-      _handlePurchase(purchase);
     }
   }
 
@@ -161,6 +143,9 @@ class iOSSubscriptionService {
         break;
     }
   }
+
+  /// Expose le traitement d'un achat pour le service unifié
+  Future<void> handlePurchase(PurchaseDetails purchase) => _handlePurchase(purchase);
 
   /// Vérifie un achat (validation côté serveur recommandée)
   Future<void> _verifyPurchase(PurchaseDetails purchase) async {
@@ -446,7 +431,6 @@ class iOSSubscriptionService {
 
   /// Nettoie les ressources
   void dispose() {
-    _subscription?.cancel();
     _subscriptionController.close();
     _errorController.close();
     _isInitialized = false;
