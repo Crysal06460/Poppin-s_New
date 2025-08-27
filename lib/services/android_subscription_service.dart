@@ -1,5 +1,6 @@
 // lib/services/android_subscription_service.dart
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -22,6 +23,11 @@ class AndroidSubscriptionService {
   final StreamController<String> _errorController =
       StreamController<String>.broadcast();
 
+  void _showMsg(String msg) {
+    debugPrint(msg);
+    _errorController.add(msg);
+  }
+
   // Streams publics
   Stream<PurchaseDetails> get subscriptionUpdates =>
       _subscriptionController.stream;
@@ -29,7 +35,6 @@ class AndroidSubscriptionService {
 
   // État
   bool _isInitialized = false;
-  List<ProductDetails> _availableProducts = [];
 
   // 🔧 CORRIGÉ : IDs des produits Android (Google Play) - CORRESPONDENT À GOOGLE PLAY CONSOLE
   static const Map<String, String> _androidProductIds = {
@@ -57,42 +62,11 @@ class AndroidSubscriptionService {
         throw Exception('Google Play Store n\'est pas disponible');
       }
 
-      // Charger les produits disponibles
-      await _loadProducts();
-
       _isInitialized = true;
       print('✅ Service d\'abonnement Android initialisé');
     } catch (e) {
       print('❌ Erreur d\'initialisation Android: $e');
       _errorController.add('Erreur d\'initialisation: $e');
-      rethrow;
-    }
-  }
-
-  /// Charge les produits depuis Google Play
-  Future<void> _loadProducts() async {
-    try {
-      final ProductDetailsResponse response =
-          await _inAppPurchase.queryProductDetails(_allProductIds);
-
-      if (response.error != null) {
-        throw Exception(
-            'Erreur de chargement des produits: ${response.error?.message}');
-      }
-
-      _availableProducts = response.productDetails;
-
-      print('🤖 Produits Android chargés: ${_availableProducts.length}');
-      for (final product in _availableProducts) {
-        print('  - ${product.id}: ${product.price}');
-      }
-
-      if (_availableProducts.isEmpty) {
-        print('⚠️ Aucun produit trouvé sur Google Play');
-      }
-    } catch (e) {
-      print('❌ Erreur de chargement des produits: $e');
-      _errorController.add('Erreur de chargement: $e');
       rethrow;
     }
   }
@@ -309,41 +283,60 @@ class AndroidSubscriptionService {
   /// Récupère les produits disponibles
   Future<List<ProductDetails>> getAvailableProducts() async {
     await _ensureInitialized();
-    return _availableProducts;
+    try {
+      final response = await _inAppPurchase.queryProductDetails(_allProductIds);
+      if (response.error != null) {
+        _showMsg('Erreur de chargement des produits: ${response.error?.message}');
+        return [];
+      }
+      return response.productDetails;
+    } catch (e) {
+      _showMsg('Erreur de chargement des produits: $e');
+      return [];
+    }
   }
 
-  /// Achète un abonnement
-  Future<bool> purchaseSubscription(String productId) async {
+  /// Achète un abonnement Android
+  Future<bool> purchaseAndroidSubscription(String productId) async {
     await _ensureInitialized();
-
     try {
-      // Récupération du produit par ID uniquement
-      final ProductDetails product = _availableProducts.firstWhere(
-        (p) => p.id == productId,
-        orElse: () => throw Exception('Produit non trouvé: $productId'),
-      );
+      final response =
+          await _inAppPurchase.queryProductDetails({productId});
+      final found = response.productDetails;
+      final notFound = response.notFoundIDs;
+      debugPrint('found: $found');
+      debugPrint('notFound: $notFound');
 
-      // Convertit en produit Google Play et vérifie qu'il s'agit d'un abonnement
-      final GooglePlayProductDetails gpProduct =
-          product as GooglePlayProductDetails;
-      if (gpProduct.subscriptionOffers.isEmpty) {
-        throw Exception('Produit non abonnement: $productId');
+      if (response.error != null) {
+        _showMsg('Erreur de chargement du produit: ${response.error?.message}');
+        return false;
+      }
+      if (found.isEmpty) {
+        _showMsg('Produit non trouvé: $productId');
+        return false;
       }
 
-      final GooglePlayPurchaseParam purchaseParam = GooglePlayPurchaseParam(
-        productDetails: gpProduct,
-        offerToken: gpProduct.subscriptionOffers.first.offerToken,
+      final product = found.first;
+      if (product is! GooglePlayProductDetails ||
+          product.subscriptionOffers.isEmpty) {
+        _showMsg('Produit non abonnement: $productId');
+        return false;
+      }
+
+      final purchaseParam = GooglePlayPurchaseParam(
+        productDetails: product,
+        offerToken: product.subscriptionOffers.first.offerToken,
       );
 
-      final bool success = await _inAppPurchase.buyNonConsumable(
+      final success = await _inAppPurchase.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
-
-      print('🤖 Achat Android initié: $productId - Success: $success');
+      if (!success) {
+        _showMsg('Échec de l\'initiation de l\'achat');
+      }
       return success;
     } catch (e) {
-      print('❌ Erreur d\'achat Android: $e');
-      _errorController.add('Erreur d\'achat: $e');
+      _showMsg('Erreur d\'achat: $e');
       return false;
     }
   }
