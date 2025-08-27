@@ -381,7 +381,7 @@ class UnifiedSubscriptionService {
               .timeout(Duration(seconds: 30));
         } else if (Platform.isAndroid) {
           success = await _androidService!
-              .purchaseSubscription(productId)
+              .purchaseAndroidSubscription(productId)
               .timeout(Duration(seconds: 30));
         }
       } on TimeoutException {
