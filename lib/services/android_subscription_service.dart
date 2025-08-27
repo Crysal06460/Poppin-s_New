@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -331,8 +332,11 @@ class AndroidSubscriptionService {
         throw Exception('Produit non trouvé: $productId');
       }
 
-      final PurchaseParam purchaseParam =
-          PurchaseParam(productDetails: product);
+      final GooglePlayPurchaseParam purchaseParam =
+          GooglePlayPurchaseParam(
+        productDetails: product,
+        offerToken: product.subscriptionOffers.first.offerToken,
+      );
 
       // Pour les abonnements, utiliser buyNonConsumable
       final bool success = await _inAppPurchase.buyNonConsumable(
