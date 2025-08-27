@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:go_router/go_router.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 // Import du nouveau service unifié
 import '../services/unified_subscription_service.dart';
+import '../services/android_subscription_service.dart';
 import 'dart:async';
 
 class PricingScreen extends StatefulWidget {
@@ -32,6 +34,9 @@ class _PricingScreenState extends State<PricingScreen> {
   List<SubscriptionInfo> _availableSubscriptions = [];
   SubscriptionInfo? _activeSubscription;
   String _errorMessage = '';
+
+  // Disponibilité du Store
+  bool _storeLoaded = false;
 
   // Pour la sélection du nombre de membres MAM
   int _selectedMamMembers = 2;
@@ -93,6 +98,7 @@ class _PricingScreenState extends State<PricingScreen> {
 
       // Charger les produits et vérifier les abonnements actifs
       await _loadSubscriptions();
+      await _checkStoreAvailability();
     } catch (e) {
       setState(() {
         _errorMessage = 'Erreur d\'initialisation: $e';
@@ -164,24 +170,6 @@ class _PricingScreenState extends State<PricingScreen> {
     });
   }
 
-  /// Détermine le plan selon la configuration
-  SubscriptionPlan _getCurrentPlan() {
-    if (widget.structureType == 'assistante_maternelle') {
-      return SubscriptionPlan.assistantMaternel;
-    } else {
-      switch (_selectedMamMembers) {
-        case 2:
-          return SubscriptionPlan.mam2Members;
-        case 3:
-          return SubscriptionPlan.mam3Members;
-        case 4:
-          return SubscriptionPlan.mam4Members;
-        default:
-          return SubscriptionPlan.mam2Members;
-      }
-    }
-  }
-
   /// Achète un abonnement
   Future<void> _purchaseSubscription() async {
     if (_isPurchasing) return;
@@ -205,15 +193,16 @@ class _PricingScreenState extends State<PricingScreen> {
         return;
       }
 
-      final plan = _getCurrentPlan();
-      final success = await _subscriptionService.purchaseSubscription(plan);
+      final productId = _currentProductId;
+      final success = await AndroidSubscriptionService.instance
+          .purchaseAndroidSubscription(productId);
 
       if (!success) {
         setState(() {
           _isPurchasing = false;
           _errorMessage = 'Échec de l\'achat';
         });
-        _showErrorDialog('L\'achat n\'a pas pu être finalisé');
+      _showErrorDialog('L\'achat n\'a pas pu être finalisé');
         return;
       }
 
@@ -231,6 +220,17 @@ class _PricingScreenState extends State<PricingScreen> {
       });
       _showErrorDialog('Erreur lors de l\'achat: $e');
     }
+  }
+
+  String get _currentProductId => AndroidSubscriptionService.getProductId(
+      widget.structureType, _selectedMamMembers);
+
+  Future<void> _checkStoreAvailability() async {
+    final res =
+        await InAppPurchase.instance.queryProductDetails({_currentProductId});
+    setState(() {
+      _storeLoaded = res.productDetails.isNotEmpty;
+    });
   }
 
   Future<void> _checkPurchaseStatus() async {
@@ -540,7 +540,9 @@ class _PricingScreenState extends State<PricingScreen> {
                                       onTap: () {
                                         setState(() {
                                           _selectedMamMembers = members;
+                                          _storeLoaded = false;
                                         });
+                                        _checkStoreAvailability();
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
@@ -744,11 +746,18 @@ class _PricingScreenState extends State<PricingScreen> {
                   // Boutons d'action
                   if (_activeSubscription == null) ...[
                     // Bouton d'achat
+                    if (!_storeLoaded)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8.0),
+                        child: Text('Chargement du Store…'),
+                      ),
                     SizedBox(
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _isPurchasing ? null : _purchaseSubscription,
+                        onPressed: (!_storeLoaded || _isPurchasing)
+                            ? null
+                            : _purchaseSubscription,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryBlue,
                           foregroundColor: Colors.white,

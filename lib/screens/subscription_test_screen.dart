@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import '../services/unified_subscription_service.dart';
+import '../services/android_subscription_service.dart';
 
 class SubscriptionTestScreen extends StatefulWidget {
   @override
@@ -11,6 +13,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
       UnifiedSubscriptionService.instance;
   String _status = 'Prêt pour les tests Sandbox';
   bool _isLoading = false;
+  Set<String> _availableProductIds = {};
 
   @override
   void initState() {
@@ -47,10 +50,39 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
       });
 
       setState(() => _status = '📱 Service initialisé - Sandbox connecté');
+      await _initStore();
     } catch (e) {
       setState(() => _status = '💥 Erreur initialisation: $e');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _initStore() async {
+    final ids = {
+      _productIdForPlan(SubscriptionPlan.assistantMaternel),
+      _productIdForPlan(SubscriptionPlan.mam2Members),
+      _productIdForPlan(SubscriptionPlan.mam3Members),
+      _productIdForPlan(SubscriptionPlan.mam4Members),
+    };
+    final res = await InAppPurchase.instance.queryProductDetails(ids);
+    setState(() {
+      _availableProductIds =
+          res.productDetails.map((e) => e.id).toSet();
+    });
+  }
+
+  String _productIdForPlan(SubscriptionPlan plan) {
+    switch (plan) {
+      case SubscriptionPlan.assistantMaternel:
+        return AndroidSubscriptionService.getProductId(
+            'assistante_maternelle', 1);
+      case SubscriptionPlan.mam2Members:
+        return AndroidSubscriptionService.getProductId('mam', 2);
+      case SubscriptionPlan.mam3Members:
+        return AndroidSubscriptionService.getProductId('mam', 3);
+      case SubscriptionPlan.mam4Members:
+        return AndroidSubscriptionService.getProductId('mam', 4);
     }
   }
 
@@ -63,7 +95,9 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
 
     try {
       print('🧪 SANDBOX: Tentative achat $name');
-      final success = await _service.purchaseSubscription(plan);
+      final productId = _productIdForPlan(plan);
+      final success = await AndroidSubscriptionService.instance
+          .purchaseAndroidSubscription(productId);
 
       if (!success) {
         setState(() => _status = '❌ Échec initiation achat $name');
@@ -158,12 +192,20 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
                 style: TextStyle(color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 24),
+            SizedBox(height: 24),
 
-              // Boutons de test
-              _buildTestButton(
-                '👶 Assistant Maternel',
-                '12,99€/mois',
+            if (_availableProductIds.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text('Chargement du Store…',
+                    style: TextStyle(color: Colors.grey[600])),
+              ),
+
+            // Boutons de test
+            _buildTestButton(
+              '👶 Assistant Maternel',
+              '12,99€/mois',
+                _productIdForPlan(SubscriptionPlan.assistantMaternel),
                 () => _testPurchase(SubscriptionPlan.assistantMaternel,
                     'Assistant Maternel', '12,99€'),
                 Colors.blue,
@@ -172,6 +214,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
               _buildTestButton(
                 '👥 MAM 2 membres',
                 '24,99€/mois',
+                _productIdForPlan(SubscriptionPlan.mam2Members),
                 () => _testPurchase(
                     SubscriptionPlan.mam2Members, 'MAM 2', '24,99€'),
                 Colors.green,
@@ -180,6 +223,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
               _buildTestButton(
                 '👨‍👩‍👧 MAM 3 membres',
                 '34,99€/mois',
+                _productIdForPlan(SubscriptionPlan.mam3Members),
                 () => _testPurchase(
                     SubscriptionPlan.mam3Members, 'MAM 3', '34,99€'),
                 Colors.orange,
@@ -188,6 +232,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
               _buildTestButton(
                 '👨‍👩‍👧‍👦 MAM 4 membres',
                 '44,99€/mois',
+                _productIdForPlan(SubscriptionPlan.mam4Members),
                 () => _testPurchase(
                     SubscriptionPlan.mam4Members, 'MAM 4', '44,99€'),
                 Colors.red,
@@ -199,6 +244,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
               _buildTestButton(
                 '🔄 Restaurer les achats',
                 'Test de restauration',
+                '',
                 () async {
                   setState(() {
                     _isLoading = true;
@@ -222,12 +268,14 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
     );
   }
 
-  Widget _buildTestButton(
-      String title, String subtitle, VoidCallback onPressed, Color color) {
+  Widget _buildTestButton(String title, String subtitle, String productId,
+      VoidCallback onPressed, Color color) {
+    final enabled =
+        productId.isEmpty || _availableProductIds.contains(productId);
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
