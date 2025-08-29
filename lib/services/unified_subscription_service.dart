@@ -351,38 +351,56 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
-      final productId = _getProductId(plan);
-      print('🛒 Tentative d\'achat: $productId');
-
-      // ✅ PROTECTION : Vérifier si un achat est déjà en cours
-      if (_processedProductIds.contains(productId)) {
-        print('⚠️ Achat déjà en cours pour ce produit: $productId');
-        return false;
-      }
+      final structureType = _planToStructureType(plan);
+      final memberCount = _planToMemberCount(plan);
 
       bool success = false;
+      String logId = '';
 
       // ✅ AJOUT CRITIQUE : Timeout pour éviter le chargement infini
       try {
         if (Platform.isIOS) {
+          final productId =
+              iOSSubscriptionService.getProductId(structureType, memberCount);
+          logId = productId;
+
+          print('🛒 Tentative d\'achat: $productId');
+
+          // ✅ PROTECTION : Vérifier si un achat est déjà en cours
+          if (_processedProductIds.contains(productId)) {
+            print('⚠️ Achat déjà en cours pour ce produit: $productId');
+            return false;
+          }
+
           success = await _iOSService!
               .purchaseSubscription(productId)
               .timeout(Duration(seconds: 30));
         } else if (Platform.isAndroid) {
+          final androidType =
+              structureType == 'mam' ? 'MAM' : structureType; // Respecte la casse
+          logId = '$androidType-$memberCount';
+
+          print('🛒 Tentative d\'achat: $androidType / $memberCount');
+
+          if (_processedProductIds.contains(logId)) {
+            print('⚠️ Achat déjà en cours pour ce produit: $logId');
+            return false;
+          }
+
           success = await _androidService!
-              .purchaseSubscription(productId)
+              .purchaseSubscriptionByType(androidType, memberCount)
               .timeout(Duration(seconds: 30));
         }
       } on TimeoutException {
-        print('⏰ Timeout d\'achat pour: $productId');
+        print('⏰ Timeout d\'achat pour: $logId');
         _errorController.add('Timeout d\'achat - veuillez réessayer');
         return false;
       }
 
       if (success) {
-        print('✅ Achat initié avec succès: $productId');
+        print('✅ Achat initié avec succès: $logId');
       } else {
-        print('❌ Échec de l\'initiation d\'achat: $productId');
+        print('❌ Échec de l\'initiation d\'achat: $logId');
       }
 
       return success;
@@ -420,12 +438,19 @@ class UnifiedSubscriptionService {
     await _ensureInitialized();
 
     try {
-      final productId = _getProductId(plan);
+      final structureType = _planToStructureType(plan);
+      final memberCount = _planToMemberCount(plan);
       PurchaseDetails? purchase;
 
       if (Platform.isIOS) {
+        final productId =
+            iOSSubscriptionService.getProductId(structureType, memberCount);
         purchase = await _iOSService!.checkSubscriptionStatus(productId);
       } else if (Platform.isAndroid) {
+        final androidType =
+            structureType == 'mam' ? 'MAM' : structureType; // Respecte la casse
+        final productId = AndroidSubscriptionService.getProductId(
+            androidType, memberCount);
         purchase = await _androidService!.checkSubscriptionStatus(productId);
       }
 
@@ -434,19 +459,6 @@ class UnifiedSubscriptionService {
       print('❌ Erreur de vérification: $e');
       _errorController.add('Erreur de vérification: $e');
       return null;
-    }
-  }
-
-  /// Retourne l'ID produit selon la plateforme et le plan
-  String _getProductId(SubscriptionPlan plan) {
-    final structureType = _planToStructureType(plan);
-    final memberCount = _planToMemberCount(plan);
-
-    if (Platform.isIOS) {
-      return iOSSubscriptionService.getProductId(structureType, memberCount);
-    } else {
-      return AndroidSubscriptionService.getProductId(
-          structureType, memberCount);
     }
   }
 
