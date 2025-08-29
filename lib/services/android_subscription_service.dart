@@ -433,28 +433,6 @@ class AndroidSubscriptionService {
     try {
       print('🛒 Tentative d\'achat: $structureType avec $memberCount membres');
 
-      // Chercher d'abord une offre d'essai gratuite
-      ProductDetails? trialProduct;
-      for (final product in _availableProducts) {
-        if (product.price.toLowerCase().contains('gratuit') ||
-            product.price.toLowerCase().contains('free')) {
-          trialProduct = product;
-          print('🎯 Offre d\'essai trouvée: ${product.price}');
-          break;
-        }
-      }
-
-      // Essayer l'offre d'essai en premier
-      if (trialProduct != null) {
-        try {
-          print('🎯 Tentative d\'achat avec essai gratuit');
-          return await _attemptPurchaseByProduct(trialProduct);
-        } catch (e) {
-          print(
-              '⚠️ Essai gratuit non disponible ($e), basculement vers forfait payant');
-        }
-      }
-
       // Chercher le forfait payant correspondant
       final ProductDetails? targetProduct =
           _findProductBySubscriptionType(structureType, memberCount);
@@ -462,6 +440,38 @@ class AndroidSubscriptionService {
       if (targetProduct == null) {
         throw Exception(
             'Aucun produit trouvé pour $structureType avec $memberCount membres');
+      }
+
+      // Chercher d'abord une offre d'essai gratuite correspondant au plan
+      ProductDetails? trialProduct;
+      for (final product in _availableProducts) {
+        final String lowerPrice = product.price.toLowerCase();
+        if (lowerPrice.contains('gratuit') || lowerPrice.contains('free')) {
+          final bool matchesPlan =
+              product.title.contains(targetProduct.price) ||
+                  product.description.contains(targetProduct.price);
+          if (matchesPlan) {
+            trialProduct = product;
+            print(
+                '🎯 Offre d\'essai trouvée pour ${targetProduct.price}');
+            break;
+          }
+        }
+      }
+
+      // Essayer l'offre d'essai correspondante en premier
+      if (trialProduct != null) {
+        try {
+          print(
+              '🎯 Tentative d\'achat avec essai gratuit pour ${targetProduct.price}');
+          return await _attemptPurchaseByProduct(trialProduct);
+        } catch (e) {
+          print(
+              '⚠️ Essai gratuit non disponible ($e), basculement vers forfait payant ${targetProduct.price}');
+        }
+      } else {
+        print(
+            'ℹ️ Aucun essai gratuit correspondant trouvé pour ${targetProduct.price}, passage au forfait payant');
       }
 
       print('💳 Achat du forfait: ${targetProduct.price}');
