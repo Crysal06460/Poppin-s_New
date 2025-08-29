@@ -27,31 +27,37 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
     String newPrice;
 
     switch (oldMemberCount) {
+      case 1:
+        oldPrice = '8,99 € / mois'; // Assistant maternel
+        break;
       case 2:
-        oldPrice = '22 € / mois';
+        oldPrice = '19,99 € / mois'; // ✅ CORRIGÉ
         break;
       case 3:
-        oldPrice = '32 € / mois';
+        oldPrice = '24,99 € / mois'; // ✅ CORRIGÉ
         break;
       case 4:
-        oldPrice = '40 € / mois';
+        oldPrice = '29,99 € / mois'; // ✅ CORRIGÉ
         break;
       default:
-        oldPrice = '22 € / mois';
+        oldPrice = '19,99 € / mois';
     }
 
     switch (memberCount) {
+      case 1:
+        newPrice = '8,99 € / mois';
+        break;
       case 2:
-        newPrice = '22 € / mois';
+        newPrice = '19,99 € / mois'; // ✅ CORRIGÉ
         break;
       case 3:
-        newPrice = '32 € / mois';
+        newPrice = '24,99 € / mois'; // ✅ CORRIGÉ
         break;
       case 4:
-        newPrice = '40 € / mois';
+        newPrice = '29,99 € / mois'; // ✅ CORRIGÉ
         break;
       default:
-        newPrice = '40 € / mois';
+        newPrice = '29,99 € / mois';
     }
 
     return Scaffold(

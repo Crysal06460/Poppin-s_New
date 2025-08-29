@@ -310,15 +310,15 @@ class _PricingScreenState extends State<PricingScreen> {
     final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
     final int memberCount = isAssMat ? 1 : _selectedMamMembers;
     final double priceAmount = isAssMat
-        ? 12.99
+        ? 8.99
         : (_selectedMamMembers == 2
-            ? 24.99
-            : (_selectedMamMembers == 3 ? 34.99 : 44.99));
+            ? 19.99
+            : (_selectedMamMembers == 3 ? 24.99 : 29.99));
     final String priceDisplay = isAssMat
-        ? '12,99 € / mois'
+        ? '8,99 € / mois'
         : (_selectedMamMembers == 2
-            ? '24,99 € / mois'
-            : (_selectedMamMembers == 3 ? '34,99 € / mois' : '44,99 € / mois'));
+            ? '19,99 € / mois'
+            : (_selectedMamMembers == 3 ? '24,99 € / mois' : '29,99 € / mois'));
 
     context.go('/subscription-confirmed', extra: {
       'structureType': structureType,
@@ -366,17 +366,17 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Retourne le prix selon le type
   String _getPrice() {
     if (widget.structureType == 'assistante_maternelle') {
-      return '12,99€';
+      return '8,99€';
     } else {
       switch (_selectedMamMembers) {
         case 2:
-          return '24,99€';
+          return '19,99€';
         case 3:
-          return '34,99€';
-        case 4:
-          return '44,99€';
-        default:
           return '24,99€';
+        case 4:
+          return '29,99€';
+        default:
+          return '19,99€';
       }
     }
   }
@@ -399,13 +399,13 @@ class _PricingScreenState extends State<PricingScreen> {
   String _getPriceForMembers(int members) {
     switch (members) {
       case 2:
-        return '24,99€';
+        return '19,99€';
       case 3:
-        return '34,99€';
-      case 4:
-        return '44,99€';
-      default:
         return '24,99€';
+      case 4:
+        return '29,99€';
+      default:
+        return '19,99€';
     }
   }
 

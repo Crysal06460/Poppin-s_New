@@ -242,25 +242,25 @@ class iOSSubscriptionService {
       // Déterminer le type de structure et nombre de membres
       String structureType = 'assistante_maternelle';
       int memberCount = 1;
-      double priceAmount = 12.99;
-      String priceDisplay = '12,99 € / mois';
+      double priceAmount = 8.99;
+      String priceDisplay = '8,99 € / mois';
 
       // ✅ MAPPING robuste basé sur les IDs produits iOS
       if (productId == _iOSProductIds['mam_2_members']) {
         structureType = 'MAM';
         memberCount = 2;
-        priceAmount = 24.99;
-        priceDisplay = '24,99 € / mois';
+        priceAmount = 19.99;
+        priceDisplay = '19,99 € / mois';
       } else if (productId == _iOSProductIds['mam_3_members']) {
         structureType = 'MAM';
         memberCount = 3;
-        priceAmount = 34.99;
-        priceDisplay = '34,99 € / mois';
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
       } else if (productId == _iOSProductIds['mam_4_members']) {
         structureType = 'MAM';
         memberCount = 4;
-        priceAmount = 44.99;
-        priceDisplay = '44,99 € / mois';
+        priceAmount = 29.99;
+        priceDisplay = '29,99 € / mois';
       } else if (productId == _iOSProductIds['assistante_maternelle']) {
         // valeurs par défaut déjà correctes
       } else {
@@ -612,24 +612,24 @@ class iOSSubscriptionService {
     if (structureType == 'MAM') {
       switch (memberCount) {
         case 2:
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
+          priceAmount = 19.99;
+          priceDisplay = '19,99 € / mois';
           break;
         case 3:
-          priceAmount = 34.99;
-          priceDisplay = '34,99 € / mois';
-          break;
-        case 4:
-          priceAmount = 44.99;
-          priceDisplay = '44,99 € / mois';
-          break;
-        default:
           priceAmount = 24.99;
           priceDisplay = '24,99 € / mois';
+          break;
+        case 4:
+          priceAmount = 29.99;
+          priceDisplay = '29,99 € / mois';
+          break;
+        default:
+          priceAmount = 19.99;
+          priceDisplay = '19,99 € / mois';
       }
     } else {
-      priceAmount = 12.99;
-      priceDisplay = '12,99 € / mois';
+      priceAmount = 8.99;
+      priceDisplay = '8,99 € / mois';
     }
 
     return {

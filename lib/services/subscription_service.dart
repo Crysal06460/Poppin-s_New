@@ -303,23 +303,23 @@ class SubscriptionService {
     // Déterminer le type de structure et nombre de membres selon le produit
     String structureType = 'assistante_maternelle';
     int memberCount = 1;
-    double priceAmount = 12.99;
-    String priceDisplay = '12,99 € / mois';
+    double priceAmount = 8.99;
+    String priceDisplay = '8,99 € / mois';
 
     if (productId.contains('mam')) {
       structureType = 'MAM';
       if (productId.contains('2_members') || productId == 'mam2') {
         memberCount = 2;
-        priceAmount = 24.99;
-        priceDisplay = '24,99 € / mois';
+        priceAmount = 19.99;
+        priceDisplay = '19,99 € / mois';
       } else if (productId.contains('3_members') || productId == 'mam3') {
         memberCount = 3;
-        priceAmount = 34.99;
-        priceDisplay = '34,99 € / mois';
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
       } else if (productId.contains('4_members') || productId == 'mam4') {
         memberCount = 4;
-        priceAmount = 44.99;
-        priceDisplay = '44,99 € / mois';
+        priceAmount = 29.99;
+        priceDisplay = '29,99 € / mois';
       }
     }
 
