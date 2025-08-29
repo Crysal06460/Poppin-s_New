@@ -1,6 +1,5 @@
 // lib/screens/pricing_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:go_router/go_router.dart';
 // Import du nouveau service unifié
@@ -309,16 +308,12 @@ class _PricingScreenState extends State<PricingScreen> {
 
     final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
     final int memberCount = isAssMat ? 1 : _selectedMamMembers;
-    final double priceAmount = isAssMat
-        ? 12.99
-        : (_selectedMamMembers == 2
-            ? 24.99
-            : (_selectedMamMembers == 3 ? 34.99 : 44.99));
-    final String priceDisplay = isAssMat
-        ? '12,99 € / mois'
-        : (_selectedMamMembers == 2
-            ? '24,99 € / mois'
-            : (_selectedMamMembers == 3 ? '34,99 € / mois' : '44,99 € / mois'));
+    final product =
+        _subscriptionService.getProductDetailsForPlan(_getCurrentPlan());
+    final double priceAmount = product?.rawPrice ?? 0.0;
+    final String priceDisplay =
+        product != null ? '${product.price} / mois' : 'Prix inconnu';
+    final String currency = product?.currencyCode ?? 'EUR';
 
     context.go('/subscription-confirmed', extra: {
       'structureType': structureType,
@@ -326,7 +321,7 @@ class _PricingScreenState extends State<PricingScreen> {
       'memberCount': memberCount,
       'priceAmount': priceAmount,
       'priceDisplay': priceDisplay,
-      'currency': 'EUR',
+      'currency': currency,
       'billingPeriod': 'monthly',
     });
   }
@@ -365,20 +360,9 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Retourne le prix selon le type
   String _getPrice() {
-    if (widget.structureType == 'assistante_maternelle') {
-      return '12,99€';
-    } else {
-      switch (_selectedMamMembers) {
-        case 2:
-          return '24,99€';
-        case 3:
-          return '34,99€';
-        case 4:
-          return '44,99€';
-        default:
-          return '24,99€';
-      }
-    }
+    final plan = _getCurrentPlan();
+    final price = _subscriptionService.getPriceForPlan(plan);
+    return price ?? 'N/A';
   }
 
   /// Retourne la description des fonctionnalités
@@ -397,16 +381,21 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Retourne le prix pour un nombre de membres donné
   String _getPriceForMembers(int members) {
+    SubscriptionPlan plan;
     switch (members) {
       case 2:
-        return '24,99€';
+        plan = SubscriptionPlan.mam2Members;
+        break;
       case 3:
-        return '34,99€';
+        plan = SubscriptionPlan.mam3Members;
+        break;
       case 4:
-        return '44,99€';
+        plan = SubscriptionPlan.mam4Members;
+        break;
       default:
-        return '24,99€';
+        plan = SubscriptionPlan.mam2Members;
     }
+    return _subscriptionService.getPriceForPlan(plan) ?? 'N/A';
   }
 
   @override
@@ -587,7 +576,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              _getPriceForMembers(members),
+                                              '${_getPriceForMembers(members)} / mois',
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,

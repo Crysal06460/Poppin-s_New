@@ -77,6 +77,9 @@ class UnifiedSubscriptionService {
   Timer? _debounceTimer;
   static const Duration _debounceDelay = Duration(milliseconds: 500);
 
+  // Cache des détails produits pour accéder aux prix localisés
+  final Map<String, ProductDetails> _productDetailsCache = {};
+
   /// Initialise le service selon la plateforme
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -271,9 +274,11 @@ class UnifiedSubscriptionService {
 
   /// Mappe les données de PurchaseDetails vers SubscriptionInfo
   SubscriptionInfo _mapPurchaseToSubscription(PurchaseDetails purchase) {
+    final cachedPrice =
+        _productDetailsCache[purchase.productID]?.price ?? 'Prix inconnu';
     return SubscriptionInfo(
       productId: purchase.productID,
-      localizedPrice: _getPriceFromProductId(purchase.productID),
+      localizedPrice: cachedPrice,
       status: _mapPurchaseStatus(purchase.status),
       purchaseDate: DateTime.now(), // TODO: extraire la vraie date d'achat
       expiryDate: _calculateExpiryDate(purchase.productID),
@@ -310,15 +315,6 @@ class UnifiedSubscriptionService {
     return true;
   }
 
-  /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois
-  String _getPriceFromProductId(String productId) {
-    if (productId.contains('assistante_maternelle')) return '12,99 € / mois';
-    if (productId.contains('mam_2_members')) return '24,99 € / mois';
-    if (productId.contains('mam_3_members')) return '34,99 € / mois';
-    if (productId.contains('mam_4_members')) return '44,99 € / mois';
-    return 'Prix inconnu';
-  }
-
   /// Récupère les produits disponibles
   Future<List<SubscriptionInfo>> getAvailableSubscriptions() async {
     await _ensureInitialized();
@@ -330,6 +326,11 @@ class UnifiedSubscriptionService {
         products = await _iOSService!.getAvailableProducts();
       } else if (Platform.isAndroid) {
         products = await _androidService!.getAvailableProducts();
+      }
+
+      // Mettre en cache les détails produits pour un accès ultérieur
+      for (final product in products) {
+        _productDetailsCache[product.id] = product;
       }
 
       return products
@@ -344,6 +345,30 @@ class UnifiedSubscriptionService {
       _errorController.add('Erreur de récupération: $e');
       return [];
     }
+  }
+
+  /// Récupère le prix localisé pour un plan donné à partir du cache
+  String? getPriceForPlan(SubscriptionPlan plan) {
+    final productId = _getProductIdForPlan(plan);
+    return _productDetailsCache[productId]?.price;
+  }
+
+  /// Récupère les détails complets du produit pour un plan
+  ProductDetails? getProductDetailsForPlan(SubscriptionPlan plan) {
+    final productId = _getProductIdForPlan(plan);
+    return _productDetailsCache[productId];
+  }
+
+  String _getProductIdForPlan(SubscriptionPlan plan) {
+    final structureType = _planToStructureType(plan);
+    final memberCount = _planToMemberCount(plan);
+    if (Platform.isIOS) {
+      return iOSSubscriptionService.getProductId(structureType, memberCount);
+    } else if (Platform.isAndroid) {
+      final androidType = structureType == 'mam' ? 'MAM' : structureType;
+      return AndroidSubscriptionService.getProductId(androidType, memberCount);
+    }
+    return '';
   }
 
   /// ✅ AMÉLIORATION : Achète un abonnement avec protection et timeout
