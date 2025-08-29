@@ -47,16 +47,16 @@ class _SubscriptionConfirmedScreenState
     if (isMam) {
       switch (memberCount) {
         case 2:
-          return '24,99 € / mois'; // ✅ CORRIGÉ
+          return '19,99 € / mois'; // ✅ CORRIGÉ
         case 3:
-          return '34,99 € / mois'; // ✅ CORRIGÉ
-        case 4:
-          return '44,99 € / mois'; // ✅ CORRIGÉ
-        default:
           return '24,99 € / mois'; // ✅ CORRIGÉ
+        case 4:
+          return '29,99 € / mois'; // ✅ CORRIGÉ
+        default:
+          return '19,99 € / mois'; // ✅ CORRIGÉ
       }
     } else {
-      return '12,99 € / mois'; // ✅ CORRIGÉ
+      return '8,99 € / mois'; // ✅ CORRIGÉ
     }
   }
 

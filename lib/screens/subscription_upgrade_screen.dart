@@ -331,15 +331,15 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   String _getPriceForMembers(int memberCount) {
     switch (memberCount) {
       case 2:
-        return '24,99 € / mois';
+        return '19,99 € / mois';
       case 3:
-        return '34,99 € / mois';
+        return '24,99 € / mois';
       case 4:
-        return '44,99 € / mois';
+        return '29,99 € / mois';
       default:
         // ✅ CORRECTION : Si < 2, renvoyer le prix pour 2 membres
-        if (memberCount < 2) return '24,99 € / mois';
-        return '44,99 € / mois'; // Pour > 4, utiliser le prix maximum
+        if (memberCount < 2) return '19,99 € / mois';
+        return '29,99 € / mois'; // Pour > 4, utiliser le prix maximum
     }
   }
 
@@ -364,13 +364,13 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       // IDs Android (définis dans subscription_service.dart)
       switch (actualMemberCount) {
         case 2:
-          return 'mam2';
+          return 'abonnement_mam2';
         case 3:
-          return 'mam3';
+          return 'abonnement_mam3';
         case 4:
-          return 'mam4';
+          return 'abonnement_mam4';
         default:
-          return 'mam2';
+          return 'abonnement_mam2';
       }
     }
   }

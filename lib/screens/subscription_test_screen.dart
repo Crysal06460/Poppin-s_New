@@ -165,7 +165,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
                 '👶 Assistant Maternel',
                 '12,99€/mois',
                 () => _testPurchase(SubscriptionPlan.assistantMaternel,
-                    'Assistant Maternel', '12,99€'),
+                    'Assistant Maternel', '8,99€'),
                 Colors.blue,
               ),
               SizedBox(height: 12),
@@ -173,7 +173,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
                 '👥 MAM 2 membres',
                 '24,99€/mois',
                 () => _testPurchase(
-                    SubscriptionPlan.mam2Members, 'MAM 2', '24,99€'),
+                    SubscriptionPlan.mam2Members, 'MAM 2', '19,99€'),
                 Colors.green,
               ),
               SizedBox(height: 12),
@@ -181,7 +181,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
                 '👨‍👩‍👧 MAM 3 membres',
                 '34,99€/mois',
                 () => _testPurchase(
-                    SubscriptionPlan.mam3Members, 'MAM 3', '34,99€'),
+                    SubscriptionPlan.mam3Members, 'MAM 3', '24,99€'),
                 Colors.orange,
               ),
               SizedBox(height: 12),
@@ -189,7 +189,7 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
                 '👨‍👩‍👧‍👦 MAM 4 membres',
                 '44,99€/mois',
                 () => _testPurchase(
-                    SubscriptionPlan.mam4Members, 'MAM 4', '44,99€'),
+                    SubscriptionPlan.mam4Members, 'MAM 4', '29,99€'),
                 Colors.red,
               ),
 
