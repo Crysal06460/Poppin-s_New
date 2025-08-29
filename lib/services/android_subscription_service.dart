@@ -33,19 +33,9 @@ class AndroidSubscriptionService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
 
-  // 🔧 CORRIGÉ : IDs des produits Android (Google Play) - CORRESPONDENT À GOOGLE PLAY CONSOLE
-  static const Map<String, String> _androidProductIds = {
-    'assistante_maternelle': 'assmat', // ← CORRIGÉ
-    'mam_2_members': 'mam2', // ← CORRIGÉ
-    'mam_3_members': 'mam3', // ← CORRIGÉ
-    'mam_4_members': 'mam4', // ← CORRIGÉ
-  };
-
+  // 🔧 CORRIGÉ : ID unique pour Google Play
   static const Set<String> _allProductIds = {
-    'assmat', // ← CORRIGÉ
-    'mam2', // ← CORRIGÉ
-    'mam3', // ← CORRIGÉ
-    'mam4', // ← CORRIGÉ
+    'abo_poppins',
   };
 
   /// Initialise le service Android
@@ -53,6 +43,8 @@ class AndroidSubscriptionService {
     if (_isInitialized) return;
 
     try {
+      print('🤖 Initialisation du service Android...');
+
       // Vérifier la disponibilité
       final bool isAvailable = await _inAppPurchase.isAvailable();
       if (!isAvailable) {
@@ -84,15 +76,24 @@ class AndroidSubscriptionService {
   /// Charge les produits depuis Google Play
   Future<void> _loadProducts() async {
     try {
+      print('🔍 Tentative de chargement des produits: $_allProductIds');
+
       final ProductDetailsResponse response =
           await _inAppPurchase.queryProductDetails(_allProductIds);
 
       if (response.error != null) {
+        print(
+            '❌ Erreur détaillée: ${response.error?.code} - ${response.error?.message}');
         throw Exception(
             'Erreur de chargement des produits: ${response.error?.message}');
       }
 
       _availableProducts = response.productDetails;
+
+      // Debug : voir quels produits sont trouvés vs non trouvés
+      print(
+          '✅ Produits trouvés: ${response.productDetails.map((p) => p.id).toList()}');
+      print('❌ Produits non trouvés: ${response.notFoundIDs}');
 
       print('🤖 Produits Android chargés: ${_availableProducts.length}');
       for (final product in _availableProducts) {
@@ -178,6 +179,74 @@ class AndroidSubscriptionService {
     }
   }
 
+  /// ✅ MÉTHODE CORRIGÉE : Identifier le type d'abonnement par le prix
+  Map<String, dynamic> _getSubscriptionInfoByPrice(String price) {
+    // Prix normalisé (supprime les espaces et caractères spéciaux)
+    String normalizedPrice = price.replaceAll(' ', '').toLowerCase();
+
+    print('🔍 Analyse du prix: "$price" (normalisé: "$normalizedPrice")');
+
+    if (normalizedPrice.contains('8,99') || normalizedPrice.contains('8.99')) {
+      return {
+        'structureType': 'assistante_maternelle',
+        'memberCount': 1,
+        'priceAmount': 8.99,
+        'priceDisplay': '8,99 € / mois',
+        'productKey': 'ass-mat',
+      };
+    } else if (normalizedPrice.contains('19,99') ||
+        normalizedPrice.contains('19.99')) {
+      return {
+        'structureType': 'MAM',
+        'memberCount': 2,
+        'priceAmount': 19.99,
+        'priceDisplay': '19,99 € / mois',
+        'productKey': 'mam-2',
+      };
+    } else if (normalizedPrice.contains('24,99') ||
+        normalizedPrice.contains('24.99')) {
+      return {
+        'structureType': 'MAM',
+        'memberCount': 3,
+        'priceAmount': 24.99,
+        'priceDisplay': '24,99 € / mois',
+        'productKey': 'mam-3',
+      };
+    } else if (normalizedPrice.contains('29,99') ||
+        normalizedPrice.contains('29.99')) {
+      return {
+        'structureType': 'MAM',
+        'memberCount': 4,
+        'priceAmount': 29.99,
+        'priceDisplay': '29,99 € / mois',
+        'productKey': 'mam-4',
+      };
+    } else if (normalizedPrice.contains('gratuit') ||
+        normalizedPrice.contains('free') ||
+        normalizedPrice == '0') {
+      // Pour les offres d'essai gratuit, on doit deviner le type
+      // On va utiliser un défaut et laisser l'utilisateur choisir
+      return {
+        'structureType': 'assistante_maternelle',
+        'memberCount': 1,
+        'priceAmount': 0.0,
+        'priceDisplay': 'Essai gratuit 7 jours',
+        'productKey': 'trial',
+        'isTrialPurchase': true,
+      };
+    } else {
+      // Prix par défaut si non reconnu
+      print('⚠️ Prix non reconnu: $price, utilisation des valeurs par défaut');
+      return {
+        'structureType': 'assistante_maternelle',
+        'memberCount': 1,
+        'priceAmount': 8.99,
+        'priceDisplay': '8,99 € / mois',
+        'productKey': 'ass-mat',
+      };
+    }
+  }
+
   /// ✅ NOUVELLE MÉTHODE : Sauvegarder l'abonnement dans Firestore (Android)
   Future<void> _saveSubscriptionToFirestore(PurchaseDetails purchase) async {
     try {
@@ -194,7 +263,7 @@ class AndroidSubscriptionService {
       print(
           '🤖 Tentative de sauvegarde Android pour: $productId (transaction: $transactionId)');
 
-      // Vérification anti-duplication (même logique que iOS)
+      // Vérification anti-duplication
       if (transactionId.isNotEmpty) {
         final existingByTransaction = await FirebaseFirestore.instance
             .collection('subscriptions')
@@ -208,36 +277,33 @@ class AndroidSubscriptionService {
         }
       }
 
-      // Déterminer type et prix (logique Android avec IDs courts)
-      String structureType = 'assistante_maternelle';
-      int memberCount = 1;
-      double priceAmount = 12.99;
-      String priceDisplay = '12,99 € / mois';
-
-      switch (productId) {
-        case 'mam2':
-          structureType = 'MAM';
-          memberCount = 2;
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
+      // Trouver le produit acheté pour récupérer le prix
+      ProductDetails? purchasedProduct;
+      for (final product in _availableProducts) {
+        if (product.id == productId) {
+          purchasedProduct = product;
           break;
-        case 'mam3':
-          structureType = 'MAM';
-          memberCount = 3;
-          priceAmount = 34.99;
-          priceDisplay = '34,99 € / mois';
-          break;
-        case 'mam4':
-          structureType = 'MAM';
-          memberCount = 4;
-          priceAmount = 44.99;
-          priceDisplay = '44,99 € / mois';
-          break;
-        case 'assmat':
-        default:
-          // Garde les valeurs par défaut
-          break;
+        }
       }
+
+      if (purchasedProduct == null) {
+        print('❌ Produit non trouvé dans la liste des produits disponibles');
+        return;
+      }
+
+      // Identifier le type d'abonnement par le prix
+      final subscriptionInfo =
+          _getSubscriptionInfoByPrice(purchasedProduct.price);
+
+      final String structureType = subscriptionInfo['structureType'];
+      final int memberCount = subscriptionInfo['memberCount'];
+      final double priceAmount = subscriptionInfo['priceAmount'];
+      final String priceDisplay = subscriptionInfo['priceDisplay'];
+      final String productKey = subscriptionInfo['productKey'];
+      final bool isTrialPurchase = subscriptionInfo['isTrialPurchase'] ?? false;
+
+      print(
+          '🎯 Type d\'abonnement identifié: $structureType ($memberCount membres) - $priceDisplay');
 
       // Désactiver anciens abonnements
       final oldActiveSubscriptions = await FirebaseFirestore.instance
@@ -256,7 +322,8 @@ class AndroidSubscriptionService {
       // Créer nouvel abonnement
       final DateTime purchaseDate = DateTime.now();
       final DateTime expirationDate = purchaseDate.add(Duration(days: 30));
-      final DateTime trialEndDate = purchaseDate.add(Duration(days: 7));
+      final DateTime trialEndDate =
+          isTrialPurchase ? purchaseDate.add(Duration(days: 7)) : purchaseDate;
 
       final Map<String, dynamic> subscriptionData = {
         'structureId': user.uid,
@@ -264,16 +331,18 @@ class AndroidSubscriptionService {
         'memberCount': memberCount,
         'status': 'active',
         'productId': productId,
+        'productKey': productKey, // Identifiant interne pour notre logique
         'transactionId': transactionId,
         'purchaseDate': purchaseDate.toIso8601String(),
         'expirationDate': expirationDate.toIso8601String(),
         'trialEndsAt': Timestamp.fromDate(trialEndDate),
         'priceAmount': priceAmount,
         'priceDisplay': priceDisplay,
+        'originalPrice': purchasedProduct.price, // Prix original de Google Play
         'currency': 'EUR',
         'billingPeriod': 'monthly',
         'platform': 'android',
-        'isTrialPeriod': true,
+        'isTrialPeriod': isTrialPurchase,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -300,24 +369,53 @@ class AndroidSubscriptionService {
     }
   }
 
-  /// Retourne l'ID produit Android
-  static String getProductId(String structureType, int mamMembersCount) {
-    switch (structureType) {
-      case 'assistante_maternelle':
-        return _androidProductIds['assistante_maternelle']!;
-      case 'mam':
-        switch (mamMembersCount) {
-          case 2:
-            return _androidProductIds['mam_2_members']!;
-          case 3:
-            return _androidProductIds['mam_3_members']!;
-          case 4:
-            return _androidProductIds['mam_4_members']!;
-          default:
-            return _androidProductIds['mam_2_members']!;
-        }
-      default:
-        return _androidProductIds['assistante_maternelle']!;
+  /// 🆕 MÉTHODE : Trouver un produit par type d'abonnement désiré
+  ProductDetails? _findProductBySubscriptionType(
+      String structureType, int memberCount) {
+    double targetPrice = 8.99; // par défaut assistante maternelle
+
+    if (structureType == 'MAM') {
+      switch (memberCount) {
+        case 2:
+          targetPrice = 19.99;
+          break;
+        case 3:
+          targetPrice = 24.99;
+          break;
+        case 4:
+          targetPrice = 29.99;
+          break;
+      }
+    }
+
+    // Chercher le produit avec le prix correspondant
+    for (final product in _availableProducts) {
+      final subscriptionInfo = _getSubscriptionInfoByPrice(product.price);
+      if (subscriptionInfo['priceAmount'] == targetPrice) {
+        return product;
+      }
+    }
+
+    return null;
+  }
+
+  /// 🆕 MÉTHODE AMÉLIORÉE : Tentative d'achat d'un produit spécifique
+  Future<bool> _attemptPurchaseByProduct(ProductDetails product) async {
+    try {
+      final PurchaseParam purchaseParam =
+          PurchaseParam(productDetails: product);
+
+      // Pour les abonnements, utiliser buyNonConsumable
+      final bool success = await _inAppPurchase.buyNonConsumable(
+        purchaseParam: purchaseParam,
+      );
+
+      print(
+          '🤖 Achat Android initié: ${product.id} (${product.price}) - Success: $success');
+      return success;
+    } catch (e) {
+      print('❌ Erreur d\'achat Android pour ${product.id}: $e');
+      throw e;
     }
   }
 
@@ -327,39 +425,75 @@ class AndroidSubscriptionService {
     return _availableProducts;
   }
 
-  /// Achète un abonnement
-  Future<bool> purchaseSubscription(String productId) async {
+  /// 🆕 MÉTHODE AMÉLIORÉE : Achète un abonnement en spécifiant le type voulu
+  Future<bool> purchaseSubscriptionByType(
+      String structureType, int memberCount) async {
     await _ensureInitialized();
 
     try {
-      // Chercher le produit correspondant
-      ProductDetails? product;
-      for (final p in _availableProducts) {
-        if (p.id == productId) {
-          product = p;
+      print('🛒 Tentative d\'achat: $structureType avec $memberCount membres');
+
+      // Chercher d'abord une offre d'essai gratuite
+      ProductDetails? trialProduct;
+      for (final product in _availableProducts) {
+        if (product.price.toLowerCase().contains('gratuit') ||
+            product.price.toLowerCase().contains('free')) {
+          trialProduct = product;
+          print('🎯 Offre d\'essai trouvée: ${product.price}');
           break;
         }
       }
 
-      if (product == null) {
-        throw Exception('Produit non trouvé: $productId');
+      // Essayer l'offre d'essai en premier
+      if (trialProduct != null) {
+        try {
+          print('🎯 Tentative d\'achat avec essai gratuit');
+          return await _attemptPurchaseByProduct(trialProduct);
+        } catch (e) {
+          print(
+              '⚠️ Essai gratuit non disponible ($e), basculement vers forfait payant');
+        }
       }
 
-      final PurchaseParam purchaseParam =
-          PurchaseParam(productDetails: product);
+      // Chercher le forfait payant correspondant
+      final ProductDetails? targetProduct =
+          _findProductBySubscriptionType(structureType, memberCount);
 
-      // Pour les abonnements, utiliser buyNonConsumable
-      final bool success = await _inAppPurchase.buyNonConsumable(
-        purchaseParam: purchaseParam,
-      );
+      if (targetProduct == null) {
+        throw Exception(
+            'Aucun produit trouvé pour $structureType avec $memberCount membres');
+      }
 
-      print('🤖 Achat Android initié: $productId - Success: $success');
-      return success;
+      print('💳 Achat du forfait: ${targetProduct.price}');
+      return await _attemptPurchaseByProduct(targetProduct);
     } catch (e) {
       print('❌ Erreur d\'achat Android: $e');
       _errorController.add('Erreur d\'achat: $e');
       return false;
     }
+  }
+
+  /// MÉTHODE DE COMPATIBILITÉ : Achète un abonnement (ancienne signature)
+  Future<bool> purchaseSubscription(String productId) async {
+    // Convertir l'ancien productId vers le nouveau système
+    if (productId == 'ass-mat') {
+      return await purchaseSubscriptionByType('assistante_maternelle', 1);
+    } else if (productId == 'abo-mam-2') {
+      return await purchaseSubscriptionByType('MAM', 2);
+    } else if (productId == 'abo-mam-3') {
+      return await purchaseSubscriptionByType('MAM', 3);
+    } else if (productId == 'abo-mam-4') {
+      return await purchaseSubscriptionByType('MAM', 4);
+    } else {
+      // Par défaut, assistante maternelle
+      return await purchaseSubscriptionByType('assistante_maternelle', 1);
+    }
+  }
+
+  /// Retourne l'ID produit Android (pour compatibilité)
+  static String getProductId(String structureType, int mamMembersCount) {
+    // Maintenant on utilise toujours 'abo_poppins' mais on différencie par le prix
+    return 'abo_poppins';
   }
 
   /// Restaure les achats
@@ -380,13 +514,7 @@ class AndroidSubscriptionService {
   Future<PurchaseDetails?> checkSubscriptionStatus(String productId) async {
     await _ensureInitialized();
 
-    // Pour le moment, on utilise une approche simplifiée
-    // Dans un vrai projet, il faudrait implémenter une vérification côté serveur
     print('🤖 Vérification du statut de l\'abonnement: $productId');
-
-    // TODO: Implémenter la vérification d'abonnement avec votre backend
-    // qui interroge l'API Google Play Developer
-
     return null;
   }
 
@@ -405,7 +533,7 @@ class AndroidSubscriptionService {
     _isInitialized = false;
   }
 
-  /// Vérifie si un abonnement est actif - VERSION IMPLÉMENTÉE
+  /// Vérifie si un abonnement est actif
   Future<bool> hasActiveSubscription() async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
@@ -414,7 +542,7 @@ class AndroidSubscriptionService {
         return false;
       }
 
-      print('🤖 Vérification abonnement actif pour: ${user.uid}');
+      print('🤖 Récupération abonnement actif pour: ${user.uid}');
 
       final subscriptionQuery = await FirebaseFirestore.instance
           .collection('subscriptions')
@@ -425,7 +553,12 @@ class AndroidSubscriptionService {
           .get();
 
       final bool hasActive = subscriptionQuery.docs.isNotEmpty;
-      print('🤖 Résultat vérification abonnement: $hasActive');
+
+      if (hasActive) {
+        print('🤖 Abonnement actif trouvé');
+      } else {
+        print('🤖 Aucun abonnement actif trouvé');
+      }
 
       return hasActive;
     } catch (e) {
@@ -434,7 +567,7 @@ class AndroidSubscriptionService {
     }
   }
 
-  /// Retourne l'abonnement actif - VERSION IMPLÉMENTÉE
+  /// Retourne l'abonnement actif
   Future<PurchaseDetails?> getActiveSubscription() async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
