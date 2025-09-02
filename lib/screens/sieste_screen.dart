@@ -39,11 +39,12 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
   int _siesteHours = 1;
   int _siesteMinutes = 0;
-  TextEditingController _durationController =
-      TextEditingController(text: "1h 00min");
+  TextEditingController _durationController = TextEditingController(text: "");
   String _sleepQuality = "Bien dormi";
   TextEditingController _observationsController = TextEditingController();
-  String _siesteTime = "";
+  String _siesteTime = ""; // Ancien champ (compat)
+  String _siesteStart = "";
+  String _siesteEnd = "";
 
   final List<Map<String, dynamic>> qualityLevels = [
     {"label": "Pas dormi", "stars": 1},
@@ -119,6 +120,59 @@ class _SiesteScreenState extends State<SiesteScreen> {
       setState(() {
         onTimeSelected(timeString);
       });
+    }
+  }
+
+  // Nouveau: picker d'heure avec heure initiale fournie
+  Future<void> _pickTimeWithInitial({
+    required String current,
+    required void Function(String) onPicked,
+  }) async {
+    TimeOfDay initialTime;
+    if (current.isNotEmpty && current.contains(':')) {
+      final parts = current.split(':');
+      initialTime = TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? TimeOfDay.now().hour,
+        minute: int.tryParse(parts[1]) ?? TimeOfDay.now().minute,
+      );
+    } else {
+      initialTime = TimeOfDay.now();
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: Colors.white,
+              hourMinuteTextColor: primaryColor,
+              dayPeriodTextColor: primaryColor,
+              dialHandColor: primaryColor,
+              dialBackgroundColor: lightBlue.withOpacity(0.2),
+              hourMinuteColor: MaterialStateColor.resolveWith((states) =>
+                  states.contains(MaterialState.selected)
+                      ? primaryColor.withOpacity(0.15)
+                      : Colors.transparent),
+              hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final timeString =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      onPicked(timeString);
     }
   }
 
@@ -861,7 +915,9 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
   void _showAddSiestePopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
-    String localSiesteTime = _siesteTime;
+    // Variables locales pour les heures début/fin et la qualité
+    String localStart = _siesteStart;
+    String localEnd = _siesteEnd;
     String localSleepQuality = _sleepQuality;
     String? errorMessage;
 
@@ -970,7 +1026,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Section Heure de la sieste
+                            // Sélecteurs Début / Fin de la sieste (style "horaire")
                             Container(
                               margin: EdgeInsets.only(
                                   bottom: isTabletDevice ? 24 : 16),
@@ -978,7 +1034,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Heure de la sieste",
+                                    "Heures de la sieste",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -986,55 +1042,198 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     ),
                                   ),
                                   SizedBox(height: 12),
-                                  InkWell(
-                                    onTap: () =>
-                                        _selectSiesteTime(setState, (time) {
-                                      localSiesteTime = time;
-                                      errorMessage = null;
-                                    }),
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                          vertical: 16, horizontal: 20),
-                                      decoration: BoxDecoration(
-                                        color: lightBlue,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: localSiesteTime.isEmpty
-                                              ? Colors.transparent
-                                              : primaryColor.withOpacity(0.5),
-                                          width: 1.5,
-                                        ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: (localStart.isNotEmpty)
+                                            ? GestureDetector(
+                                                onLongPress: () async {
+                                                  await _pickTimeWithInitial(
+                                                    current: localStart,
+                                                    onPicked: (val) {
+                                                      setState(() {
+                                                        localStart = val;
+                                                        errorMessage = null;
+                                                      });
+                                                    },
+                                                  );
+                                                },
+                                                child: ElevatedButton(
+                                                  onPressed: null,
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        primaryColor,
+                                                    disabledBackgroundColor:
+                                                        primaryColor,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              16),
+                                                    ),
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            vertical:
+                                                                isTabletDevice
+                                                                    ? 16
+                                                                    : 14,
+                                                            horizontal: 12),
+                                                  ),
+                                                  child: Text(
+                                                    localStart,
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: isTabletDevice
+                                                          ? 18
+                                                          : 16,
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : OutlinedButton.icon(
+                                                onPressed: () {
+                                                  final now = TimeOfDay.now();
+                                                  final s =
+                                                      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                                                  setState(() {
+                                                    localStart = s;
+                                                    errorMessage = null;
+                                                  });
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(
+                                                      color: primaryColor),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            16),
+                                                  ),
+                                                  padding: EdgeInsets.symmetric(
+                                                      vertical: isTabletDevice
+                                                          ? 16
+                                                          : 14,
+                                                      horizontal: 12),
+                                                ),
+                                                icon: Icon(Icons.play_arrow,
+                                                    color: primaryColor),
+                                                label: Text(
+                                                  'Début',
+                                                  style: TextStyle(
+                                                    color: primaryColor,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: isTabletDevice
+                                                        ? 18
+                                                        : 16,
+                                                  ),
+                                                ),
+                                              ),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            localSiesteTime.isEmpty
-                                                ? 'Choisir l\'heure'
-                                                : localSiesteTime,
-                                            style: TextStyle(
-                                              fontSize:
-                                                  isTabletDevice ? 18 : 16,
-                                              color: localSiesteTime.isEmpty
-                                                  ? Colors.grey.shade600
-                                                  : primaryColor,
-                                              fontWeight:
-                                                  localSiesteTime.isEmpty
-                                                      ? FontWeight.normal
-                                                      : FontWeight.w600,
-                                            ),
-                                          ),
-                                          Icon(
-                                            Icons.access_time_rounded,
-                                            color:
-                                                primaryColor.withOpacity(0.7),
-                                            size: isTabletDevice ? 24 : 20,
-                                          ),
-                                        ],
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: (localEnd.isNotEmpty)
+                                            ? GestureDetector(
+                                                onLongPress: () async {
+                                                  await _pickTimeWithInitial(
+                                                    current: localEnd,
+                                                    onPicked: (val) {
+                                                      setState(() {
+                                                        localEnd = val;
+                                                        errorMessage = null;
+                                                      });
+                                                    },
+                                                  );
+                                                },
+                                                child: ElevatedButton(
+                                                  onPressed: null,
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        primaryColor,
+                                                    disabledBackgroundColor:
+                                                        primaryColor,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              16),
+                                                    ),
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            vertical:
+                                                                isTabletDevice
+                                                                    ? 16
+                                                                    : 14,
+                                                            horizontal: 12),
+                                                  ),
+                                                  child: Text(
+                                                    localEnd,
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: isTabletDevice
+                                                          ? 18
+                                                          : 16,
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : OutlinedButton.icon(
+                                                onPressed: () {
+                                                  final now = TimeOfDay.now();
+                                                  final s =
+                                                      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                                                  setState(() {
+                                                    localEnd = s;
+                                                    errorMessage = null;
+                                                  });
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(
+                                                      color: primaryColor),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            16),
+                                                  ),
+                                                  padding: EdgeInsets.symmetric(
+                                                      vertical: isTabletDevice
+                                                          ? 16
+                                                          : 14,
+                                                      horizontal: 12),
+                                                ),
+                                                icon: Icon(Icons.stop,
+                                                    color: primaryColor),
+                                                label: Text(
+                                                  'Fin',
+                                                  style: TextStyle(
+                                                    color: primaryColor,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: isTabletDevice
+                                                        ? 18
+                                                        : 16,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (localStart.isNotEmpty || localEnd.isNotEmpty)
+                                    Padding(
+                                      padding: EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        'Appui long sur une heure pour modifier',
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 14 : 12,
+                                          color: Colors.grey[600],
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                        textAlign: TextAlign.center,
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -1118,62 +1317,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                               ),
                             ),
 
-                            // Section Durée de la sieste
-                            // Section Durée de la sieste
-                            Container(
-                              margin: EdgeInsets.only(
-                                  bottom: isTabletDevice ? 24 : 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Durée de la sieste",
-                                    style: TextStyle(
-                                      fontSize: isTabletDevice ? 18 : 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade800,
-                                    ),
-                                  ),
-                                  SizedBox(height: 12),
-                                  InkWell(
-                                    onTap: () => _showDurationPicker(setState),
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                          vertical: 16, horizontal: 20),
-                                      decoration: BoxDecoration(
-                                        color: lightBlue.withOpacity(0.5),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: Colors.grey.shade300,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            _durationController.text,
-                                            style: TextStyle(
-                                              fontSize:
-                                                  isTabletDevice ? 18 : 16,
-                                              color: primaryColor,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          Icon(
-                                            Icons.timer_outlined,
-                                            color:
-                                                primaryColor.withOpacity(0.7),
-                                            size: isTabletDevice ? 24 : 20,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            // (Durée supprimée: sera calculée automatiquement à partir Début/Fin)
 
                             // Section Observations
                             Container(
@@ -1292,10 +1436,27 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 // Bouton Ajouter
                                 ElevatedButton(
                                   onPressed: () async {
-                                    if (localSiesteTime.isEmpty) {
+                                    if (localStart.isEmpty ||
+                                        localEnd.isEmpty) {
                                       setState(() {
                                         errorMessage =
-                                            'Veuillez sélectionner une heure';
+                                            'Veuillez sélectionner un début et une fin de sieste';
+                                      });
+                                      return;
+                                    }
+                                    // Vérifier que la fin est après le début
+                                    int _toMinutes(String t) {
+                                      final p = t.split(':');
+                                      return (int.parse(p[0]) * 60) +
+                                          int.parse(p[1]);
+                                    }
+
+                                    final startMins = _toMinutes(localStart);
+                                    final endMins = _toMinutes(localEnd);
+                                    if (endMins <= startMins) {
+                                      setState(() {
+                                        errorMessage =
+                                            'L\'heure de fin doit être après le début';
                                       });
                                       return;
                                     }
@@ -1306,7 +1467,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     });
 
                                     // Si tout est validé, ajouter la sieste
-                                    _siesteTime = localSiesteTime;
+                                    _siesteStart = localStart;
+                                    _siesteEnd = localEnd;
                                     _sleepQuality = localSleepQuality;
                                     _sleepQuality = localSleepQuality;
 
@@ -1418,22 +1580,51 @@ class _SiesteScreenState extends State<SiesteScreen> {
           .collection('siestes')
           .doc();
 
+      // Construire l'affichage et la durée à partir des heures début/fin
+      String heureLabel = _siesteStart.isNotEmpty && _siesteEnd.isNotEmpty
+          ? '${_siesteStart} - ${_siesteEnd}'
+          : _siesteTime; // fallback ancien champ si non saisi
+
+      String durationLabel = _durationController.text;
+      if (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty) {
+        int _toMinutes(String t) {
+          final p = t.split(':');
+          return (int.parse(p[0]) * 60) + int.parse(p[1]);
+        }
+
+        final diff = _toMinutes(_siesteEnd) - _toMinutes(_siesteStart);
+        final h = diff ~/ 60;
+        final m = diff % 60;
+        durationLabel = '';
+        if (h > 0) durationLabel += '${h}h';
+        if (m > 0) {
+          if (durationLabel.isNotEmpty) durationLabel += ' ';
+          durationLabel += '${m.toString().padLeft(2, '0')}min';
+        }
+        if (durationLabel.isEmpty) durationLabel = '0min';
+      }
+
       final siesteData = {
-        'heure': _siesteTime,
+        'heure': heureLabel,
         'date': DateTime.now(),
-        'duration': _durationController.text, // Utiliser le nouveau format
+        'duration': durationLabel,
         'qualite': _sleepQuality,
         'moonCount': _getMoonCountFromQuality(_sleepQuality),
         'observations': _observationsController.text,
-      };
+        // Nouveaux champs pour compatibilité future
+        'start': _siesteStart.isNotEmpty ? _siesteStart : null,
+        'end': _siesteEnd.isNotEmpty ? _siesteEnd : null,
+      }..removeWhere((key, value) => value == null);
 
       await siesteRef.set(siesteData);
 
       setState(() {
         _siesteTime = '';
-        _siesteHours = 1; // Réinitialiser
-        _siesteMinutes = 0; // Réinitialiser
-        _updateDurationDisplay(); // Mettre à jour l'affichage
+        _siesteStart = '';
+        _siesteEnd = '';
+        _siesteHours = 1;
+        _siesteMinutes = 0;
+        _updateDurationDisplay();
         _sleepQuality = 'Bien dormi';
         _observationsController.clear();
       });
