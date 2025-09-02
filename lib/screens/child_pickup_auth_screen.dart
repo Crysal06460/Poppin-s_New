@@ -44,6 +44,10 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
   static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+  // AJOUT après les couleurs existantes :
+  static const Color authorizedGreen = Color(0xFF4CAF50); // Vert pour autorisé
+  static const Color unauthorizedRed =
+      Color(0xFFD94350); // Rouge pour non autorisé (utilise primaryRed)
 
   @override
   void initState() {
@@ -638,6 +642,42 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
     });
   }
 
+  Future<void> _cleanupFirebaseData() async {
+    if (widget.childId.isEmpty) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      String structureId = user.uid;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          structureId = userData['structureId'];
+        }
+      }
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .delete();
+
+      print("Enfant supprimé de Firebase : ${widget.childId}");
+    } catch (e) {
+      print("Erreur lors du nettoyage Firebase: $e");
+    }
+  }
+
   Future<void> _showExitWarning(
       BuildContext context, String destination) async {
     final bool? shouldExit = await showDialog<bool>(
@@ -645,9 +685,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               Container(
@@ -656,11 +695,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                   color: primaryRed.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.warning_rounded,
-                  color: primaryRed,
-                  size: 24,
-                ),
+                child: Icon(Icons.warning_rounded, color: primaryRed, size: 24),
               ),
               SizedBox(width: 12),
               Expanded(
@@ -679,11 +714,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
               "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[700],
-                height: 1.4,
-              ),
+              style:
+                  TextStyle(fontSize: 16, color: Colors.grey[700], height: 1.4),
             ),
           ),
           actions: [
@@ -695,10 +727,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
               ),
               child: Text(
                 "Annuler",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
             ElevatedButton(
@@ -708,15 +737,11 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: Text(
                 "Quitter",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -725,6 +750,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
     );
 
     if (shouldExit == true) {
+      await _cleanupFirebaseData();
       if (context.mounted) {
         context.go(destination);
       }
@@ -765,7 +791,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                   vertical: (maxWidth * 0.004).clamp(2.0, 6.0),
                 ),
                 decoration: BoxDecoration(
-                  color: isAuthorized ? primaryBlue : Colors.grey,
+                  color: isAuthorized ? authorizedGreen : unauthorizedRed,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -846,13 +872,15 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           ),
           SizedBox(height: maxHeight * 0.02),
 
-          // Parent 1 (toujours autorisé)
+          // Parent 1 (modifiable)
           if (_parent1Name != null)
             _buildParentRowTablet(
               _parent1Name!,
-              true,
-              (value) {}, // Ne pas changer, toujours autorisé
-              enabled: false,
+              _parent1Authorized,
+              (value) {
+                setState(() => _parent1Authorized = value);
+              },
+              enabled: true,
               maxWidth: maxWidth,
               maxHeight: maxHeight,
             ),
@@ -907,20 +935,30 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           ),
           Row(
             children: [
+              // CORRECTION : Texte dynamique selon l'état
               Text(
-                "Autorisé",
+                isAuthorized ? "Autorisé" : "Non autorisé",
                 style: TextStyle(
                   fontSize: (maxWidth * 0.014).clamp(10.0, 16.0),
-                  color: Colors.grey[700],
+                  color: isAuthorized ? authorizedGreen : unauthorizedRed,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               SizedBox(width: (maxWidth * 0.01).clamp(6.0, 12.0)),
+              // CORRECTION : Switch avec couleurs améliorées
               Transform.scale(
-                scale: (maxWidth * 0.001).clamp(0.8, 1.2),
+                scale: (maxWidth * 0.001).clamp(0.9, 1.3),
                 child: Switch(
                   value: isAuthorized,
                   onChanged: enabled ? onChanged : null,
-                  activeColor: primaryBlue,
+                  // Couleur quand activé (vert)
+                  activeColor: Colors.white,
+                  activeTrackColor: authorizedGreen,
+                  // Couleur quand désactivé (rouge)
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: unauthorizedRed,
+                  // Style du thumb (cercle)
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],
@@ -995,7 +1033,13 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                       }
                     });
                   },
-                  activeColor: primaryBlue,
+                  // Couleur quand activé (bleu)
+                  activeColor: Colors.white,
+                  activeTrackColor: primaryBlue,
+                  // Couleur quand désactivé (gris)
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: Colors.grey.shade400,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],
@@ -1028,9 +1072,13 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: Icon(Icons.delete, color: primaryRed),
-                          onPressed: () => _removeAuthorizedPerson(index),
-                          iconSize: (maxWidth * 0.02).clamp(16.0, 24.0),
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => _showExitWarning(context, '/home'),
+                          style: IconButton.styleFrom(
+                            backgroundColor: lightBlue,
+                            foregroundColor: primaryBlue,
+                            padding: EdgeInsets.all(12),
+                          ),
                         ),
                       ],
                     ),
@@ -1182,13 +1230,13 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
       }
 
       final childDoc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(structureId) // Utiliser structureId au lieu de user.uid
+          .doc(structureId)
           .collection('children')
           .doc(widget.childId)
           .get();
@@ -1210,7 +1258,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           setState(() {
             _parent2Name = "${parent2['firstName']} ${parent2['lastName']}";
             _hasParent2 = true;
-            _parent2Authorized = null; // Initialement pas défini
+            // CORRECTION : Initialiser à false au lieu de null
+            _parent2Authorized = false;
           });
         }
       }
@@ -1290,7 +1339,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
       }
 
@@ -1313,8 +1362,8 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           .doc(widget.childId)
           .update({
         'authorizedPickup': {
-          'parent1': true,
-          'parent2': _hasParent2 ? _parent2Authorized : false,
+          'parent1': _parent1Authorized, // CHANGÉ : était true
+          'parent2': _hasParent2 ? (_parent2Authorized ?? false) : false,
           'extraPersons': authorizedPersonsList,
         },
         'lastUpdatedBy': currentUserEmail,
@@ -1607,13 +1656,16 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
 
                                     const SizedBox(height: 20),
 
-                                    // Parent 1 (toujours autorisé)
+                                    // Parent 1 (modifiable)
                                     if (_parent1Name != null)
                                       _buildParentRow(
                                         _parent1Name!,
-                                        true,
-                                        (value) {}, // Ne pas changer, toujours autorisé
-                                        enabled: false,
+                                        _parent1Authorized,
+                                        (value) {
+                                          setState(
+                                              () => _parent1Authorized = value);
+                                        },
+                                        enabled: true,
                                       ),
 
                                     const SizedBox(height: 12),
@@ -1691,17 +1743,29 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        Switch(
-                                          value: _addExtraPerson,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _addExtraPerson = value;
-                                              if (!value) {
-                                                _authorizedPersons.clear();
-                                              }
-                                            });
-                                          },
-                                          activeColor: primaryBlue,
+                                        Transform.scale(
+                                          scale: 1.1,
+                                          child: Switch(
+                                            value: _addExtraPerson,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _addExtraPerson = value;
+                                                if (!value) {
+                                                  _authorizedPersons.clear();
+                                                }
+                                              });
+                                            },
+                                            // Couleur quand activé (bleu)
+                                            activeColor: Colors.white,
+                                            activeTrackColor: primaryBlue,
+                                            // Couleur quand désactivé (gris)
+                                            inactiveThumbColor: Colors.white,
+                                            inactiveTrackColor:
+                                                Colors.grey.shade400,
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1898,17 +1962,33 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           ),
           Row(
             children: [
+              // CORRECTION : Texte dynamique selon l'état
               Text(
-                "Autorisé",
+                isAuthorized ? "Autorisé" : "Non autorisé",
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[700],
+                  color: isAuthorized ? authorizedGreen : unauthorizedRed,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              Switch(
-                value: isAuthorized,
-                onChanged: enabled ? onChanged : null,
-                activeColor: primaryBlue,
+              SizedBox(width: 8),
+              // CORRECTION IMPORTANTE : Utiliser isAuthorized au lieu de _addExtraPerson
+              Transform.scale(
+                scale: 1.1,
+                child: Switch(
+                  value: isAuthorized, // CHANGÉ : était _addExtraPerson
+                  onChanged: enabled
+                      ? onChanged
+                      : null, // CHANGÉ : était le callback pour _addExtraPerson
+                  // Couleur quand activé (vert)
+                  activeColor: Colors.white,
+                  activeTrackColor: authorizedGreen,
+                  // Couleur quand désactivé (rouge)
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: unauthorizedRed,
+                  // Style du thumb (cercle)
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ],
           ),

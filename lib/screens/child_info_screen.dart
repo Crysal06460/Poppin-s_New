@@ -37,6 +37,39 @@ class CapitalizeFirstLetterFormatter extends TextInputFormatter {
   }
 }
 
+class DateTextInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+
+    // Supprimer tout ce qui n'est pas un chiffre
+    String digitsOnly = text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Limiter à 8 chiffres (DDMMYYYY)
+    if (digitsOnly.length > 8) {
+      digitsOnly = digitsOnly.substring(0, 8);
+    }
+
+    String formattedText = '';
+
+    for (int i = 0; i < digitsOnly.length; i++) {
+      // Ajouter "/" après 2 chiffres (jour) et après 4 chiffres (jour + mois)
+      if (i == 2 || i == 4) {
+        formattedText += '/';
+      }
+      formattedText += digitsOnly[i];
+    }
+
+    return TextEditingValue(
+      text: formattedText,
+      selection: TextSelection.collapsed(offset: formattedText.length),
+    );
+  }
+}
+
 class CapitalizeWordsFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -71,6 +104,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
   int _selectedIndex = 2; // Pour la barre de navigation du bas
   String structureName = "Chargement...";
   bool isLoadingStructure = true;
+  String? _createdChildId; //
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -719,6 +753,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
     );
   }
 
+  // Remplacer les méthodes de date existantes par cette version simplifiée et optimisée
+
   Widget _buildDateFieldTablet(double maxWidth, double maxHeight) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -732,10 +768,13 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
           ),
         ),
         SizedBox(height: maxHeight * 0.015),
+
+        // UN SEUL BOUTON - Calendrier optimisé
         InkWell(
           onTap: () => _selectDate(context),
           borderRadius: BorderRadius.circular(16),
           child: Container(
+            width: double.infinity,
             padding: EdgeInsets.symmetric(
                 horizontal: maxWidth * 0.02, vertical: maxHeight * 0.02),
             decoration: BoxDecoration(
@@ -745,7 +784,9 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                 width: selectedDate != null ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(16),
-              color: Colors.white,
+              color: selectedDate != null
+                  ? lightBlue.withOpacity(0.1)
+                  : Colors.grey.shade50,
               boxShadow: selectedDate != null
                   ? [
                       BoxShadow(
@@ -754,61 +795,196 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                         offset: Offset(0, 3),
                       )
                     ]
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        offset: const Offset(0, 3),
-                        blurRadius: 5,
-                      ),
-                    ],
+                  : null,
             ),
             child: Row(
               children: [
                 Container(
-                  padding: EdgeInsets.all(maxWidth * 0.01),
+                  padding: EdgeInsets.all(maxWidth * 0.012),
                   decoration: BoxDecoration(
-                    color:
-                        selectedDate != null ? lightBlue : Colors.grey.shade100,
+                    gradient: selectedDate != null
+                        ? LinearGradient(
+                            colors: [primaryBlue.withOpacity(0.8), primaryBlue],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: selectedDate != null ? null : Colors.grey.shade200,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.calendar_today_rounded,
-                    color: selectedDate != null ? primaryBlue : Colors.grey,
+                    color: selectedDate != null ? Colors.white : Colors.grey,
                     size: maxWidth * 0.02,
                   ),
                 ),
                 SizedBox(width: maxWidth * 0.015),
-                Text(
-                  selectedDate != null
-                      ? birthDateController.text
-                      : "Choisir une date de naissance",
-                  style: TextStyle(
-                    fontSize: maxWidth * 0.018,
-                    color: selectedDate != null
-                        ? Colors.black87
-                        : Colors.grey.shade600,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedDate != null
+                            ? birthDateController.text
+                            : "Toucher pour choisir la date",
+                        style: TextStyle(
+                          fontSize: maxWidth * 0.018,
+                          color: selectedDate != null
+                              ? Colors.black87
+                              : Colors.grey.shade600,
+                          fontWeight: selectedDate != null
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      if (selectedDate != null)
+                        Text(
+                          _calculateAge(selectedDate!),
+                          style: TextStyle(
+                            fontSize: maxWidth * 0.014,
+                            color: primaryBlue,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                Spacer(),
-                if (selectedDate != null)
-                  Container(
-                    padding: EdgeInsets.all(maxWidth * 0.005),
-                    decoration: BoxDecoration(
-                      color: lightBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.edit,
-                      color: primaryBlue,
-                      size: maxWidth * 0.015,
-                    ),
-                  ),
+                Icon(
+                  selectedDate != null ? Icons.edit_calendar : Icons.touch_app,
+                  color:
+                      selectedDate != null ? primaryBlue : Colors.grey.shade400,
+                  size: maxWidth * 0.022,
+                ),
               ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  void _showDateInputDialog() {
+    final TextEditingController dateInputController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: lightBlue,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.edit_calendar, color: primaryBlue),
+              ),
+              SizedBox(width: 12),
+              Text("Saisir la date", style: TextStyle(color: primaryBlue)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Format : JJ/MM/AAAA",
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: dateInputController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [DateTextInputFormatter()],
+                decoration: InputDecoration(
+                  hintText: "DD/MM/YYYY",
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: primaryBlue, width: 2),
+                  ),
+                  prefixIcon: Icon(Icons.calendar_today, color: primaryBlue),
+                ),
+                style: TextStyle(fontSize: 16, letterSpacing: 1.2),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (_validateAndSetDate(dateInputController.text)) {
+                  Navigator.of(context).pop();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryBlue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text("Confirmer", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _validateAndSetDate(String dateText) {
+    if (dateText.length != 10) {
+      _showErrorSnackBar("Format de date incorrect (JJ/MM/AAAA)");
+      return false;
+    }
+
+    try {
+      final parts = dateText.split('/');
+      if (parts.length != 3) {
+        _showErrorSnackBar("Format de date incorrect");
+        return false;
+      }
+
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+
+      // Validation des valeurs
+      if (day < 1 || day > 31) {
+        _showErrorSnackBar("Jour invalide (01-31)");
+        return false;
+      }
+      if (month < 1 || month > 12) {
+        _showErrorSnackBar("Mois invalide (01-12)");
+        return false;
+      }
+      if (year < 2010 || year > DateTime.now().year) {
+        _showErrorSnackBar("Année invalide");
+        return false;
+      }
+
+      // Créer la date
+      final date = DateTime(year, month, day);
+      if (date.isAfter(DateTime.now())) {
+        _showErrorSnackBar("La date ne peut pas être dans le futur");
+        return false;
+      }
+
+      setState(() {
+        selectedDate = date;
+        birthDateController.text =
+            DateFormat('dd MMMM yyyy', 'fr_FR').format(date);
+      });
+
+      return true;
+    } catch (e) {
+      _showErrorSnackBar("Date invalide");
+      return false;
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -881,18 +1057,12 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Afficher un indicateur de chargement
     _showLoadingDialog("Enregistrement en cours...");
 
     try {
-      // Récupérer l'email de l'utilisateur actuel (crucial pour l'assignation)
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      String structureId = user.uid;
 
-      // Déterminer l'ID de structure correct à utiliser
-      String structureId =
-          user.uid; // Par défaut, utiliser l'UID de l'utilisateur
-
-      // Vérifier si l'utilisateur est un membre MAM
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserEmail)
@@ -902,27 +1072,23 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         final userData = userDoc.data() ?? {};
         if (userData['role'] == 'mamMember' &&
             userData['structureId'] != null) {
-          // C'est un membre MAM, utiliser structureId au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
               "👤 Utilisateur identifié comme membre MAM pour la structure: $structureId");
         }
       }
 
-      // Récupérer la structure associée à l'utilisateur
       DocumentSnapshot structureDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
           .get();
 
       if (!structureDoc.exists) {
-        // Fermer le dialogue de chargement avant d'afficher l'erreur
         Navigator.of(context).pop();
         _showErrorSnackBar("Erreur : structure non trouvée.");
         return;
       }
 
-      // Ajouter l'enfant sous `structures/{structureId}/children`
       DocumentReference newChildRef = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -933,26 +1099,23 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         'gender': gender,
         'birthdate': selectedDate!.toIso8601String(),
         'createdAt': Timestamp.now(),
-
-        // CRUCIAL: Ajouter ces champs pour l'assignation correcte du membre
         'assignedMemberEmail': currentUserEmail,
         'createdByEmail': currentUserEmail,
         'lastUpdatedBy': currentUserEmail,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
+        'status': 'incomplete', // NOUVEAU : marquer comme incomplet
       });
 
       String childId = newChildRef.id;
-      print("✅ Enfant créé et assigné au membre: $currentUserEmail");
+      _createdChildId = childId; // NOUVEAU : stocker l'ID
+      print("✅ Enfant créé avec ID: $childId");
 
-      // Fermer le dialogue de chargement
       if (context.mounted) Navigator.of(context).pop();
 
-      // Redirection vers parent-info avec l'ID de l'enfant
       if (context.mounted) {
         context.go('/parent-info', extra: childId);
       }
     } catch (e) {
-      // Fermer le dialogue de chargement en cas d'erreur
       if (context.mounted) Navigator.of(context).pop();
       _showErrorSnackBar("Une erreur est survenue lors de l'enregistrement");
       print("❌ Erreur lors de la création de l'enfant: $e");
@@ -1066,13 +1229,13 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             InkWell(
                               onTap: () => _selectDate(context),
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 padding: EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 16),
+                                    horizontal: 16, vertical: 18),
                                 decoration: BoxDecoration(
                                   border: Border.all(
                                     color: selectedDate != null
@@ -1085,57 +1248,103 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                                   boxShadow: selectedDate != null
                                       ? [
                                           BoxShadow(
-                                            color: primaryBlue.withOpacity(0.1),
-                                            blurRadius: 8,
-                                            offset: Offset(0, 3),
+                                            color:
+                                                primaryBlue.withOpacity(0.15),
+                                            blurRadius: 12,
+                                            offset: Offset(0, 4),
                                           )
                                         ]
-                                      : null,
+                                      : [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.05),
+                                            blurRadius: 8,
+                                            offset: Offset(0, 2),
+                                          )
+                                        ],
                                 ),
                                 child: Row(
                                   children: [
                                     Container(
-                                      padding: EdgeInsets.all(8),
+                                      padding: EdgeInsets.all(10),
                                       decoration: BoxDecoration(
+                                        gradient: selectedDate != null
+                                            ? LinearGradient(
+                                                colors: [
+                                                  primaryBlue.withOpacity(0.8),
+                                                  primaryBlue
+                                                ],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              )
+                                            : null,
                                         color: selectedDate != null
-                                            ? lightBlue
+                                            ? null
                                             : Colors.grey.shade100,
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
                                         Icons.calendar_today_rounded,
                                         color: selectedDate != null
-                                            ? primaryBlue
+                                            ? Colors.white
                                             : Colors.grey,
                                         size: 22,
                                       ),
                                     ),
                                     SizedBox(width: 16),
-                                    Text(
-                                      selectedDate != null
-                                          ? birthDateController.text
-                                          : "Choisir une date de naissance",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: selectedDate != null
-                                            ? Colors.black87
-                                            : Colors.grey.shade600,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            selectedDate != null
+                                                ? birthDateController.text
+                                                : "Toucher pour choisir la date",
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: selectedDate != null
+                                                  ? Colors.black87
+                                                  : Colors.grey.shade600,
+                                              fontWeight: selectedDate != null
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                          if (selectedDate != null)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                _calculateAge(selectedDate!),
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: primaryBlue,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
-                                    Spacer(),
-                                    if (selectedDate != null)
-                                      Container(
-                                        padding: EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: lightBlue,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          Icons.edit,
-                                          color: primaryBlue,
-                                          size: 16,
-                                        ),
+                                    Container(
+                                      padding: EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: selectedDate != null
+                                            ? lightBlue.withOpacity(0.3)
+                                            : Colors.grey.shade100,
+                                        shape: BoxShape.circle,
                                       ),
+                                      child: Icon(
+                                        selectedDate != null
+                                            ? Icons.check
+                                            : Icons.touch_app,
+                                        color: selectedDate != null
+                                            ? primaryBlue
+                                            : Colors.grey.shade400,
+                                        size: 18,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1231,6 +1440,20 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         ),
       ],
     );
+  }
+
+  String _calculateAge(DateTime birthDate) {
+    final now = DateTime.now();
+    final age = now.difference(birthDate).inDays ~/ 365;
+    final months = (now.difference(birthDate).inDays % 365) ~/ 30;
+
+    if (age > 0) {
+      return "$age an${age > 1 ? 's' : ''}";
+    } else if (months > 0) {
+      return "$months mois";
+    } else {
+      return "Nouveau-né";
+    }
   }
 
   Widget _buildGenderButton(String label, IconData icon, Color color) {

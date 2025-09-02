@@ -495,6 +495,44 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
     });
   }
 
+  Future<void> _cleanupFirebaseData() async {
+    if (widget.childId.isEmpty) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      String structureId = user.uid;
+
+      // Vérifier si utilisateur MAM
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          structureId = userData['structureId'];
+        }
+      }
+
+      // Supprimer complètement l'enfant de Firebase
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .delete();
+
+      print("Enfant supprimé de Firebase : ${widget.childId}");
+    } catch (e) {
+      print("Erreur lors du nettoyage Firebase: $e");
+    }
+  }
+
   Widget _buildInfoRowTablet(String label, String value, double maxWidth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,9 +575,8 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               Container(
@@ -548,11 +585,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                   color: primaryRed.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.warning_rounded,
-                  color: primaryRed,
-                  size: 24,
-                ),
+                child: Icon(Icons.warning_rounded, color: primaryRed, size: 24),
               ),
               SizedBox(width: 12),
               Expanded(
@@ -571,27 +604,15 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
               "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[700],
-                height: 1.4,
-              ),
+              style:
+                  TextStyle(fontSize: 16, color: Colors.grey[700], height: 1.4),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey[600],
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: Text(
-                "Annuler",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              child: Text("Annuler",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -600,16 +621,10 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text(
-                "Quitter",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: Text("Quitter",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -617,6 +632,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
     );
 
     if (shouldExit == true) {
+      await _cleanupFirebaseData(); // NETTOYER Firebase avant de quitter
       if (context.mounted) {
         context.go(destination);
       }
@@ -910,15 +926,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.arrow_back),
-                          onPressed: () {
-                            if (widget.childId.isNotEmpty) {
-                              print(
-                                  "🔄 Retour vers child-info avec childId: ${widget.childId}");
-                              context.go('/child-info', extra: widget.childId);
-                            } else {
-                              _showError("Erreur : ID d'enfant manquant !");
-                            }
-                          },
+                          onPressed: () => _showExitWarning(context, '/home'),
                           style: IconButton.styleFrom(
                             backgroundColor: lightBlue,
                             foregroundColor: primaryBlue,
