@@ -403,6 +403,42 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     });
   }
 
+  Future<void> _cleanupFirebaseData() async {
+    if (widget.childId.isEmpty) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      String structureId = user.uid;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        if (userData['role'] == 'mamMember' &&
+            userData['structureId'] != null) {
+          structureId = userData['structureId'];
+        }
+      }
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .delete();
+
+      print("Enfant supprimé de Firebase : ${widget.childId}");
+    } catch (e) {
+      print("Erreur lors du nettoyage Firebase: $e");
+    }
+  }
+
   Future<void> _showExitWarning(
       BuildContext context, String destination) async {
     final bool? shouldExit = await showDialog<bool>(
@@ -410,9 +446,8 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               Container(
@@ -421,11 +456,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                   color: primaryRed.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.warning_rounded,
-                  color: primaryRed,
-                  size: 24,
-                ),
+                child: Icon(Icons.warning_rounded, color: primaryRed, size: 24),
               ),
               SizedBox(width: 12),
               Expanded(
@@ -444,11 +475,8 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
             constraints: BoxConstraints(maxWidth: 300),
             child: Text(
               "Si vous quittez l'ajout de l'enfant maintenant, celui-ci ne sera pas ajouté et toutes les informations saisies seront perdues.\n\nÊtes-vous sûr de vouloir quitter ?",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[700],
-                height: 1.4,
-              ),
+              style:
+                  TextStyle(fontSize: 16, color: Colors.grey[700], height: 1.4),
             ),
           ),
           actions: [
@@ -460,10 +488,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
               ),
               child: Text(
                 "Annuler",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
             ElevatedButton(
@@ -473,15 +498,11 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: Text(
                 "Quitter",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -490,6 +511,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     );
 
     if (shouldExit == true) {
+      await _cleanupFirebaseData();
       if (context.mounted) {
         context.go(destination);
       }
@@ -909,15 +931,13 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
         ),
         SizedBox(width: maxWidth * 0.01),
         IconButton(
-          icon: Icon(
-            Icons.delete_outline,
-            color: primaryRed,
-            size: maxWidth * 0.02,
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => _showExitWarning(context, '/home'),
+          style: IconButton.styleFrom(
+            backgroundColor: lightBlue,
+            foregroundColor: primaryBlue,
+            padding: EdgeInsets.all(12),
           ),
-          onPressed: () {
-            _removeTimeSegment(day, index);
-            setState(() {}); // Rafraîchir l'aperçu
-          },
         ),
       ],
     );

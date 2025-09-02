@@ -18,6 +18,8 @@ bool isTablet(BuildContext context) {
 class _HorairesScreenState extends State<HorairesScreen> {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
+  String _rebuildKey =
+      DateTime.now().millisecondsSinceEpoch.toString(); // NOUVELLE LIGNE
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -38,13 +40,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
     super.initState();
     initializeDateFormatting('fr_FR').then((_) => _loadStructureData());
   }
-// Ajoute cette méthode à ta classe _HorairesScreenState
 
   @override
   Widget build(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
     return Scaffold(
+      key: Key(_rebuildKey), // FORCE LE REBUILD COMPLET
       backgroundColor: Colors.white,
       body: Column(
         children: [
@@ -59,8 +61,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
                 : enfants.isEmpty
                     ? _buildEmptyState()
                     : isTabletDevice
-                        ? _buildChildrenGridForTablet() // Grille adaptée pour iPad
-                        : _buildChildrenGrid(), // Garder la version iPhone
+                        ? _buildChildrenGridForTablet()
+                        : _buildChildrenGrid(),
           )
         ],
       ),
@@ -68,344 +70,205 @@ class _HorairesScreenState extends State<HorairesScreen> {
     );
   }
 
-// Nouvelle méthode pour la grille adaptée à l'iPad
-  Widget _buildChildrenGridForTablet() {
-    return GridView.builder(
-      padding: EdgeInsets.all(20),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.85, // Ratio plus carré pour iPad
-        crossAxisSpacing: 24, // Plus d'espace horizontal
-        mainAxisSpacing: 24, // Plus d'espace vertical
-      ),
-      itemCount: enfants.length,
-      itemBuilder: (context, index) =>
-          _buildEnfantCardForTablet(context, index),
-    );
+  // === MÉTHODES DE LOGIQUE MÉTIER ===
+
+  // NOUVELLE MÉTHODE : Annuler l'absence
+  void _annulerAbsent(Map<String, dynamic> enfant) {
+    print("🟠 DEBUG: Annulation absence pour ${enfant['prenom']}");
+    final now = DateTime.now();
+
+    setState(() {
+      enfant['absent'] = false;
+      // Garder les segments tels qu'ils étaient avant l'absence
+    });
+
+    // Mettre à jour en base de données en supprimant l'absence
+    Map<String, dynamic> horairesData = {
+      'prenom': enfant['prenom'],
+      'actionType': 'annuler_absent',
+      'exactTime': now,
+      'absent': false,
+      'segments': enfant['segments'],
+    };
+
+    _updateHoraires(enfant['id'], horairesData).then((_) {
+      // Force un rechargement complet des données et un rebuild total
+      print(
+          "✅ Annulation absence enregistrée, rechargement complet des données pour ${enfant['prenom']}");
+      print("🔄 État avant rechargement: absent=${enfant['absent']}");
+      _rebuildKey =
+          DateTime.now().millisecondsSinceEpoch.toString(); // Nouvelle clé
+      _loadEnfantsDuJour(); // Recharge complètement les données depuis Firebase
+    });
   }
 
-// Nouvelle méthode pour la carte enfant adaptée à l'iPad
-  Widget _buildEnfantCardForTablet(BuildContext context, int index) {
-    final enfant = enfants[index];
-    bool isAbsent = enfant['absent'] == true;
-    String genre = enfant['genre']?.toString() ?? 'Garçon';
-    bool hasMultipleSegments = enfant['segments'].length > 1;
+  // NOUVELLE MÉTHODE : Dialog pour modifier un horaire manuellement
+  void _showEditTimeDialog(
+      String type, Map<String, dynamic> enfant, int segmentIndex) {
+    List<dynamic> segments = enfant['segments'];
+    if (segmentIndex >= segments.length) return;
 
-    Color getCardColor() {
-      if (isAbsent) return Colors.grey.shade200;
-      return Colors.white;
-    }
+    Map<String, dynamic> segment = segments[segmentIndex];
+    String currentTime = segment[type] ?? '';
 
-    Color getTextColor() {
-      if (isAbsent) return Colors.grey;
-      return (genre == 'Fille') ? primaryRed : primaryBlue;
-    }
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        TextEditingController timeController =
+            TextEditingController(text: currentTime);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: getCardColor(),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 10,
-            offset: Offset(0, 3),
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Photo de l'enfant (40% de la hauteur)
-          Expanded(
-            flex: 40,
-            child: Stack(
-              fit: StackFit.expand,
+          child: Container(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  child: enfant['photoUrl'] != null
-                      ? Image.network(
-                          enfant['photoUrl'],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildPlaceholder(),
-                        )
-                      : _buildPlaceholder(),
+                Text(
+                  'Modifier l\'heure ${type == 'arrivee' ? 'd\'arrivée' : 'de départ'}',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87),
+                  textAlign: TextAlign.center,
                 ),
-                if (isAbsent)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(24)),
+                SizedBox(height: 16),
+                Text(
+                  '${enfant['prenom']}',
+                  style: TextStyle(
+                      fontSize: 16,
+                      color: primaryColor,
+                      fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 24),
+                TextField(
+                  controller: timeController,
+                  decoration: InputDecoration(
+                    hintText: 'HH:MM (ex: 08:30)',
+                    filled: true,
+                    fillColor: secondaryColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
-                    child: Center(
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    prefixIcon: Icon(Icons.access_time, color: primaryColor),
+                  ),
+                  keyboardType: TextInputType.text,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9:]')),
+                  ],
+                ),
+                SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
                       child: Text(
-                        'ABSENT',
+                        'Annuler',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22, // Plus grand pour iPad
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
+                          fontSize: 16,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
                     ),
-                  ),
+                    ElevatedButton(
+                      child: Text(
+                        'Enregistrer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        elevation: 2,
+                      ),
+                      onPressed: () {
+                        String newTime = timeController.text.trim();
+
+                        // Validation du format HH:MM
+                        RegExp timeRegex =
+                            RegExp(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$');
+                        if (newTime.isEmpty || !timeRegex.hasMatch(newTime)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Format d\'heure invalide. Utilisez HH:MM (ex: 08:30)'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.of(context).pop();
+                        _modifierHeure(type, enfant, segmentIndex, newTime);
+                      },
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-
-          // Contenu de la carte (60% de la hauteur)
-          Expanded(
-            flex: 60,
-            child: Padding(
-              padding: EdgeInsets.all(16), // Padding plus important pour iPad
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceEvenly, // Répartition uniforme
-                children: [
-                  Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 24, // Plus grand pour iPad
-                      fontWeight: FontWeight.bold,
-                      color: getTextColor(),
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  if (isAbsent)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Text(
-                        'Absent aujourd\'hui',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                          fontSize: 18, // Plus grand pour iPad
-                        ),
-                      ),
-                    )
-                  else if (hasMultipleSegments)
-                    Expanded(
-                      child: _buildSegmentsListForTablet(enfant),
-                    )
-                  else
-                    _buildSimpleSegmentForTablet(
-                        enfant, enfant['segments'][0], 0),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Widget pour un seul segment adapté à l'iPad
-  Widget _buildSimpleSegmentForTablet(Map<String, dynamic> enfant,
-      Map<String, dynamic> segment, int segmentIndex) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (segment['heureDebut'] != null && segment['heureFin'] != null)
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-                vertical: 10, horizontal: 16), // Plus grand pour iPad
-            margin: EdgeInsets.only(bottom: 16), // Plus d'espace
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16), // Plus arrondi
-            ),
-            child: Text(
-              '${segment['heureDebut']} - ${segment['heureFin']}',
-              style: TextStyle(
-                fontSize: 20, // Plus grand pour iPad
-                color: primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildTimeButtonForTablet(
-              'Arrivée',
-              segment['arrivee'],
-              () => _enregistrerHeure('arrivee', enfant, segmentIndex),
-              segment['arrivee'] != null || enfant['absent'],
-            ),
-            _buildTimeButtonForTablet(
-              'Départ',
-              segment['depart'],
-              () => _enregistrerHeure('depart', enfant, segmentIndex),
-              segment['depart'] != null ||
-                  enfant['absent'] ||
-                  segment['arrivee'] == null,
-            ),
-          ],
-        ),
-        SizedBox(height: 16), // Plus d'espace
-        _buildAbsentButtonForTablet(enfant),
-      ],
-    );
-  }
-
-// Liste des segments pour iPad
-  Widget _buildSegmentsListForTablet(Map<String, dynamic> enfant) {
-    List<dynamic> segments = enfant['segments'];
-
-    if (segments.isEmpty) {
-      return Center(
-        child: Text('Aucun horaire défini',
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 18, // Plus grand pour iPad
-            )),
-      );
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.only(bottom: 0),
-      shrinkWrap: true,
-      itemCount: segments.length + 1, // +1 pour le bouton absent en bas
-      itemBuilder: (context, index) {
-        if (index == segments.length) {
-          return Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Center(child: _buildAbsentButtonForTablet(enfant)),
-          );
-        }
-
-        Map<String, dynamic> segment = segments[index];
-        bool isLastSegment = index == segments.length - 1;
-        return _buildSegmentItemForTablet(
-            enfant, segment, index, isLastSegment);
+        );
       },
     );
   }
 
-// Élément de segment adapté pour iPad
-  Widget _buildSegmentItemForTablet(Map<String, dynamic> enfant,
-      Map<String, dynamic> segment, int segmentIndex, bool isLastSegment) {
-    String heureDebut = segment['heureDebut'] ?? '--:--';
-    String heureFin = segment['heureFin'] ?? '--:--';
+  // NOUVELLE MÉTHODE : Modifier un horaire existant
+  void _modifierHeure(String type, Map<String, dynamic> enfant,
+      int segmentIndex, String newTime) {
+    List<dynamic> segments = enfant['segments'];
+    if (segmentIndex >= segments.length) return;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: isLastSegment ? 8 : 12), // Plus d'espace
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: double.infinity,
-            padding:
-                EdgeInsets.symmetric(vertical: 8, horizontal: 12), // Plus grand
-            margin: EdgeInsets.only(bottom: 8), // Plus d'espace
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'Créneau ${segmentIndex + 1}: $heureDebut - $heureFin',
-              style: TextStyle(
-                fontSize: 16, // Plus grand pour iPad
-                color: primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          SizedBox(height: 8), // Plus d'espace
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildTimeButtonForTablet(
-                'Arrivée',
-                segment['arrivee'],
-                () => _enregistrerHeure('arrivee', enfant, segmentIndex),
-                segment['arrivee'] != null || enfant['absent'],
-              ),
-              _buildTimeButtonForTablet(
-                'Départ',
-                segment['depart'],
-                () => _enregistrerHeure('depart', enfant, segmentIndex),
-                segment['depart'] != null ||
-                    enfant['absent'] ||
-                    segment['arrivee'] == null,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+    Map<String, dynamic> segment = segments[segmentIndex];
 
-// Bouton de temps (arrivée/départ) adapté pour iPad
-  Widget _buildTimeButtonForTablet(
-      String label, String? time, VoidCallback onPressed, bool isDisabled) {
-    return SizedBox(
-      width: 100, // Plus large pour iPad
-      height: 44, // Plus haut pour iPad
-      child: ElevatedButton(
-        onPressed: isDisabled ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? Colors.grey[300] : primaryColor,
-          disabledBackgroundColor: Colors.grey[300],
-          elevation: isDisabled ? 0 : 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22), // Plus arrondi
-          ),
-          padding: EdgeInsets.symmetric(horizontal: 12),
-        ),
-        child: Text(
-          time ?? label,
-          style: TextStyle(
-            fontSize: 16, // Plus grand pour iPad
-            fontWeight: FontWeight.w600,
-            color: isDisabled ? Colors.grey[500] : Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
+    setState(() {
+      segment[type] = newTime;
 
-// Bouton absent adapté pour iPad
-  Widget _buildAbsentButtonForTablet(Map<String, dynamic> enfant) {
-    bool aucunHoraireEnregistre = true;
-    for (var segment in enfant['segments']) {
-      if (segment['arrivee'] != null || segment['depart'] != null) {
-        aucunHoraireEnregistre = false;
-        break;
+      // Si on modifie une arrivée, l'enfant n'est pas absent
+      if (type == 'arrivee') {
+        enfant['absent'] = false;
+      }
+    });
+
+    Map<String, dynamic> horairesData = {
+      'prenom': enfant['prenom'],
+      'actionType': '${type}_modifiee',
+      'exactTime': DateTime.now(),
+      'heure': newTime,
+      'segments': List<Map<String, dynamic>>.from(segments),
+    };
+
+    // Pour l'arrivée modifiée, on enregistre directement
+    if (type == 'arrivee') {
+      _updateHoraires(enfant['id'], horairesData);
+    }
+    // Pour le départ modifié, on demande les km si pas encore renseignés
+    else if (type == 'depart') {
+      // Vérifier si les km sont déjà enregistrés pour ce segment
+      bool kmDejaEnregistres = segment['km'] != null;
+
+      if (kmDejaEnregistres) {
+        _updateHoraires(enfant['id'], horairesData);
+      } else {
+        _showKilometersDialog(enfant, horairesData, segmentIndex);
       }
     }
-
-    return (aucunHoraireEnregistre && !enfant['absent'])
-        ? SizedBox(
-            width: 120, // Plus large pour iPad
-            height: 44, // Plus haut pour iPad
-            child: ElevatedButton(
-              onPressed: () => _marquerAbsent(enfant),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryRed,
-                elevation: 1,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22), // Plus arrondi
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 12),
-              ),
-              child: Text(
-                'Absent',
-                style: TextStyle(
-                  fontSize: 16, // Plus grand pour iPad
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          )
-        : Container();
   }
 
   Future<void> _loadStructureData() async {
@@ -436,7 +299,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
       }
 
@@ -459,8 +322,6 @@ class _HorairesScreenState extends State<HorairesScreen> {
       setState(() => isLoading = false);
     }
   }
-
-// Également dans la méthode _loadEnfantsDuJour(), assurez-vous d'utiliser le même ID de structure
 
   Future<void> _loadEnfantsDuJour() async {
     try {
@@ -488,7 +349,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
         }
       }
 
@@ -550,7 +411,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
         bool isVisible =
             structureType != "MAM" || assignedEmail == currentUserEmail;
         print(
-            "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
+            "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à : '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
 
       // Récupérer les horaires enregistrés pour aujourd'hui
@@ -623,10 +484,20 @@ class _HorairesScreenState extends State<HorairesScreen> {
           // Récupérer les horaires déjà enregistrés aujourd'hui
           if (horairesDuJour.containsKey(child['id'])) {
             final horaire = horairesDuJour[child['id']];
+            print(
+                "🔍 DEBUG: Données Firebase pour ${child['firstName']}: actionType='${horaire['actionType']}', absent=${horaire['absent']}");
 
             // Si l'enfant est marqué absent, on met à jour le statut
             if (horaire['actionType'] == 'absent') {
               horaireEnfant['absent'] = true;
+              print(
+                  "✅ Enfant ${child['firstName']} marqué absent depuis Firebase");
+            }
+            // Si l'action est 'annuler_absent', l'enfant n'est pas absent
+            else if (horaire['actionType'] == 'annuler_absent') {
+              horaireEnfant['absent'] = false;
+              print(
+                  "✅ Enfant ${child['firstName']} marqué présent depuis Firebase");
             }
             // Sinon, on récupère les heures d'arrivée/départ pour chaque segment
             else if (horaire['segments'] != null) {
@@ -662,6 +533,21 @@ class _HorairesScreenState extends State<HorairesScreen> {
         enfants = tempEnfants;
         isLoading = false;
       });
+
+      // Debug final pour vérifier l'état des enfants chargés
+      for (var enfant in enfants) {
+        print(
+            "🏁 FINAL: Enfant ${enfant['prenom']} - absent=${enfant['absent']}");
+      }
+
+      // Force un rebuild avec un délai minimal
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (mounted) {
+          print("🔄 FORCE REBUILD après délai");
+          _rebuildKey = DateTime.now().millisecondsSinceEpoch.toString();
+          setState(() {});
+        }
+      });
     } catch (e) {
       print("Erreur de chargement des enfants: $e");
       setState(() => isLoading = false);
@@ -692,7 +578,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
           // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
           structureId = userData['structureId'];
           print(
-              "🔄 Horaires: Enregistrement pour la structure MAM: $structureId");
+              "📄 Horaires: Enregistrement pour la structure MAM: $structureId");
         }
       }
 
@@ -914,6 +800,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
   }
 
   void _marquerAbsent(Map<String, dynamic> enfant) {
+    print("🔴 DEBUG: Marquage absent pour ${enfant['prenom']}");
     final now = DateTime.now();
 
     setState(() {
@@ -933,7 +820,15 @@ class _HorairesScreenState extends State<HorairesScreen> {
       'segments': enfant['segments'],
     };
 
-    _updateHoraires(enfant['id'], horairesData);
+    _updateHoraires(enfant['id'], horairesData).then((_) {
+      // Force un rechargement complet des données et un rebuild total
+      print(
+          "✅ Firebase enregistré, rechargement complet des données pour ${enfant['prenom']}");
+      print("🔄 État avant rechargement: absent=${enfant['absent']}");
+      _rebuildKey =
+          DateTime.now().millisecondsSinceEpoch.toString(); // Nouvelle clé
+      _loadEnfantsDuJour(); // Recharge complètement les données depuis Firebase
+    });
   }
 
   void _onItemTapped(int index) {
@@ -950,9 +845,448 @@ class _HorairesScreenState extends State<HorairesScreen> {
     }
   }
 
-  // AppBar personnalisé avec gradient
-  // Modification du header pour iPad dans la méthode _buildAppBar
+  // === MÉTHODES POUR IPAD ===
 
+  // Nouvelle méthode pour la grille adaptée à l'iPad
+  Widget _buildChildrenGridForTablet() {
+    return GridView.builder(
+      padding: EdgeInsets.all(20),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.85, // Ratio plus carré pour iPad
+        crossAxisSpacing: 24, // Plus d'espace horizontal
+        mainAxisSpacing: 24, // Plus d'espace vertical
+      ),
+      itemCount: enfants.length,
+      itemBuilder: (context, index) =>
+          _buildEnfantCardForTablet(context, index),
+    );
+  }
+
+  // Nouvelle méthode pour la carte enfant adaptée à l'iPad
+  Widget _buildEnfantCardForTablet(BuildContext context, int index) {
+    final enfant = enfants[index];
+    bool isAbsent = enfant['absent'] == true;
+    String genre = enfant['genre']?.toString() ?? 'Garçon';
+    bool hasMultipleSegments = enfant['segments'].length > 1;
+
+    Color getCardColor() {
+      if (isAbsent) return Colors.grey.shade200;
+      return Colors.white;
+    }
+
+    Color getTextColor() {
+      if (isAbsent) return Colors.grey;
+      return (genre == 'Fille') ? primaryRed : primaryBlue;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: getCardColor(),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Photo de l'enfant (40% de la hauteur)
+          Expanded(
+            flex: 40,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  child: enfant['photoUrl'] != null
+                      ? Image.network(
+                          enfant['photoUrl'],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _buildPlaceholder(),
+                        )
+                      : _buildPlaceholder(),
+                ),
+                if (isAbsent)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'ABSENT',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22, // Plus grand pour iPad
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Contenu de la carte (60% de la hauteur)
+          Expanded(
+            flex: 60,
+            child: Padding(
+              padding: EdgeInsets.all(16), // Padding plus important pour iPad
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceEvenly, // Répartition uniforme
+                children: [
+                  Text(
+                    enfant['prenom'],
+                    style: TextStyle(
+                      fontSize: 24, // Plus grand pour iPad
+                      fontWeight: FontWeight.bold,
+                      color: getTextColor(),
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  if (isAbsent)
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'Absent aujourd\'hui',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 18, // Plus grand pour iPad
+                        ),
+                      ),
+                    )
+                  else if (hasMultipleSegments)
+                    Expanded(
+                      child: _buildSegmentsListForTablet(enfant),
+                    )
+                  else
+                    _buildSimpleSegmentForTablet(
+                        enfant, enfant['segments'][0], 0),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget pour un seul segment adapté à l'iPad
+  Widget _buildSimpleSegmentForTablet(Map<String, dynamic> enfant,
+      Map<String, dynamic> segment, int segmentIndex) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (segment['heureDebut'] != null && segment['heureFin'] != null)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+                vertical: 10, horizontal: 16), // Plus grand pour iPad
+            margin: EdgeInsets.only(bottom: 16), // Plus d'espace
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16), // Plus arrondi
+            ),
+            child: Text(
+              '${segment['heureDebut']} - ${segment['heureFin']}',
+              style: TextStyle(
+                fontSize: 20, // Plus grand pour iPad
+                color: primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildTimeButtonForTablet(
+              'Arrivée',
+              segment['arrivee'],
+              () => _enregistrerHeure('arrivee', enfant, segmentIndex),
+              enfant, segmentIndex,
+              'arrivee', // Paramètres supplémentaires pour modification
+            ),
+            _buildTimeButtonForTablet(
+              'Départ',
+              segment['depart'],
+              () => _enregistrerHeure('depart', enfant, segmentIndex),
+              enfant, segmentIndex,
+              'depart', // Paramètres supplémentaires pour modification
+            ),
+          ],
+        ),
+        // AJOUT : Indication pour la modification sur iPad
+        if (segment['arrivee'] != null || segment['depart'] != null)
+          Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Appui long sur une heure pour modifier',
+              style: TextStyle(
+                fontSize: 14, // Plus grand pour iPad
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        SizedBox(height: 16), // Plus d'espace
+        _buildAbsentButtonForTablet(enfant),
+      ],
+    );
+  }
+
+  // Liste des segments pour iPad
+  Widget _buildSegmentsListForTablet(Map<String, dynamic> enfant) {
+    List<dynamic> segments = enfant['segments'];
+
+    if (segments.isEmpty) {
+      return Center(
+        child: Text('Aucun horaire défini',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 18, // Plus grand pour iPad
+            )),
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.only(bottom: 0),
+      shrinkWrap: true,
+      itemCount: segments.length + 1, // +1 pour le bouton absent en bas
+      itemBuilder: (context, index) {
+        if (index == segments.length) {
+          return Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Center(child: _buildAbsentButtonForTablet(enfant)),
+          );
+        }
+
+        Map<String, dynamic> segment = segments[index];
+        bool isLastSegment = index == segments.length - 1;
+        return _buildSegmentItemForTablet(
+            enfant, segment, index, isLastSegment);
+      },
+    );
+  }
+
+  // Élément de segment adapté pour iPad
+  Widget _buildSegmentItemForTablet(Map<String, dynamic> enfant,
+      Map<String, dynamic> segment, int segmentIndex, bool isLastSegment) {
+    String heureDebut = segment['heureDebut'] ?? '--:--';
+    String heureFin = segment['heureFin'] ?? '--:--';
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLastSegment ? 8 : 12), // Plus d'espace
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding:
+                EdgeInsets.symmetric(vertical: 8, horizontal: 12), // Plus grand
+            margin: EdgeInsets.only(bottom: 8), // Plus d'espace
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Créneau ${segmentIndex + 1}: $heureDebut - $heureFin',
+              style: TextStyle(
+                fontSize: 16, // Plus grand pour iPad
+                color: primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(height: 8), // Plus d'espace
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildTimeButtonForTablet(
+                'Arrivée',
+                segment['arrivee'],
+                () => _enregistrerHeure('arrivee', enfant, segmentIndex),
+                enfant,
+                segmentIndex,
+                'arrivee',
+              ),
+              _buildTimeButtonForTablet(
+                'Départ',
+                segment['depart'],
+                () => _enregistrerHeure('depart', enfant, segmentIndex),
+                enfant,
+                segmentIndex,
+                'depart',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // BOUTON MODIFIÉ pour iPad avec appui long pour modification
+  Widget _buildTimeButtonForTablet(
+      String label,
+      String? time,
+      VoidCallback onPressed,
+      Map<String, dynamic> enfant,
+      int segmentIndex,
+      String type) {
+    // CORRECTION: Ne plus désactiver les boutons quand l'enfant est absent
+    bool isDisabled = (type == 'depart' &&
+        time == null &&
+        enfant['segments'][segmentIndex]['arrivee'] == null &&
+        !enfant['absent']); // Seule condition de désactivation réelle
+
+    return SizedBox(
+      width: 100,
+      height: 44,
+      child: time != null
+          ? GestureDetector(
+              onLongPress: () {
+                // Appui long pour modifier l'horaire (même si absent)
+                _showEditTimeDialog(type, enfant, segmentIndex);
+              },
+              child: ElevatedButton(
+                onPressed: null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor.withOpacity(0.8),
+                  disabledBackgroundColor: primaryColor.withOpacity(0.8),
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            )
+          : ElevatedButton(
+              onPressed: isDisabled ? null : onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDisabled ? Colors.grey[300] : primaryColor,
+                disabledBackgroundColor: Colors.grey[300],
+                elevation: isDisabled ? 0 : 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDisabled ? Colors.grey[500] : Colors.white,
+                ),
+              ),
+            ),
+    );
+  }
+
+  // BOUTON ABSENT pour iPad avec possibilité d'annulation
+  Widget _buildAbsentButtonForTablet(Map<String, dynamic> enfant) {
+    bool aucunHoraireEnregistre = true;
+    for (var segment in enfant['segments']) {
+      if (segment['arrivee'] != null || segment['depart'] != null) {
+        aucunHoraireEnregistre = false;
+        break;
+      }
+    }
+
+    print(
+        "🔍 DEBUG _buildAbsentButtonForTablet() appelée - Enfant ${enfant['prenom']}: absent=${enfant['absent']}, aucunHoraire=$aucunHoraireEnregistre");
+
+    // Si l'enfant est déjà marqué absent, montrer le bouton pour annuler
+    if (enfant['absent'] == true) {
+      print(
+          "🟠 CRÉATION du bouton Annuler Absent TABLET pour ${enfant['prenom']}");
+      return SizedBox(
+        width: 140,
+        height: 44,
+        child: ElevatedButton(
+          onPressed: () {
+            print(
+                "🟠 Bouton Annuler Absent (iPad) pressé pour ${enfant['prenom']}");
+            _annulerAbsent(enfant);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 12),
+          ),
+          child: Text(
+            'Annuler Absent',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    } else if (aucunHoraireEnregistre) {
+      // Bouton pour marquer absent
+      print("🔴 CRÉATION du bouton Absent TABLET pour ${enfant['prenom']}");
+      return SizedBox(
+        width: 120,
+        height: 44,
+        child: ElevatedButton(
+          onPressed: () {
+            print("🔴 Bouton Absent (iPad) pressé pour ${enfant['prenom']}");
+            _marquerAbsent(enfant);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryRed,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 12),
+          ),
+          child: Text(
+            'Absent',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    print(
+        "🚫 Aucun bouton TABLET créé pour ${enfant['prenom']} (horaire déjà enregistré)");
+    return Container();
+  }
+
+  // === MÉTHODES POUR IPHONE ===
+
+  // AppBar personnalisé avec gradient
   Widget _buildAppBar(BuildContext context) {
     // Détection de l'iPad
     final bool isTabletDevice = isTablet(context);
@@ -1171,6 +1505,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
     String genre = enfant['genre']?.toString() ?? 'Garçon';
     bool hasMultipleSegments = enfant['segments'].length > 1;
 
+    print(
+        "🏗️ DEBUG _buildEnfantCard() pour ${enfant['prenom']}: absent=$isAbsent, multipleSegments=$hasMultipleSegments");
+
     // Couleurs dynamiques selon le genre (en utilisant les couleurs officielles)
     Color getCardColor() {
       if (isAbsent) return Colors.grey.shade200;
@@ -1256,15 +1593,22 @@ class _HorairesScreenState extends State<HorairesScreen> {
                   ),
                   SizedBox(height: 10),
                   if (isAbsent)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        'Absent aujourd\'hui',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
+                    Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Absent aujourd\'hui',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                         ),
-                      ),
+                        SizedBox(height: 8),
+                        _buildAbsentButton(
+                            enfant), // AJOUT DU BOUTON MÊME QUAND ABSENT
+                      ],
                     )
                   else if (hasMultipleSegments)
                     Expanded(
@@ -1295,6 +1639,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
   // Widget pour un seul segment
   Widget _buildSimpleSegment(Map<String, dynamic> enfant,
       Map<String, dynamic> segment, int segmentIndex) {
+    print(
+        "🔧 DEBUG _buildSimpleSegment() pour ${enfant['prenom']}: absent=${enfant['absent']}");
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1324,18 +1671,34 @@ class _HorairesScreenState extends State<HorairesScreen> {
               'Arrivée',
               segment['arrivee'],
               () => _enregistrerHeure('arrivee', enfant, segmentIndex),
-              segment['arrivee'] != null || enfant['absent'],
+              enfant,
+              segmentIndex,
+              'arrivee',
             ),
             _buildTimeButton(
               'Départ',
               segment['depart'],
               () => _enregistrerHeure('depart', enfant, segmentIndex),
-              segment['depart'] != null ||
-                  enfant['absent'] ||
-                  segment['arrivee'] == null,
+              enfant,
+              segmentIndex,
+              'depart',
             ),
           ],
         ),
+        // AJOUT : Indication pour la modification
+        if (segment['arrivee'] != null || segment['depart'] != null)
+          Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Appui long sur une heure pour modifier',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
         SizedBox(height: 10),
         _buildAbsentButton(enfant),
       ],
@@ -1409,57 +1772,110 @@ class _HorairesScreenState extends State<HorairesScreen> {
                 'Arrivée',
                 segment['arrivee'],
                 () => _enregistrerHeure('arrivee', enfant, segmentIndex),
-                segment['arrivee'] != null || enfant['absent'],
+                enfant,
+                segmentIndex,
+                'arrivee',
               ),
               _buildTimeButton(
                 'Départ',
                 segment['depart'],
                 () => _enregistrerHeure('depart', enfant, segmentIndex),
-                segment['depart'] != null ||
-                    enfant['absent'] ||
-                    segment['arrivee'] == null,
+                enfant,
+                segmentIndex,
+                'depart',
               ),
             ],
           ),
+          // AJOUT : Indication pour la modification sur segments multiples
+          if (segment['arrivee'] != null || segment['depart'] != null)
+            Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Text(
+                'Appui long pour modifier',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  // Bouton de temps (arrivée/départ)
-  Widget _buildTimeButton(
-      String label, String? time, VoidCallback onPressed, bool isDisabled) {
+  // BOUTON MODIFIÉ avec appui long pour modification
+  Widget _buildTimeButton(String label, String? time, VoidCallback onPressed,
+      Map<String, dynamic> enfant, int segmentIndex, String type) {
+    // CORRECTION: Ne plus désactiver les boutons quand l'enfant est absent
+    // Permettre la modification même si absent
+    bool isDisabled = (type == 'depart' &&
+        time == null &&
+        enfant['segments'][segmentIndex]['arrivee'] == null &&
+        !enfant['absent']); // Seule condition de désactivation réelle
+
     return SizedBox(
       width: 70,
       height: 32,
-      child: ElevatedButton(
-        onPressed: isDisabled ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? Colors.grey[300] : primaryColor,
-          disabledBackgroundColor: Colors.grey[300],
-          elevation: isDisabled ? 0 : 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: 8),
-        ),
-        child: FittedBox(
-          child: Text(
-            time ?? label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isDisabled ? Colors.grey[500] : Colors.white,
+      child: time != null
+          ? GestureDetector(
+              onLongPress: () {
+                // Appui long pour modifier l'horaire (même si absent)
+                _showEditTimeDialog(type, enfant, segmentIndex);
+              },
+              child: ElevatedButton(
+                onPressed:
+                    null, // Désactivé visuellement mais modifiable par appui long
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor.withOpacity(0.8),
+                  disabledBackgroundColor: primaryColor.withOpacity(0.8),
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                ),
+                child: FittedBox(
+                  child: Text(
+                    time,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : ElevatedButton(
+              onPressed: isDisabled ? null : onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDisabled ? Colors.grey[300] : primaryColor,
+                disabledBackgroundColor: Colors.grey[300],
+                elevation: isDisabled ? 0 : 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: FittedBox(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDisabled ? Colors.grey[500] : Colors.white,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
-  // Bouton pour marquer l'enfant absent
+  // BOUTON ABSENT MODIFIÉ avec possibilité d'annulation
   Widget _buildAbsentButton(Map<String, dynamic> enfant) {
-    // Ne montrer le bouton Absent que si aucun horaire n'a été enregistré
+    // Vérifier si aucun horaire n'a été enregistré
     bool aucunHoraireEnregistre = true;
     for (var segment in enfant['segments']) {
       if (segment['arrivee'] != null || segment['depart'] != null) {
@@ -1468,33 +1884,78 @@ class _HorairesScreenState extends State<HorairesScreen> {
       }
     }
 
-    return (aucunHoraireEnregistre && !enfant['absent'])
-        ? SizedBox(
-            width: 80,
-            height: 32,
-            child: ElevatedButton(
-              onPressed: () => _marquerAbsent(enfant),
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    primaryRed, // Utiliser la couleur rouge primaire
-                elevation: 1,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: FittedBox(
-                child: Text(
-                  'Absent',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
+    // CORRECTION : Vérification explicite du statut absent avec logs debug
+    print(
+        "🔍 DEBUG _buildAbsentButton() appelée - Enfant ${enfant['prenom']}: absent=${enfant['absent']}, aucunHoraire=$aucunHoraireEnregistre");
+
+    // Si l'enfant est déjà marqué absent, montrer le bouton pour annuler
+    if (enfant['absent'] == true) {
+      print("🟠 CRÉATION du bouton Annuler Absent pour ${enfant['prenom']}");
+      return SizedBox(
+        width: 120,
+        height: 32,
+        child: ElevatedButton(
+          onPressed: () {
+            print("🟠 Bouton Annuler Absent pressé pour ${enfant['prenom']}");
+            _annulerAbsent(enfant);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange, // Couleur différente pour "Annuler"
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 8),
+          ),
+          child: FittedBox(
+            child: Text(
+              'Annuler Absent',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
             ),
-          )
-        : Container(); // Retourne un conteneur vide si un horaire est déjà enregistré
+          ),
+        ),
+      );
+    }
+
+    // Sinon, montrer le bouton Absent classique uniquement si aucun horaire enregistré
+    if (aucunHoraireEnregistre) {
+      print("🔴 CRÉATION du bouton Absent pour ${enfant['prenom']}");
+      return SizedBox(
+        width: 80,
+        height: 32,
+        child: ElevatedButton(
+          onPressed: () {
+            print("🔴 Bouton Absent pressé pour ${enfant['prenom']}");
+            _marquerAbsent(enfant);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryRed, // Utiliser la couleur rouge primaire
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 8),
+          ),
+          child: FittedBox(
+            child: Text(
+              'Absent',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      print(
+          "🚫 Aucun bouton créé pour ${enfant['prenom']} (horaire déjà enregistré)");
+      return Container(); // Retourne un conteneur vide si un horaire est déjà enregistré
+    }
   }
 }
