@@ -830,7 +830,6 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
     );
   }
 
-
   Future<void> _selectDate(BuildContext context) async {
     // Initialize the French date locale
     initializeDateFormatting('fr_FR', null);
@@ -844,6 +843,7 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
       initialDate: now,
       firstDate: DateTime(now.year - 10),
       lastDate: now,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       // Set locale to French
       locale: const Locale('fr', 'FR'),
       builder: (context, child) {

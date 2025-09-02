@@ -36,6 +36,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   String? selectedChildId;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  // Nouveau: contrôleur pour faire défiler automatiquement la zone de saisie multiline
+  final ScrollController _inputScrollController = ScrollController();
   bool _isUploadingFile = false;
   int _selectedIndex = 1;
   String? selectedParentForMessage;
@@ -63,6 +65,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     WidgetsBinding.instance.removeObserver(this); // AJOUTÉ
     _messageController.dispose();
     _scrollController.dispose();
+    _inputScrollController.dispose();
     super.dispose();
   }
 
@@ -1840,6 +1843,11 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                 Expanded(
                                   child: TextField(
                                     controller: _messageController,
+                                    keyboardType: TextInputType.multiline,
+                                    textInputAction: TextInputAction.newline,
+                                    minLines: 1,
+                                    maxLines: isTabletDevice ? 6 : 4,
+                                    scrollController: _inputScrollController,
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 16 : 14,
                                     ),
@@ -1870,9 +1878,18 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                       filled: true,
                                       fillColor: Colors.grey.shade50,
                                     ),
-                                    onSubmitted: (_) => _sendMessage(
-                                        enfant['id'], dialogContext),
-                                    textInputAction: TextInputAction.send,
+                                    onChanged: (_) {
+                                      // Assure que le curseur et la dernière ligne restent visibles
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                        if (_inputScrollController.hasClients) {
+                                          _inputScrollController.jumpTo(
+                                            _inputScrollController
+                                                .position.maxScrollExtent,
+                                          );
+                                        }
+                                      });
+                                    },
                                   ),
                                 ),
                                 SizedBox(width: isTabletDevice ? 12 : 8),
