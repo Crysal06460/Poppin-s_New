@@ -418,6 +418,33 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 height: 1.4,
               ),
             ),
+            SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDFE9F2).withOpacity(0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: const [
+                  Icon(Icons.info_outline, size: 18, color: Color(0xFF3D9DF2)),
+                  SizedBox(width: 2),
+                  // Le texte se replie automatiquement si nécessaire (pas d'overflow)
+                  Text(
+                    "Les photos et vidéos sont conservées 10 jours",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF3D9DF2),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

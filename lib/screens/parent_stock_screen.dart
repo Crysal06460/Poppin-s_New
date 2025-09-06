@@ -614,32 +614,39 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                                       ),
                                     ),
                                     SizedBox(width: 16),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          child['firstName'],
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black87,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            child['firstName'],
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
                                           ),
-                                        ),
-                                        SizedBox(height: 4),
-                                        Text(
-                                          hasNeeds
-                                              ? "Des fournitures sont demandées"
-                                              : "Aucune fourniture demandée",
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: hasNeeds
-                                                ? Colors.orange[800]
-                                                : Colors.green[700],
-                                            fontWeight: FontWeight.w500,
+                                          SizedBox(height: 4),
+                                          Text(
+                                            hasNeeds
+                                                ? "Des fournitures sont demandées"
+                                                : "Aucune fourniture demandée",
+                                            softWrap: true,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: hasNeeds
+                                                  ? Colors.orange[800]
+                                                  : Colors.green[700],
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
