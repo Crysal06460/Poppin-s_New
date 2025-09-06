@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -430,6 +431,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
       final structureId = _selectedChild!['structureId'];
 
       // Ajouter le message à la collection exchanges
+      final senderFcmToken = await FirebaseMessaging.instance.getToken();
       await _firestore.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
@@ -438,22 +440,12 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         'type': 'text',
         'senderType': 'parent',
         'nonLu': true, // Pour l'assistante maternelle
-        'readByParent': true // Le parent a déjà lu son propre message
+        'readByParent': true, // Le parent a déjà lu son propre message
+        'senderFcmToken': senderFcmToken,
       });
 
       final messageContent = _messageController.text.trim();
       _messageController.clear();
-
-      // 🔥 NOUVEAU : ENVOYER NOTIFICATION PUSH À L'ASSISTANTE MATERNELLE
-      // ✅ CORRIGÉ : Utiliser l'EMAIL au lieu de l'UID
-      final assistantEmail = await _getAssistantEmail(childId, structureId);
-      if (assistantEmail != null) {
-        await NotificationService.sendNotificationToUser(
-          recipientUserId: assistantEmail, // ✅ EMAIL au lieu d'UID
-          title: 'Nouveau message d\'un parent',
-          body: messageContent,
-        );
-      }
 
       // 🔥 PARTIE CRITIQUE : NOTIFIER L'ASSISTANTE MATERNELLE 🔥
       await _notifyAssistanteMaternel(childId, structureId);

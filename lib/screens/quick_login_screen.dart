@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:poppins_app/services/notification_service.dart';
 
 class QuickLoginScreen extends StatefulWidget {
   final Map<String, String> data;
@@ -67,6 +68,11 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
         email: email,
         password: _passwordController.text.trim(),
       );
+
+      // Renouveler le token FCM au login rapide
+      try {
+        await NotificationService.refreshTokenForCurrentUser();
+      } catch (_) {}
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);

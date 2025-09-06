@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:intl/intl.dart';
@@ -721,6 +722,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
           replyToId != null ? messageText.split(': ')[1] : messageText;
 
       // NOUVEAU : Ajouter le destinataire dans le message
+      final senderFcmToken = await FirebaseMessaging.instance.getToken();
       await FirebaseFirestore.instance.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
@@ -731,14 +733,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         'nonLu': true,
         'replyTo': replyToId,
         'targetParent': selectedParentForMessage, // NOUVEAU CHAMP
+        'senderFcmToken': senderFcmToken,
       });
 
       _messageController.clear();
       print("✅ Message envoyé avec destinataire: $selectedParentForMessage");
 
-      // Envoyer notifications selon le destinataire sélectionné
-      await _sendNotificationsToSelectedParents(
-          childId, structureId, messageContent);
+      // Notifications push envoyées côté serveur par Cloud Functions
+      // On met uniquement à jour les compteurs locaux
+      await _updateUnreadCountersAfterMessage(childId, structureId);
 
       // Message de succès
       ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -757,48 +760,26 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     }
   }
 
-  Future<void> _sendNotificationsToSelectedParents(
-      String childId, String structureId, String messageContent) async {
+  Future<void> _updateUnreadCountersAfterMessage(
+      String childId, String structureId) async {
     try {
       if (selectedParentForMessage == null) return;
-
       if (selectedParentForMessage == 'both') {
-        // Envoyer à tous les parents
         final parentsList = await _getParentsList(childId, structureId);
         for (var parent in parentsList) {
-          await NotificationService.sendNotificationToUser(
-            recipientUserId: parent['email'],
-            title: 'Nouveau message de Poppin\'s',
-            body: messageContent,
-          );
-
-          // Mettre à jour le compteur
           await FirebaseFirestore.instance
               .collection('users')
               .doc(parent['email'])
               .update({'unreadMessages': FieldValue.increment(1)});
-
-          print("✅ Notification envoyée au parent: ${parent['email']}");
         }
       } else {
-        // Envoyer à un parent spécifique
-        await NotificationService.sendNotificationToUser(
-          recipientUserId: selectedParentForMessage!,
-          title: 'Nouveau message de Poppin\'s',
-          body: messageContent,
-        );
-
-        // Mettre à jour le compteur
         await FirebaseFirestore.instance
             .collection('users')
             .doc(selectedParentForMessage!)
             .update({'unreadMessages': FieldValue.increment(1)});
-
-        print(
-            "✅ Notification envoyée au parent sélectionné: $selectedParentForMessage");
       }
     } catch (e) {
-      print("❌ Erreur lors de l'envoi des notifications: $e");
+      print("❌ Erreur lors de la mise à jour des compteurs: $e");
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:poppins_app/services/notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -119,6 +120,11 @@ class _LoginScreenState extends State<LoginScreen> {
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
+
+      // Renouveler le token FCM pour éviter d\'hériter d\'un ancien compte
+      try {
+        await NotificationService.refreshTokenForCurrentUser();
+      } catch (_) {}
 
       // ✅ NOUVELLES SAUVEGARDES
       final prefs = await SharedPreferences.getInstance();

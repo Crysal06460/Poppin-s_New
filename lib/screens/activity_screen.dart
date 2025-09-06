@@ -42,7 +42,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   String _activityType = "Musique";
   String _activityAttitude =
       "Curieux"; // ✅ CORRIGÉ : Plus de référence à _activityDuration
-  String _participationLevel = "Bien participé";
+  String _participationLevel = "";
   String _activityTime = "";
 
   // Types d'activités standards et personnalisées
@@ -1660,7 +1660,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     String localType = (activityData['type'] ?? 'Musique').toString();
     String localAttitude = (activityData['attitude'] ?? 'Curieux').toString();
     String localParticipation =
-        (activityData['participation'] ?? 'Bien participé').toString();
+        (activityData['participation'] ?? '').toString();
     TextEditingController obsCtrl = TextEditingController(
         text: (activityData['observations'] ?? '').toString());
 
@@ -1949,6 +1949,28 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               ],
                             ),
 
+                            // Hint UX: participation optionnelle
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 16, color: Colors.grey[500]),
+                                  SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      "Optionnel — laissez vide si non évalué aujourd'hui.",
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 13 : 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
                             SizedBox(height: 16),
                             // Observations
                             Text("Observations",
@@ -2142,7 +2164,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         _activityTime = '';
         _activityType = 'Musique';
         _activityAttitude = 'Curieux'; // ✅ CORRIGÉ : Réinitialisation attitude
-        _participationLevel = 'Bien participé';
+        _participationLevel = '';
         _observationsController.clear();
       });
 
