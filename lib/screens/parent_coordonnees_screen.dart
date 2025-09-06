@@ -222,7 +222,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                       children: [
                         // Email avec fonctionnalité d'envoi
                         if (parent['email'] != null &&
-                            parent['email'].toString().isNotEmpty)
+                            parent['email'].toString().isNotEmpty) ...[
                           _buildModernInfoRow(
                             Icons.email_rounded,
                             "Email",
@@ -231,7 +231,26 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             isClickable: true,
                             onTap: () => _handleEmailTap(
                                 parent['email'].toString(), parentKey),
+                            isEditable: true,
+                            onEdit: () => _showEditEmailDialog(parentKey),
                           ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => _resendInvitation(parentKey),
+                              icon: const Icon(Icons.restart_alt_rounded),
+                              label: const Text("Renvoyer l'invitation"),
+                              style: TextButton.styleFrom(
+                                foregroundColor: primaryBlue,
+                                backgroundColor: primaryBlue.withOpacity(0.08),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                shape: const StadiumBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
 
                         // Téléphone
                         if (parent['phone'] != null &&
@@ -241,6 +260,8 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             "Téléphone",
                             parent['phone'].toString(),
                             Colors.green,
+                            isEditable: true,
+                            onEdit: () => _showEditPhoneDialog(parentKey),
                           ),
 
                         // Adresse
@@ -250,6 +271,8 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             "Adresse",
                             _formatAddress(parentAddr),
                             Colors.orange,
+                            isEditable: true,
+                            onEdit: () => _showEditAddressDialog(parentKey),
                           ),
                       ],
                     ),
@@ -271,6 +294,8 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     Color iconColor, {
     bool isClickable = false,
     VoidCallback? onTap,
+    bool isEditable = false,
+    VoidCallback? onEdit,
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: 16),
@@ -369,12 +394,303 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                     ),
                   ),
                 ],
+                if (isEditable) ...[
+                  SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.edit, color: iconColor),
+                    tooltip: 'Modifier',
+                    onPressed: onEdit,
+                  ),
+                ],
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _showEditEmailDialog(String parentKey) async {
+    final parent = Map<String, dynamic>.from(parentInfo[parentKey] ?? {});
+    final TextEditingController controller =
+        TextEditingController(text: (parent['email'] ?? '').toString());
+
+    final newEmail = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Modifier l\'email du ${parentKey == 'parent1' ? 'parent 1' : 'parent 2'}'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            labelText: 'Email',
+            hintText: 'parent@example.com',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+
+    if (newEmail == null || newEmail.isEmpty) return;
+
+    // Validation simple
+    final emailRegex = RegExp(r'^\S+@\S+\.\S+$');
+    if (!emailRegex.hasMatch(newEmail)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Adresse email invalide'), backgroundColor: primaryRed),
+        );
+      }
+      return;
+    }
+
+    await _updateParentEmail(parentKey, newEmail.toLowerCase());
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Email mis à jour. Invitation renvoyée.'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _updateParentEmail(String parentKey, String email) async {
+    // Mise à jour Firestore enfant
+    final childRef = FirebaseFirestore.instance
+        .collection('structures')
+        .doc(widget.structureId)
+        .collection('children')
+        .doc(widget.childId);
+
+    final fieldPath = parentKey == 'parent2' ? 'parent2.email' : 'parent1.email';
+    await childRef.update({fieldPath: email});
+
+    // Etat local
+    setState(() {
+      parentInfo[parentKey] = {
+        ...?parentInfo[parentKey],
+        'email': email,
+      };
+    });
+
+    await _queueParentInvitationEmail(parentKey, email);
+  }
+
+  Future<void> _queueParentInvitationEmail(String parentKey, String email) async {
+    // Récupération infos
+    String structureName = 'Structure d\'accueil';
+    try {
+      final s = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .get();
+      structureName = (s.data() ?? {})['structureName'] ?? structureName;
+    } catch (_) {}
+
+    final parent = Map<String, dynamic>.from(parentInfo[parentKey] ?? {});
+    final firstName = (parent['firstName'] ?? '').toString();
+    final lastName = (parent['lastName'] ?? '').toString();
+
+    // Enregistrer une entrée d'invitation (suivi)
+    await FirebaseFirestore.instance.collection('invitations').add({
+      'email': email,
+      'type': 'parent',
+      'structureId': widget.structureId,
+      'structureName': structureName,
+      'childId': widget.childId,
+      'childName': widget.childName,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 30))),
+      'status': 'active',
+    });
+
+    // Upsert doc user parent minimal
+    await FirebaseFirestore.instance.collection('users').doc(email).set({
+      'role': 'parent',
+      'email': email,
+      'children': FieldValue.arrayUnion([widget.childId]),
+      'structureId': widget.structureId,
+      'structureName': structureName,
+      'childName': widget.childName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // Queue email via emailQueue
+    final templateData = {
+      'firstName': firstName,
+      'lastName': lastName,
+      'childName': widget.childName,
+      'childId': widget.childId,
+      'structureName': structureName,
+      'structureId': widget.structureId,
+      'androidLink': 'https://play.google.com/store/apps/details?id=com.example.poppins_app',
+      'iosLink': 'https://apps.apple.com/us/app/poppins/id6744274953',
+      'email': email,
+      'year': DateTime.now().year.toString(),
+    };
+
+    await FirebaseFirestore.instance.collection('emailQueue').add({
+      'to': email,
+      'template': 'parent-invitation',
+      'subject': "Invitation Poppins - Pour ${widget.childName}",
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'priority': 'high',
+      'retryCount': 0,
+      'templateData': templateData,
+    });
+  }
+
+  Future<void> _resendInvitation(String parentKey) async {
+    try {
+      final parent = Map<String, dynamic>.from(parentInfo[parentKey] ?? {});
+      final email = (parent['email'] ?? '').toString().toLowerCase().trim();
+      if (email.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Aucune adresse email à utiliser'), backgroundColor: primaryRed),
+          );
+        }
+        return;
+      }
+      await _queueParentInvitationEmail(parentKey, email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invitation renvoyée à $email'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${e.toString()}'), backgroundColor: primaryRed),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditPhoneDialog(String parentKey) async {
+    final parent = Map<String, dynamic>.from(parentInfo[parentKey] ?? {});
+    final TextEditingController controller =
+        TextEditingController(text: (parent['phone'] ?? '').toString());
+
+    final newPhone = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Modifier le téléphone du ${parentKey == 'parent1' ? 'parent 1' : 'parent 2'}'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            labelText: 'Téléphone',
+            hintText: '+33 6 12 34 56 78',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+
+    if (newPhone == null) return;
+    final cleaned = newPhone.trim();
+    if (cleaned.isEmpty || cleaned.replaceAll(RegExp('[^0-9+]'), '').length < 6) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Numéro invalide'), backgroundColor: primaryRed),
+        );
+      }
+      return;
+    }
+
+    await _updateParentPhone(parentKey, cleaned);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Téléphone mis à jour'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _updateParentPhone(String parentKey, String phone) async {
+    final childRef = FirebaseFirestore.instance
+        .collection('structures')
+        .doc(widget.structureId)
+        .collection('children')
+        .doc(widget.childId);
+    final fieldPath = parentKey == 'parent2' ? 'parent2.phone' : 'parent1.phone';
+    await childRef.update({fieldPath: phone});
+    setState(() {
+      parentInfo[parentKey] = {
+        ...?parentInfo[parentKey],
+        'phone': phone,
+      };
+    });
+  }
+
+  Future<void> _showEditAddressDialog(String parentKey) async {
+    final addr = Map<String, dynamic>.from(parentAddress[parentKey] ?? {});
+    final cAddress = TextEditingController(text: (addr['address'] ?? '').toString());
+    final cPostal = TextEditingController(text: (addr['postalCode'] ?? '').toString());
+    final cCity = TextEditingController(text: (addr['city'] ?? '').toString());
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Modifier l\'adresse du ${parentKey == 'parent1' ? 'parent 1' : 'parent 2'}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: cAddress, decoration: InputDecoration(labelText: 'Adresse')), 
+            SizedBox(height: 8),
+            TextField(controller: cPostal, decoration: InputDecoration(labelText: 'Code postal'), keyboardType: TextInputType.number),
+            SizedBox(height: 8),
+            TextField(controller: cCity, decoration: InputDecoration(labelText: 'Ville')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text('Enregistrer')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await _updateParentAddress(parentKey, {
+      'address': cAddress.text.trim(),
+      'postalCode': cPostal.text.trim(),
+      'city': cCity.text.trim(),
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Adresse mise à jour'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _updateParentAddress(String parentKey, Map<String, String> address) async {
+    final childRef = FirebaseFirestore.instance
+        .collection('structures')
+        .doc(widget.structureId)
+        .collection('children')
+        .doc(widget.childId);
+
+    final fieldPath = parentKey == 'parent2' ? 'parent2Address' : 'parentAddress';
+    await childRef.update({fieldPath: address});
+    setState(() {
+      parentAddress[parentKey] = address;
+    });
   }
 
   // Méthode corrigée pour gérer le clic sur l'email

@@ -1,4 +1,4 @@
-const {onDocumentCreated} = require('firebase-functions/v2/firestore');
+const {onDocumentCreated, onDocumentWritten} = require('firebase-functions/v2/firestore');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {onCall} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
 const {initializeApp} = require('firebase-admin/app');
@@ -1011,4 +1011,107 @@ exports.cleanupOldNotifications = onSchedule({
     }
     
     return null;
+});
+
+// ================================
+// ===== STOCK NOTIF TRIGGER  =====
+// ================================
+// Crée une notification pour les parents lorsqu'un pro ajoute des besoins de stock
+exports.onStockNeedsUpdated = onDocumentWritten({
+    document: 'structures/{structureId}/children/{childId}/stocks/current',
+    region: 'europe-west1'
+}, async (event) => {
+    try {
+        const beforeData = event.data.before.exists ? event.data.before.data() : {};
+        const afterData = event.data.after.exists ? event.data.after.data() : {};
+
+        // Sécurité: si le doc est supprimé ou vide -> rien à faire
+        if (!event.data.after.exists || !afterData) {
+            console.log('ℹ️ Stock supprimé ou vide, aucune notif créée');
+            return null;
+        }
+
+        // Détecter les nouveaux items passés à true
+        let newlyActivated = [];
+        Object.keys(afterData || {}).forEach((key) => {
+            const afterVal = !!afterData[key];
+            const beforeVal = !!(beforeData ? beforeData[key] : false);
+            if (afterVal === true && beforeVal !== true) {
+                newlyActivated.push(key);
+            }
+        });
+
+        // Cas initial: avant aucun besoin actif et après ≥1 besoin actif
+        if (newlyActivated.length === 0) {
+            const beforeTrue = Object.keys(beforeData || {}).filter(k => !!beforeData[k]);
+            const afterTrue = Object.keys(afterData || {}).filter(k => !!afterData[k]);
+            if (beforeTrue.length === 0 && afterTrue.length > 0) {
+                newlyActivated = afterTrue; // notifier la première fois
+                console.log('ℹ️ Activation initiale des besoins, items:', newlyActivated);
+            } else {
+                console.log('ℹ️ Aucun nouveau besoin de stock activé');
+                return null;
+            }
+        }
+
+        const { childId } = event.params;
+
+        // Charger les infos enfant pour le prénom (optionnel)
+        let childName = '';
+        try {
+            const childRef = db
+                .collection('structures')
+                .doc(event.params.structureId)
+                .collection('children')
+                .doc(childId);
+            const childSnap = await childRef.get();
+            if (childSnap.exists) {
+                const c = childSnap.data() || {};
+                childName = c.prenom || c.name || '';
+            }
+        } catch (e) {
+            console.warn('⚠️ Impossible de charger les infos enfant:', e.message || e);
+        }
+
+        const title = 'Demande de stock';
+        const body = childName
+            ? `Nouveaux besoins pour ${childName} : ${newlyActivated.join(', ')}`
+            : `Nouveaux besoins : ${newlyActivated.join(', ')}`;
+
+        // Destinataires: tous les parents liés à l'enfant
+        const recipients = await getParentsEmails(childId);
+        if (!recipients || recipients.length === 0) {
+            console.warn('⚠️ Aucun parent trouvé pour childId:', childId);
+            return null;
+        }
+
+        console.log(`📬 Création de ${recipients.length} notification(s) de type stock`);
+
+        // Créer un document de notification par parent
+        const batchOps = [];
+        for (const email of recipients) {
+            const notificationData = {
+                recipientUserId: email.toLowerCase().trim(),
+                title,
+                body,
+                data: {
+                    type: 'stock',
+                    childId,
+                    items: newlyActivated,
+                },
+                timestamp: FieldValue.serverTimestamp(),
+                sent: false,
+                platform: 'multi',
+            };
+            console.log('📦 Notification stock →', email, newlyActivated);
+            batchOps.push(db.collection('notifications').add(notificationData));
+        }
+
+        await Promise.all(batchOps);
+        console.log('✅ Notifications stock créées');
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur onStockNeedsUpdated:', error);
+        return null;
+    }
 });

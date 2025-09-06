@@ -6,6 +6,8 @@ import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+import 'package:poppins_app/routes.dart';
 
 // Top-level background handler (recommandé par firebase_messaging)
 @pragma('vm:entry-point')
@@ -378,15 +380,25 @@ class NotificationService {
       message.notification?.title ?? 'Nouveau message',
       message.notification?.body ?? 'Vous avez reçu un nouveau message',
       notificationDetails,
-      payload: message.data.toString(),
+      // Utiliser JSON pour décodage fiable lors du clic
+      payload: jsonEncode(message.data),
     );
   }
 
   /// Gérer les clics sur notifications
   static void _handleMessageClick(RemoteMessage message) {
     print('🔔 Notification cliquée: ${message.data}');
-    // Ici vous pouvez naviguer vers l'écran approprié
-    // Exemple: NavigationService.navigateToMessages(message.data['childId']);
+    try {
+      final type = (message.data['type'] ?? '').toString();
+      if (type == 'stock') {
+        // Ouvrir l'écran stocks parent
+        router.go('/parent/stocks');
+        return;
+      }
+      // À défaut, ne rien faire (ou ouvrir messages si vous le souhaitez)
+    } catch (e) {
+      print('⚠️ Erreur navigation clic notification: $e');
+    }
   }
 
   // notification_service.dart
@@ -460,6 +472,25 @@ class NotificationService {
 
   static void _onDidReceiveNotificationResponse(NotificationResponse response) {
     print('🔔 Réponse notification: ${response.payload}');
+    // Gestion du clic sur notification locale (Android foreground)
+    try {
+      if (response.payload != null && response.payload!.isNotEmpty) {
+        final Map<String, dynamic> data = jsonDecode(response.payload!);
+        final type = (data['type'] ?? '').toString();
+        if (type == 'stock') {
+          router.go('/parent/stocks');
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback si payload n'est pas du JSON
+      final payload = response.payload ?? '';
+      if (payload.contains('type') && payload.contains('stock')) {
+        router.go('/parent/stocks');
+      } else {
+        print('⚠️ Payload non JSON ou navigation non traitée');
+      }
+    }
   }
 
   /// Handler global pour les messages Firebase en arrière-plan
