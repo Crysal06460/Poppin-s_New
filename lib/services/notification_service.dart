@@ -345,6 +345,12 @@ class NotificationService {
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
     print('📨 Message reçu en foreground: ${message.notification?.title}');
 
+    // iOS: on a activé setForegroundNotificationPresentationOptions(alert: true)
+    // pour laisser iOS afficher la notif distante. Ne pas dupliquer avec une locale.
+    if (Platform.isIOS) {
+      return;
+    }
+
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'messages_channel',

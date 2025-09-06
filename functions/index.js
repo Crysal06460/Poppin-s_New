@@ -536,6 +536,46 @@ exports.sendNotification = onDocumentCreated({
 
         console.log(`✅ Token FCM trouvé: ${fcmToken.substring(0, 30)}...`);
 
+        // 🛡️ Anti auto-notif: si l'assistante envoie et que le token destinataire == token assistante, ignorer
+        try {
+            const senderType = (notification.data && notification.data.senderType) || '';
+            const childId = (notification.data && notification.data.childId) || null;
+            if ((senderType === 'assistante' || senderType === 'staff') && childId) {
+                const assistantEmail = await getAssistantEmail(childId);
+                if (assistantEmail) {
+                    const assDoc = await db.collection('users').doc(assistantEmail.toLowerCase()).get();
+                    const assistantToken = assDoc.exists ? (assDoc.data().fcmToken || null) : null;
+                    if (assistantToken && assistantToken === fcmToken) {
+                        console.log('🛑 Même token que l\'assistante détecté — notification non envoyée pour éviter l\'auto-notif');
+                        await event.data.ref.update({
+                            sent: true,
+                            skipped: true,
+                            skipReason: 'same_token_as_assistant'
+                        });
+                        return;
+                    }
+                }
+            }
+        } catch (guardErr) {
+            console.warn('⚠️ Erreur anti auto-notif (guard):', guardErr);
+        }
+
+        // 🛡️ Anti auto-notif 2: si le document de notif contient un suppressToken égal au token destinataire, ignorer
+        try {
+            const suppressToken = (notification.data && notification.data.suppressToken) || '';
+            if (suppressToken && suppressToken === fcmToken) {
+                console.log('🛑 suppressToken == destinataire token — notification ignorée');
+                await event.data.ref.update({
+                    sent: true,
+                    skipped: true,
+                    skipReason: 'suppressToken_match'
+                });
+                return;
+            }
+        } catch (guard2Err) {
+            console.warn('⚠️ Erreur anti auto-notif (suppressToken):', guard2Err);
+        }
+
         // 🔥 CORRECTION CRITIQUE : Structure de message pour iOS/Android
         const message = {
             token: fcmToken,
@@ -641,7 +681,7 @@ exports.onNewMessage = onDocumentCreated({
         
         console.log(`📋 Message ${messageId}:`, JSON.stringify(messageData, null, 2));
 
-        const { childId, senderType, content } = messageData;
+        const { childId, senderType, content, targetParent, senderFcmToken } = messageData;
 
         // Éviter le double traitement
         if (messageData.notificationSent) {
@@ -663,7 +703,32 @@ exports.onNewMessage = onDocumentCreated({
             // 👩‍⚕️ MESSAGE ASSISTANTE → PARENT
             console.log('👩‍⚕️ Message de l\'assistante vers parent');
             title = 'Nouveau message de votre assistante';
-            recipientEmail = await getParentEmail(childId);
+            // Respecter le ciblage si présent
+            if (targetParent && typeof targetParent === 'string') {
+                if (targetParent === 'both') {
+                    const emails = await getParentsEmails(childId);
+                    for (const email of emails) {
+                        await createNotificationDoc(db, { recipientUserId: email, title, body, childId, messageId, senderType, suppressToken: senderFcmToken });
+                    }
+                    // Marquer et terminer
+                    await event.data.ref.update({ notificationSent: true });
+                    console.log('✅ Notifications envoyées aux deux parents');
+                    return;
+                } else if (targetParent.includes('@')) {
+                    recipientEmail = targetParent.toLowerCase().trim();
+                }
+            }
+            if (!recipientEmail) {
+                recipientEmail = await getParentEmail(childId);
+            }
+
+            // Ne jamais notifier l'expéditeur (assistante)
+            const assistantEmail = await getAssistantEmail(childId);
+            if (assistantEmail && recipientEmail && assistantEmail.toLowerCase() === recipientEmail.toLowerCase()) {
+                console.log('⚠️ Destinataire détecté égal à l\'assistante – notification ignorée');
+                await event.data.ref.update({ notificationSent: true });
+                return;
+            }
         }
 
         if (!recipientEmail) {
@@ -678,27 +743,8 @@ exports.onNewMessage = onDocumentCreated({
 
         console.log(`✅ Destinataire trouvé: ${recipientEmail}`);
 
-        // 🔔 CRÉER LA NOTIFICATION
-        const notificationData = {
-            recipientUserId: recipientEmail,
-            title: title,
-            body: body,
-            data: {
-                childId: childId,
-                messageId: messageId,
-                type: 'message',
-                senderType: senderType,
-            },
-            timestamp: FieldValue.serverTimestamp(),
-            sent: false,
-            platform: 'multi', // Pour supporter iOS et Android
-        };
-
-        console.log('📬 Création notification:', JSON.stringify(notificationData, null, 2));
-
-        // Créer le document de notification (déclenche sendNotification)
-        const notificationRef = await db.collection('notifications').add(notificationData);
-        console.log(`📬 Notification créée avec ID: ${notificationRef.id}`);
+        // 🔔 CRÉER LA NOTIFICATION (un destinataire)
+        await createNotificationDoc(db, { recipientUserId: recipientEmail, title, body, childId, messageId, senderType, suppressToken: senderFcmToken });
 
         // Marquer le message comme traité
         await event.data.ref.update({
@@ -786,9 +832,15 @@ async function getParentEmail(childId) {
             .get();
 
         if (!parentQuery.empty) {
-            const parentEmail = parentQuery.docs[0].id;
-            console.log(`👪 Parent trouvé via array-contains: ${parentEmail}`);
-            return parentEmail;
+            const doc = parentQuery.docs[0];
+            const data = doc.data() || {};
+            if ((data.role || '').toLowerCase() === 'parent') {
+                const parentEmail = doc.id.toLowerCase();
+                console.log(`👪 Parent trouvé via array-contains (role=parent): ${parentEmail}`);
+                return parentEmail;
+            } else {
+                console.log('ℹ️ Utilisateur trouvé mais role != parent, on continue la recherche');
+            }
         }
 
         // Méthode 2: Chercher dans les documents enfants pour récupérer parentId
@@ -812,7 +864,7 @@ async function getParentEmail(childId) {
                     console.log(`👪 Parent trouvé via parent1: ${email}`);
                     return email;
                 }
-                
+
                 if (childData.parent2 && childData.parent2.email) {
                     const email = childData.parent2.email.toLowerCase().trim();
                     console.log(`👪 Parent trouvé via parent2: ${email}`);
@@ -834,6 +886,60 @@ async function getParentEmail(childId) {
         console.error('❌ Erreur recherche parent:', error);
         return null;
     }
+}
+
+// Récupérer tous les emails des parents d'un enfant
+async function getParentsEmails(childId) {
+    const emails = new Set();
+    try {
+        const parentQuery = await db
+            .collection('users')
+            .where('children', 'array-contains', childId)
+            .get();
+        parentQuery.forEach(doc => {
+            const data = doc.data() || {};
+            if ((data.role || '').toLowerCase() === 'parent') {
+                emails.add(doc.id.toLowerCase().trim());
+            }
+        });
+
+        const structuresSnapshot = await db.collection('structures').get();
+        for (const structureDoc of structuresSnapshot.docs) {
+            const childDoc = await db
+                .collection('structures')
+                .doc(structureDoc.id)
+                .collection('children')
+                .doc(childId)
+                .get();
+            if (childDoc.exists) {
+                const childData = childDoc.data();
+                if (childData.parent1 && childData.parent1.email) emails.add(childData.parent1.email.toLowerCase().trim());
+                if (childData.parent2 && childData.parent2.email) emails.add(childData.parent2.email.toLowerCase().trim());
+                if (childData.parentId && childData.parentId.includes('@')) emails.add(childData.parentId.toLowerCase().trim());
+                break;
+            }
+        }
+    } catch (e) {
+        console.error('❌ Erreur getParentsEmails:', e);
+    }
+    return Array.from(emails);
+}
+
+// Helper: créer un document de notification
+async function createNotificationDoc(db, { recipientUserId, title, body, childId, messageId, senderType, suppressToken }) {
+    const notificationData = {
+        recipientUserId,
+        title,
+        body,
+        data: { childId, messageId, type: 'message', senderType, suppressToken: suppressToken || '' },
+        timestamp: FieldValue.serverTimestamp(),
+        sent: false,
+        platform: 'multi',
+    };
+    console.log('📬 Création notification:', JSON.stringify(notificationData, null, 2));
+    const ref = await db.collection('notifications').add(notificationData);
+    console.log(`📬 Notification créée avec ID: ${ref.id}`);
+    return ref.id;
 }
 
 // 🧪 FONCTION TEST : Tester les notifications
