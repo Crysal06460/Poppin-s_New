@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
@@ -39,6 +40,10 @@ class _PhotosScreenState extends State<PhotosScreen>
   Uint8List? _webImage;
   XFile? _pickedFile;
   String _mediaTime = '';
+  bool _isVideoSelected = false;
+  // Limites pour les vidéos
+  static const int _maxVideoSeconds = 15; // Durée maximale d'une vidéo capturée
+  static const int _maxVideoBytes = 50 * 1024 * 1024; // 50 Mo pour la taille max
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -252,6 +257,7 @@ class _PhotosScreenState extends State<PhotosScreen>
       if (image != null) {
         setStateDialog(() {
           _pickedFile = image;
+          _isVideoSelected = false;
           if (kIsWeb) {
             image.readAsBytes().then((value) {
               setStateDialog(() => _webImage = value);
@@ -281,6 +287,7 @@ class _PhotosScreenState extends State<PhotosScreen>
       if (image != null) {
         setStateDialog(() {
           _pickedFile = image;
+          _isVideoSelected = false;
           if (kIsWeb) {
             image.readAsBytes().then((value) {
               setStateDialog(() => _webImage = value);
@@ -293,6 +300,70 @@ class _PhotosScreenState extends State<PhotosScreen>
       print("Erreur lors de la prise de photo: $e");
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erreur lors de la prise de photo: $e")));
+    }
+  }
+
+  Future<void> _pickVideo(String childId, StateSetter setStateDialog) async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('La sélection vidéo n\'est pas prise en charge sur le web.')),
+      );
+      return;
+    }
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+      if (video != null) {
+        // Vérifier la taille du fichier
+        final file = File(video.path);
+        final bytes = await file.length();
+        if (bytes > _maxVideoBytes) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Vidéo trop lourde (> ${(_maxVideoBytes / (1024*1024)).round()} Mo). Merci de choisir une vidéo plus courte.')));
+          return;
+        }
+        setStateDialog(() {
+          _pickedFile = video;
+          _isVideoSelected = true;
+          _webImage = null;
+        });
+      }
+    } catch (e) {
+      print("Erreur lors de la sélection vidéo: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors de la sélection vidéo: $e")));
+    }
+  }
+
+  Future<void> _pickCameraVideo(String childId, StateSetter setStateDialog) async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('La caméra vidéo n\'est pas prise en charge sur le web.')),
+      );
+      return;
+    }
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? video = await picker.pickVideo(source: ImageSource.camera, maxDuration: Duration(seconds: _maxVideoSeconds));
+      if (video != null) {
+        // Vérifier la taille du fichier par sécurité
+        final file = File(video.path);
+        final bytes = await file.length();
+        if (bytes > _maxVideoBytes) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Vidéo trop lourde (> ${(_maxVideoBytes / (1024*1024)).round()} Mo). Réessayez en filmant plus court.')));
+          return;
+        }
+        setStateDialog(() {
+          _pickedFile = video;
+          _isVideoSelected = true;
+          _webImage = null;
+        });
+      }
+    } catch (e) {
+      print("Erreur lors de la prise de vidéo: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors de la prise de vidéo: $e")));
     }
   }
 
@@ -339,7 +410,7 @@ class _PhotosScreenState extends State<PhotosScreen>
 
         // Mise à jour Firestore
         if (downloadUrl != null) {
-          await _addMediaToFirebase(childId, downloadUrl);
+          await _addMediaToFirebase(childId, downloadUrl, type: 'Photo');
         }
       } catch (e) {
         print("Erreur détaillée: $e");
@@ -353,6 +424,62 @@ class _PhotosScreenState extends State<PhotosScreen>
       }
     } catch (e) {
       print("Erreur globale: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur: ${e.toString()}"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploadingFile = false);
+    }
+  }
+
+  Future<void> _uploadAndSaveVideo(String childId) async {
+    if (_pickedFile == null) return;
+
+    setState(() => _isUploadingFile = true);
+
+    try {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("Utilisateur non connecté");
+
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('medias')
+          .child(user.uid)
+          .child(fileName);
+
+      String? downloadUrl;
+
+      try {
+        print("Début upload vidéo...");
+
+        // Mobile: vérifier la taille et uploader via le fichier directement
+        final file = File(_pickedFile!.path);
+        final fileSize = await file.length();
+        if (fileSize > _maxVideoBytes) {
+          throw Exception('Fichier vidéo trop volumineux (> ${(_maxVideoBytes / (1024*1024)).round()} Mo)');
+        }
+        await ref
+            .putFile(file, SettableMetadata(contentType: 'video/mp4'))
+            .timeout(Duration(minutes: 10));
+
+        print("Vidéo uploadée avec succès");
+        downloadUrl = await ref.getDownloadURL();
+
+        if (downloadUrl != null) {
+          await _addMediaToFirebase(childId, downloadUrl, type: 'Video');
+        }
+      } catch (e) {
+        print("Erreur upload vidéo: $e");
+        rethrow;
+      }
+    } catch (e) {
+      print("Erreur globale vidéo: $e");
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -500,8 +627,8 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
+                                      Row(
+                                        children: [
                                         Icon(
                                           Icons.warning_amber_rounded,
                                           color: Colors.orange.shade800,
@@ -530,7 +657,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 ),
                               ),
 
-                            // Affichage de l'aperçu de la photo si disponible
+                            // Affichage de l'aperçu du média si disponible
                             if (_pickedFile != null) ...[
                               Container(
                                 width: double.infinity,
@@ -546,7 +673,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     Text(
-                                      "Aperçu de la photo",
+                                      "Aperçu du média",
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 18 : 16,
                                         fontWeight: FontWeight.w600,
@@ -561,40 +688,60 @@ class _PhotosScreenState extends State<PhotosScreen>
                                         color: Colors.grey.shade200,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
-                                      child: kIsWeb
-                                          ? _webImage != null
-                                              ? ClipRRect(
+                                      child: _isVideoSelected
+                                          ? Center(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.videocam,
+                                                      size: 56,
+                                                      color: Colors.grey[700]),
+                                                  SizedBox(height: 8),
+                                                  Text(
+                                                    'Vidéo sélectionnée',
+                                                    style: TextStyle(
+                                                        color:
+                                                            Colors.grey.shade700),
+                                                  )
+                                                ],
+                                              ),
+                                            )
+                                          : (kIsWeb
+                                              ? (_webImage != null
+                                                  ? ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius
+                                                              .circular(10),
+                                                      child: Image.memory(
+                                                        _webImage!,
+                                                        fit: BoxFit.contain,
+                                                      ),
+                                                    )
+                                                  : Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                                    Color>(
+                                                                primaryColor),
+                                                      ),
+                                                    ))
+                                              : ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(10),
-                                                  child: Image.memory(
-                                                    _webImage!,
+                                                  child: Image.file(
+                                                    File(_pickedFile!.path),
                                                     fit: BoxFit.contain,
                                                   ),
-                                                )
-                                              : Center(
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                                Color>(
-                                                            primaryColor),
-                                                  ),
-                                                )
-                                          : ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              child: Image.file(
-                                                File(_pickedFile!.path),
-                                                fit: BoxFit.contain,
-                                              ),
-                                            ),
+                                                )),
                                     ),
                                   ],
                                 ),
                               ),
                             ],
 
-                            // Heure de la photo
+                            // Heure du média
                             Container(
                               margin: EdgeInsets.only(
                                   bottom: isTabletDevice ? 24 : 16),
@@ -602,7 +749,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Heure de la photo",
+                                    "Heure du média",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -662,7 +809,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                               ),
                             ),
 
-                            // Options de choix (Appareil photo ou Galerie) - seulement si pas d'aperçu
+                            // Options de choix (Photo/Vidéo depuis Appareil photo ou Galerie) - seulement si pas d'aperçu
                             if (_pickedFile == null)
                               Container(
                                 margin: EdgeInsets.only(
@@ -671,7 +818,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      "Source de la photo",
+                                      "Source du média",
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 18 : 16,
                                         fontWeight: FontWeight.w600,
@@ -695,7 +842,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                                   enfant['id'], setState);
                                             },
                                             icon: Icon(Icons.camera_alt),
-                                            label: Text('Appareil photo'),
+                                            label: Text('Photo (caméra)'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: primaryColor,
                                               foregroundColor: Colors.white,
@@ -726,7 +873,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                                   enfant['id'], setState);
                                             },
                                             icon: Icon(Icons.photo_library),
-                                            label: Text('Galerie'),
+                                            label: Text('Photo (galerie)'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
                                                   primaryColor.withOpacity(0.8),
@@ -740,6 +887,94 @@ class _PhotosScreenState extends State<PhotosScreen>
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              if (localMediaTime.isEmpty) {
+                                                setState(() {
+                                                  errorMessage =
+                                                      'Veuillez sélectionner une heure';
+                                                });
+                                                return;
+                                              }
+                                              _pickCameraVideo(
+                                                  enfant['id'], setState);
+                                            },
+                                            icon: Icon(Icons.videocam),
+                                            label: Text('Vidéo (caméra)'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.deepPurple,
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical:
+                                                    isTabletDevice ? 16 : 12,
+                                                horizontal: 16,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              if (localMediaTime.isEmpty) {
+                                                setState(() {
+                                                  errorMessage =
+                                                      'Veuillez sélectionner une heure';
+                                                });
+                                                return;
+                                              }
+                                              _pickVideo(
+                                                  enfant['id'], setState);
+                                            },
+                                            icon: Icon(Icons.video_library),
+                                            label: Text('Vidéo (galerie)'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.deepPurpleAccent,
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical:
+                                                    isTabletDevice ? 16 : 12,
+                                                horizontal: 16,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      ),
+                                    SizedBox(height: 8),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.info_outline,
+                                            size: 16, color: Colors.grey[500]),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Vidéos limitées à ${_maxVideoSeconds}s (≈ ${(_maxVideoBytes / (1024*1024)).round()} Mo max) pour un partage rapide.',
+                                            style: TextStyle(
+                                              fontSize:
+                                                  isTabletDevice ? 13 : 12,
+                                              color: Colors.grey.shade600,
+                                              height: 1.25,
                                             ),
                                           ),
                                         ),
@@ -804,7 +1039,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                   ),
                                 ),
 
-                                // Bouton Confirmer - visible seulement quand une photo est sélectionnée
+                                // Bouton Confirmer - visible seulement quand un média est sélectionné
                                 if (_pickedFile != null)
                                   ElevatedButton(
                                     onPressed: () async {
@@ -823,7 +1058,11 @@ class _PhotosScreenState extends State<PhotosScreen>
                                         print(
                                             "Début de l'upload après confirmation");
                                         // Faire l'upload seulement après confirmation
-                                        await _uploadAndSaveImage(childId);
+                                        if (_isVideoSelected) {
+                                          await _uploadAndSaveVideo(childId);
+                                        } else {
+                                          await _uploadAndSaveImage(childId);
+                                        }
                                         print("Upload terminé avec succès");
                                       } catch (e) {
                                         print(
@@ -865,7 +1104,7 @@ class _PhotosScreenState extends State<PhotosScreen>
     );
   }
 
-  Future<void> _addMediaToFirebase(String childId, String mediaUrl) async {
+  Future<void> _addMediaToFirebase(String childId, String mediaUrl, {String type = 'Photo'}) async {
     try {
       // Trouver l'enfant pour récupérer l'ID de structure
       final enfant = enfants.firstWhere((e) => e['id'] == childId);
@@ -885,12 +1124,12 @@ class _PhotosScreenState extends State<PhotosScreen>
             ? DateFormat('HH:mm').format(DateTime.now())
             : _mediaTime,
         'date': DateTime.now(),
-        'type': 'Photo',
+        'type': type,
         'url': mediaUrl,
       };
 
       await mediaRef.set(mediaData);
-      print("Photo ajoutée avec succès !");
+      print("Média ajouté avec succès ! type=$type");
     } catch (e) {
       print("Erreur lors de l'ajout de la photo : $e");
       throw e;
@@ -958,7 +1197,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            Icons.photo,
+                            (mediaData['type'] == 'Video') ? Icons.videocam : Icons.photo,
                             color: Colors.white,
                             size: isTabletDevice ? 30 : 24,
                           ),
@@ -969,7 +1208,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Photo de ${mediaData['heure']}",
+                                "${mediaData['type'] == 'Video' ? 'Vidéo' : 'Photo'} de ${mediaData['heure']}",
                                 style: TextStyle(
                                   fontSize: isTabletDevice ? 22 : 18,
                                   fontWeight: FontWeight.bold,
@@ -993,58 +1232,96 @@ class _PhotosScreenState extends State<PhotosScreen>
                     ),
                   ),
 
-                  // Contenu - Image
+                  // Contenu - Image/Vidéo
                   Padding(
                     padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              mediaData['url'],
-                              fit: BoxFit.contain,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        primaryColor),
+                        if (mediaData['type'] == 'Video')
+                          Container(
+                            height: 220,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.black12,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.play_circle_filled,
+                                      size: 64, color: primaryColor),
+                                  SizedBox(height: 8),
+                                  Text('Aperçu vidéo non intégré'),
+                                  SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final url = Uri.parse(mediaData['url']);
+                                      if (await canLaunchUrl(url)) {
+                                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    icon: Icon(Icons.open_in_new),
+                                    label: Text('Ouvrir la vidéo'),
                                   ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.broken_image,
-                                        size: 64, color: primaryRed),
-                                    SizedBox(height: 8),
-                                    Text('Erreur de chargement de l\'image'),
-                                  ],
-                                );
-                              },
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                mediaData['url'],
+                                fit: BoxFit.contain,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes !=
+                                              null
+                                          ? loadingProgress
+                                                  .cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          primaryColor),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.broken_image,
+                                          size: 64, color: primaryRed),
+                                      SizedBox(height: 8),
+                                      Text('Erreur de chargement de l\'image'),
+                                    ],
+                                  );
+                                },
+                              ),
                             ),
                           ),
-                        ),
 
                         // Bouton Fermer
                         SizedBox(height: 16),
@@ -1276,7 +1553,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
-                              Icons.photo,
+                              (mediaData['type'] == 'Video') ? Icons.videocam : Icons.photo,
                               color: primaryColor,
                               size: 20,
                             ),
@@ -1846,7 +2123,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             ),
           ),
 
-          // Photo
+          // Média (photo/vidéo)
           Expanded(
             child: GestureDetector(
               onTap: () => _showMediaDetailsPopup(photo),
@@ -1855,32 +2132,42 @@ class _PhotosScreenState extends State<PhotosScreen>
                 padding: EdgeInsets.all(8),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    photo['url'],
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(primaryBlue),
+                  child: (photo['type'] == 'Video')
+                      ? Container(
+                          color: Colors.black12,
+                          child: Center(
+                            child: Icon(Icons.play_circle_fill,
+                                size: 48, color: primaryBlue),
+                          ),
+                        )
+                      : Image.network(
+                          photo['url'],
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(primaryBlue),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey.shade200,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.broken_image,
+                                    color: Colors.grey.shade400),
+                                if (!isGrid)
+                                  Text('Erreur de chargement',
+                                      style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 12)),
+                              ],
+                            ),
+                          ),
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey.shade200,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.broken_image, color: Colors.grey.shade400),
-                          if (!isGrid)
-                            Text('Erreur de chargement',
-                                style: TextStyle(
-                                    color: Colors.grey.shade600, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),

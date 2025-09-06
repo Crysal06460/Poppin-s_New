@@ -582,7 +582,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
     );
   }
 
-  void _showSiesteDetailsPopup(Map<String, dynamic> siesteData) {
+  void _showSiesteDetailsPopup(String structureId, String childId, String siesteId,
+      Map<String, dynamic> siesteData) {
     // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
 
@@ -796,26 +797,54 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
                         // Bouton Fermer
                         SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.grey.shade100,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade100,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(
+                                  "FERMER",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 16 : 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryColor,
+                                  ),
+                                ),
                               ),
                             ),
-                            child: Text(
-                              "FERMER", // Texte en majuscule comme sur la page Repas
-                              style: TextStyle(
-                                fontSize: isTabletDevice ? 16 : 14,
-                                fontWeight: FontWeight.w600,
-                                color: primaryColor,
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _showEditSiestePopup(
+                                      structureId, childId, siesteId, siesteData);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  padding:
+                                      EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(
+                                  "MODIFIER",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -910,6 +939,335 @@ class _SiesteScreenState extends State<SiesteScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showEditSiestePopup(String structureId, String childId, String siesteId,
+      Map<String, dynamic> siesteData) {
+    // Pré-remplir début/fin en tentant d'utiliser 'start'/'end' ou parser 'heure'
+    String localStart = (siesteData['start'] ?? '').toString();
+    String localEnd = (siesteData['end'] ?? '').toString();
+    if (localStart.isEmpty || localEnd.isEmpty) {
+      final heure = (siesteData['heure'] ?? '').toString();
+      if (heure.contains('-')) {
+        final parts = heure.split('-').map((s) => s.trim()).toList();
+        if (parts.length == 2) {
+          localStart = parts[0];
+          localEnd = parts[1];
+        }
+      }
+    }
+    String localQuality = (siesteData['qualite'] ?? 'Bien dormi').toString();
+    final int localMoonCount = _getMoonCountFromQuality(localQuality);
+    TextEditingController obsCtrl = TextEditingController(
+        text: (siesteData['observations'] ?? '').toString());
+
+    final bool isTabletDevice = isTablet(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // En-tête
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                          ),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                        ),
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.nightlight_round,
+                                color: Colors.white,
+                                size: isTabletDevice ? 26 : 22,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Modifier une sieste',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isTabletDevice ? 20 : 18,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Corps
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Début/Fin
+                            Text('Heures de la sieste',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await _pickTimeWithInitial(
+                                          current: localStart,
+                                          onPicked: (val) => setState(() {
+                                                localStart = val;
+                                              }));
+                                    },
+                                    icon: Icon(Icons.play_arrow, color: primaryColor),
+                                    label: Text(
+                                      localStart.isEmpty ? 'Début' : localStart,
+                                      style: TextStyle(color: primaryColor),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: primaryColor),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16)),
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: isTabletDevice ? 16 : 14),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await _pickTimeWithInitial(
+                                          current: localEnd,
+                                          onPicked: (val) => setState(() {
+                                                localEnd = val;
+                                              }));
+                                    },
+                                    icon: Icon(Icons.stop, color: primaryColor),
+                                    label: Text(
+                                      localEnd.isEmpty ? 'Fin' : localEnd,
+                                      style: TextStyle(color: primaryColor),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: primaryColor),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16)),
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: isTabletDevice ? 16 : 14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: 16),
+                            // Qualité
+                            Text('Qualité du sommeil',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 12),
+                            GridView.count(
+                              crossAxisCount: 2,
+                              shrinkWrap: true,
+                              physics: NeverScrollableScrollPhysics(),
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: isTabletDevice ? 2.5 : 2.3,
+                              children: [
+                                _buildSleepQualityButtonModern(
+                                  'Pas dormi',
+                                  localQuality,
+                                  (q) => setState(() => localQuality = q),
+                                  isTabletDevice,
+                                  1,
+                                  primaryRed,
+                                ),
+                                _buildSleepQualityButtonModern(
+                                  'Peu dormi',
+                                  localQuality,
+                                  (q) => setState(() => localQuality = q),
+                                  isTabletDevice,
+                                  2,
+                                  Colors.amber,
+                                ),
+                                _buildSleepQualityButtonModern(
+                                  'Bien dormi',
+                                  localQuality,
+                                  (q) => setState(() => localQuality = q),
+                                  isTabletDevice,
+                                  3,
+                                  Colors.indigo,
+                                ),
+                                _buildSleepQualityButtonModern(
+                                  'Très bien dormi',
+                                  localQuality,
+                                  (q) => setState(() => localQuality = q),
+                                  isTabletDevice,
+                                  4,
+                                  Colors.green,
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: 16),
+                            // Observations
+                            Text('Observations',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            TextField(
+                              controller: obsCtrl,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Précisions sur la sieste...',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+
+                            SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: Text('ANNULER'),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      // Validation
+                                      if (localStart.isEmpty || localEnd.isEmpty) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Veuillez sélectionner un début et une fin de sieste'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                        return;
+                                      }
+                                      int toMinutes(String t) {
+                                        final p = t.split(':');
+                                        return (int.parse(p[0]) * 60) +
+                                            int.parse(p[1]);
+                                      }
+                                      if (toMinutes(localEnd) <=
+                                          toMinutes(localStart)) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'L\'heure de fin doit être après le début'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                        return;
+                                      }
+
+                                      // Calcul durée
+                                      final diff =
+                                          toMinutes(localEnd) - toMinutes(localStart);
+                                      final h = diff ~/ 60;
+                                      final m = diff % 60;
+                                      String durationLabel = '';
+                                      if (h > 0) durationLabel += '${h}h';
+                                      if (m > 0) {
+                                        if (durationLabel.isNotEmpty) durationLabel += ' ';
+                                        durationLabel += '${m.toString().padLeft(2, '0')}min';
+                                      }
+                                      if (durationLabel.isEmpty) durationLabel = '0min';
+
+                                      try {
+                                        final docRef = FirebaseFirestore.instance
+                                            .collection('structures')
+                                            .doc(structureId)
+                                            .collection('children')
+                                            .doc(childId)
+                                            .collection('siestes')
+                                            .doc(siesteId);
+                                        await docRef.update({
+                                          'heure': '${localStart} - ${localEnd}',
+                                          'start': localStart,
+                                          'end': localEnd,
+                                          'duration': durationLabel,
+                                          'qualite': localQuality,
+                                          'moonCount': _getMoonCountFromQuality(localQuality),
+                                          'observations': obsCtrl.text,
+                                        });
+
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Erreur lors de la mise à jour de la sieste'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                      }
+                                    },
+                                    child: Text('ENREGISTRER'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1034,7 +1392,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Heures de la sieste",
+                                    "Heure de la sieste",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 18 : 16,
                                       fontWeight: FontWeight.w600,
@@ -1221,7 +1579,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                       ),
                                     ],
                                   ),
-                                  if (localStart.isNotEmpty || localEnd.isNotEmpty)
+                                  if (localStart.isNotEmpty ||
+                                      localEnd.isNotEmpty)
                                     Padding(
                                       padding: EdgeInsets.only(top: 8),
                                       child: Text(
@@ -1806,10 +2165,15 @@ class _SiesteScreenState extends State<SiesteScreen> {
                 itemCount: snapshot.data!.docs.length,
                 separatorBuilder: (context, index) => SizedBox(height: 8),
                 itemBuilder: (context, index) {
-                  final siesteData =
-                      snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                  final doc = snapshot.data!.docs[index];
+                  final siesteData = doc.data() as Map<String, dynamic>;
                   return GestureDetector(
-                    onTap: () => _showSiesteDetailsPopup(siesteData),
+                    onTap: () => _showSiesteDetailsPopup(
+                        enfant['structureId'] ??
+                            FirebaseAuth.instance.currentUser?.uid,
+                        enfant['id'],
+                        doc.id,
+                        siesteData),
                     child: Container(
                       padding:
                           EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2133,10 +2497,15 @@ class _SiesteScreenState extends State<SiesteScreen> {
                   itemCount: snapshot.data!.docs.length,
                   separatorBuilder: (context, index) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final siesteData = snapshot.data!.docs[index].data()
-                        as Map<String, dynamic>;
+                    final doc = snapshot.data!.docs[index];
+                    final siesteData = doc.data() as Map<String, dynamic>;
                     return GestureDetector(
-                      onTap: () => _showSiesteDetailsPopup(siesteData),
+                      onTap: () => _showSiesteDetailsPopup(
+                          enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                          enfant['id'],
+                          doc.id,
+                          siesteData),
                       child: Container(
                         padding:
                             EdgeInsets.symmetric(horizontal: 16, vertical: 14),

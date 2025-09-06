@@ -72,7 +72,7 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
             return AlertDialog(
               title: Text("Confirmer le nettoyage"),
               content: Text(
-                  "Êtes-vous sûr de vouloir supprimer toutes les photos de plus de ${PhotoCleanupService.getRetentionDays()} jours ?\n\nCette action est irréversible."),
+                  "Êtes-vous sûr de vouloir supprimer tous les médias (photos/vidéos) de plus de ${PhotoCleanupService.getRetentionDays()} jours ?\n\nCette action est irréversible."),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
@@ -164,7 +164,7 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                     // Titre avec meilleur style
                     Expanded(
                       child: Text(
-                        "Gestion des photos",
+                        "Gestion des médias",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -201,9 +201,9 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                                   ),
                                 ),
                                 SizedBox(height: 16),
-                                _buildStatRow("Photos totales",
+                                _buildStatRow("Médias totaux",
                                     "${_stats['totalPhotos'] ?? 0}"),
-                                _buildStatRow("Photos anciennes",
+                                _buildStatRow("Médias anciens",
                                     "${_stats['oldPhotos'] ?? 0}"),
                                 _buildStatRow("Rétention",
                                     "${_stats['retentionDays'] ?? 0} jours"),
@@ -292,8 +292,8 @@ class _AdminCleanupScreenState extends State<AdminCleanupScreen> {
                                 SizedBox(height: 12),
                                 Text(
                                   "• Le nettoyage automatique s'exécute une fois par jour\n"
-                                  "• Les photos sont conservées pendant ${PhotoCleanupService.getRetentionDays()} jours\n"
-                                  "• La suppression concerne uniquement les photos\n",
+                                  "• Les photos et vidéos sont conservées pendant ${PhotoCleanupService.getRetentionDays()} jours\n"
+                                  "• La suppression concerne tous les médias (photos/vidéos)\n",
                                   style:
                                       TextStyle(color: Colors.orange.shade700),
                                 ),

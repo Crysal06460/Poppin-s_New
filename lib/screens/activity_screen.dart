@@ -70,6 +70,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     "Attentif",
     "Hésitant",
     "Enjoué",
+    "Autre",
   ];
 
   IconData _getAttitudeIcon(String attitude) {
@@ -82,6 +83,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Icons.help_outline;
       case 'enjoué':
         return Icons.sentiment_very_satisfied;
+      case 'autre':
+        return Icons.more_horiz;
       default:
         return Icons.sentiment_neutral;
     }
@@ -530,7 +533,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  void _showActivityDetailsPopup(Map<String, dynamic> activityData) {
+  void _showActivityDetailsPopup(String structureId, String childId,
+      String activityId, Map<String, dynamic> activityData) {
     final bool isTabletDevice = isTablet(context);
 
     showDialog(
@@ -754,26 +758,53 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
                         // Bouton Fermer
                         SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.grey.shade100,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade100,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(
+                                  "FERMER",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 16 : 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryColor,
+                                  ),
+                                ),
                               ),
                             ),
-                            child: Text(
-                              "FERMER",
-                              style: TextStyle(
-                                fontSize: isTabletDevice ? 16 : 14,
-                                fontWeight: FontWeight.w600,
-                                color: primaryColor,
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _showEditActivityPopup(
+                                      structureId, childId, activityId, activityData);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(
+                                  "MODIFIER",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -1623,6 +1654,382 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
+  void _showEditActivityPopup(String structureId, String childId,
+      String activityId, Map<String, dynamic> activityData) {
+    String localTime = (activityData['heure'] ?? '').toString();
+    String localType = (activityData['type'] ?? 'Musique').toString();
+    String localAttitude = (activityData['attitude'] ?? 'Curieux').toString();
+    String localParticipation =
+        (activityData['participation'] ?? 'Bien participé').toString();
+    TextEditingController obsCtrl = TextEditingController(
+        text: (activityData['observations'] ?? '').toString());
+
+    // Liste organisée des types (perso + standard)
+    List<String> organizedActivityTypes = [
+      ...customActivityTypes,
+      if (customActivityTypes.isNotEmpty) "_separator_",
+      ...standardActivityTypes,
+    ];
+
+    final enfant = enfants.firstWhere((e) => e['id'] == childId,
+        orElse: () => {'prenom': ''});
+    final bool isTabletDevice = isTablet(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25,
+                    )
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        blurRadius: 15,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // En-tête
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isTabletDevice ? 20 : 16,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(
+                                isTabletDevice ? 12 : 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                _getActivityTypeIcon(localType),
+                                color: Colors.white,
+                                size: isTabletDevice ? 30 : 24,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Modifier une activité - ${enfant['prenom']}",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 22 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Formulaire
+                      Padding(
+                        padding: EdgeInsets.all(
+                          isTabletDevice ? 24 : 16,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Heure
+                            Text("Heure de l'activité",
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 10),
+                            InkWell(
+                              onTap: () => _selectActivityTime(setState, (t) {
+                                localTime = t;
+                              }),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                    vertical: 14, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: lightBlue.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                      color: Colors.grey.shade300, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      localTime.isEmpty ? 'Choisir l\'heure' : localTime,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        color: localTime.isEmpty
+                                            ? Colors.grey.shade600
+                                            : primaryColor,
+                                        fontWeight: localTime.isEmpty
+                                            ? FontWeight.normal
+                                            : FontWeight.w600,
+                                      ),
+                                    ),
+                                    Icon(Icons.access_time_rounded,
+                                        color: primaryColor),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(height: 16),
+                            // Type
+                            Text("Qu'elle était l'activité",
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: lightBlue.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              child: DropdownButton<String>(
+                                value: (organizedActivityTypes.contains(localType) &&
+                                        localType != "_separator_")
+                                    ? localType
+                                    : standardActivityTypes.first,
+                                isExpanded: true,
+                                underline: Container(),
+                                icon: Icon(Icons.arrow_drop_down,
+                                    color: primaryColor),
+                                items: organizedActivityTypes.map((String value) {
+                                  if (value == "_separator_") {
+                                    return DropdownMenuItem<String>(
+                                      enabled: false,
+                                      value: value,
+                                      child: Divider(),
+                                    );
+                                  }
+                                  return DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(value),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null && val != "_separator_") {
+                                    setState(() => localType = val);
+                                  }
+                                },
+                              ),
+                            ),
+
+                            SizedBox(height: 16),
+                            // Attitude
+                            Text("Quelle attitude ?",
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: lightBlue.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              child: DropdownButton<String>(
+                                value: attitudes.contains(localAttitude)
+                                    ? localAttitude
+                                    : attitudes.first,
+                                isExpanded: true,
+                                underline: Container(),
+                                icon: Icon(Icons.arrow_drop_down,
+                                    color: primaryColor),
+                                items: attitudes
+                                    .map((a) => DropdownMenuItem(
+                                          value: a,
+                                          child: Text(a),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => localAttitude = val);
+                                },
+                              ),
+                            ),
+
+                            SizedBox(height: 16),
+                            // Participation
+                            Text("Niveau de participation",
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                _buildParticipationButtonModern(
+                                  'Pas participé',
+                                  localParticipation,
+                                  (value) => setState(() => localParticipation = value),
+                                  isTabletDevice,
+                                  Icons.sentiment_very_dissatisfied,
+                                  primaryRed,
+                                ),
+                                _buildParticipationButtonModern(
+                                  'Peu participé',
+                                  localParticipation,
+                                  (value) => setState(() => localParticipation = value),
+                                  isTabletDevice,
+                                  Icons.sentiment_dissatisfied,
+                                  Colors.amber,
+                                ),
+                                _buildParticipationButtonModern(
+                                  'Bien participé',
+                                  localParticipation,
+                                  (value) => setState(() => localParticipation = value),
+                                  isTabletDevice,
+                                  Icons.sentiment_satisfied,
+                                  Colors.lime,
+                                ),
+                                _buildParticipationButtonModern(
+                                  'Très bien participé',
+                                  localParticipation,
+                                  (value) => setState(() => localParticipation = value),
+                                  isTabletDevice,
+                                  Icons.sentiment_very_satisfied,
+                                  Colors.green,
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: 16),
+                            // Observations
+                            Text("Observations",
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            TextField(
+                              controller: obsCtrl,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Précisions sur l\'activité...',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+
+                            SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: Text('ANNULER'),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      try {
+                                        final docRef = FirebaseFirestore.instance
+                                            .collection('structures')
+                                            .doc(structureId)
+                                            .collection('children')
+                                            .doc(childId)
+                                            .collection('activites')
+                                            .doc(activityId);
+
+                                        await docRef.update({
+                                          'heure': localTime.isNotEmpty
+                                              ? localTime
+                                              : (activityData['heure'] ?? ''),
+                                          'type': localType,
+                                          'attitude': localAttitude,
+                                          'participation': localParticipation,
+                                          'participationLevel': _getParticipationLevel(
+                                              localParticipation),
+                                          'observations': obsCtrl.text,
+                                        });
+
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Erreur lors de la mise à jour de l\'activité'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                      }
+                                    },
+                                    child: Text('ENREGISTRER'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildParticipationButtonModern(
     String level,
     String selectedLevel,
@@ -1924,10 +2331,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 itemCount: snapshot.data!.docs.length,
                 separatorBuilder: (context, index) => SizedBox(height: 8),
                 itemBuilder: (context, index) {
-                  final activityData =
-                      snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                  final doc = snapshot.data!.docs[index];
+                  final activityData = doc.data() as Map<String, dynamic>;
                   return GestureDetector(
-                    onTap: () => _showActivityDetailsPopup(activityData),
+                    onTap: () => _showActivityDetailsPopup(
+                        enfant['structureId'] ??
+                            FirebaseAuth.instance.currentUser?.uid,
+                        enfant['id'],
+                        doc.id,
+                        activityData),
                     child: Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: 12,
@@ -2260,10 +2672,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   itemCount: snapshot.data!.docs.length,
                   separatorBuilder: (context, index) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final activityData = snapshot.data!.docs[index].data()
-                        as Map<String, dynamic>;
+                    final doc = snapshot.data!.docs[index];
+                    final activityData = doc.data() as Map<String, dynamic>;
                     return GestureDetector(
-                      onTap: () => _showActivityDetailsPopup(activityData),
+                      onTap: () => _showActivityDetailsPopup(
+                          enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                          enfant['id'],
+                          doc.id,
+                          activityData),
                       child: Container(
                         padding: EdgeInsets.symmetric(
                           horizontal: 16,

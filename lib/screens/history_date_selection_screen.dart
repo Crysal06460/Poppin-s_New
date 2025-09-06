@@ -319,15 +319,20 @@ class _HistoryDateSelectionScreenState
                                   size: 20,
                                 ),
                                 SizedBox(width: 8),
-                                Text(
-                                  DateFormat('EEEE d MMMM yyyy', 'fr_FR')
-                                      .format(_selectedDate),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: isTabletDevice ? 18 : 16,
-                                    color: primaryColor,
+                                // Empêche le dépassement sur petits écrans
+                                Expanded(
+                                  child: Text(
+                                    DateFormat('EEEE d MMMM yyyy', 'fr_FR')
+                                        .format(_selectedDate),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      color: primaryColor,
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
                               ],
                             ),

@@ -256,7 +256,8 @@ class _SanteScreenState extends State<SanteScreen> {
     }
   }
 
-  void _showCareDetailsPopup(Map<String, dynamic> careData) {
+  void _showCareDetailsPopup(String structureId, String childId, String careId,
+      Map<String, dynamic> careData) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -437,38 +438,47 @@ class _SanteScreenState extends State<SanteScreen> {
                     ],
                   ),
                 ),
-                Container(
-                  width: double.infinity,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(24),
-                        bottomRight: Radius.circular(24),
-                      ),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(24),
-                            bottomRight: Radius.circular(24),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.grey.shade100,
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          "FERMER",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: primaryColor,
+                          child: Text(
+                            'FERMER',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _showEditCarePopup(structureId, childId, careId, careData);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text('MODIFIER'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -1229,6 +1239,392 @@ class _SanteScreenState extends State<SanteScreen> {
     );
   }
 
+  void _showEditCarePopup(String structureId, String childId, String careId,
+      Map<String, dynamic> careData) {
+    String localTime = (careData['heure'] ?? '').toString();
+    String localType = (careData['type'] ?? 'Température').toString();
+    String localMedicationType = (careData['medicationType'] ?? 'Suppositoire').toString();
+    String localRoute = (careData['route'] ?? 'Auriculaire').toString();
+    TextEditingController tempCtrl = TextEditingController(
+        text: careData['temperature'] != null
+            ? (careData['temperature'].toString())
+            : '');
+    TextEditingController weightCtrl = TextEditingController(
+        text:
+            careData['weight'] != null ? (careData['weight'].toString()) : '');
+    TextEditingController obsCtrl = TextEditingController(
+        text: (careData['observations'] ?? '').toString());
+
+    final bool isTabletDevice = isTablet(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25,
+                    )
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: EdgeInsets.all(0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // En-tête
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                          ),
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(24)),
+                        ),
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.healing,
+                                  color: Colors.white,
+                                  size: isTabletDevice ? 26 : 22),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Modifier un soin',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isTabletDevice ? 20 : 18,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Formulaire
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Heure
+                            Text('Heure du soin',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 10),
+                            InkWell(
+                              onTap: () => _selectCareTime(setState, (t) {
+                                localTime = t;
+                              }),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                    vertical: 14, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: lightBlue.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                      color: Colors.grey.shade300, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      localTime.isEmpty ? 'Choisir l\'heure' : localTime,
+                                      style: TextStyle(
+                                        fontSize: isTabletDevice ? 18 : 16,
+                                        color: localTime.isEmpty
+                                            ? Colors.grey.shade600
+                                            : primaryColor,
+                                        fontWeight: localTime.isEmpty
+                                            ? FontWeight.normal
+                                            : FontWeight.w600,
+                                      ),
+                                    ),
+                                    Icon(Icons.access_time_rounded,
+                                        color: primaryColor),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(height: 16),
+                            // Type de soin
+                            Text('Quel était le soin ?',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: lightBlue.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                  width: 1,
+                                ),
+                              ),
+                              child: DropdownButton<String>(
+                                value: careTypes.contains(localType)
+                                    ? localType
+                                    : 'Température',
+                                isExpanded: true,
+                                underline: Container(),
+                                icon: Icon(Icons.arrow_drop_down,
+                                    color: primaryColor),
+                                items: careTypes
+                                    .map((t) => DropdownMenuItem(
+                                          value: t,
+                                          child: Text(t),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => localType = val);
+                                },
+                              ),
+                            ),
+
+                            SizedBox(height: 16),
+                            if (localType == 'Température') ...[
+                              Text('Température',
+                                  style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800)),
+                              SizedBox(height: 8),
+                              TextField(
+                                controller: tempCtrl,
+                                keyboardType:
+                                    TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[0-9\.]')),
+                                ],
+                                decoration: InputDecoration(
+                                  hintText: 'Ex: 37.2',
+                                  suffixText: '°',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text('Voie de mesure',
+                                  style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800)),
+                              SizedBox(height: 8),
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: lightBlue.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: DropdownButton<String>(
+                                  value: routes.contains(localRoute)
+                                      ? localRoute
+                                      : routes.first,
+                                  isExpanded: true,
+                                  underline: Container(),
+                                  icon: Icon(Icons.arrow_drop_down,
+                                      color: primaryColor),
+                                  items: routes
+                                      .map((r) => DropdownMenuItem(
+                                            value: r,
+                                            child: Text(r),
+                                          ))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) setState(() => localRoute = val);
+                                  },
+                                ),
+                              ),
+                            ] else if (localType == 'Poids') ...[
+                              Text('Poids',
+                                  style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800)),
+                              SizedBox(height: 8),
+                              TextField(
+                                controller: weightCtrl,
+                                keyboardType:
+                                    TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'[0-9\.]')),
+                                ],
+                                decoration: InputDecoration(
+                                  hintText: 'Ex: 9.3',
+                                  suffixText: 'kg',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ] else if (localType == 'Médicaments') ...[
+                              Text('Type de médicament',
+                                  style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800)),
+                              SizedBox(height: 8),
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: lightBlue.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: DropdownButton<String>(
+                                  value: medicationTypes.contains(localMedicationType)
+                                      ? localMedicationType
+                                      : medicationTypes.first,
+                                  isExpanded: true,
+                                  underline: Container(),
+                                  icon: Icon(Icons.arrow_drop_down,
+                                      color: primaryColor),
+                                  items: medicationTypes
+                                      .map((m) => DropdownMenuItem(
+                                            value: m,
+                                            child: Text(m),
+                                          ))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null)
+                                      setState(() => localMedicationType = val);
+                                  },
+                                ),
+                              ),
+                            ],
+
+                            SizedBox(height: 16),
+                            Text('Observations',
+                                style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800)),
+                            SizedBox(height: 8),
+                            TextField(
+                              controller: obsCtrl,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Précisions...',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+
+                            SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: Text('ANNULER'),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      try {
+                                        final docRef = FirebaseFirestore.instance
+                                            .collection('structures')
+                                            .doc(structureId)
+                                            .collection('children')
+                                            .doc(childId)
+                                            .collection('sante')
+                                            .doc(careId);
+                                        Map<String, dynamic> update = {
+                                          'heure': localTime.isNotEmpty
+                                              ? localTime
+                                              : (careData['heure'] ?? ''),
+                                          'type': localType,
+                                          'observations': obsCtrl.text,
+                                        };
+                                        // Nettoyage/ajout des champs spécifiques
+                                        if (localType == 'Température') {
+                                          update['temperature'] =
+                                              double.tryParse(tempCtrl.text) ?? 0;
+                                          update['route'] = localRoute;
+                                          update.remove('weight');
+                                          update.remove('medicationType');
+                                        } else if (localType == 'Poids') {
+                                          update['weight'] =
+                                              double.tryParse(weightCtrl.text) ?? 0;
+                                          update.remove('temperature');
+                                          update.remove('route');
+                                          update.remove('medicationType');
+                                        } else if (localType == 'Médicaments') {
+                                          update['medicationType'] =
+                                              localMedicationType;
+                                          update.remove('temperature');
+                                          update.remove('route');
+                                          update.remove('weight');
+                                        }
+
+                                        await docRef.update(update);
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Erreur lors de la mise à jour du soin'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                      }
+                                    },
+                                    child: Text('ENREGISTRER'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _addCareToFirebase(String childId) async {
     try {
       // Trouver l'enfant pour récupérer l'ID de structure
@@ -1447,7 +1843,12 @@ class _SanteScreenState extends State<SanteScreen> {
                       children: snapshot.data!.docs.map((doc) {
                         final careData = doc.data() as Map<String, dynamic>;
                         return GestureDetector(
-                          onTap: () => _showCareDetailsPopup(careData),
+                          onTap: () => _showCareDetailsPopup(
+                              enfant['structureId'] ??
+                                  FirebaseAuth.instance.currentUser?.uid,
+                              enfant['id'],
+                              doc.id,
+                              careData),
                           child: Container(
                             margin: EdgeInsets.only(bottom: 8),
                             padding: EdgeInsets.symmetric(
@@ -1837,7 +2238,12 @@ class _SanteScreenState extends State<SanteScreen> {
                             final doc = snapshot.data!.docs[idx];
                             final careData = doc.data() as Map<String, dynamic>;
                             return GestureDetector(
-                              onTap: () => _showCareDetailsPopup(careData),
+                              onTap: () => _showCareDetailsPopup(
+                                  enfant['structureId'] ??
+                                      FirebaseAuth.instance.currentUser?.uid,
+                                  enfant['id'],
+                                  doc.id,
+                                  careData),
                               child: Container(
                                 margin: EdgeInsets.only(
                                     bottom: 12), // Plus d'espace pour iPad

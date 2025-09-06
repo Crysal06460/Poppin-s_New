@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'; // AJOUT : Import pour SystemChrome
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Firebase Functions
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
@@ -36,10 +37,9 @@ void main() async {
     // Suppression de portraitDown pour éviter la rotation 180°
   ]);
 
-  // Initialisation de Firebase avec les options spécifiques à la plateforme
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Initialisation Firebase (utilise les fichiers natifs: GoogleService-Info.plist / google-services.json)
+  // Évite les incohérences de bundleId iOS vs firebase_options.dart
+  await Firebase.initializeApp();
 
   // 🔥 NOUVEAU : Configuration Firebase Functions pour la région europe-west1
   // Vos Cloud Functions sont déployées dans cette région
@@ -53,6 +53,9 @@ void main() async {
 
   // 🔥 INITIALISER LES NOTIFICATIONS (NON BLOQUANT)
   try {
+    // Handler background Android/iOS enregistré au plus tôt (top-level)
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
     await NotificationService.initialize().timeout(
       Duration(seconds: 3),
       onTimeout: () {

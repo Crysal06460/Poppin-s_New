@@ -279,7 +279,8 @@ class _RepasScreenState extends State<RepasScreen> {
     );
   }
 
-  void _showMealDetailsPopup(Map<String, dynamic> mealData) {
+  void _showMealDetailsPopup(
+      String structureId, String childId, String mealId, Map<String, dynamic> mealData) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -517,26 +518,55 @@ class _RepasScreenState extends State<RepasScreen> {
 
                         // Bouton Fermer
                         SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.grey.shade100,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade100,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  "FERMER",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryBlue,
+                                  ),
+                                ),
                               ),
                             ),
-                            child: Text(
-                              "FERMER",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: primaryBlue,
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _showEditMealPopup(
+                                      structureId, childId, mealId, mealData);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryBlue,
+                                  padding:
+                                      EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  "MODIFIER",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -603,6 +633,325 @@ class _RepasScreenState extends State<RepasScreen> {
         onTimeSelected(timeString);
       });
     }
+  }
+
+  // Popup d'édition d'un repas existant
+  void _showEditMealPopup(String structureId, String childId, String mealId,
+      Map<String, dynamic> mealData) {
+    String localMealTime = (mealData['heure'] ?? '').toString();
+    bool localIsBiberon = mealData['biberon'] == true;
+    bool localIsAllaitement = mealData['allaitement'] == true;
+    String localMealQuality = (mealData['qualite'] ?? 'Bien mangé').toString();
+    String localMlText = (mealData['ml'] != null)
+        ? (mealData['ml'] is num
+            ? (mealData['ml'] as num).toInt().toString()
+            : mealData['ml'].toString())
+        : '';
+    TextEditingController obsCtrl =
+        TextEditingController(text: (mealData['observations'] ?? '').toString());
+    TextEditingController mlCtrl = TextEditingController(text: localMlText);
+
+    final enfant = enfants.firstWhere((e) => e['id'] == childId,
+        orElse: () => {'prenom': ''});
+    final bool isTabletDevice = isTablet(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              insetPadding: isTabletDevice
+                  ? EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width * 0.25)
+                  : EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // En-tête
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [primaryBlue, primaryBlue.withOpacity(0.85)],
+                          ),
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(24)),
+                        ),
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.restaurant,
+                                  color: Colors.white,
+                                  size: isTabletDevice ? 26 : 22),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Modifier un repas - ${enfant['prenom']}",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 20 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  GestureDetector(
+                                    onTap: () => _selectMealTime(setState, (t) {
+                                      localMealTime = t;
+                                    }),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          vertical: 6, horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                            color: Colors.white24, width: 1),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.access_time,
+                                              size: 16, color: Colors.white),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            localMealTime.isEmpty
+                                                ? (mealData['heure'] ?? '')
+                                                : localMealTime,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Corps
+                      Padding(
+                        padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Type repas
+                            Text(
+                              "Type de repas",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 18 : 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                ChoiceChip(
+                                  selected: localIsBiberon,
+                                  label: Text('Biberon'),
+                                  onSelected: (sel) => setState(() {
+                                    localIsBiberon = true;
+                                    localIsAllaitement = false;
+                                  }),
+                                ),
+                                SizedBox(width: 8),
+                                ChoiceChip(
+                                  selected: localIsAllaitement,
+                                  label: Text('Allaitement'),
+                                  onSelected: (sel) => setState(() {
+                                    localIsAllaitement = true;
+                                    localIsBiberon = false;
+                                  }),
+                                ),
+                                SizedBox(width: 8),
+                                ChoiceChip(
+                                  selected: !localIsBiberon && !localIsAllaitement,
+                                  label: Text('Repas'),
+                                  onSelected: (sel) => setState(() {
+                                    localIsBiberon = false;
+                                    localIsAllaitement = false;
+                                  }),
+                                ),
+                              ],
+                            ),
+
+                            // Quantité ML
+                            if (localIsBiberon) ...[
+                              SizedBox(height: 16),
+                              Text(
+                                "Quantité (ml)",
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 16 : 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: primaryBlue,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              TextField(
+                                controller: mlCtrl,
+                                decoration: InputDecoration(
+                                  hintText: "Exemple: 150",
+                                  suffixText: 'ml',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                keyboardType: TextInputType.number,
+                              ),
+                            ],
+
+                            // Qualité
+                            if (!localIsBiberon && !localIsAllaitement) ...[
+                              SizedBox(height: 16),
+                              Text(
+                                "Comment a mangé ${enfant['prenom']} ?",
+                                style: TextStyle(
+                                  fontSize: isTabletDevice ? 18 : 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                              SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildMealQualityButton('Pas mangé',
+                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton('Peu mangé',
+                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton('Bien mangé',
+                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton('Très bien mangé',
+                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
+                                ],
+                              ),
+                            ],
+
+                            // Observations
+                            SizedBox(height: 16),
+                            Text(
+                              "Observations",
+                              style: TextStyle(
+                                fontSize: isTabletDevice ? 18 : 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            TextField(
+                              controller: obsCtrl,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Ajouter une note...',
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+
+                            SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: Text('ANNULER'),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      try {
+                                        final docRef = FirebaseFirestore.instance
+                                            .collection('structures')
+                                            .doc(structureId)
+                                            .collection('children')
+                                            .doc(childId)
+                                            .collection('repas')
+                                            .doc(mealId);
+
+                                        Map<String, dynamic> update = {
+                                          'heure': localMealTime.isNotEmpty
+                                              ? localMealTime
+                                              : (mealData['heure'] ?? ''),
+                                          'observations': obsCtrl.text,
+                                          'biberon': localIsBiberon,
+                                          'allaitement': localIsAllaitement,
+                                        };
+
+                                        if (localIsBiberon) {
+                                          update['ml'] =
+                                              double.tryParse(mlCtrl.text) ?? 0;
+                                          update.remove('qualite');
+                                          update.remove('starCount');
+                                        } else if (localIsAllaitement) {
+                                          update.remove('qualite');
+                                          update.remove('starCount');
+                                          update.remove('ml');
+                                        } else {
+                                          update['qualite'] = localMealQuality;
+                                          update['starCount'] =
+                                              _getStarCountFromQuality(
+                                                  localMealQuality);
+                                          update.remove('ml');
+                                        }
+
+                                        await docRef.update(update);
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Erreur lors de la mise à jour du repas'),
+                                          backgroundColor: Colors.red,
+                                        ));
+                                      }
+                                    },
+                                    child: Text('ENREGISTRER'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showAddMealPopup(String childId) {
@@ -1712,7 +2061,12 @@ class _RepasScreenState extends State<RepasScreen> {
                   children: snapshot.data!.docs.map((doc) {
                     final mealData = doc.data() as Map<String, dynamic>;
                     return GestureDetector(
-                      onTap: () => _showMealDetailsPopup(mealData),
+                      onTap: () => _showMealDetailsPopup(
+                          enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                          enfant['id'],
+                          doc.id,
+                          mealData),
                       child: Container(
                         margin: EdgeInsets.only(bottom: 8),
                         padding:
@@ -2071,7 +2425,12 @@ class _RepasScreenState extends State<RepasScreen> {
                             // Repas avec biberon
                             if (mealData['biberon'] == true) {
                               return GestureDetector(
-                                onTap: () => _showMealDetailsPopup(mealData),
+                                onTap: () => _showMealDetailsPopup(
+                                    enfant['structureId'] ??
+                                        FirebaseAuth.instance.currentUser?.uid,
+                                    enfant['id'],
+                                    doc.id,
+                                    mealData),
                                 child: Container(
                                   margin: EdgeInsets.only(bottom: 10),
                                   padding: EdgeInsets.all(12),
@@ -2126,7 +2485,12 @@ class _RepasScreenState extends State<RepasScreen> {
                             // Repas normal (avec qualité)
                             else {
                               return GestureDetector(
-                                onTap: () => _showMealDetailsPopup(mealData),
+                                onTap: () => _showMealDetailsPopup(
+                                    enfant['structureId'] ??
+                                        FirebaseAuth.instance.currentUser?.uid,
+                                    enfant['id'],
+                                    doc.id,
+                                    mealData),
                                 child: Container(
                                   margin: EdgeInsets.only(bottom: 10),
                                   padding: EdgeInsets.all(12),

@@ -22,19 +22,19 @@ class PhotoCleanupService {
 
         if (difference.inHours < 24) {
           print(
-              "📸 Nettoyage des photos: pas encore nécessaire (dernier: ${difference.inHours}h)");
+              "🧹 Nettoyage des médias: pas encore nécessaire (dernier: ${difference.inHours}h)");
           return;
         }
       }
 
-      print("📸 Début du nettoyage automatique des photos anciennes...");
+      print("🧹 Début du nettoyage automatique des médias anciens (photos/vidéos)...");
       await _performCleanup();
 
       // Enregistrer la date du dernier nettoyage
       await prefs.setString(_lastCleanupKey, DateTime.now().toIso8601String());
-      print("📸 Nettoyage des photos terminé avec succès");
+      print("🧹 Nettoyage des médias terminé avec succès");
     } catch (e) {
-      print("❌ Erreur lors du nettoyage des photos: $e");
+      print("❌ Erreur lors du nettoyage des médias: $e");
     }
   }
 
@@ -47,13 +47,13 @@ class PhotoCleanupService {
     final cutoffDate = DateTime.now().subtract(Duration(days: _retentionDays));
     final cutoffTimestamp = Timestamp.fromDate(cutoffDate);
 
-    print("📸 Suppression des photos antérieures au ${cutoffDate.toLocal()}");
+    print("🧹 Suppression des médias antérieurs au ${cutoffDate.toLocal()}");
 
     try {
       // Récupérer toutes les structures
       final structuresSnapshot = await firestore.collection('structures').get();
 
-      int totalPhotosDeleted = 0;
+      int totalMediasDeleted = 0;
       int totalStorageFilesDeleted = 0;
 
       for (var structureDoc in structuresSnapshot.docs) {
@@ -69,7 +69,7 @@ class PhotoCleanupService {
         for (var childDoc in childrenSnapshot.docs) {
           final childId = childDoc.id;
 
-          // Récupérer les photos anciennes
+          // Récupérer les médias anciens (photos et vidéos)
           final oldPhotosSnapshot = await firestore
               .collection('structures')
               .doc(structureId)
@@ -80,7 +80,7 @@ class PhotoCleanupService {
               .get();
 
           print(
-              "📸 Enfant $childId: ${oldPhotosSnapshot.docs.length} photos à supprimer");
+              "🧹 Enfant $childId: ${oldPhotosSnapshot.docs.length} médias à supprimer");
 
           // Supprimer les photos une par une
           for (var photoDoc in oldPhotosSnapshot.docs) {
@@ -104,27 +104,27 @@ class PhotoCleanupService {
 
               // Supprimer le document Firestore
               await photoDoc.reference.delete();
-              totalPhotosDeleted++;
+              totalMediasDeleted++;
             } catch (e) {
               print(
-                  "❌ Erreur lors de la suppression de la photo ${photoDoc.id}: $e");
+                  "❌ Erreur lors de la suppression du média ${photoDoc.id}: $e");
             }
           }
         }
       }
 
-      print("📸 Nettoyage terminé:");
-      print("   - $totalPhotosDeleted documents supprimés de Firestore");
+      print("🧹 Nettoyage terminé:");
+      print("   - $totalMediasDeleted documents supprimés de Firestore");
       print("   - $totalStorageFilesDeleted fichiers supprimés du Storage");
     } catch (e) {
-      print("❌ Erreur lors du nettoyage des photos: $e");
+      print("❌ Erreur lors du nettoyage des médias: $e");
       throw e;
     }
   }
 
   /// Force le nettoyage immédiat (pour les tests ou maintenance manuelle)
   static Future<void> forceCleanup() async {
-    print("📸 Nettoyage forcé des photos anciennes...");
+    print("🧹 Nettoyage forcé des médias anciens...");
     await _performCleanup();
 
     // Mettre à jour la date du dernier nettoyage
@@ -146,7 +146,7 @@ class PhotoCleanupService {
   /// Récupère le nombre de jours de rétention configuré
   static int getRetentionDays() => _retentionDays;
 
-  /// Méthode pour obtenir des statistiques sur les photos anciennes
+  /// Méthode pour obtenir des statistiques sur les médias anciens
   static Future<Map<String, int>> getCleanupStats() async {
     try {
       final firestore = FirebaseFirestore.instance;
@@ -154,8 +154,8 @@ class PhotoCleanupService {
           DateTime.now().subtract(Duration(days: _retentionDays));
       final cutoffTimestamp = Timestamp.fromDate(cutoffDate);
 
-      int oldPhotosCount = 0;
-      int totalPhotosCount = 0;
+      int oldMediasCount = 0;
+      int totalMediasCount = 0;
 
       final structuresSnapshot = await firestore.collection('structures').get();
 
@@ -171,7 +171,7 @@ class PhotoCleanupService {
         for (var childDoc in childrenSnapshot.docs) {
           final childId = childDoc.id;
 
-          // Compter toutes les photos
+          // Compter tous les médias
           final allPhotosSnapshot = await firestore
               .collection('structures')
               .doc(structureId)
@@ -180,9 +180,9 @@ class PhotoCleanupService {
               .collection('medias')
               .get();
 
-          totalPhotosCount += allPhotosSnapshot.docs.length;
+          totalMediasCount += allPhotosSnapshot.docs.length;
 
-          // Compter les photos anciennes
+          // Compter les médias anciens
           final oldPhotosSnapshot = await firestore
               .collection('structures')
               .doc(structureId)
@@ -192,13 +192,13 @@ class PhotoCleanupService {
               .where('date', isLessThan: cutoffTimestamp)
               .get();
 
-          oldPhotosCount += oldPhotosSnapshot.docs.length;
+          oldMediasCount += oldPhotosSnapshot.docs.length;
         }
       }
 
       return {
-        'totalPhotos': totalPhotosCount,
-        'oldPhotos': oldPhotosCount,
+        'totalPhotos': totalMediasCount, // conserver les clés pour compatibilité
+        'oldPhotos': oldMediasCount,
         'retentionDays': _retentionDays,
       };
     } catch (e) {

@@ -18,6 +18,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ParentHomeScreen extends StatefulWidget {
   const ParentHomeScreen({Key? key}) : super(key: key);
@@ -1007,20 +1008,19 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         print("❌ Erreur dans l'écouteur de photos: $error");
       }));
 
-      // 7. Écouter les horaires
+      // 7. Écouter les horaires du jour (source d'état courant, évite les doublons)
       _subscriptions.add(_firestore
           .collection('structures')
           .doc(structureId)
-          .collection('horaires_history')
-          .where('childId', isEqualTo: childId)
-          .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(now))
+          .collection('horaires')
+          .doc(DateFormat('yyyy-MM-dd').format(now))
           .snapshots()
-          .listen((snapshot) {
-        print("⏱️ Horaires reçus: ${snapshot.docs.length}");
-        _processHoursSnapshot(snapshot);
+          .listen((doc) {
+        print("⏱️ Document horaires reçu: ${doc.exists}");
+        _processHoursDocSnapshot(doc, childId);
         _updateTimelineEvents();
       }, onError: (error) {
-        print("❌ Erreur dans l'écouteur d'horaires: $error");
+        print("❌ Erreur dans l'écouteur d'horaires (doc): $error");
       }));
 
       // 8. Écouter les transmissions
@@ -1071,6 +1071,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         'title': 'Activité: ${data['type'] ?? ""}',
         'details': data['duration'] ?? "",
         'participation': data['participation'] ?? "",
+        'attitude': data['attitude'] ?? "",
         'iconData': Icons.directions_run,
         'color': Colors.green,
         'observations': data['observations'],
@@ -1171,6 +1172,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         'type': 'change',
         'title': 'Change',
         'details': details.trim(),
+        'changeType': data['type'] ?? '',
+        'soins': (data['soins'] is List) ? List<String>.from(data['soins']) : [],
         'iconData': Icons.baby_changing_station,
         'color': Colors.brown,
         'observations': data['observations'],
@@ -1224,13 +1227,15 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         eventTime = data['heure'];
       }
 
+      final isVideo = (data['type']?.toString().toLowerCase() == 'video');
+
       return {
         'id': doc.id,
         'time': eventTime.isNotEmpty
             ? eventTime
             : data['eventTime'] ?? data['date'],
-        'type': 'photo',
-        'title': 'Photo',
+        'type': isVideo ? 'video' : 'photo',
+        'title': isVideo ? 'Vidéo' : 'Photo',
         'details': data['description'] ?? '',
         'iconData': Icons.photo,
         'color': Colors.purple,
@@ -1240,40 +1245,118 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   }
 
   void _processHoursSnapshot(QuerySnapshot snapshot) {
-    _eventsMap['hour'] = snapshot.docs.map((doc) {
+    // Conservé pour compatibilité si utilisé ailleurs, mais non appelé désormais.
+    final events = <Map<String, dynamic>>[];
+    for (final doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
+      final action = (data['actionType'] ?? '').toString();
 
-      // Récupérer l'heure réelle si disponible
+      // Normaliser les types et ignorer les écritures non pertinentes
+      String? normalized;
+      if (action == 'arrivee' || action == 'arrivee_modifiee') {
+        normalized = 'arrival';
+      } else if (action == 'depart' || action == 'depart_modifiee') {
+        normalized = 'departure';
+      } else {
+        // absent, annuler_absent, etc. → pas d'événement dans la timeline
+        continue;
+      }
+
       String eventTime = '';
       if (data['heure'] != null && data['heure'] is String) {
         eventTime = data['heure'];
       }
-
       final timestamp =
           data['exactTime'] as Timestamp? ?? data['timestamp'] as Timestamp?;
 
-      if (data['actionType'] == 'arrivee') {
-        return {
-          'id': doc.id,
-          'time': eventTime.isNotEmpty ? eventTime : timestamp,
-          'type': 'arrival',
-          'title': 'Arrivée',
-          'details': data['arrivee'] ?? '',
-          'iconData': Icons.login,
-          'color': Colors.green.shade700,
-        };
-      } else {
-        return {
-          'id': doc.id,
-          'time': eventTime.isNotEmpty ? eventTime : timestamp,
-          'type': 'departure',
-          'title': 'Départ',
-          'details': data['depart'] ?? '',
-          'iconData': Icons.logout,
-          'color': Colors.red.shade700,
-        };
+      events.add({
+        'id': doc.id,
+        'time': eventTime.isNotEmpty ? eventTime : timestamp,
+        'type': normalized,
+        'title': normalized == 'arrival' ? 'Arrivée' : 'Départ',
+        'details': normalized == 'arrival' ? (data['arrivee'] ?? '') : (data['depart'] ?? ''),
+        'iconData': normalized == 'arrival' ? Icons.login : Icons.logout,
+        'color': normalized == 'arrival' ? Colors.green.shade700 : Colors.red.shade700,
+      });
+    }
+    _eventsMap['hour'] = events;
+  }
+
+  // Nouvelle méthode: construit les événements horaires depuis le document d'état courant
+  void _processHoursDocSnapshot(DocumentSnapshot doc, String childId) {
+    final events = <Map<String, dynamic>>[];
+
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data != null && data.containsKey(childId)) {
+        final childData = data[childId] as Map<String, dynamic>;
+
+        // Si absent: ne rien afficher
+        if (childData['absent'] == true) {
+          _eventsMap['hour'] = [];
+          return;
+        }
+
+        // Format segments (nouveau)
+        if (childData['segments'] is List) {
+          final segments = List<Map<String, dynamic>>.from(childData['segments']);
+          for (final seg in segments) {
+            final arr = seg['arrivee'];
+            final dep = seg['depart'];
+            if (arr != null && arr.toString().isNotEmpty) {
+              events.add({
+                'id': 'arr_${arr}_${events.length}',
+                'time': arr,
+                'type': 'arrival',
+                'title': 'Arrivée',
+                'details': arr,
+                'iconData': Icons.login,
+                'color': Colors.green.shade700,
+              });
+            }
+            if (dep != null && dep.toString().isNotEmpty) {
+              events.add({
+                'id': 'dep_${dep}_${events.length}',
+                'time': dep,
+                'type': 'departure',
+                'title': 'Départ',
+                'details': dep,
+                'iconData': Icons.logout,
+                'color': Colors.red.shade700,
+              });
+            }
+          }
+        } else {
+          // Compat: ancien format
+          final arr = childData['arrivee'];
+          final dep = childData['depart'];
+          if (arr != null && arr.toString().isNotEmpty) {
+            events.add({
+              'id': 'arr_${arr}_0',
+              'time': arr,
+              'type': 'arrival',
+              'title': 'Arrivée',
+              'details': arr,
+              'iconData': Icons.login,
+              'color': Colors.green.shade700,
+            });
+          }
+          if (dep != null && dep.toString().isNotEmpty) {
+            events.add({
+              'id': 'dep_${dep}_0',
+              'time': dep,
+              'type': 'departure',
+              'title': 'Départ',
+              'details': dep,
+              'iconData': Icons.logout,
+              'color': Colors.red.shade700,
+            });
+          }
+        }
       }
-    }).toList();
+    }
+
+    _eventsMap['hour'] = events;
   }
 
   void _processTransmissionsSnapshot(QuerySnapshot snapshot) {
@@ -2485,6 +2568,21 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                       ),
                     ),
 
+                  if (event['type'] == 'activity' &&
+                      event['attitude'] != null &&
+                      event['attitude'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0, left: 2),
+                      child: Text(
+                        "Attitude: ${event['attitude']}",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+
                   if (event['type'] == 'sleep' &&
                       event['qualite'] != null &&
                       event['qualite'].toString().isNotEmpty)
@@ -2497,6 +2595,49 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                           color: Colors.black54,
                           fontStyle: FontStyle.italic,
                         ),
+                      ),
+                    ),
+
+                  if (event['type'] == 'change' &&
+                      event['changeType'] != null &&
+                      event['changeType'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0, left: 2),
+                      child: Text(
+                        "Type: ${event['changeType']}",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ),
+
+                  if (event['type'] == 'change' &&
+                      event['soins'] != null &&
+                      (event['soins'] as List).isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: (event['soins'] as List)
+                            .map<Widget>((s) => Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.brown.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color:
+                                            Colors.brown.withOpacity(0.15)),
+                                  ),
+                                  child: Text(
+                                    s.toString(),
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.brown),
+                                  ),
+                                ))
+                            .toList(),
                       ),
                     ),
 
@@ -2531,7 +2672,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                       ),
                     ),
 
-                  // Affichage des photos (si présentes)
+                  // Affichage des médias (photo/vidéo)
                   if (event['type'] == 'photo' && event['url'] != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 10.0),
@@ -2592,6 +2733,29 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                  if (event['type'] == 'video' && event['url'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10.0),
+                      child: GestureDetector(
+                        onTap: () async {
+                          final url = Uri.parse(event['url']);
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        child: Container(
+                          height: 180,
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Icon(Icons.play_circle_fill,
+                                size: 56, color: Colors.purple),
+                          ),
                         ),
                       ),
                     ),
