@@ -142,11 +142,11 @@ class NotificationService {
       const maxRetries = 8;
 
       while (apnsToken == null && retryCount < maxRetries) {
-        print('⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
-        await Future.delayed(Duration(seconds: 3));
-        apnsToken = await _messaging.getAPNSToken();
-        retryCount++;
-      }
+  print('⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
+  await Future.delayed(Duration(seconds: 5));  // ← 5 secondes
+  apnsToken = await _messaging.getAPNSToken();
+  retryCount++;
+}
 
       if (apnsToken != null) {
         print('✅ Token APNS obtenu: ${apnsToken.substring(0, 20)}...');

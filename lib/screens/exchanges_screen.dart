@@ -1538,102 +1538,138 @@ class _ExchangesScreenState extends State<ExchangesScreen>
 
                     // Messages
                     Expanded(
-                      child: StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('exchanges')
-                            .where('childId', isEqualTo: enfant['id'])
-                            .orderBy('timestamp', descending: true)
-                            .snapshots(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            print('Erreur de chargement: ${snapshot.error}');
-                            return Center(
-                              child: Text(
-                                'Erreur de chargement des messages',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: isTabletDevice ? 16 : 14,
-                                ),
+                        child: // Dans exchanges_screen.dart, dans la méthode _showChatPopup
+// Remplacer le StreamBuilder existant par celui-ci :
+
+                            StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('exchanges')
+                          .where('childId', isEqualTo: enfant['id'])
+                          .orderBy('timestamp', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          print('Erreur de chargement: ${snapshot.error}');
+                          return Center(
+                            child: Text(
+                              'Erreur de chargement des messages',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: isTabletDevice ? 16 : 14,
                               ),
-                            );
-                          }
-
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return Center(
-                                child: CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(primaryBlue),
-                            ));
-                          }
-
-                          if (!snapshot.hasData ||
-                              snapshot.data!.docs.isEmpty) {
-                            return Center(
-                              child: Padding(
-                                padding:
-                                    EdgeInsets.all(isTabletDevice ? 24 : 16),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.chat_bubble_outline,
-                                        size: isTabletDevice ? 60 : 48,
-                                        color: Colors.grey),
-                                    SizedBox(height: isTabletDevice ? 20 : 16),
-                                    Text(
-                                      "Aucun message\nCommencez la conversation !",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: isTabletDevice ? 20 : 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          final messages = snapshot.data!.docs;
-                          return ListView.builder(
-                            controller: _scrollController,
-                            reverse: true,
-                            padding: EdgeInsets.only(
-                              bottom: isTabletDevice ? 12 : 8,
-                              left: isTabletDevice ? 12 : 0,
-                              right: isTabletDevice ? 12 : 0,
                             ),
-                            itemCount: messages.length,
-                            itemBuilder: (context, index) {
-                              final messageData = {
-                                ...messages[index].data()
-                                    as Map<String, dynamic>,
-                                'id': messages[index].id,
-                              };
-                              final isMe = messageData['senderId'] ==
-                                  FirebaseAuth.instance.currentUser?.uid;
-                              // Marquer le message comme lu
-                              FirebaseFirestore.instance
-                                  .collection('exchanges')
-                                  .doc(messages[index].id)
-                                  .update({
-                                'nonLu': false,
-                              }).then((_) {
-                                print(
-                                    '🔍 Avant clearBadge - message marqué comme lu');
-                                NotificationService.clearBadge();
-                                print('🔍 Après clearBadge');
-                              });
-                              return _buildMessage(
-                                messageData,
-                                isMe,
-                                isTabletDevice,
-                              );
-                            },
                           );
-                        },
-                      ),
-                    ),
+                        }
+
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(
+                              child: CircularProgressIndicator(
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(primaryBlue),
+                          ));
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.chat_bubble_outline,
+                                      size: isTabletDevice ? 60 : 48,
+                                      color: Colors.grey),
+                                  SizedBox(height: isTabletDevice ? 20 : 16),
+                                  Text(
+                                    "Aucun message\nCommencez la conversation !",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: isTabletDevice ? 20 : 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final messages = snapshot.data!.docs;
+
+                        // 🔥 CORRECTION CRITIQUE : Marquer les messages DES PARENTS comme lus
+                        List<Future<void>> messageUpdates = [];
+                        for (final doc in messages) {
+                          final message = doc.data() as Map<String, dynamic>;
+
+                          // ✅ CORRIGÉ: Marquer comme lus les messages des PARENTS (pas de l'assistante)
+                          if (message['senderType'] == 'parent' &&
+                              message['nonLu'] == true) {
+                            messageUpdates.add(FirebaseFirestore.instance
+                                .collection('exchanges')
+                                .doc(doc.id)
+                                .update({'nonLu': false}).then((_) {
+                              print(
+                                  "✅ Message parent ${doc.id} marqué comme lu par l'assistante");
+                            }).catchError((error) {
+                              print("❌ Erreur marquage message parent: $error");
+                            }));
+                          }
+                        }
+
+                        // Si des messages de parents ont été marqués comme lus
+                        if (messageUpdates.isNotEmpty) {
+                          Future.wait(messageUpdates).then((_) {
+                            print(
+                                "🔄 Tous les messages parents marqués comme lus, mise à jour du badge");
+
+                            // 🔥 NOUVEAU : Réinitialiser le compteur de l'assistante maternelle
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user != null) {
+                              final currentUserEmail =
+                                  user.email?.toLowerCase();
+                              if (currentUserEmail != null) {
+                                FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(currentUserEmail)
+                                    .update({'unreadMessages': 0}).then((_) {
+                                  print(
+                                      "✅ Compteur assistante réinitialisé pour: $currentUserEmail");
+                                }).catchError((error) {
+                                  print(
+                                      "❌ Erreur réinitialisation compteur assistante: $error");
+                                });
+                              }
+                            }
+                          });
+                        }
+
+                        return ListView.builder(
+                          controller: _scrollController,
+                          reverse: true,
+                          padding: EdgeInsets.only(
+                            bottom: isTabletDevice ? 12 : 8,
+                            left: isTabletDevice ? 12 : 0,
+                            right: isTabletDevice ? 12 : 0,
+                          ),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final messageData = {
+                              ...messages[index].data() as Map<String, dynamic>,
+                              'id': messages[index].id,
+                            };
+                            final isMe = messageData['senderId'] ==
+                                FirebaseAuth.instance.currentUser?.uid;
+
+                            return _buildMessage(
+                              messageData,
+                              isMe,
+                              isTabletDevice,
+                            );
+                          },
+                        );
+                      },
+                    )),
 
                     // Upload Progress
                     if (_isUploadingFile)

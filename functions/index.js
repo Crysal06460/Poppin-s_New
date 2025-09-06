@@ -473,33 +473,46 @@ exports.retryFailedEmails = onSchedule({
 });
 
 // ==========================================
-// ===== VOS FONCTIONS EXISTANTES INTACTES =====
+// ===== FONCTIONS NOTIFICATIONS CORRIGÉES =====
 // ==========================================
 
-// Fonction pour envoyer des notifications push
-exports.sendNotification = onDocumentCreated('notifications/{notificationId}', async (event) => {
+// 🔥 FONCTION PRINCIPALE CORRIGÉE : Notifications Push
+exports.sendNotification = onDocumentCreated({
+    document: 'notifications/{notificationId}',
+    region: 'europe-west1'
+}, async (event) => {
     try {
         const notification = event.data.data();
-        console.log('📤 Nouvelle notification à envoyer:', notification);
+        const notificationId = event.params.notificationId;
+        
+        console.log(`📤 Nouvelle notification à traiter: ${notificationId}`);
+        console.log('📋 Données notification:', JSON.stringify(notification, null, 2));
 
-        // Vérifier si la notification a déjà été envoyée
+        // Vérifier si déjà envoyée
         if (notification.sent) {
             console.log('⚠️ Notification déjà envoyée');
             return;
         }
 
         const recipientUserId = notification.recipientUserId;
-        console.log('🎯 Recherche utilisateur:', recipientUserId);
         
-        // CORRECTION: Rechercher directement par email (ID du document)
-        const userDoc = await db
-            .collection('users')
-            .doc(recipientUserId)
-            .get();
+        if (!recipientUserId) {
+            console.error('❌ recipientUserId manquant');
+            await event.data.ref.update({
+                sent: false,
+                error: 'recipientUserId manquant',
+                errorAt: FieldValue.serverTimestamp(),
+            });
+            return;
+        }
+
+        console.log(`🎯 Recherche utilisateur: ${recipientUserId}`);
+        
+        // Rechercher l'utilisateur par email (ID du document)
+        const userDoc = await db.collection('users').doc(recipientUserId.toLowerCase()).get();
 
         if (!userDoc.exists) {
-            console.log('❌ Utilisateur non trouvé:', recipientUserId);
-            // Marquer comme échoué
+            console.error(`❌ Utilisateur non trouvé: ${recipientUserId}`);
             await event.data.ref.update({
                 sent: false,
                 error: 'Utilisateur non trouvé',
@@ -512,82 +525,125 @@ exports.sendNotification = onDocumentCreated('notifications/{notificationId}', a
         const fcmToken = userData.fcmToken;
 
         if (!fcmToken) {
-            console.log('❌ Token FCM non trouvé pour:', recipientUserId);
-            // Marquer comme échoué
+            console.error(`❌ Token FCM manquant pour: ${recipientUserId}`);
             await event.data.ref.update({
                 sent: false,
-                error: 'Token FCM non trouvé',
+                error: 'Token FCM manquant',
                 errorAt: FieldValue.serverTimestamp(),
             });
             return;
         }
 
-        console.log('🎯 Token FCM trouvé:', fcmToken.substring(0, 20) + '...');
+        console.log(`✅ Token FCM trouvé: ${fcmToken.substring(0, 30)}...`);
 
-        // Préparer le message
+        // 🔥 CORRECTION CRITIQUE : Structure de message pour iOS/Android
         const message = {
+            token: fcmToken,
             notification: {
-                title: notification.title,
-                body: notification.body,
+                title: notification.title || 'Nouveau message',
+                body: notification.body || 'Vous avez reçu un nouveau message',
             },
             data: {
-                ...notification.data,
+                ...(notification.data || {}),
+                notificationId: notificationId,
                 click_action: 'FLUTTER_NOTIFICATION_CLICK',
             },
-            token: fcmToken,
+            // 🍎 Configuration spécifique iOS (APNs)
             apns: {
-                payload: {
-                    aps: {
-                        badge: 1,
-                        sound: 'default',
-                        'content-available': 1,
-                    },
-                },
-            },
+  headers: {
+    'apns-priority': '10',
+    'apns-push-type': 'alert',
+    'apns-topic': 'com.beylet.poppinsApp', // IMPORTANT: doit correspondre au bundle iOS
+  },
+  payload: {
+    aps: {
+      alert: {
+        title: notification.title || 'Nouveau message',
+        body: notification.body || 'Vous avez reçu un nouveau message',
+      },
+      badge: 1,
+      sound: 'default',
+      'content-available': 1, // Pour background
+    }
+  },
+},
+            // 🤖 Configuration spécifique Android (FCM)
             android: {
                 priority: 'high',
                 notification: {
+                    title: notification.title || 'Nouveau message',
+                    body: notification.body || 'Vous avez reçu un nouveau message',
                     channel_id: 'messages_channel',
                     priority: 'high',
+                    default_sound: true,
                     visibility: 'public',
+                    icon: 'ic_launcher',
+                    color: '#3D9DF2',
                 },
+                data: {
+                    ...(notification.data || {}),
+                    notificationId: notificationId,
+                }
             },
         };
 
-        // Envoyer la notification
+        console.log('📱 Structure message final:', JSON.stringify(message, null, 2));
+
+        // 🚀 ENVOYER LA NOTIFICATION
         const response = await messaging.send(message);
         console.log('✅ Notification envoyée avec succès:', response);
 
-        // Marquer la notification comme envoyée
+        // Marquer comme envoyée
         await event.data.ref.update({
             sent: true,
             sentAt: FieldValue.serverTimestamp(),
             messageId: response,
+            fcmTokenUsed: fcmToken.substring(0, 20) + '...', // Pour debug
         });
 
+        console.log(`✅ Notification ${notificationId} marquée comme envoyée`);
+
     } catch (error) {
-        console.error('❌ Erreur lors de l\'envoi de la notification:', error);
+        console.error('❌ Erreur envoi notification:', error);
+        console.error('📋 Stack trace:', error.stack);
         
-        // Marquer la notification comme échouée
+        // Analyser le type d'erreur
+        let errorType = 'unknown';
+        if (error.code === 'messaging/invalid-registration-token') {
+            errorType = 'invalid_token';
+        } else if (error.code === 'messaging/registration-token-not-registered') {
+            errorType = 'token_not_registered';
+        } else if (error.code === 'messaging/invalid-argument') {
+            errorType = 'invalid_argument';
+        }
+
         await event.data.ref.update({
             sent: false,
             error: error.message,
+            errorCode: error.code || 'unknown',
+            errorType: errorType,
             errorAt: FieldValue.serverTimestamp(),
+            errorStack: error.stack,
         });
     }
 });
 
-// 🔥 FONCTION PRINCIPALE CORRIGÉE : Gérer TOUS les messages (avec ou sans parentId)
-exports.onNewMessage = onDocumentCreated('exchanges/{messageId}', async (event) => {
-    console.log('🔥 DEBUT onNewMessage - Message détecté !');
+// 🔥 FONCTION CORRIGÉE : Gérer les nouveaux messages
+exports.onNewMessage = onDocumentCreated({
+    document: 'exchanges/{messageId}',
+    region: 'europe-west1'
+}, async (event) => {
+    console.log('🔥 DEBUT onNewMessage - Nouveau message détecté !');
     
     try {
         const messageData = event.data.data();
-        console.log('📋 Message data:', JSON.stringify(messageData, null, 2));
+        const messageId = event.params.messageId;
+        
+        console.log(`📋 Message ${messageId}:`, JSON.stringify(messageData, null, 2));
 
         const { childId, senderType, content } = messageData;
 
-        // Skip si déjà traité
+        // Éviter le double traitement
         if (messageData.notificationSent) {
             console.log('⚠️ Notification déjà traitée');
             return;
@@ -595,110 +651,150 @@ exports.onNewMessage = onDocumentCreated('exchanges/{messageId}', async (event) 
 
         let recipientEmail = null;
         let title = '';
+        let body = content || 'Nouveau message';
 
         if (senderType === 'parent') {
-            // 🟢 MESSAGE PARENT → ASSISTANTE (ça marche déjà)
-            console.log('👨‍👩‍👧‍👦 Message du parent vers assistante');
+            // 👨‍👩‍👧‍👦 MESSAGE PARENT → ASSISTANTE
+            console.log('👪 Message du parent vers assistante');
             title = 'Nouveau message d\'un parent';
             recipientEmail = await getAssistantEmail(childId);
             
-        } else if (senderType === 'assistante') {
-            // 🔴 MESSAGE ASSISTANTE → PARENT (à corriger)
+        } else if (senderType === 'assistante' || senderType === 'staff') {
+            // 👩‍⚕️ MESSAGE ASSISTANTE → PARENT
             console.log('👩‍⚕️ Message de l\'assistante vers parent');
-            title = 'Nouveau message de Poppin\'s';
-            
-            // 🔥 CORRECTION : Ne pas utiliser parentId du message, le chercher dynamiquement
-            console.log('🔍 Recherche parent pour childId:', childId);
-            
-            // Chercher directement les parents qui ont cet enfant
-            const parentQuery = await db
-                .collection('users')
-                .where('children', 'array-contains', childId)
-                .get();
-
-            console.log('👪 Nombre de parents trouvés:', parentQuery.size);
-
-            if (!parentQuery.empty) {
-                recipientEmail = parentQuery.docs[0].id; // ID = email
-                console.log('📧 Email parent trouvé:', recipientEmail);
-            } else {
-                console.log('❌ Aucun parent trouvé pour childId:', childId);
-                
-                // FALLBACK : Chercher dans les documents enfants pour récupérer parentId
-                const structuresSnapshot = await db.collection('structures').get();
-                
-                for (const structureDoc of structuresSnapshot.docs) {
-                    const childDoc = await db
-                        .collection('structures')
-                        .doc(structureDoc.id)
-                        .collection('children')
-                        .doc(childId)
-                        .get();
-
-                    if (childDoc.exists) {
-                        const childData = childDoc.data();
-                        const parentId = childData.parentId;
-                        
-                        if (parentId && parentId.includes('@')) {
-                            recipientEmail = parentId.toLowerCase();
-                            console.log('📧 Email parent trouvé via document enfant:', recipientEmail);
-                            break;
-                        }
-                    }
-                }
-            }
+            title = 'Nouveau message de votre assistante';
+            recipientEmail = await getParentEmail(childId);
         }
 
-        if (recipientEmail) {
-            console.log('✅ Destinataire trouvé:', recipientEmail);
-            
-            // Créer la notification
-            const notificationData = {
-                recipientUserId: recipientEmail,
-                title: title,
-                body: content || 'Nouveau message',
-                data: {
-                    childId: childId,
-                    messageId: event.params.messageId,
-                    type: 'message'
-                },
-                timestamp: FieldValue.serverTimestamp(),
-                sent: false,
-                platform: 'ios'
-            };
-
-            console.log('📬 Création notification:', JSON.stringify(notificationData, null, 2));
-
-            await db.collection('notifications').add(notificationData);
-
-            // Marquer le message comme traité
-            await event.data.ref.update({
-                notificationSent: true
+        if (!recipientEmail) {
+            console.error('❌ AUCUN destinataire trouvé !');
+            console.error('🔍 Debug info:', {
+                senderType,
+                childId,
+                messageId
             });
+            return;
+        }
 
-            console.log('✅ Notification créée avec succès pour:', recipientEmail);
-        } else {
-            console.log('❌ AUCUN destinataire trouvé !');
-            console.log('📋 Debug info:', {
-                senderType: senderType,
+        console.log(`✅ Destinataire trouvé: ${recipientEmail}`);
+
+        // 🔔 CRÉER LA NOTIFICATION
+        const notificationData = {
+            recipientUserId: recipientEmail,
+            title: title,
+            body: body,
+            data: {
                 childId: childId,
-                parentId: messageData.parentId
-            });
-        }
+                messageId: messageId,
+                type: 'message',
+                senderType: senderType,
+            },
+            timestamp: FieldValue.serverTimestamp(),
+            sent: false,
+            platform: 'multi', // Pour supporter iOS et Android
+        };
+
+        console.log('📬 Création notification:', JSON.stringify(notificationData, null, 2));
+
+        // Créer le document de notification (déclenche sendNotification)
+        const notificationRef = await db.collection('notifications').add(notificationData);
+        console.log(`📬 Notification créée avec ID: ${notificationRef.id}`);
+
+        // Marquer le message comme traité
+        await event.data.ref.update({
+            notificationSent: true,
+            notificationId: notificationRef.id,
+            notificationCreatedAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`✅ Message ${messageId} traité avec succès`);
 
     } catch (error) {
         console.error('❌ Erreur dans onNewMessage:', error);
+        console.error('📋 Stack trace:', error.stack);
     }
 });
 
-// 🔥 FONCTION HELPER : Trouver l'email de l'assistante
+// 🔍 FONCTION HELPER CORRIGÉE : Trouver email assistante
 async function getAssistantEmail(childId) {
     try {
-        console.log('🔍 Recherche assistante pour enfant:', childId);
+        console.log(`🔍 Recherche assistante pour enfant: ${childId}`);
         
         // Chercher dans toutes les structures
         const structuresSnapshot = await db.collection('structures').get();
 
+        for (const structureDoc of structuresSnapshot.docs) {
+            console.log(`🏢 Vérification structure: ${structureDoc.id}`);
+            
+            const childDoc = await db
+                .collection('structures')
+                .doc(structureDoc.id)
+                .collection('children')
+                .doc(childId)
+                .get();
+
+            if (childDoc.exists) {
+                console.log(`👶 Enfant trouvé dans structure: ${structureDoc.id}`);
+                
+                const childData = childDoc.data();
+                const assignedMemberEmail = childData.assignedMemberEmail;
+
+                // Si assigné à un membre MAM spécifique
+                if (assignedMemberEmail && assignedMemberEmail.trim() !== '') {
+                    const email = assignedMemberEmail.toLowerCase().trim();
+                    console.log(`👥 Membre MAM assigné trouvé: ${email}`);
+                    return email;
+                }
+
+                // Sinon, propriétaire de la structure
+                const structureData = structureDoc.data();
+                
+                // Essayer d'abord ownerEmail
+                if (structureData.ownerEmail && structureData.ownerEmail.trim() !== '') {
+                    const email = structureData.ownerEmail.toLowerCase().trim();
+                    console.log(`👤 Propriétaire structure trouvé (ownerEmail): ${email}`);
+                    return email;
+                }
+
+                // Fallback: email du document structure
+                if (structureData.email && structureData.email.trim() !== '') {
+                    const email = structureData.email.toLowerCase().trim();
+                    console.log(`👤 Propriétaire structure trouvé (email): ${email}`);
+                    return email;
+                }
+            }
+        }
+
+        console.error(`❌ Aucune assistante trouvée pour childId: ${childId}`);
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur recherche assistante:', error);
+        return null;
+    }
+}
+
+// 🔍 FONCTION HELPER CORRIGÉE : Trouver email parent
+async function getParentEmail(childId) {
+    try {
+        console.log(`🔍 Recherche parent pour enfant: ${childId}`);
+        
+        // Méthode 1: Chercher directement les parents qui ont cet enfant
+        const parentQuery = await db
+            .collection('users')
+            .where('children', 'array-contains', childId)
+            .limit(1)
+            .get();
+
+        if (!parentQuery.empty) {
+            const parentEmail = parentQuery.docs[0].id;
+            console.log(`👪 Parent trouvé via array-contains: ${parentEmail}`);
+            return parentEmail;
+        }
+
+        // Méthode 2: Chercher dans les documents enfants pour récupérer parentId
+        console.log('🔍 Recherche dans les documents enfants...');
+        const structuresSnapshot = await db.collection('structures').get();
+        
         for (const structureDoc of structuresSnapshot.docs) {
             const childDoc = await db
                 .collection('structures')
@@ -709,45 +805,104 @@ async function getAssistantEmail(childId) {
 
             if (childDoc.exists) {
                 const childData = childDoc.data();
-                const assignedMemberEmail = childData.assignedMemberEmail;
+                
+                // Chercher dans parent1 et parent2
+                if (childData.parent1 && childData.parent1.email) {
+                    const email = childData.parent1.email.toLowerCase().trim();
+                    console.log(`👪 Parent trouvé via parent1: ${email}`);
+                    return email;
+                }
+                
+                if (childData.parent2 && childData.parent2.email) {
+                    const email = childData.parent2.email.toLowerCase().trim();
+                    console.log(`👪 Parent trouvé via parent2: ${email}`);
+                    return email;
+                }
 
-                // Si assigné à un membre MAM
-                if (assignedMemberEmail) {
-                    console.log('📧 Membre MAM assigné trouvé:', assignedMemberEmail);
-                    return assignedMemberEmail.toLowerCase();
-                } else {
-                    // Sinon, propriétaire de la structure
-                    const structureData = structureDoc.data();
-                    const ownerEmail = structureData.ownerEmail;
-                    
-                    if (ownerEmail) {
-                        console.log('📧 Propriétaire structure trouvé:', ownerEmail);
-                        return ownerEmail.toLowerCase();
-                    }
+                // Fallback: parentId direct (si c'est un email)
+                if (childData.parentId && childData.parentId.includes('@')) {
+                    const email = childData.parentId.toLowerCase().trim();
+                    console.log(`👪 Parent trouvé via parentId: ${email}`);
+                    return email;
                 }
             }
         }
 
-        console.log('❌ Aucune assistante trouvée pour childId:', childId);
+        console.error(`❌ Aucun parent trouvé pour childId: ${childId}`);
         return null;
     } catch (error) {
-        console.error('❌ Erreur recherche assistante:', error);
+        console.error('❌ Erreur recherche parent:', error);
         return null;
     }
 }
 
-// Fonction pour nettoyer les anciennes notifications
-exports.cleanupOldNotifications = onSchedule('every 24 hours', async (event) => {
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 jours
-    
-    const snapshot = await db
-        .collection('notifications')
-        .where('timestamp', '<', cutoff)
-        .get();
+// 🧪 FONCTION TEST : Tester les notifications
+exports.testNotification = onCall({
+    region: 'europe-west1'
+}, async (request) => {
+    try {
+        if (!request.auth) {
+            throw new Error('unauthenticated');
+        }
 
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        const userEmail = request.auth.token.email?.toLowerCase();
+        console.log('🧪 Test notification pour:', userEmail);
+
+        // Créer une notification de test
+        const notificationData = {
+            recipientUserId: userEmail,
+            title: '🧪 Test Notification Push',
+            body: 'Ceci est un test des notifications push depuis Firebase Functions !',
+            data: { 
+                type: 'test',
+                timestamp: Date.now().toString(),
+            },
+            timestamp: FieldValue.serverTimestamp(),
+            sent: false,
+            platform: 'multi',
+        };
+
+        const notificationRef = await db.collection('notifications').add(notificationData);
+
+        return { 
+            success: true, 
+            message: 'Notification de test créée',
+            notificationId: notificationRef.id,
+        };
+    } catch (error) {
+        console.error('❌ Erreur test notification:', error);
+        throw new Error('internal');
+    }
+});
+
+// 🗑️ NETTOYAGE : Supprimer anciennes notifications
+exports.cleanupOldNotifications = onSchedule({
+    schedule: 'every 24 hours',
+    region: 'europe-west1'
+}, async (event) => {
+    try {
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 jours
+        
+        console.log('🗑️ Nettoyage des notifications anciennes...');
+        
+        const snapshot = await db
+            .collection('notifications')
+            .where('timestamp', '<', cutoff)
+            .get();
+
+        if (snapshot.empty) {
+            console.log('✅ Aucune notification ancienne à supprimer');
+            return null;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        
+        await batch.commit();
+        console.log(`🗑️ ${snapshot.size} anciennes notifications supprimées`);
+    } catch (error) {
+        console.error('❌ Erreur nettoyage:', error);
+    }
     
-    await batch.commit();
-    console.log(`🗑️ ${snapshot.size} anciennes notifications supprimées`);
+    return null;
 });

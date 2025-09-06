@@ -5,6 +5,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
+
+// Top-level background handler (recommandé par firebase_messaging)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  try {
+    print('📱 (BG) Message Firebase: ${message.notification?.title}');
+  } catch (e) {
+    // Garder minimal pour l'isolement background
+    // ignore: avoid_print
+    print('⚠️ Erreur handler BG: $e');
+  }
+}
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -59,7 +72,91 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onDidReceiveNotificationResponse,
     );
 
+    // Création explicite du canal Android utilisé par FCM et les locales
+    try {
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'messages_channel', // DOIT correspondre au Manifest et aux payloads FCM
+        'Messages',
+        description: 'Notifications pour les nouveaux messages',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
+
+      final androidPlugin =
+          _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.createNotificationChannel(channel);
+      print('✅ Canal Android créé');
+
+      // Android 13+ : demander explicitement la permission via permission_handler
+      if (Platform.isAndroid) {
+        try {
+          final status = await Permission.notification.status;
+          if (!status.isGranted) {
+            final result = await Permission.notification.request();
+            print('🔔 Permission notifications Android: $result');
+          }
+        } catch (e) {
+          print('⚠️ Impossible de demander la permission Android: $e');
+        }
+      }
+    } catch (e) {
+      print(
+          '⚠️ Impossible de créer le canal Android ou de demander la permission: $e');
+    }
+
     print('✅ Flutter Local Notifications initialisé');
+  }
+
+  /// 🔥 NOUVELLES MÉTHODES : Force la sauvegarde des tokens
+  static Future<void> refreshTokenForCurrentUser() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      await FirebaseMessaging.instance.deleteToken();
+      final newToken = await FirebaseMessaging.instance.getToken();
+
+      if (newToken != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.email?.toLowerCase())
+            .update({
+          'fcmToken': newToken,
+          'tokenUpdatedAt': FieldValue.serverTimestamp(),
+        });
+
+        print('✅ Token FCM mis à jour: ${newToken.substring(0, 20)}...');
+      }
+    } catch (e) {
+      print('❌ Erreur refresh token: $e');
+    }
+  }
+
+  /// Méthode de diagnostic des tokens
+  static Future<void> diagnoseTokens() async {
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      print('🔑 Token FCM actuel: $fcmToken');
+
+      final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      print('🍎 Token APNs: $apnsToken');
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.email?.toLowerCase())
+            .get();
+
+        print('💾 Token en base: ${userDoc.data()?['fcmToken']}');
+      }
+    } catch (e) {
+      print('❌ Erreur diagnostic: $e');
+    }
   }
 
   /// Initialisation Firebase commune
@@ -82,26 +179,29 @@ class NotificationService {
 
       // Configuration spéciale iOS avec APNS
       if (Platform.isIOS) {
-        await Future.delayed(Duration(seconds: 1));
-        String? apnsToken = await _messaging.getAPNSToken();
-        int retryCount = 0;
-        const maxRetries = 8;
+        // Ne pas supprimer le token FCM existant. On s'appuie sur onTokenRefresh.
+        // Tenter de récupérer APNS (non bloquant). Ne pas quitter en cas d'échec.
+        try {
+          await Future.delayed(Duration(seconds: 2));
+          String? apnsToken = await _messaging.getAPNSToken();
+          int retryCount = 0;
+          const maxRetries = 8;
 
-        while (apnsToken == null && retryCount < maxRetries) {
-          print(
-              '⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
-          await Future.delayed(Duration(seconds: 3));
-          apnsToken = await _messaging.getAPNSToken();
-          retryCount++;
-        }
+          while (apnsToken == null && retryCount < maxRetries) {
+            print(
+                '⏳ Attente du token APNS (tentative ${retryCount + 1}/$maxRetries)...');
+            await Future.delayed(Duration(seconds: 3));
+            apnsToken = await _messaging.getAPNSToken();
+            retryCount++;
+          }
 
-        if (apnsToken != null) {
-          print('✅ Token APNS obtenu: ${apnsToken.substring(0, 20)}...');
-        } else {
-          print(
-              '❌ Impossible d\'obtenir le token APNS après $maxRetries tentatives');
-          print('⚠️ L\'app continue sans notifications push');
-          return;
+          if (apnsToken != null) {
+            print('✅ Token APNS obtenu: ${apnsToken.substring(0, 20)}...');
+          } else {
+            print('⚠️ Token APNS indisponible pour le moment – on poursuit.');
+          }
+        } catch (e) {
+          print('⚠️ Erreur récupération APNS: $e – on poursuit');
         }
       }
 
@@ -114,9 +214,8 @@ class NotificationService {
           print('🔥 TOKEN FCM OBTENU: ${token.substring(0, 50)}...');
           await _saveTokenToFirestore(token);
         } else {
-          print('❌ Token FCM non disponible');
-          print('⚠️ L\'app continue sans notifications push');
-          return;
+          print(
+              '⚠️ Token FCM non disponible pour le moment – en attente onTokenRefresh');
         }
       } catch (e) {
         if (e.toString().contains('SSL error') ||
@@ -132,14 +231,24 @@ class NotificationService {
             }
           } catch (e2) {
             print('❌ Échec retry token FCM: $e2');
-            print('⚠️ L\'app continue sans notifications push');
-            return;
+            print('⚠️ On attendra onTokenRefresh');
           }
         } else {
           print('❌ Erreur token FCM: $e');
-          print('⚠️ L\'app continue sans notifications push');
-          return;
+          print('⚠️ On attendra onTokenRefresh');
         }
+      }
+
+      // iOS: afficher notifications APNS en foreground
+      try {
+        await FirebaseMessaging.instance
+            .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      } catch (e) {
+        print('⚠️ Erreur setForegroundNotificationPresentationOptions: $e');
       }
 
       // Configurer les listeners Firebase
@@ -274,7 +383,7 @@ class NotificationService {
     // Exemple: NavigationService.navigateToMessages(message.data['childId']);
   }
 
-  /// Envoyer une notification à un utilisateur spécifique
+  // notification_service.dart
   static Future<void> sendNotificationToUser({
     required String recipientUserId,
     required String title,
@@ -282,21 +391,20 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     try {
-      print('📤 Envoi notification vers: $recipientUserId');
+      final normalizedRecipient =
+          recipientUserId.trim().toLowerCase(); // ⬅️ clé
+      print('📤 Envoi notification vers: $normalizedRecipient');
 
       await FirebaseFirestore.instance.collection('notifications').add({
-        'recipientUserId': recipientUserId,
+        'recipientUserId': normalizedRecipient,
         'title': title,
         'body': body,
         'data': data ?? {},
         'timestamp': FieldValue.serverTimestamp(),
         'sent': false,
-        'platform': Platform.isIOS ? 'ios' : 'android',
       });
-
-      print('✅ Document notification créé dans Firestore');
     } catch (e) {
-      print('❌ Erreur envoi notification: $e');
+      print('❌ Erreur envoi notif: $e');
     }
   }
 

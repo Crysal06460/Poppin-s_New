@@ -238,26 +238,7 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
 
       // Récupérer les horaires (arrivée/départ)
       try {
-        List<Map<String, dynamic>> allHoraires = [];
-
-        // Récupérer les horaires dans la collection horaires_history
-        final horairesSnapshot = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(widget.structureId)
-            .collection('horaires_history')
-            .where('childId', isEqualTo: widget.childId)
-            .where('date', isEqualTo: selectedDateFormatted)
-            .get();
-
-        for (var doc in horairesSnapshot.docs) {
-          final data = doc.data();
-          if (data['actionType'] == 'arrivee' ||
-              data['actionType'] == 'depart') {
-            allHoraires.add(data);
-          }
-        }
-
-        // Récupérer également les horaires dans la collection horaires (document du jour)
+        // 1) Essayer d'abord d'utiliser le document d'état courant (source de vérité)
         final horairesDaySnapshot = await FirebaseFirestore.instance
             .collection('structures')
             .doc(widget.structureId)
@@ -265,84 +246,88 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
             .doc(selectedDateFormatted)
             .get();
 
+        final List<Map<String, dynamic>> finalHoraires = [];
+
         if (horairesDaySnapshot.exists) {
           final data = horairesDaySnapshot.data();
           if (data != null && data.containsKey(widget.childId)) {
             final childHoraires = data[widget.childId];
 
-            // Vérifier si l'enfant était absent
             if (childHoraires['absent'] == true ||
                 childHoraires['actionType'] == 'absent') {
-              // Ne pas ajouter d'horaires pour les enfants absents
-            } else {
-              // Vérifier si des segments existent
-              if (childHoraires['segments'] != null) {
-                List<dynamic> segments = childHoraires['segments'];
-                for (var segment in segments) {
-                  if (segment['arrivee'] != null) {
-                    allHoraires.add({
-                      'childId': widget.childId,
-                      'date': selectedDateFormatted,
-                      'actionType': 'arrivee',
-                      'heure': segment['arrivee'],
-                    });
-                  }
-                  if (segment['depart'] != null) {
-                    allHoraires.add({
-                      'childId': widget.childId,
-                      'date': selectedDateFormatted,
-                      'actionType': 'depart',
-                      'heure': segment['depart'],
-                    });
-                  }
+              // Rien à afficher si absent
+            } else if (childHoraires['segments'] != null) {
+              // Format segments: prendre uniquement les heures finales
+              final segments = List<Map<String, dynamic>>.from(childHoraires['segments']);
+              for (final seg in segments) {
+                final arr = seg['arrivee'];
+                final dep = seg['depart'];
+                if (arr != null && arr.toString().isNotEmpty) {
+                  finalHoraires.add({'actionType': 'arrivee', 'heure': arr});
+                }
+                if (dep != null && dep.toString().isNotEmpty) {
+                  finalHoraires.add({'actionType': 'depart', 'heure': dep});
                 }
               }
-              // Format ancien (sans segments)
-              else if (childHoraires['arrivee'] != null ||
-                  childHoraires['depart'] != null) {
-                if (childHoraires['arrivee'] != null) {
-                  allHoraires.add({
-                    'childId': widget.childId,
-                    'date': selectedDateFormatted,
-                    'actionType': 'arrivee',
-                    'heure': childHoraires['arrivee'],
-                  });
-                }
-                if (childHoraires['depart'] != null) {
-                  allHoraires.add({
-                    'childId': widget.childId,
-                    'date': selectedDateFormatted,
-                    'actionType': 'depart',
-                    'heure': childHoraires['depart'],
-                  });
-                }
+            } else {
+              // Ancien format
+              final arr = childHoraires['arrivee'];
+              final dep = childHoraires['depart'];
+              if (arr != null && arr.toString().isNotEmpty) {
+                finalHoraires.add({'actionType': 'arrivee', 'heure': arr});
+              }
+              if (dep != null && dep.toString().isNotEmpty) {
+                finalHoraires.add({'actionType': 'depart', 'heure': dep});
               }
             }
           }
         }
 
-        // Supprimer les doublons et traiter les horaires
-        Map<String, Map<String, dynamic>> uniqueHoraires = {};
-        for (var horaire in allHoraires) {
-          String key = "${horaire['actionType']}_${horaire['heure']}";
-          uniqueHoraires[key] = horaire;
+        if (finalHoraires.isEmpty) {
+          // 2) Fallback: utiliser l'historique (normaliser pour éviter doublons de modifs)
+          final horairesSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(widget.structureId)
+              .collection('horaires_history')
+              .where('childId', isEqualTo: widget.childId)
+              .where('date', isEqualTo: selectedDateFormatted)
+              .orderBy('timestamp', descending: true)
+              .get();
+
+          // Garder la dernière valeur par type et par heure unique
+          final Map<String, String> latestByType = {};
+          for (final doc in horairesSnapshot.docs) {
+            final data = doc.data();
+            final action = (data['actionType'] ?? '').toString();
+            if (action == 'arrivee' || action == 'arrivee_modifiee') {
+              latestByType['arrivee'] ??= data['heure'] ?? _formatTimestamp(data['timestamp']);
+            } else if (action == 'depart' || action == 'depart_modifiee') {
+              latestByType['depart'] ??= data['heure'] ?? _formatTimestamp(data['timestamp']);
+            }
+          }
+
+          if (latestByType.containsKey('arrivee')) {
+            finalHoraires.add({'actionType': 'arrivee', 'heure': latestByType['arrivee']});
+          }
+          if (latestByType.containsKey('depart')) {
+            finalHoraires.add({'actionType': 'depart', 'heure': latestByType['depart']});
+          }
         }
 
-        for (var horaire in uniqueHoraires.values) {
-          if (horaire['actionType'] == 'arrivee') {
+        // Injecter dans tempRecapData
+        for (final h in finalHoraires) {
+          if (h['actionType'] == 'arrivee') {
             tempRecapData['horaires']!.add({
-              'heure':
-                  horaire['heure'] ?? _formatTimestamp(horaire['timestamp']),
+              'heure': h['heure'],
               'type': 'arrivee',
-              'details': 'Arrivée', // Avec accent
+              'details': 'Arrivée',
               'actionType': 'arrivee',
             });
-          } else if (horaire['actionType'] == 'depart') {
+          } else if (h['actionType'] == 'depart') {
             tempRecapData['horaires']!.add({
-              'heure':
-                  horaire['heure'] ?? _formatTimestamp(horaire['timestamp']),
+              'heure': h['heure'],
               'type': 'depart',
-              'details': 'Départ', // Avec accent
+              'details': 'Départ',
               'actionType': 'depart',
             });
           }

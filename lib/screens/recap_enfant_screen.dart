@@ -455,11 +455,17 @@ class _RecapScreenState extends State<RecapScreen> {
           print(
               "DEBUG: Horaires trouvés pour l'enfant $childId dans horaires_history: ${horairesSnapshot.docs.length}");
 
-          // Ajouter les horaires trouvés
+          // Ajouter les horaires trouvés (accepte heures modifiées)
           for (var doc in horairesSnapshot.docs) {
             final data = doc.data();
-            if (data['actionType'] == 'arrivee' ||
-                data['actionType'] == 'depart') {
+            final action = (data['actionType'] ?? '').toString();
+            if (action == 'arrivee' ||
+                action == 'depart' ||
+                action == 'arrivee_modifiee' ||
+                action == 'depart_modifiee') {
+              // Normaliser pour l'affichage
+              if (action.startsWith('arrivee')) data['actionType'] = 'arrivee';
+              if (action.startsWith('depart')) data['actionType'] = 'depart';
               allHoraires.add(data);
             }
           }
@@ -519,14 +525,14 @@ class _RecapScreenState extends State<RecapScreen> {
               "DEBUG: Nombre total d'horaires trouvés pour l'enfant $childId: ${allHoraires.length}");
 
           if (allHoraires.isNotEmpty) {
-            // Supprimer les doublons en se basant sur actionType et heure
-            Map<String, Map<String, dynamic>> uniqueHoraires = {};
-            for (var horaire in allHoraires) {
-              String key = "${horaire['actionType']}_${horaire['heure']}";
-              uniqueHoraires[key] = horaire;
+            // Supprimer les doublons en se basant sur actionType+heure
+            final Map<String, Map<String, dynamic>> uniqueHoraires = {};
+            for (final horaire in allHoraires) {
+              final key = "${horaire['actionType']}_${horaire['heure']}";
+              uniqueHoraires[key] = horaire; // la dernière occurence écrase
             }
 
-            for (var horaire in uniqueHoraires.values) {
+            for (final horaire in uniqueHoraires.values) {
               print(
                   "DEBUG: Ajout horaire: ${horaire['actionType']} à ${horaire['heure']}");
 
