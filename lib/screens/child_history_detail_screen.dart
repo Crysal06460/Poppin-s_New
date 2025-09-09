@@ -257,17 +257,48 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
                 childHoraires['actionType'] == 'absent') {
               // Rien à afficher si absent
             } else if (childHoraires['segments'] != null) {
-              // Format segments: prendre uniquement les heures finales
+              // Format segments: ne garder qu'une seule arrivée (la plus tôt)
+              // et un seul départ (le plus tard) pour éviter les doublons
               final segments = List<Map<String, dynamic>>.from(childHoraires['segments']);
+
+              String? firstArrival;
+              String? lastDeparture;
+              int? minArrMins;
+              int? maxDepMins;
+
+              int toMins(String t) {
+                try {
+                  final p = t.split(':');
+                  return (int.parse(p[0]) * 60) + int.parse(p[1]);
+                } catch (_) {
+                  return 0;
+                }
+              }
+
               for (final seg in segments) {
                 final arr = seg['arrivee'];
                 final dep = seg['depart'];
                 if (arr != null && arr.toString().isNotEmpty) {
-                  finalHoraires.add({'actionType': 'arrivee', 'heure': arr});
+                  final m = toMins(arr.toString());
+                  if (minArrMins == null || m < minArrMins!) {
+                    minArrMins = m;
+                    firstArrival = arr.toString();
+                  }
                 }
                 if (dep != null && dep.toString().isNotEmpty) {
-                  finalHoraires.add({'actionType': 'depart', 'heure': dep});
+                  final m = toMins(dep.toString());
+                  if (maxDepMins == null || m > maxDepMins!) {
+                    maxDepMins = m;
+                    lastDeparture = dep.toString();
+                  }
                 }
+              }
+
+              if (firstArrival != null) {
+                finalHoraires.add({'actionType': 'arrivee', 'heure': firstArrival});
+              }
+              if (lastDeparture != null) {
+                finalHoraires.add({'actionType': 'depart', 'heure': lastDeparture});
               }
             } else {
               // Ancien format

@@ -441,130 +441,117 @@ class _RecapScreenState extends State<RecapScreen> {
 
         // Si l'enfant n'est pas absent, récupérer les horaires normalement
         if (!isAbsent) {
-          List<Map<String, dynamic>> allHoraires = [];
+          final List<Map<String, dynamic>> finalHoraires = [];
 
-          // Récupérer les horaires dans la collection horaires_history
-          final horairesSnapshot = await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(structureId)
-              .collection('horaires_history')
-              .where('childId', isEqualTo: childId)
-              .where('date', isEqualTo: todayFormatted)
-              .get();
-
-          print(
-              "DEBUG: Horaires trouvés pour l'enfant $childId dans horaires_history: ${horairesSnapshot.docs.length}");
-
-          // Ajouter les horaires trouvés (accepte heures modifiées)
-          for (var doc in horairesSnapshot.docs) {
-            final data = doc.data();
-            final action = (data['actionType'] ?? '').toString();
-            if (action == 'arrivee' ||
-                action == 'depart' ||
-                action == 'arrivee_modifiee' ||
-                action == 'depart_modifiee') {
-              // Normaliser pour l'affichage
-              if (action.startsWith('arrivee')) data['actionType'] = 'arrivee';
-              if (action.startsWith('depart')) data['actionType'] = 'depart';
-              allHoraires.add(data);
-            }
-          }
-
-          // Récupérer également les horaires dans la collection horaires (historique journalier)
+          // 1) Source principale: document "horaires" du jour
           if (absenceSnapshot.exists) {
             final data = absenceSnapshot.data();
             if (data != null && data.containsKey(childId)) {
               final childHoraires = data[childId];
+              String? firstArrival;
+              String? lastDeparture;
+              int? minArrMins;
+              int? maxDepMins;
+              int toMins(String t) {
+                try {
+                  final p = t.split(':');
+                  return (int.parse(p[0]) * 60) + int.parse(p[1]);
+                } catch (_) {
+                  return 0;
+                }
+              }
 
-              // Vérifier si des segments existent dans ce document
               if (childHoraires['segments'] != null) {
-                List<dynamic> segments = childHoraires['segments'];
-                for (var segment in segments) {
-                  if (segment['arrivee'] != null) {
-                    allHoraires.add({
-                      'childId': childId,
-                      'date': todayFormatted,
-                      'actionType': 'arrivee',
-                      'heure': segment['arrivee'],
-                    });
+                final segments = List<Map<String, dynamic>>.from(childHoraires['segments']);
+                for (final seg in segments) {
+                  final arr = seg['arrivee'];
+                  final dep = seg['depart'];
+                  if (arr != null && arr.toString().isNotEmpty) {
+                    final m = toMins(arr.toString());
+                    if (minArrMins == null || m < minArrMins!) {
+                      minArrMins = m;
+                      firstArrival = arr.toString();
+                    }
                   }
-                  if (segment['depart'] != null) {
-                    allHoraires.add({
-                      'childId': childId,
-                      'date': todayFormatted,
-                      'actionType': 'depart',
-                      'heure': segment['depart'],
-                    });
+                  if (dep != null && dep.toString().isNotEmpty) {
+                    final m = toMins(dep.toString());
+                    if (maxDepMins == null || m > maxDepMins!) {
+                      maxDepMins = m;
+                      lastDeparture = dep.toString();
+                    }
                   }
+                }
+              } else {
+                // Ancien format direct arrivee/depart
+                if (childHoraires['arrivee'] != null &&
+                    childHoraires['arrivee'].toString().isNotEmpty) {
+                  firstArrival = childHoraires['arrivee'].toString();
+                }
+                if (childHoraires['depart'] != null &&
+                    childHoraires['depart'].toString().isNotEmpty) {
+                  lastDeparture = childHoraires['depart'].toString();
                 }
               }
-              // Format ancien (sans segments)
-              else if (childHoraires['arrivee'] != null ||
-                  childHoraires['depart'] != null) {
-                if (childHoraires['arrivee'] != null) {
-                  allHoraires.add({
-                    'childId': childId,
-                    'date': todayFormatted,
-                    'actionType': 'arrivee',
-                    'heure': childHoraires['arrivee'],
-                  });
-                }
-                if (childHoraires['depart'] != null) {
-                  allHoraires.add({
-                    'childId': childId,
-                    'date': todayFormatted,
-                    'actionType': 'depart',
-                    'heure': childHoraires['depart'],
-                  });
-                }
+
+              if (firstArrival != null) {
+                finalHoraires.add({'actionType': 'arrivee', 'heure': firstArrival});
+              }
+              if (lastDeparture != null) {
+                finalHoraires.add({'actionType': 'depart', 'heure': lastDeparture});
               }
             }
           }
 
-          print(
-              "DEBUG: Nombre total d'horaires trouvés pour l'enfant $childId: ${allHoraires.length}");
+          // 2) Fallback: si rien, utiliser la dernière valeur par type dans l'historique
+          if (finalHoraires.isEmpty) {
+            final hist = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .collection('horaires_history')
+                .where('childId', isEqualTo: childId)
+                .where('date', isEqualTo: todayFormatted)
+                .orderBy('timestamp', descending: true)
+                .get();
 
-          if (allHoraires.isNotEmpty) {
-            // Supprimer les doublons en se basant sur actionType+heure
-            final Map<String, Map<String, dynamic>> uniqueHoraires = {};
-            for (final horaire in allHoraires) {
-              final key = "${horaire['actionType']}_${horaire['heure']}";
-              uniqueHoraires[key] = horaire; // la dernière occurence écrase
-            }
-
-            for (final horaire in uniqueHoraires.values) {
-              print(
-                  "DEBUG: Ajout horaire: ${horaire['actionType']} à ${horaire['heure']}");
-
-              if (horaire['actionType'] == 'arrivee') {
-                tempRecapData['horaires']!.add({
-                  'heure': horaire['heure'] ??
-                      _formatTimestamp(horaire['timestamp']),
-                  'type': 'arrivee',
-                  'details': 'Arrivée',
-                });
-              } else if (horaire['actionType'] == 'depart') {
-                tempRecapData['horaires']!.add({
-                  'heure': horaire['heure'] ??
-                      _formatTimestamp(horaire['timestamp']),
-                  'type': 'depart',
-                  'details': 'Départ',
-                });
+            String? lastArr;
+            String? lastDep;
+            for (final d in hist.docs) {
+              final data = d.data();
+              final action = (data['actionType'] ?? '').toString();
+              if (lastArr == null && (action == 'arrivee' || action == 'arrivee_modifiee')) {
+                lastArr = (data['heure'] ?? _formatTimestamp(data['timestamp'])).toString();
               }
+              if (lastDep == null && (action == 'depart' || action == 'depart_modifiee')) {
+                lastDep = (data['heure'] ?? _formatTimestamp(data['timestamp'])).toString();
+              }
+              if (lastArr != null && lastDep != null) break;
             }
-
-            // Tri des horaires par heure
-            tempRecapData['horaires']!.sort((a, b) {
-              // Conversion des heures en minutes depuis minuit pour comparaison
-              int minutesA = _convertHoursToMinutes(a['heure'] ?? '00:00');
-              int minutesB = _convertHoursToMinutes(b['heure'] ?? '00:00');
-              return minutesA.compareTo(minutesB);
-            });
-          } else {
-            print("Aucun horaire trouvé pour l'enfant $childId");
-            // Pour un enfant sans horaires mais non absent, on ne met rien dans horaires
-            // tempRecapData['horaires'] reste vide
+            if (lastArr != null) finalHoraires.add({'actionType': 'arrivee', 'heure': lastArr});
+            if (lastDep != null) finalHoraires.add({'actionType': 'depart', 'heure': lastDep});
           }
+
+          // Injecter au plus deux éléments (Arrivée, Départ)
+          for (final h in finalHoraires) {
+            if (h['actionType'] == 'arrivee') {
+              tempRecapData['horaires']!.add({
+                'heure': h['heure'],
+                'type': 'arrivee',
+                'details': 'Arrivée',
+              });
+            } else if (h['actionType'] == 'depart') {
+              tempRecapData['horaires']!.add({
+                'heure': h['heure'],
+                'type': 'depart',
+                'details': 'Départ',
+              });
+            }
+          }
+
+          tempRecapData['horaires']!.sort((a, b) {
+            int minutesA = _convertHoursToMinutes(a['heure'] ?? '00:00');
+            int minutesB = _convertHoursToMinutes(b['heure'] ?? '00:00');
+            return minutesA.compareTo(minutesB);
+          });
         }
       } catch (e) {
         print("Erreur lors de la récupération des horaires: $e");
