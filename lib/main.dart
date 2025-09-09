@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ AJOUT CRUCIAL
+import 'dart:io'; // 🚨 AJOUT CRUCIAL pour Platform.isAndroid
 import 'firebase_options.dart';
 import 'routes.dart';
 
@@ -67,16 +68,39 @@ void main() async {
     print('⚠️ Erreur notifications: $e - continuer sans');
   }
 
-  // 🔧 FORCER LE MODE DEV pour les tests (INSTANTANÉ)
-  SubscriptionService.setDebugMode(true);
-  print('🧪 Mode debug activé pour SubscriptionService');
+  // 🚨 FIX URGENCE ANDROID : Gestion différenciée iOS/Android
+  try {
+    print('🚨 FIX ANDROID : Initialisation SubscriptionService...');
 
-  // ⚡ SUPPRIMÉ LA LIGNE QUI BLOQUAIT LE DÉMARRAGE :
-  // await SubscriptionService.initialize(); // ← Cette ligne prenait 10-30 secondes !
+    // Activer le mode debug AVANT l'initialisation
+    SubscriptionService.setDebugMode(true);
+    print('🧪 Mode debug activé pour SubscriptionService');
 
-  // ✅ MAINTENANT : Services initialisés dans SplashScreen avec feedback utilisateur
+    // 🔧 LOGIQUE DIFFÉRENCIÉE iOS vs ANDROID
+    if (Platform.isAndroid) {
+      // ANDROID : Force l'initialisation complète pour éviter race condition
+      print('🤖 ANDROID détecté : initialisation forcée...');
+      await SubscriptionService.initialize().timeout(
+        Duration(seconds: 5),
+        onTimeout: () {
+          print(
+              '⚠️ Timeout SubscriptionService Android - continuer avec debug');
+        },
+      );
+      print('✅ SubscriptionService initialisé pour Android');
+    } else {
+      // iOS : Garde l'ancienne logique (initialisation dans SplashScreen)
+      print(
+          '📱 iOS détecté : SubscriptionService sera initialisé dans SplashScreen');
+      // Ne pas initialiser maintenant pour iOS - garde le comportement existant
+    }
+  } catch (e) {
+    print('⚠️ Erreur SubscriptionService: $e - continuer avec mode debug');
+    // En cas d'erreur, forcer le mode debug pour éviter blocage
+    SubscriptionService.setDebugMode(true);
+  }
 
-  print('🚀 Démarrage rapide de Poppins - Services en arrière-plan');
+  print('🚀 Démarrage Poppins - Fix Android appliqué, iOS préservé');
 
   // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());
@@ -108,7 +132,7 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // 🔑 GESTION CRITIQUE DU CYCLE DE VIE - MODIFIÉE POUR LE SYSTÈME DE SÉCURITÉ
+  // 🔒 GESTION CRITIQUE DU CYCLE DE VIE - MODIFIÉE POUR LE SYSTÈME DE SÉCURITÉ
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);

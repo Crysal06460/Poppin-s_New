@@ -703,7 +703,13 @@ class _SiesteScreenState extends State<SiesteScreen> {
                               SizedBox(width: 12),
                               Spacer(),
                               Text(
-                                "Durée: ${siesteData['duration']}",
+                                (siesteData['end'] == null ||
+                                        (siesteData['end']
+                                                ?.toString()
+                                                .isEmpty ??
+                                            true))
+                                    ? 'Durée: en cours'
+                                    : "Durée: ${siesteData['duration']}",
                                 style: TextStyle(
                                   fontSize: isTabletDevice ? 18 : 16,
                                   fontWeight: FontWeight.w600,
@@ -716,8 +722,9 @@ class _SiesteScreenState extends State<SiesteScreen> {
 
                         SizedBox(height: 16),
 
-                        // Participation - CHANGÉ DE JAUNE À BLEU CLAIR
-                        Container(
+                        // Participation (qualité) - affichée seulement si disponible
+                        if ((siesteData['qualite'] ?? '').toString().isNotEmpty)
+                          Container(
                           width: double.infinity,
                           padding: EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -836,7 +843,14 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  "MODIFIER",
+                                  // Si pas d'heure de fin, proposer de terminer
+                                  ((siesteData['end'] == null) ||
+                                          (siesteData['end']
+                                                  ?.toString()
+                                                  .isEmpty ??
+                                              true))
+                                      ? 'TERMINER'
+                                      : 'MODIFIER',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -945,6 +959,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
   void _showEditSiestePopup(String structureId, String childId, String siesteId,
       Map<String, dynamic> siesteData) {
     // Pré-remplir début/fin en tentant d'utiliser 'start'/'end' ou parser 'heure'
+    final bool wasInProgress = (siesteData['end'] == null) ||
+        ((siesteData['end']?.toString().isEmpty) ?? true);
     String localStart = (siesteData['start'] ?? '').toString();
     String localEnd = (siesteData['end'] ?? '').toString();
     if (localStart.isEmpty || localEnd.isEmpty) {
@@ -1187,12 +1203,14 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     onPressed: () async {
                                       // Validation
                                       if (localStart.isEmpty || localEnd.isEmpty) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(SnackBar(
-                                          content: Text(
-                                              'Veuillez sélectionner un début et une fin de sieste'),
-                                          backgroundColor: Colors.red,
-                                        ));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(localStart.isEmpty
+                                                ? 'Veuillez indiquer l\'heure de début'
+                                                : 'Veuillez indiquer l\'heure de fin'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
                                         return;
                                       }
                                       int toMinutes(String t) {
@@ -1252,7 +1270,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                         ));
                                       }
                                     },
-                                    child: Text('ENREGISTRER'),
+                                    child: Text(wasInProgress ? 'TERMINER' : 'ENREGISTRER'),
                                   ),
                                 ),
                               ],
@@ -1792,24 +1810,35 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                   ),
                                 ),
 
-                                // Bouton Ajouter
+                                // Bouton Démarrer/Ajouter
                                 ElevatedButton(
                                   onPressed: () async {
-                                    if (localStart.isEmpty ||
-                                        localEnd.isEmpty) {
+                                    // Cas 1: aucun début saisi
+                                    if (localStart.isEmpty) {
                                       setState(() {
                                         errorMessage =
-                                            'Veuillez sélectionner un début et une fin de sieste';
+                                            'Veuillez indiquer l\'heure de début';
                                       });
                                       return;
                                     }
-                                    // Vérifier que la fin est après le début
+
+                                    // Cas 2: début saisi mais pas de fin -> démarrer la sieste (en cours)
+                                    if (localEnd.isEmpty) {
+                                      setState(() => errorMessage = null);
+                                      _siesteStart = localStart;
+                                      _siesteEnd = '';
+                                      // On ne persiste pas la qualité/observations à ce stade
+                                      _addSiesteToFirebase(childId);
+                                      Navigator.of(context).pop();
+                                      return;
+                                    }
+
+                                    // Cas 3: début et fin saisis -> vérifier cohérence et ajouter complet
                                     int _toMinutes(String t) {
                                       final p = t.split(':');
                                       return (int.parse(p[0]) * 60) +
                                           int.parse(p[1]);
                                     }
-
                                     final startMins = _toMinutes(localStart);
                                     final endMins = _toMinutes(localEnd);
                                     if (endMins <= startMins) {
@@ -1820,21 +1849,11 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                       return;
                                     }
 
-                                    // Réinitialiser le message d'erreur si tout est OK
-                                    setState(() {
-                                      errorMessage = null;
-                                    });
-
-                                    // Si tout est validé, ajouter la sieste
+                                    setState(() => errorMessage = null);
                                     _siesteStart = localStart;
                                     _siesteEnd = localEnd;
                                     _sleepQuality = localSleepQuality;
-                                    _sleepQuality = localSleepQuality;
-
-                                    // Ajouter la sieste dans Firebase
                                     _addSiesteToFirebase(childId);
-
-                                    // Fermer le popup une fois la sieste ajoutée
                                     Navigator.of(context).pop();
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -1848,7 +1867,10 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    "AJOUTER",
+                                    // Si seule l'heure de début est renseignée, on démarre
+                                    (localStart.isNotEmpty && localEnd.isEmpty)
+                                        ? "DÉMARRER"
+                                        : "AJOUTER",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 16 : 14,
                                       fontWeight: FontWeight.w600,
@@ -1940,11 +1962,17 @@ class _SiesteScreenState extends State<SiesteScreen> {
           .doc();
 
       // Construire l'affichage et la durée à partir des heures début/fin
-      String heureLabel = _siesteStart.isNotEmpty && _siesteEnd.isNotEmpty
-          ? '${_siesteStart} - ${_siesteEnd}'
-          : _siesteTime; // fallback ancien champ si non saisi
+      // Si seule l'heure de début est fournie, on marque visuellement l'état "en cours".
+      String heureLabel;
+      if (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty) {
+        heureLabel = '${_siesteStart} - ${_siesteEnd}';
+      } else if (_siesteStart.isNotEmpty) {
+        heureLabel = '${_siesteStart} - …';
+      } else {
+        heureLabel = _siesteTime; // fallback ancien champ si non saisi
+      }
 
-      String durationLabel = _durationController.text;
+      String durationLabel = '';
       if (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty) {
         int _toMinutes(String t) {
           final p = t.split(':');
@@ -1963,14 +1991,24 @@ class _SiesteScreenState extends State<SiesteScreen> {
         if (durationLabel.isEmpty) durationLabel = '0min';
       }
 
-      final siesteData = {
+      final Map<String, dynamic> siesteData = {
         'heure': heureLabel,
         'date': DateTime.now(),
-        'duration': durationLabel,
-        'qualite': _sleepQuality,
-        'moonCount': _getMoonCountFromQuality(_sleepQuality),
-        'observations': _observationsController.text,
-        // Nouveaux champs pour compatibilité future
+        // duration seulement si fin connue
+        'duration': (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty)
+            ? durationLabel
+            : null,
+        // Qualité/observations seulement lors de la fin
+        'qualite': (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty)
+            ? _sleepQuality
+            : null,
+        'moonCount': (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty)
+            ? _getMoonCountFromQuality(_sleepQuality)
+            : null,
+        'observations': (_siesteStart.isNotEmpty && _siesteEnd.isNotEmpty)
+            ? _observationsController.text
+            : null,
+        // Nouveaux champs normalisés
         'start': _siesteStart.isNotEmpty ? _siesteStart : null,
         'end': _siesteEnd.isNotEmpty ? _siesteEnd : null,
       }..removeWhere((key, value) => value == null);
@@ -2205,7 +2243,13 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 Row(
                                   children: [
                                     Text(
-                                      siesteData['heure'],
+                                      ((siesteData['end'] == null) ||
+                                              (siesteData['end']
+                                                      ?.toString()
+                                                      .isEmpty ??
+                                                  true))
+                                          ? 'En cours • Début ${siesteData['start'] ?? (siesteData['heure'] ?? '')}'
+                                          : (siesteData['heure'] ?? ''),
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -2216,7 +2260,13 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  "Durée: ${siesteData['duration']}",
+                                  ((siesteData['end'] == null) ||
+                                          (siesteData['end']
+                                                  ?.toString()
+                                                  .isEmpty ??
+                                              true))
+                                      ? 'Durée: en cours'
+                                      : "Durée: ${siesteData['duration']}",
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey.shade600,
@@ -2537,7 +2587,14 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                   Row(
                                     children: [
                                       Text(
-                                        siesteData['heure'],
+                                        // Afficher l'état en cours si pas de fin
+                                        ((siesteData['end'] == null) ||
+                                                (siesteData['end']
+                                                        ?.toString()
+                                                        .isEmpty ??
+                                                    true))
+                                            ? 'En cours • Début ${siesteData['start'] ?? (siesteData['heure'] ?? '')}'
+                                            : (siesteData['heure'] ?? ''),
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -2548,7 +2605,13 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    "Durée: ${siesteData['duration']}",
+                                    ((siesteData['end'] == null) ||
+                                            (siesteData['end']
+                                                    ?.toString()
+                                                    .isEmpty ??
+                                                true))
+                                        ? 'Durée: en cours'
+                                        : "Durée: ${siesteData['duration']}",
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.grey.shade600,

@@ -1139,29 +1139,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                     ],
                   ),
           ),
-          // Réactions
-          Row(
-            mainAxisAlignment:
-                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: [
-              // Bouton like
-              IconButton(
-                onPressed: () => _toggleReaction(messageData['id'], 'like'),
-                icon: Icon(
-                  Icons.thumb_up,
-                  color: primaryBlue,
-                  size: isTablet ? 22 : 18,
-                ),
-              ),
-              // Décompte des likes
-              Text(
-                '${messageData['reactions']?['like']?.length ?? 0} 👍',
-                style: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                ),
-              ),
-            ],
-          ),
+          // Réactions supprimées (plus de pouces affichés)
+          SizedBox.shrink(),
         ],
       ),
     );
