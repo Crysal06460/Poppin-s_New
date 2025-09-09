@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_composer_screen.dart';
 import 'package:url_launcher/url_launcher.dart'; // AJOUT en haut du fichier
+import 'package:flutter/services.dart';
 
 class ParentCoordonneesScreen extends StatefulWidget {
   final String childId;
@@ -286,6 +287,266 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     );
   }
 
+  // Carte CTA pour ajouter un Parent 2 si manquant
+  Widget _buildAddParent2Card() {
+    return Container(
+      margin: EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            offset: const Offset(0, 4),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [primaryBlue.withOpacity(0.08), brightCyan.withOpacity(0.04)],
+              ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [primaryBlue, brightCyan],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(Icons.person_add_alt_1, color: Colors.white),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ajouter un second parent',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary)),
+                      SizedBox(height: 4),
+                      Text(
+                        'Renseignez ses coordonnées pour l\'inviter et partager le suivi.',
+                        style: TextStyle(color: textSecondary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _showAddSecondParentDialog,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: primaryBlue),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: Icon(Icons.edit, color: primaryBlue),
+                    label: Text('Renseigner le Parent 2',
+                        style: TextStyle(
+                            color: primaryBlue, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddSecondParentDialog() async {
+    final firstCtl = TextEditingController();
+    final lastCtl = TextEditingController();
+    final phoneCtl = TextEditingController();
+    final emailCtl = TextEditingController();
+    String? error;
+
+    bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Ajouter le Parent 2',
+                style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildTextField(firstCtl, 'Prénom', TextInputType.name, hint: 'Ex: Marie'),
+                  SizedBox(height: 10),
+                  _buildTextField(lastCtl, 'Nom', TextInputType.name, hint: 'Ex: Dupont'),
+                  SizedBox(height: 10),
+                  _buildTextField(
+                    phoneCtl,
+                    'Téléphone',
+                    TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    hint: '10 chiffres (ex: 0612345678)'
+                  ),
+                  SizedBox(height: 10),
+                  _buildTextField(
+                    emailCtl,
+                    'Email',
+                    TextInputType.emailAddress,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.deny(RegExp(r'[\s]')),
+                    ],
+                    hint: 'prenom.nom@email.fr'
+                  ),
+                  if (error != null) ...[
+                    SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(error!, style: TextStyle(color: primaryRed)),
+                    ),
+                  ]
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Annuler', style: TextStyle(color: textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final email = emailCtl.text.trim().toLowerCase();
+                  final first = firstCtl.text.trim();
+                  final last = lastCtl.text.trim();
+                  final phone = phoneCtl.text.trim();
+                  final emailRe = RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+                  if (first.isEmpty || last.isEmpty) {
+                    setState(() => error = 'Prénom et nom sont requis');
+                    return;
+                  }
+                  if (email.isEmpty || !emailRe.hasMatch(email)) {
+                    setState(() => error = 'Email invalide');
+                    return;
+                  }
+                  // Téléphone facultatif mais si fourni => 10 chiffres
+                  final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
+                  if (phone.isNotEmpty && phoneDigits.length != 10) {
+                    setState(() => error = 'Téléphone invalide (10 chiffres requis)');
+                    return;
+                  }
+                  setState(() => error = null);
+                  Navigator.pop(context, true);
+                  // Sauvegarder après fermeture pour éviter multiple setState du dialog
+                  _saveSecondParent({'firstName': first, 'lastName': last, 'phone': phoneDigits, 'email': email});
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text('Enregistrer'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+
+    if (confirmed == true) {
+      // Un snackbar est géré dans _saveSecondParent
+    }
+  }
+
+  Widget _buildTextField(TextEditingController ctl, String label, TextInputType type,
+      {List<TextInputFormatter>? inputFormatters, String? hint}) {
+    return TextField(
+      controller: ctl,
+      keyboardType: type,
+      inputFormatters: inputFormatters,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: primaryBlue, width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveSecondParent(Map<String, String> p2) async {
+    try {
+      final childRef = FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('children')
+          .doc(widget.childId);
+
+      await childRef.update({'parent2': p2});
+
+      setState(() {
+        parentInfo['parent2'] = p2;
+      });
+
+      // Si email fourni, créer/mettre à jour l'user parent et file invitation
+      final email = p2['email'] ?? '';
+      String msg = 'Parent 2 ajouté et enregistré';
+      if (email.isNotEmpty) {
+        await _queueParentInvitationEmail('parent2', email);
+        msg = 'Parent 2 ajouté. Invitation envoyée à $email';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'enregistrement: $e'),
+            backgroundColor: primaryRed,
+          ),
+        );
+      }
+    }
+  }
+
   // Méthode corrigée pour les infos avec support email cliquable
   Widget _buildModernInfoRow(
     IconData icon,
@@ -422,6 +683,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.emailAddress,
+          inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[\s]'))],
           decoration: InputDecoration(
             labelText: 'Email',
             hintText: 'parent@example.com',
@@ -443,7 +705,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     if (newEmail == null || newEmail.isEmpty) return;
 
     // Validation simple
-    final emailRegex = RegExp(r'^\S+@\S+\.\S+$');
+    final emailRegex = RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
     if (!emailRegex.hasMatch(newEmail)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -588,9 +850,13 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
           decoration: InputDecoration(
             labelText: 'Téléphone',
-            hintText: '+33 6 12 34 56 78',
+            hintText: '10 chiffres (ex: 0612345678)',
           ),
         ),
         actions: [
@@ -604,11 +870,11 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     );
 
     if (newPhone == null) return;
-    final cleaned = newPhone.trim();
-    if (cleaned.isEmpty || cleaned.replaceAll(RegExp('[^0-9+]'), '').length < 6) {
+    final cleaned = newPhone.trim().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.isEmpty || cleaned.length != 10) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Numéro invalide'), backgroundColor: primaryRed),
+          SnackBar(content: Text('Numéro invalide (10 chiffres requis)'), backgroundColor: primaryRed),
         );
       }
       return;
@@ -952,7 +1218,11 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                               _buildParentSection('parent1', 'Parent 1', 0),
 
                               // Parent 2
-                              _buildParentSection('parent2', 'Parent 2', 1),
+                              if ((parentInfo['parent2'] ?? {}).isNotEmpty ||
+                                  (parentAddress['parent2'] ?? {}).isNotEmpty)
+                                _buildParentSection('parent2', 'Parent 2', 1)
+                              else
+                                _buildAddParent2Card(),
 
                               // Espace pour le scroll final
                               SizedBox(height: 20),

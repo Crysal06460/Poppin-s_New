@@ -33,6 +33,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   Map<String, dynamic> documents = {};
   Map<String, dynamic> mealInfo = {};
   Map<String, dynamic> authorizedPickup = {};
+  Map<String, dynamic> financialInfo = {};
 
   // Nouvelles variables pour la gestion des uploads
   final ImagePicker _picker = ImagePicker();
@@ -255,6 +256,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       // Extraction des autorisations de récupération
       authorizedPickup = data['authorizedPickup'] ?? {};
 
+      // Extraction des infos financières (tableau mensuel)
+      financialInfo = data['financialInfo'] ?? {};
+
       setState(() => isLoading = false);
     } catch (e) {
       print("Erreur lors du chargement du profil: $e");
@@ -279,6 +283,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
 
       // Créer le chemin pour la mise à jour
       String updatePath = '';
@@ -310,6 +315,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
             authorizedPickup[field] = value;
           });
           break;
+        case 'financialInfo':
+          updatePath = 'financialInfo.$field';
+          setState(() {
+            financialInfo[field] = value;
+          });
+          break;
         case 'profile':
           updatePath = field;
           setState(() {
@@ -320,6 +331,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
       // Création de l'objet de mise à jour
       updateData[updatePath] = value;
+
+      // Cas particulier: activation du tableau mensuel => assurer l'affichage Dashboard (MAM)
+      if (section == 'financialInfo' && field == 'useMonthlyTable' && value == true) {
+        updateData['assignedMemberEmail'] = currentUserEmail;
+        updateData['lastUpdatedBy'] = currentUserEmail;
+        updateData['lastUpdatedAt'] = FieldValue.serverTimestamp();
+      }
 
       // Mise à jour dans Firestore
       await FirebaseFirestore.instance
@@ -355,6 +373,198 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     } finally {
       setState(() => isLoading = false);
     }
+  }
+
+  // Edition des 4 champs du tableau mensuel
+  Future<void> _editMonthlyTableFields() async {
+    final TextEditingController salaryCtl = TextEditingController(
+        text: (financialInfo['monthlySalary']?.toString() ?? ''));
+    final TextEditingController careCtl = TextEditingController(
+        text: (financialInfo['careExpenses']?.toString() ?? ''));
+    final TextEditingController mealCtl = TextEditingController(
+        text: (financialInfo['mealExpenses']?.toString() ?? ''));
+    final TextEditingController kmCtl = TextEditingController(
+        text: (financialInfo['kmExpenses']?.toString() ?? ''));
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'Configuration du tableau mensuel',
+            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildNumberField(salaryCtl, 'Salaire net mensuel (€)', true),
+                SizedBox(height: 10),
+                _buildNumberField(careCtl, 'Frais de garde (€/jour)', false),
+                SizedBox(height: 10),
+                _buildNumberField(mealCtl, 'Frais de repas (€/jour)', false),
+                SizedBox(height: 10),
+                _buildNumberField(kmCtl, 'Frais kilométriques (€/km)', false),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Annuler', style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Validation minimale
+                if (salaryCtl.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Le salaire mensuel est obligatoire'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                // Construction des valeurs numériques
+                double parseNum(String s) =>
+                    double.tryParse(s.replaceAll(',', '.')) ?? 0;
+
+                final Map<String, dynamic> updates = {
+                  'financialInfo.useMonthlyTable': true,
+                  'financialInfo.monthlySalary': parseNum(salaryCtl.text),
+                  'financialInfo.careExpenses': parseNum(careCtl.text),
+                  'financialInfo.mealExpenses': parseNum(mealCtl.text),
+                  'financialInfo.kmExpenses': parseNum(kmCtl.text),
+                };
+
+                // Assurer l'affichage Dashboard pour MAM: marquer le membre assigné et métadonnées
+                final currentUser = FirebaseAuth.instance.currentUser;
+                if (currentUser != null) {
+                  final email = currentUser.email?.toLowerCase() ?? '';
+                  updates['assignedMemberEmail'] = email;
+                  updates['lastUpdatedBy'] = email;
+                  updates['lastUpdatedAt'] = FieldValue.serverTimestamp();
+                }
+
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('structures')
+                      .doc(widget.structureId)
+                      .collection('children')
+                      .doc(widget.childId)
+                      .update(updates);
+
+                  setState(() {
+                    financialInfo['useMonthlyTable'] = true;
+                    financialInfo['monthlySalary'] = updates['financialInfo.monthlySalary'];
+                    financialInfo['careExpenses'] = updates['financialInfo.careExpenses'];
+                    financialInfo['mealExpenses'] = updates['financialInfo.mealExpenses'];
+                    financialInfo['kmExpenses'] = updates['financialInfo.kmExpenses'];
+                  });
+
+                  Navigator.pop(context, true);
+                } catch (e) {
+                  print('Erreur sauvegarde tableau mensuel: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erreur lors de l\'enregistrement'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text('Enregistrer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tableau mensuel mis à jour'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // Toggle "Utiliser le tableau mensuel" avec ouverture auto de la configuration
+  Future<void> _editUseMonthlyTableToggle() async {
+    final bool current = (financialInfo['useMonthlyTable'] == true);
+    bool switchValue = current;
+
+    final bool? result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, dialogSetState) {
+          return AlertDialog(
+            title: Text(
+              'Tableau mensuel',
+              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content: SwitchListTile(
+              title: Text('Utiliser le tableau mensuel ?'),
+              value: switchValue,
+              activeColor: primaryColor,
+              onChanged: (v) {
+                dialogSetState(() => switchValue = v);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: Text('Annuler', style: TextStyle(color: Colors.grey[600])),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, switchValue),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                child: Text('Confirmer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result == null || result == current) return;
+
+    await _saveChanges('financialInfo', 'useMonthlyTable', result);
+    if (result == true) {
+      // Ouvrir immédiatement la configuration des 4 champs
+      await _editMonthlyTableFields();
+    }
+  }
+
+  Widget _buildNumberField(TextEditingController ctl, String label, bool required) {
+    return TextField(
+      controller: ctl,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*[,.]?\d*')),
+      ],
+      decoration: InputDecoration(
+        labelText: label + (required ? ' *' : ''),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: primaryColor, width: 2),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
   }
 
   // Méthode pour gérer l'édition des données textuelles
@@ -735,6 +945,29 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
         ],
       ),
     );
+  }
+
+  String _formatMonthlySummary(Map<String, dynamic> fin) {
+    final salary = fin['monthlySalary'];
+    final care = fin['careExpenses'];
+    final meal = fin['mealExpenses'];
+    final km = fin['kmExpenses'];
+
+    List<String> parts = [];
+    if (salary != null && (salary is num) && salary > 0) {
+      parts.add('Salaire: ${salary.toString()}€');
+    }
+    if (care != null && (care is num) && care > 0) {
+      parts.add('Garde: ${care.toString()}€/j');
+    }
+    if (meal != null && (meal is num) && meal > 0) {
+      parts.add('Repas: ${meal.toString()}€/j');
+    }
+    if (km != null && (km is num) && km > 0) {
+      parts.add('KM: ${km.toString()}€/km');
+    }
+    if (parts.isEmpty) return 'À compléter';
+    return parts.join(' • ');
   }
 
   Widget _buildInfoRow(String label, String value,
@@ -1348,6 +1581,27 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                       'Description du régime alimentaire');
                                 },
                               ),
+                          ],
+                        ),
+
+                        // Section Tableau mensuel (financier)
+                        _buildProfileSection(
+                          '💶 Tableau mensuel',
+                          [
+                            // Sélecteur Oui/Non comme les autres
+                            _buildAuthorizationRow(
+                              'Utiliser le tableau mensuel',
+                              (financialInfo['useMonthlyTable'] == true),
+                              onEdit: _editUseMonthlyTableToggle,
+                            ),
+                            if (financialInfo['useMonthlyTable'] == true) ...[
+                              _buildInfoRow(
+                                'Configuration',
+                                _formatMonthlySummary(financialInfo),
+                                icon: Icons.edit_note,
+                                onEdit: _editMonthlyTableFields,
+                              ),
+                            ],
                           ],
                         ),
 
