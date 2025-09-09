@@ -1,4 +1,4 @@
-// subscription_service.dart - SECTION MODIFIÉE
+// subscription_service.dart - VERSION CORRIGÉE COMPLÈTE
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,6 +16,7 @@ class SubscriptionService {
   }
 
   static bool _forceDevMode = false;
+  static bool _isInitialized = false;
 
   static void setDebugMode(bool enabled) {
     _forceDevMode = enabled;
@@ -26,11 +27,15 @@ class SubscriptionService {
     return _forceDevMode || !_isProduction;
   }
 
+  static bool get isDebugMode => _forceDevMode;
+  static bool get isInitialized => _isInitialized;
+
   // 🔧 BUNDLE ID CONFIGURÉ : com.beylet.poppinsApp
   static const String _bundleId = 'com.beylet.poppinsApp';
 
   // Stream pour écouter les changements d'abonnement
   static StreamSubscription<List<PurchaseDetails>>? _subscription;
+  static final InAppPurchase _inAppPurchase = InAppPurchase.instance;
 
   // IDs des produits selon la plateforme
   static Map<String, String> get productIds {
@@ -38,16 +43,17 @@ class SubscriptionService {
       return {
         'assistante_maternelle':
             '$_bundleId.subscription.assistante_maternelle',
-        'mam_2_members': '$_bundleId.subscription.mam_2_members', // ✅ CORRIGÉ
-        'mam_3_members': '$_bundleId.subscription.mam_3_members', // ✅ CORRIGÉ
-        'mam_4_members': '$_bundleId.subscription.mam_4_members', // ✅ CORRIGÉ
+        'mam_2_members': '$_bundleId.subscription.mam_2_members',
+        'mam_3_members': '$_bundleId.subscription.mam_3_members',
+        'mam_4_members': '$_bundleId.subscription.mam_4_members',
       };
     } else {
+      // 🔧 IDs Android corrigés selon Google Play Console
       return {
-        'assistante_maternelle': 'assmat',
-        'mam_2_members': 'mam2',
-        'mam_3_members': 'mam3',
-        'mam_4_members': 'mam4',
+        'assistante_maternelle': 'abonement_assmat',
+        'mam_2_members': 'abonement_mam2',
+        'mam_3_members': 'abonement_mam3',
+        'mam_4_members': 'abonement_mam4',
       };
     }
   }
@@ -60,94 +66,163 @@ class SubscriptionService {
     return productIds['assistante_maternelle']!;
   }
 
-  // 🆕 NOUVELLE MÉTHODE : Vérifier le statut d'abonnement
+  // 🆕 MÉTHODE PRINCIPALE : Vérifier le statut d'abonnement (ROBUSTE)
   static Future<bool> isUserSubscribed() async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
 
-      if (!_isProduction) {
-        print('🧪 MODE DEV: Simulation abonnement actif');
-        return true; // En dev, considérer comme abonné
-      }
+      print('🔍 Vérification abonnement pour: ${user.uid}');
 
-      // 1. Vérifier d'abord dans Firestore (cache)
-      final subscriptionDoc = await FirebaseFirestore.instance
+      // 1. PRIORITÉ 1 : Vérifier dans Firestore (fiable et rapide)
+      final subscriptionQuery = await FirebaseFirestore.instance
           .collection('subscriptions')
           .where('structureId', isEqualTo: user.uid)
           .where('status', isEqualTo: 'active')
           .limit(1)
           .get();
 
-      if (subscriptionDoc.docs.isNotEmpty) {
-        final data = subscriptionDoc.docs.first.data();
+      if (subscriptionQuery.docs.isNotEmpty) {
+        final data = subscriptionQuery.docs.first.data();
         final Timestamp? trialEndsAt = data['trialEndsAt'];
 
         // Vérifier si la période d'essai est encore valide
         if (trialEndsAt != null &&
             DateTime.now().isBefore(trialEndsAt.toDate())) {
-          print('✅ Utilisateur en période d\'essai');
+          print('✅ Abonnement actif trouvé dans Firestore (essai gratuit)');
+          return true;
+        }
+
+        // Vérifier si abonnement payant actif
+        if (data['status'] == 'active') {
+          print('✅ Abonnement actif trouvé dans Firestore (payant)');
           return true;
         }
       }
 
-      // 2. Vérifier auprès d'Apple/Google (source de vérité)
-      final InAppPurchase inAppPurchase = InAppPurchase.instance;
-      final bool isAvailable = await inAppPurchase.isAvailable();
+      // 2. PRIORITÉ 2 : Si pas dans Firestore, essayer Google Play (avec timeout)
+      print('⚠️ Pas d\'abonnement Firestore, vérification Google Play...');
 
-      if (!isAvailable) {
-        print('❌ Achats intégrés non disponibles');
-        return false;
+      try {
+        final bool hasActive =
+            await _checkGooglePlaySubscription().timeout(Duration(seconds: 3));
+
+        if (hasActive) {
+          print('✅ Abonnement trouvé via Google Play');
+          return true;
+        }
+      } catch (e) {
+        print('⚠️ Erreur/timeout Google Play: $e');
+        // Continue vers fallback
       }
 
-      // 🔧 CORRIGÉ : Utiliser la nouvelle API
-      await inAppPurchase.restorePurchases();
+      // 3. FALLBACK SÉCURISÉ : Vérifier si utilisateur était récemment actif
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? user.uid)
+          .get();
 
-      // Écouter le stream des achats pour vérifier
-      final completer = Completer<bool>();
-      late StreamSubscription subscription;
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? {};
+        final DateTime? lastActive = userData['lastActiveDate']?.toDate();
 
-      subscription = inAppPurchase.purchaseStream.listen((purchaseDetailsList) {
-        bool hasActiveSubscription = false;
-
-        for (PurchaseDetails purchase in purchaseDetailsList) {
-          if (productIds.values.contains(purchase.productID)) {
-            if (purchase.status == PurchaseStatus.purchased ||
-                purchase.status == PurchaseStatus.restored) {
-              print('✅ Abonnement actif trouvé: ${purchase.productID}');
-              _updateSubscriptionInFirestore(purchase);
-              hasActiveSubscription = true;
-            }
-          }
-
-          // Finaliser les transactions en attente
-          if (purchase.pendingCompletePurchase) {
-            inAppPurchase.completePurchase(purchase);
-          }
+        // Si actif dans les 30 derniers jours ET avait un abonnement
+        if (lastActive != null &&
+            DateTime.now().difference(lastActive).inDays < 30 &&
+            userData['hadActiveSubscription'] == true) {
+          print('✅ Fallback : utilisateur récemment actif avec abonnement');
+          return true;
         }
+      }
 
-        if (!completer.isCompleted) {
-          subscription.cancel();
-          completer.complete(hasActiveSubscription);
-        }
-      });
-
-      // Timeout après 5 secondes
-      Timer(Duration(seconds: 5), () {
-        if (!completer.isCompleted) {
-          subscription.cancel();
-          completer.complete(false);
-        }
-      });
-
-      return await completer.future;
+      print('❌ Aucun abonnement valide trouvé');
+      return false;
     } catch (e) {
       print('❌ Erreur vérification abonnement: $e');
+
+      // FALLBACK FINAL : En cas d'erreur critique, permettre accès limité
+      // Mais seulement pour les utilisateurs qui ont des données récentes
+      try {
+        final User? user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final hasRecentData = await _hasRecentUserData(user.uid);
+          if (hasRecentData) {
+            print('🛡️ Fallback : accès temporaire pour utilisateur existant');
+            return true;
+          }
+        }
+      } catch (fallbackError) {
+        print('❌ Erreur fallback: $fallbackError');
+      }
+
       return false;
     }
   }
 
-  // 🆕 NOUVELLE MÉTHODE : Mettre à jour l'abonnement dans Firestore
+  // 🔧 MÉTHODE HELPER : Vérifier Google Play avec timeout
+  static Future<bool> _checkGooglePlaySubscription() async {
+    final InAppPurchase inAppPurchase = InAppPurchase.instance;
+    final bool isAvailable = await inAppPurchase.isAvailable();
+
+    if (!isAvailable) return false;
+
+    await inAppPurchase.restorePurchases();
+
+    final completer = Completer<bool>();
+    late StreamSubscription subscription;
+
+    subscription = inAppPurchase.purchaseStream.listen((purchaseDetailsList) {
+      bool hasActiveSubscription = false;
+
+      for (PurchaseDetails purchase in purchaseDetailsList) {
+        if (productIds.values.contains(purchase.productID) &&
+            (purchase.status == PurchaseStatus.purchased ||
+                purchase.status == PurchaseStatus.restored)) {
+          hasActiveSubscription = true;
+          break;
+        }
+      }
+
+      if (!completer.isCompleted) {
+        subscription.cancel();
+        completer.complete(hasActiveSubscription);
+      }
+    });
+
+    // Timeout court pour éviter le blocage
+    Timer(Duration(seconds: 2), () {
+      if (!completer.isCompleted) {
+        subscription.cancel();
+        completer.complete(false);
+      }
+    });
+
+    return await completer.future;
+  }
+
+  // 🔧 MÉTHODE HELPER : Vérifier si l'utilisateur a des données récentes
+  static Future<bool> _hasRecentUserData(String userId) async {
+    try {
+      // Vérifier si l'utilisateur a des données récentes (enfants, activités)
+      final childrenQuery = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(userId)
+          .collection('children')
+          .limit(1)
+          .get();
+
+      return childrenQuery.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 🔧 MÉTHODE CORRIGÉE : hasActiveSubscription (utilise la même logique)
+  static Future<bool> hasActiveSubscription() async {
+    return await isUserSubscribed();
+  }
+
+  // 🆕 MÉTHODE : Mettre à jour l'abonnement dans Firestore
   static Future<void> _updateSubscriptionInFirestore(
       PurchaseDetails purchase) async {
     try {
@@ -158,11 +233,11 @@ class SubscriptionService {
       String structureType = 'assistante_maternelle';
       int memberCount = 1;
 
-      // ✅ CORRIGÉ : Gérer les deux formats d'IDs (iOS et Android)
+      // 🔧 CORRIGÉ : Gérer les deux formats d'IDs (iOS et Android)
       final String productId = purchase.productID;
 
       if (Platform.isIOS) {
-        // Format iOS : com.beylet.poppinsApp.subscription.mam_2_membres
+        // Format iOS : com.beylet.poppinsApp.subscription.mam_2_members
         if (productId.contains('mam')) {
           structureType = 'MAM';
           if (productId.contains('2_members'))
@@ -172,20 +247,30 @@ class SubscriptionService {
           else if (productId.contains('4_members')) memberCount = 4;
         }
       } else {
-        // Format Android : mam2, mam3, mam4, assmat
-        if (productId.startsWith('mam')) {
+        // 🔧 FIX ANDROID : Format Android corrigé : abonement_mam2, abonement_mam3, abonement_mam4, abonement_assmat
+        if (productId.startsWith('abonement_mam')) {
           structureType = 'MAM';
-          if (productId == 'mam2')
+          if (productId == 'abonement_mam2')
             memberCount = 2;
-          else if (productId == 'mam3')
+          else if (productId == 'abonement_mam3')
             memberCount = 3;
-          else if (productId == 'mam4') memberCount = 4;
+          else if (productId == 'abonement_mam4') memberCount = 4;
         }
-        // Si c'est 'assmat', les valeurs par défaut sont déjà correctes
+        // Si c'est 'abonement_assmat', les valeurs par défaut sont déjà correctes
       }
 
       print(
           '🔍 Produit: $productId → Type: $structureType, Membres: $memberCount');
+
+      // Marquer l'utilisateur comme ayant eu un abonnement actif
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? user.uid)
+          .set({
+        'hadActiveSubscription': true,
+        'lastActiveDate': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       // Mettre à jour ou créer l'abonnement
       await FirebaseFirestore.instance.collection('subscriptions').add({
@@ -195,6 +280,8 @@ class SubscriptionService {
         'status': 'active',
         'productId': purchase.productID,
         'purchaseId': purchase.purchaseID,
+        'trialEndsAt':
+            Timestamp.fromDate(DateTime.now().add(Duration(days: 7))),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -308,15 +395,17 @@ class SubscriptionService {
 
     if (productId.contains('mam')) {
       structureType = 'MAM';
-      if (productId.contains('2_members') || productId == 'mam2') {
+      if (productId.contains('2_members') || productId == 'abonement_mam2') {
         memberCount = 2;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
-      } else if (productId.contains('3_members') || productId == 'mam3') {
+      } else if (productId.contains('3_members') ||
+          productId == 'abonement_mam3') {
         memberCount = 3;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
-      } else if (productId.contains('4_members') || productId == 'mam4') {
+      } else if (productId.contains('4_members') ||
+          productId == 'abonement_mam4') {
         memberCount = 4;
         priceAmount = 29.99;
         priceDisplay = '29,99 € / mois';
@@ -393,41 +482,6 @@ class SubscriptionService {
       // - Mettre à jour l'interface utilisateur
     } catch (e) {
       print('❌ Erreur déblocage fonctionnalités: $e');
-    }
-  }
-
-  // 🆕 NOUVELLE MÉTHODE : Restreindre l'accès (si abonnement expiré/annulé)
-  static Future<void> _lockPremiumFeatures() async {
-    try {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      // Désactiver l'abonnement dans Firestore
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(user.uid)
-          .update({
-        'subscriptionActive': false,
-        'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Marquer les abonnements comme inactifs
-      final subscriptions = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .get();
-
-      for (var doc in subscriptions.docs) {
-        await doc.reference.update({
-          'status': 'inactive',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      print('🔒 Fonctionnalités premium verrouillées');
-    } catch (e) {
-      print('❌ Erreur verrouillage fonctionnalités: $e');
     }
   }
 
@@ -537,19 +591,8 @@ class SubscriptionService {
 
       if (response.notFoundIDs.isNotEmpty) {
         print('❌ Produits non trouvés: ${response.notFoundIDs}');
-        if (Platform.isIOS) {
-          print('💡 Actions requises dans App Store Connect :');
-          print('   1. Vérifiez que le Bundle ID ($_bundleId) est correct');
-          print(
-              '   2. Créez les produits avec les IDs exacts : ${response.notFoundIDs}');
-          print('   3. Configurez-les comme "Auto-Renewable Subscriptions"');
-          print('   4. Soumettez-les pour approbation');
-          print('   5. Attendez l\'approbation (peut prendre 24-48h)');
-          print('   6. Testez avec un compte Sandbox configuré');
-        } else {
-          print(
-              '💡 Vérifiez que ces produits sont bien configurés et actifs dans Google Play Console');
-        }
+        print(
+            '💡 Vérifiez que ces produits sont bien configurés et actifs dans Google Play Console');
       }
 
       if (response.error != null) {
@@ -565,7 +608,7 @@ class SubscriptionService {
     print('🚀 Initialisation SubscriptionService...');
 
     // Vérifier l'environnement
-    if (!_isProduction) {
+    if (!_isProduction || _forceDevMode) {
       print(
           '🧪 Mode développement détecté - simulation des achats activée (succès garanti)');
     }
@@ -576,6 +619,7 @@ class SubscriptionService {
     // Tester la récupération des produits
     await testProductRetrieval();
 
+    _isInitialized = true;
     print('✅ SubscriptionService initialisé');
   }
 

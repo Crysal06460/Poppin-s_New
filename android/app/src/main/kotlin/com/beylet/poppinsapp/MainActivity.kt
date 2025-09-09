@@ -1,4 +1,4 @@
-package com.beylet.poppinsApp
+package com.beylet.poppinsapp
 
 import io.flutter.embedding.android.FlutterActivity
 
