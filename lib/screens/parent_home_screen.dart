@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
+import '../utils/actualites_badge_util.dart';
+import '../utils/photos_badge_util.dart';
 import '../utils/session_util.dart';
 import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
@@ -64,6 +66,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   bool _loadingTimeline = false;
   bool _showStockBadge = false;
   bool _showMessageBadge = false;
+  bool _showEventsBadge = false;
+  bool _showSortiesBadge = false;
+  bool _showActualitesBadge = false; // global: events OR sorties
+  bool _showPhotosBadge = false;
 
   // Variable pour suivre si l'application était en arrière-plan
   bool _wasInBackground = false;
@@ -94,6 +100,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
     _checkStockBadge();
     _checkMessageBadge();
+    _checkActualitesBadges();
+    _checkPhotosBadge();
   }
 
   Future<void> _performPhotoCleanup() async {
@@ -209,6 +217,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
   // Conservez UNIQUEMENT cette version de la méthode et supprimez l'autre
   void _showPhotoHistory() {
+    // Marquer les photos comme vues et retirer le badge avant d'ouvrir
+    PhotosBadgeUtil.markSeen().catchError((e) => print('📸 markSeen error: $e'));
+    if (mounted && _showPhotosBadge) {
+      setState(() => _showPhotosBadge = false);
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -310,6 +323,16 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         );
       },
     );
+  }
+
+  Future<void> _checkPhotosBadge() async {
+    try {
+      final should = await PhotosBadgeUtil.shouldShowBadge();
+      if (mounted) setState(() => _showPhotosBadge = should);
+    } catch (e) {
+      print('📸 ❌ Erreur vérification badge Photos: $e');
+      if (mounted) setState(() => _showPhotosBadge = false);
+    }
   }
 
   Future<void> _showPhotoDatePicker(StateSetter setModalState) async {
@@ -691,6 +714,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       // Vérifier s'il y a des messages non lus
       await _checkMessageBadge();
 
+      // Vérifier les badges Actualités
+      await _checkActualitesBadges();
+
+      // Vérifier badge Photos
+      await _checkPhotosBadge();
+
       setState(() => _loadingTimeline = false);
 
       // Afficher un feedback visuel
@@ -701,6 +730,34 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           backgroundColor: Colors.blueGrey.shade700,
         ),
       );
+    }
+  }
+
+  Future<void> _checkActualitesBadges() async {
+    try {
+      Map<String, bool> badges;
+      if (_selectedChild != null && _selectedChild!['structureId'] != null) {
+        final sid = _selectedChild!['structureId'] as String;
+        badges = await ActualitesBadgeUtil.shouldShowBadgesFor(sid);
+      } else {
+        badges = await ActualitesBadgeUtil.shouldShowBadges();
+      }
+      if (mounted) {
+        setState(() {
+          _showEventsBadge = badges['events'] ?? false;
+          _showSortiesBadge = badges['sorties'] ?? false;
+          _showActualitesBadge = _showEventsBadge || _showSortiesBadge;
+        });
+      }
+    } catch (e) {
+      print('📰 ❌ Erreur vérification badges Actualités: $e');
+      if (mounted) {
+        setState(() {
+          _showEventsBadge = false;
+          _showSortiesBadge = false;
+          _showActualitesBadge = false;
+        });
+      }
     }
   }
 
@@ -880,6 +937,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           if (structureId != null) {
             await _loadActualites(structureId);
             print("📱 Actualités chargées pour structureId: $structureId");
+            // Vérifier/mettre à jour les badges Actualités maintenant que la structure est connue
+            await _checkActualitesBadges();
           }
         } else {
           print(
@@ -1438,43 +1497,37 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       print("  - $key: ${events.length} événements");
     });
 
-    // Trier tous les événements par heure
+    // Trier tous les événements par heure réelle (minutes depuis minuit)
+    int toMinutes(dynamic value) {
+      // Chaîne HH:mm
+      if (value is String && value.contains(':')) {
+        final parts = value.split(':');
+        final h = int.tryParse(parts[0]) ?? 0;
+        final m = int.tryParse(parts[1]) ?? 0;
+        return h * 60 + m;
+      }
+      // Timestamp
+      if (value is Timestamp) {
+        final dt = value.toDate();
+        return dt.hour * 60 + dt.minute;
+      }
+      // DateTime
+      if (value is DateTime) {
+        return value.hour * 60 + value.minute;
+      }
+      return 0;
+    }
+
     allEvents.sort((a, b) {
-      dynamic aTime = a['time'];
-      dynamic bTime = b['time'];
-
-      // Convertir les Timestamp en DateTime si nécessaire
-      if (aTime is Timestamp) {
-        aTime = aTime.toDate();
-      }
-      if (bTime is Timestamp) {
-        bTime = bTime.toDate();
-      }
-
-      // Convertir les chaînes d'heures en DateTime pour comparaison si nécessaire
-      if (aTime is String && aTime.contains(':')) {
-        final parts = aTime.split(':');
-        if (parts.length == 2) {
-          final now = DateTime.now();
-          aTime = DateTime(now.year, now.month, now.day,
-              int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
-        }
-      }
-      if (bTime is String && bTime.contains(':')) {
-        final parts = bTime.split(':');
-        if (parts.length == 2) {
-          final now = DateTime.now();
-          bTime = DateTime(now.year, now.month, now.day,
-              int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
-        }
-      }
-
-      try {
-        return aTime.compareTo(bTime); // Ordre chronologique
-      } catch (e) {
-        print("❌ Erreur lors du tri: $e pour $aTime et $bTime");
-        return 0; // En cas d'erreur, ne pas modifier l'ordre
-      }
+      final aMin = toMinutes(a['time']);
+      final bMin = toMinutes(b['time']);
+      final cmp = aMin.compareTo(bMin);
+      if (cmp != 0) return cmp; // Ordre chronologique croissant
+      // En cas d'égalité parfaite (même minute), garder un ordre stable
+      // en comparant éventuellement sur le titre pour éviter les sauts visuels
+      final at = (a['title'] ?? '').toString();
+      final bt = (b['title'] ?? '').toString();
+      return at.compareTo(bt);
     });
 
     // Créer une nouvelle liste pour forcer le rafraîchissement
@@ -1524,7 +1577,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     return true;
   }
 
-  Widget _buildHeaderIcon(String label, IconData icon, VoidCallback onTap) {
+  Widget _buildHeaderIcon(String label, IconData icon, VoidCallback onTap,
+      {bool showBadge = false}) {
     // Obtenir la largeur de l'écran
     final screenWidth = MediaQuery.of(context).size.width;
     // Ajuster la taille selon la largeur de l'écran
@@ -1535,17 +1589,35 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            padding: EdgeInsets.all(containerPadding),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: iconSize,
-            ),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: EdgeInsets.all(containerPadding),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: iconSize,
+                ),
+              ),
+              if (showBadge)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
           ),
           SizedBox(height: 4),
           Text(
@@ -1562,7 +1634,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   }
 
   Widget _buildActualiteCard(String title, String subtitle, IconData icon,
-      Color color, VoidCallback onTap) {
+      Color color, VoidCallback onTap,
+      {bool showBadge = false}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1583,17 +1656,35 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 24,
+                  ),
+                ),
+                if (showBadge)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             SizedBox(height: 12),
             Text(
@@ -1620,7 +1711,27 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     );
   }
 
-  void _showActualiteDetails(String type) {
+  void _showActualiteDetails(String type) async {
+    // Marquer comme vu avant d'afficher les détails
+    try {
+      final sid = (_selectedChild != null)
+          ? _selectedChild!['structureId'] as String?
+          : null;
+      // Badge global: ouvrir l'un ou l'autre marque tout comme vu
+      if (type == 'evenement' || type == 'sortie') {
+        await ActualitesBadgeUtil.markAllSeen(structureId: sid);
+        if (mounted) {
+          setState(() {
+            _showEventsBadge = false;
+            _showSortiesBadge = false;
+            _showActualitesBadge = false;
+          });
+        }
+      }
+    } catch (e) {
+      // Pas bloquant
+      print('📰 ❌ Erreur mark seen ($type): $e');
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1970,18 +2081,20 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                       _buildHeaderIcon(
                                         "Événements",
                                         Icons.event,
-                                        () =>
-                                            _showActualiteDetails("evenement"),
+                                        () => _showActualiteDetails("evenement"),
+                                        showBadge: _showActualitesBadge,
                                       ),
                                       _buildHeaderIcon(
                                         "Sorties",
                                         Icons.directions_bus,
                                         () => _showActualiteDetails("sortie"),
+                                        showBadge: _showActualitesBadge,
                                       ),
                                       _buildHeaderIcon(
                                         "Photos",
                                         Icons.photo_library,
                                         () => _showPhotoHistory(),
+                                        showBadge: _showPhotosBadge,
                                       ),
                                     ],
                                   ),
@@ -2050,6 +2163,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         // Navigation vers les événements
                                         _showActualiteDetails("evenement");
                                       },
+                                      showBadge: _showActualitesBadge,
                                     ),
                                     SizedBox(width: 12),
                                     _buildActualiteCard(
@@ -2061,6 +2175,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         // Navigation vers les sorties
                                         _showActualiteDetails("sortie");
                                       },
+                                      showBadge: _showActualitesBadge,
                                     ),
                                   ],
                                 ),

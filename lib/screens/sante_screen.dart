@@ -299,26 +299,36 @@ class _SanteScreenState extends State<SanteScreen> {
                         size: 28,
                       ),
                       SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Soin de ${careData['heure']}",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Soin de ${careData['heure']}",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
-                          Text(
-                            DateFormat('dd MMMM yyyy', 'fr_FR')
-                                .format(careData['date'].toDate()),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withOpacity(0.9),
+                            Text(
+                              DateFormat('dd MMMM yyyy', 'fr_FR')
+                                  .format(careData['date'].toDate()),
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                      // Bouton supprimer (même UX que Repas/Activités/Siestes)
+                      IconButton(
+                        tooltip: 'Supprimer',
+                        icon: Icon(Icons.delete_outline, color: Colors.white),
+                        onPressed: () {
+                          _confirmDeleteCare(context, structureId, childId, careId);
+                        },
                       ),
                     ],
                   ),
@@ -480,6 +490,114 @@ class _SanteScreenState extends State<SanteScreen> {
                       ),
                     ],
                   ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Confirmation & suppression d'un soin santé
+  void _confirmDeleteCare(BuildContext dialogContext, String structureId,
+      String childId, String careId) {
+    showModalBottomSheet(
+      context: dialogContext,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.delete_outline, color: Colors.red),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Supprimer ce soin ?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Cette action retirera ce soin du journal, du récapitulatif et du fil des parents pour la journée.',
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.3),
+                ),
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text('Annuler'),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('structures')
+                                .doc(structureId)
+                                .collection('children')
+                                .doc(childId)
+                                .collection('sante')
+                                .doc(careId)
+                                .delete();
+
+                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(dialogContext).canPop()) {
+                              Navigator.of(dialogContext).pop();
+                            }
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Soin supprimé.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Erreur lors de la suppression du soin.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text('Supprimer'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
