@@ -675,6 +675,14 @@ class _SiesteScreenState extends State<SiesteScreen> {
                             ],
                           ),
                         ),
+                        // Bouton supprimer (même emplacement/UX que Repas & Activités)
+                        IconButton(
+                          tooltip: 'Supprimer',
+                          icon: Icon(Icons.delete_outline, color: Colors.white),
+                          onPressed: () {
+                            _confirmDeleteSieste(context, structureId, childId, siesteId);
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -865,6 +873,114 @@ class _SiesteScreenState extends State<SiesteScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Confirmation & suppression d'une sieste
+  void _confirmDeleteSieste(BuildContext dialogContext, String structureId,
+      String childId, String siesteId) {
+    showModalBottomSheet(
+      context: dialogContext,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.delete_outline, color: Colors.red),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Supprimer cette sieste ?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Cette action retirera la sieste du journal, du récapitulatif et du fil des parents pour la journée.',
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.3),
+                ),
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text('Annuler'),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('structures')
+                                .doc(structureId)
+                                .collection('children')
+                                .doc(childId)
+                                .collection('siestes')
+                                .doc(siesteId)
+                                .delete();
+
+                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(dialogContext).canPop()) {
+                              Navigator.of(dialogContext).pop();
+                            }
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Sieste supprimée.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Erreur lors de la suppression de la sieste.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text('Supprimer'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         );

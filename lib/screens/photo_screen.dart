@@ -43,7 +43,7 @@ class _PhotosScreenState extends State<PhotosScreen>
   bool _isVideoSelected = false;
   // Limites pour les vidéos
   static const int _maxVideoSeconds = 15; // Durée maximale d'une vidéo capturée
-  static const int _maxVideoBytes = 50 * 1024 * 1024; // 50 Mo pour la taille max
+  static const int _maxVideoBytes = 200 * 1024 * 1024; // 200 Mo pour la taille max
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -1228,6 +1228,14 @@ class _PhotosScreenState extends State<PhotosScreen>
                             ],
                           ),
                         ),
+                        // Bouton supprimer (même UX que Repas/Activités/Siestes)
+                        IconButton(
+                          tooltip: 'Supprimer',
+                          icon: Icon(Icons.delete_outline, color: Colors.white),
+                          onPressed: () {
+                            _confirmDeleteMedia(context, mediaData);
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -1351,6 +1359,141 @@ class _PhotosScreenState extends State<PhotosScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Confirmation & suppression d'un média (photo/vidéo)
+  void _confirmDeleteMedia(
+      BuildContext dialogContext, Map<String, dynamic> mediaData) {
+    final String? structureId = mediaData['structureId'] as String?;
+    final String? childId = mediaData['childId'] as String?;
+    final String? mediaId = mediaData['id'] as String?;
+
+    if (structureId == null || childId == null || mediaId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Impossible de supprimer ce média (identifiants manquants).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: dialogContext,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.delete_outline, color: Colors.red),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Supprimer ce média ?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Cette action retirera la photo/vidéo du journal, du récapitulatif et du fil des parents pour la journée.',
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.3),
+                ),
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text('Annuler'),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('structures')
+                                .doc(structureId)
+                                .collection('children')
+                                .doc(childId)
+                                .collection('medias')
+                                .doc(mediaId)
+                                .delete();
+
+                            // Tenter de supprimer aussi le fichier du Storage si URL présente
+                            final url = mediaData['url'] as String?;
+                            if (url != null && url.isNotEmpty) {
+                              try {
+                                await FirebaseStorage.instance
+                                    .refFromURL(url)
+                                    .delete();
+                              } catch (_) {
+                                // Ignorer les erreurs de suppression Storage
+                              }
+                            }
+
+                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(dialogContext).canPop()) {
+                              Navigator.of(dialogContext).pop();
+                            }
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Média supprimé.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Erreur lors de la suppression du média.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text('Supprimer'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         );
@@ -1532,9 +1675,16 @@ class _PhotosScreenState extends State<PhotosScreen>
                 itemCount: medias.length,
                 separatorBuilder: (context, index) => SizedBox(height: 8),
                 itemBuilder: (context, idx) {
-                  final mediaData = medias[idx].data() as Map<String, dynamic>;
+                  final doc = medias[idx];
+                  final mediaData = doc.data() as Map<String, dynamic>;
                   return GestureDetector(
-                    onTap: () => _showMediaDetailsPopup(mediaData),
+                    onTap: () => _showMediaDetailsPopup({
+                      ...mediaData,
+                      'id': doc.id,
+                      'childId': enfant['id'],
+                      'structureId': enfant['structureId'] ??
+                          FirebaseAuth.instance.currentUser?.uid,
+                    }),
                     child: Container(
                       padding:
                           EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1954,6 +2104,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             'childName': enfant[
                 'firstName'], // Utiliser firstName comme dans les autres endroits
             'childGender': enfant['gender'],
+            'structureId': structureId,
           });
         }
       }
@@ -2387,7 +2538,13 @@ class _PhotosScreenState extends State<PhotosScreen>
                     final doc = medias[idx];
                     final mediaData = doc.data() as Map<String, dynamic>;
                     return GestureDetector(
-                      onTap: () => _showMediaDetailsPopup(mediaData),
+                      onTap: () => _showMediaDetailsPopup({
+                        ...mediaData,
+                        'id': doc.id,
+                        'childId': enfant['id'],
+                        'structureId': enfant['structureId'] ??
+                            FirebaseAuth.instance.currentUser?.uid,
+                      }),
                       child: Container(
                         padding:
                             EdgeInsets.symmetric(horizontal: 16, vertical: 14),

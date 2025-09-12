@@ -3744,40 +3744,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Titre et date
+                        // Titre et date (responsive, pas d'overflow)
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              "Tableau de bord",
-                              style: TextStyle(
-                                fontSize: screenSize.width *
-                                    (isTablet ? 0.032 : 0.06),
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: screenSize.width *
-                                    (isTablet ? 0.018 : 0.03),
-                                vertical: screenSize.height *
-                                    (isTablet ? 0.01 : 0.006),
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(
-                                  screenSize.width * (isTablet ? 0.025 : 0.05),
-                                ),
-                              ),
+                            Expanded(
                               child: Text(
-                                DateFormat('EEEE d MMMM', 'fr_FR')
-                                    .format(DateTime.now()),
+                                "Tableau de bord",
                                 style: TextStyle(
                                   fontSize: screenSize.width *
-                                      (isTablet ? 0.018 : 0.035),
-                                  color: Colors.white.withOpacity(0.95),
-                                  fontWeight: FontWeight.w500,
+                                      (isTablet ? 0.032 : 0.06),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            SizedBox(width: screenSize.width * 0.02),
+                            Flexible(
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: screenSize.width *
+                                      (isTablet ? 0.018 : 0.03),
+                                  vertical: screenSize.height *
+                                      (isTablet ? 0.01 : 0.006),
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(
+                                    screenSize.width *
+                                        (isTablet ? 0.025 : 0.05),
+                                  ),
+                                ),
+                                child: Text(
+                                  DateFormat('EEEE d MMMM', 'fr_FR')
+                                      .format(DateTime.now()),
+                                  style: TextStyle(
+                                    fontSize: screenSize.width *
+                                        (isTablet ? 0.018 : 0.035),
+                                    color: Colors.white.withOpacity(0.95),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),
