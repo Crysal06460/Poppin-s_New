@@ -256,7 +256,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       // Extraction des autorisations de récupération
       authorizedPickup = data['authorizedPickup'] ?? {};
 
-      // Extraction des infos financières (tableau mensuel)
+      // Extraction des infos financières (mémo mensuel)
       financialInfo = data['financialInfo'] ?? {};
 
       setState(() => isLoading = false);
@@ -332,7 +332,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       // Création de l'objet de mise à jour
       updateData[updatePath] = value;
 
-      // Cas particulier: activation du tableau mensuel => assurer l'affichage Dashboard (MAM)
+      // Cas particulier: activation du mémo mensuel => assurer l'affichage Dashboard (MAM)
       if (section == 'financialInfo' && field == 'useMonthlyTable' && value == true) {
         updateData['assignedMemberEmail'] = currentUserEmail;
         updateData['lastUpdatedBy'] = currentUserEmail;
@@ -375,23 +375,17 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     }
   }
 
-  // Edition des 4 champs du tableau mensuel
+  // Edition du mémo mensuel
   Future<void> _editMonthlyTableFields() async {
     final TextEditingController salaryCtl = TextEditingController(
         text: (financialInfo['monthlySalary']?.toString() ?? ''));
-    final TextEditingController careCtl = TextEditingController(
-        text: (financialInfo['careExpenses']?.toString() ?? ''));
-    final TextEditingController mealCtl = TextEditingController(
-        text: (financialInfo['mealExpenses']?.toString() ?? ''));
-    final TextEditingController kmCtl = TextEditingController(
-        text: (financialInfo['kmExpenses']?.toString() ?? ''));
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text(
-            'Configuration du tableau mensuel',
+            'Configuration du mémo mensuel',
             style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -399,13 +393,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildNumberField(salaryCtl, 'Salaire net mensuel (€)', true),
-                SizedBox(height: 10),
-                _buildNumberField(careCtl, 'Frais de garde (€/jour)', false),
-                SizedBox(height: 10),
-                _buildNumberField(mealCtl, 'Frais de repas (€/jour)', false),
-                SizedBox(height: 10),
-                _buildNumberField(kmCtl, 'Frais kilométriques (€/km)', false),
+                _buildNumberField(salaryCtl, 'Salaire net (€)', true),
               ],
             ),
           ),
@@ -420,7 +408,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                 if (salaryCtl.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Le salaire mensuel est obligatoire'),
+                      content: Text('Le salaire net est obligatoire'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -434,9 +422,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                 final Map<String, dynamic> updates = {
                   'financialInfo.useMonthlyTable': true,
                   'financialInfo.monthlySalary': parseNum(salaryCtl.text),
-                  'financialInfo.careExpenses': parseNum(careCtl.text),
-                  'financialInfo.mealExpenses': parseNum(mealCtl.text),
-                  'financialInfo.kmExpenses': parseNum(kmCtl.text),
+                  // Cleanup des anciens champs devenus obsolètes
+                  'financialInfo.careExpenses': FieldValue.delete(),
+                  'financialInfo.mealExpenses': FieldValue.delete(),
+                  'financialInfo.kmExpenses': FieldValue.delete(),
                 };
 
                 // Assurer l'affichage Dashboard pour MAM: marquer le membre assigné et métadonnées
@@ -459,14 +448,15 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                   setState(() {
                     financialInfo['useMonthlyTable'] = true;
                     financialInfo['monthlySalary'] = updates['financialInfo.monthlySalary'];
-                    financialInfo['careExpenses'] = updates['financialInfo.careExpenses'];
-                    financialInfo['mealExpenses'] = updates['financialInfo.mealExpenses'];
-                    financialInfo['kmExpenses'] = updates['financialInfo.kmExpenses'];
+                    // Supprimer les anciens champs s'ils existent côté UI
+                    financialInfo.remove('careExpenses');
+                    financialInfo.remove('mealExpenses');
+                    financialInfo.remove('kmExpenses');
                   });
 
                   Navigator.pop(context, true);
                 } catch (e) {
-                  print('Erreur sauvegarde tableau mensuel: $e');
+                  print('Erreur sauvegarde mémo mensuel: $e');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Erreur lors de l\'enregistrement'),
@@ -491,14 +481,14 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     if (result == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Tableau mensuel mis à jour'),
+          content: Text('Mémo mensuel mis à jour'),
           backgroundColor: Colors.green,
         ),
       );
     }
   }
 
-  // Toggle "Utiliser le tableau mensuel" avec ouverture auto de la configuration
+// Toggle "Utiliser le mémo mensuel" avec ouverture auto de la configuration
   Future<void> _editUseMonthlyTableToggle() async {
     final bool current = (financialInfo['useMonthlyTable'] == true);
     bool switchValue = current;
@@ -509,12 +499,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
         builder: (context, dialogSetState) {
           return AlertDialog(
             title: Text(
-              'Tableau mensuel',
+              'Mémo mensuel',
               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
             ),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SwitchListTile(
-              title: Text('Utiliser le tableau mensuel ?'),
+              title: Text('Utiliser le mémo mensuel ?'),
               value: switchValue,
               activeColor: primaryColor,
               onChanged: (v) {
@@ -949,25 +939,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
   String _formatMonthlySummary(Map<String, dynamic> fin) {
     final salary = fin['monthlySalary'];
-    final care = fin['careExpenses'];
-    final meal = fin['mealExpenses'];
-    final km = fin['kmExpenses'];
-
-    List<String> parts = [];
     if (salary != null && (salary is num) && salary > 0) {
-      parts.add('Salaire: ${salary.toString()}€');
+      return 'Salaire net: ${salary.toString()}€';
     }
-    if (care != null && (care is num) && care > 0) {
-      parts.add('Garde: ${care.toString()}€/j');
-    }
-    if (meal != null && (meal is num) && meal > 0) {
-      parts.add('Repas: ${meal.toString()}€/j');
-    }
-    if (km != null && (km is num) && km > 0) {
-      parts.add('KM: ${km.toString()}€/km');
-    }
-    if (parts.isEmpty) return 'À compléter';
-    return parts.join(' • ');
+    return 'À compléter';
   }
 
   Widget _buildInfoRow(String label, String value,
@@ -1584,13 +1559,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                           ],
                         ),
 
-                        // Section Tableau mensuel (financier)
+                        // Section Mémo mensuel (financier)
                         _buildProfileSection(
-                          '💶 Tableau mensuel',
+                          '💶 Mémo mensuel',
                           [
                             // Sélecteur Oui/Non comme les autres
                             _buildAuthorizationRow(
-                              'Utiliser le tableau mensuel',
+                              'Utiliser le mémo mensuel',
                               (financialInfo['useMonthlyTable'] == true),
                               onEdit: _editUseMonthlyTableToggle,
                             ),

@@ -353,20 +353,20 @@ class _MonthlyReportSelectionScreenState
         print("👩‍👧‍👦 Assistante Maternelle - affichage de tous les enfants");
       }
 
-      // Filtrer uniquement les enfants avec useMonthlyTable activé
+      // Filtrer uniquement les enfants avec Mémo mensuel activé
       List<Map<String, dynamic>> monthlyTableChildren =
           filteredChildren.where((child) {
         final financialInfo = child['financialInfo'] as Map<String, dynamic>;
         bool useMonthlyTable = financialInfo.containsKey('useMonthlyTable') &&
             financialInfo['useMonthlyTable'] == true;
         print(
-            "  📊 Enfant: ${child['firstName']}, utilise le tableau mensuel: $useMonthlyTable");
+            "  📊 Enfant: ${child['firstName']}, utilise le mémo mensuel: $useMonthlyTable");
         return useMonthlyTable;
       }).toList();
 
       if (monthlyTableChildren.isEmpty) {
         print("⚠️ Aucun enfant avec useMonthlyTable activé!");
-        return []; // Retourner une liste vide si aucun enfant n'utilise le tableau mensuel
+        return []; // Retourner une liste vide si aucun enfant n'utilise le mémo mensuel
       }
 
       return monthlyTableChildren;
@@ -380,7 +380,7 @@ class _MonthlyReportSelectionScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tableau Mensuel'),
+        title: const Text('Mémo mensuel'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/dashboard'),
@@ -402,7 +402,7 @@ class _MonthlyReportSelectionScreenState
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Veuillez d\'abord ajouter des enfants ou activer\nle tableau mensuel dans leurs profils.',
+                        'Veuillez d\'abord ajouter des enfants ou activer\nle mémo mensuel dans leurs profils.',
                         textAlign: TextAlign.center,
                       ),
                       SizedBox(height: 24),
@@ -420,7 +420,7 @@ class _MonthlyReportSelectionScreenState
                     children: [
                       // Titre
                       Text(
-                        'Générer un tableau mensuel',
+                        'Générer un mémo mensuel',
                         style: TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold),
                       ),

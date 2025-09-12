@@ -122,7 +122,8 @@ class _RepasScreenState extends State<RepasScreen> {
                                 .delete();
 
                             // Fermer la bottom sheet puis le dialog de détails
-                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(ctx).canPop())
+                              Navigator.of(ctx).pop();
                             if (Navigator.of(dialogContext).canPop()) {
                               Navigator.of(dialogContext).pop();
                             }
@@ -139,8 +140,8 @@ class _RepasScreenState extends State<RepasScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content:
-                                      Text('Erreur lors de la suppression du repas.'),
+                                  content: Text(
+                                      'Erreur lors de la suppression du repas.'),
                                   backgroundColor: Colors.red,
                                 ),
                               );
@@ -388,8 +389,8 @@ class _RepasScreenState extends State<RepasScreen> {
     );
   }
 
-  void _showMealDetailsPopup(
-      String structureId, String childId, String mealId, Map<String, dynamic> mealData) {
+  void _showMealDetailsPopup(String structureId, String childId, String mealId,
+      Map<String, dynamic> mealData) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -485,7 +486,8 @@ class _RepasScreenState extends State<RepasScreen> {
                           tooltip: 'Supprimer',
                           icon: Icon(Icons.delete_outline, color: Colors.white),
                           onPressed: () {
-                            _confirmDeleteMeal(context, structureId, childId, mealId);
+                            _confirmDeleteMeal(
+                                context, structureId, childId, mealId);
                           },
                         ),
                       ],
@@ -667,8 +669,7 @@ class _RepasScreenState extends State<RepasScreen> {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryBlue,
-                                  padding:
-                                      EdgeInsets.symmetric(vertical: 12),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -764,8 +765,8 @@ class _RepasScreenState extends State<RepasScreen> {
             ? (mealData['ml'] as num).toInt().toString()
             : mealData['ml'].toString())
         : '';
-    TextEditingController obsCtrl =
-        TextEditingController(text: (mealData['observations'] ?? '').toString());
+    TextEditingController obsCtrl = TextEditingController(
+        text: (mealData['observations'] ?? '').toString());
     TextEditingController mlCtrl = TextEditingController(text: localMlText);
 
     final enfant = enfants.firstWhere((e) => e['id'] == childId,
@@ -802,7 +803,10 @@ class _RepasScreenState extends State<RepasScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [primaryBlue, primaryBlue.withOpacity(0.85)],
+                            colors: [
+                              primaryBlue,
+                              primaryBlue.withOpacity(0.85)
+                            ],
                           ),
                           borderRadius:
                               BorderRadius.vertical(top: Radius.circular(24)),
@@ -910,7 +914,8 @@ class _RepasScreenState extends State<RepasScreen> {
                                 ),
                                 SizedBox(width: 8),
                                 ChoiceChip(
-                                  selected: !localIsBiberon && !localIsAllaitement,
+                                  selected:
+                                      !localIsBiberon && !localIsAllaitement,
                                   label: Text('Repas'),
                                   onSelected: (sel) => setState(() {
                                     localIsBiberon = false;
@@ -960,14 +965,26 @@ class _RepasScreenState extends State<RepasScreen> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: [
-                                  _buildMealQualityButton('Pas mangé',
-                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
-                                  _buildMealQualityButton('Peu mangé',
-                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
-                                  _buildMealQualityButton('Bien mangé',
-                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
-                                  _buildMealQualityButton('Très bien mangé',
-                                      localMealQuality, (q) => setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton(
+                                      'Pas mangé',
+                                      localMealQuality,
+                                      (q) =>
+                                          setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton(
+                                      'Peu mangé',
+                                      localMealQuality,
+                                      (q) =>
+                                          setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton(
+                                      'Bien mangé',
+                                      localMealQuality,
+                                      (q) =>
+                                          setState(() => localMealQuality = q)),
+                                  _buildMealQualityButton(
+                                      'Très bien mangé',
+                                      localMealQuality,
+                                      (q) =>
+                                          setState(() => localMealQuality = q)),
                                 ],
                               ),
                             ],
@@ -998,7 +1015,8 @@ class _RepasScreenState extends State<RepasScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: Text('ANNULER'),
                                   ),
                                 ),
@@ -1007,7 +1025,8 @@ class _RepasScreenState extends State<RepasScreen> {
                                   child: ElevatedButton(
                                     onPressed: () async {
                                       try {
-                                        final docRef = FirebaseFirestore.instance
+                                        final docRef = FirebaseFirestore
+                                            .instance
                                             .collection('structures')
                                             .doc(structureId)
                                             .collection('children')
@@ -1756,6 +1775,62 @@ class _RepasScreenState extends State<RepasScreen> {
     );
   }
 
+  // Vérifie si l'enfant a une heure d'arrivée enregistrée aujourd'hui
+  Future<bool> _isChildArrivedToday(String structureId, String childId) async {
+    try {
+      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final doc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('horaires')
+          .doc(dateKey)
+          .get();
+      if (!doc.exists) return false;
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null || !data.containsKey(childId)) return false;
+      final ch = data[childId] as Map<String, dynamic>?;
+      if (ch == null) return false;
+      if (ch['actionType'] == 'absent') return false;
+      // Nouveau format avec segments
+      if (ch['segments'] is List) {
+        for (final seg in (ch['segments'] as List)) {
+          final arr = seg['arrivee'];
+          if (arr != null && arr.toString().isNotEmpty) return true;
+        }
+      }
+      // Ancien format
+      final arr = ch['arrivee'];
+      if (arr != null && arr.toString().isNotEmpty) return true;
+      return false;
+    } catch (e) {
+      print('Erreur vérification arrivée: $e');
+      return false;
+    }
+  }
+
+  Future<void> _guardAddMeal(String structureId, String childId) async {
+    final arrived = await _isChildArrivedToday(structureId, childId);
+    if (!arrived) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Arrivée requise'),
+          content: Text(
+              "Attention: vous n'avez pas indiqué l'heure d'arrivée pour cet enfant.\n\nVeuillez enregistrer l'heure d'arrivée pour pouvoir ajouter un repas."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    _showAddMealPopup(childId);
+  }
+
 // Nouveau bouton de qualité du repas - version moderne
   Widget _buildMealQualityButtonModern(
     String quality,
@@ -2048,7 +2123,10 @@ class _RepasScreenState extends State<RepasScreen> {
                   ),
                   child: IconButton(
                     icon: Icon(Icons.add, color: primaryBlue, size: 24),
-                    onPressed: () => _showAddMealPopup(enfant['id']),
+                    onPressed: () => _guardAddMeal(
+                        enfant['structureId'] ??
+                            FirebaseAuth.instance.currentUser?.uid,
+                        enfant['id']),
                     tooltip: "Ajouter un repas",
                   ),
                 ),
@@ -2452,7 +2530,10 @@ class _RepasScreenState extends State<RepasScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(Icons.add, color: cardColor, size: 24),
-                      onPressed: () => _showAddMealPopup(enfant['id']),
+                      onPressed: () => _guardAddMeal(
+                          enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                          enfant['id']),
                       tooltip: "Ajouter un repas",
                       padding: EdgeInsets.all(10),
                       constraints: BoxConstraints(minWidth: 0, minHeight: 0),

@@ -23,7 +23,7 @@ bool isTablet(BuildContext context) {
 }
 
 class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
-  // Variables pour le tableau mensuel
+  // Variables pour le mémo mensuel
   bool? _useMonthlyTable = null;
   final TextEditingController _monthlySalaryController =
       TextEditingController();
@@ -229,7 +229,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                         SizedBox(height: maxHeight * 0.04),
 
-                        // Aperçu du choix tableau mensuel
+                        // Aperçu du choix mémo mensuel
                         Container(
                           width: double.infinity,
                           padding: EdgeInsets.all(
@@ -248,7 +248,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                           child: Column(
                             children: [
                               Text(
-                                "Tableau mensuel",
+                                "Mémo mensuel",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.018).clamp(14.0, 20.0),
@@ -377,9 +377,9 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 ),
                                 SizedBox(height: maxHeight * 0.03),
 
-                                // Salaire mensuel
+                                // Salaire net
                                 _buildInfoRowTablet(
-                                    "Salaire mensuel",
+                                    "Salaire net",
                                     _monthlySalaryController.text.isEmpty
                                         ? "Non renseigné"
                                         : "${_monthlySalaryController.text} €",
@@ -387,30 +387,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 SizedBox(height: maxHeight * 0.03),
 
                                 // Frais d'entretien
-                                _buildInfoRowTablet(
-                                    "Frais d'entretien",
-                                    _careExpensesController.text.isEmpty
-                                        ? "Non renseigné"
-                                        : "${_careExpensesController.text} €/jour",
-                                    maxWidth),
-                                SizedBox(height: maxHeight * 0.03),
-
-                                // Frais de repas
-                                _buildInfoRowTablet(
-                                    "Frais de repas",
-                                    _mealExpensesController.text.isEmpty
-                                        ? "Non renseigné"
-                                        : "${_mealExpensesController.text} €/jour",
-                                    maxWidth),
-                                SizedBox(height: maxHeight * 0.03),
-
-                                // Frais kilométriques
-                                _buildInfoRowTablet(
-                                    "Frais km",
-                                    _kmExpensesController.text.isEmpty
-                                        ? "Non renseigné"
-                                        : "${_kmExpensesController.text} €/km",
-                                    maxWidth),
+                                // Les autres lignes ne s'affichent plus dans le mémo mensuel
 
                                 SizedBox(height: maxHeight * 0.03),
 
@@ -536,7 +513,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                     children: [
                       // Titre du formulaire
                       Text(
-                        "Configuration du tableau mensuel",
+                        "Configuration du mémo mensuel",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.025).clamp(18.0, 28.0),
                           fontWeight: FontWeight.bold,
@@ -577,7 +554,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 width: (maxWidth * 0.015).clamp(8.0, 15.0)),
                             Expanded(
                               child: Text(
-                                "Le tableau mensuel est proposé à titre indicatif et permet de générer le récapitulatif mensuel.",
+                                "Le mémo mensuel est proposé à titre indicatif et permet de générer le récapitulatif mensuel.",
                                 style: TextStyle(
                                   fontSize:
                                       (maxWidth * 0.016).clamp(12.0, 18.0),
@@ -596,7 +573,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                       // Question
                       Text(
-                        "Souhaitez-vous utiliser le tableau mensuel ?",
+                        "Souhaitez-vous utiliser le mémo mensuel ?",
                         style: TextStyle(
                           fontSize: (maxWidth * 0.02).clamp(16.0, 22.0),
                           fontWeight: FontWeight.w600,
@@ -680,7 +657,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                   ),
                                   SizedBox(height: maxHeight * 0.02),
                                   Text(
-                                    "Cliquer sur Oui \n pour remplir les informations du tableau mensuel",
+                                    "Cliquer sur Oui pour remplir le mémo mensuel (Salaire net)",
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize:
@@ -1010,7 +987,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
   // Méthode pour sauvegarder les informations financières
   Future<void> _saveFinancialInfo() async {
-    // Si on n'utilise pas le tableau mensuel, on retourne directement à l'accueil
+    // Si on n'utilise pas le mémo mensuel, on retourne directement à l'accueil
     if (_useMonthlyTable == false) {
       // Envoyer l'invitation avant de quitter
       await _sendParentInvitation();
@@ -1067,16 +1044,11 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           'monthlySalary': double.tryParse(
                   _monthlySalaryController.text.replaceAll(',', '.')) ??
               0,
-          'careExpenses': double.tryParse(
-                  _careExpensesController.text.replaceAll(',', '.')) ??
-              0,
-          'mealExpenses': double.tryParse(
-                  _mealExpensesController.text.replaceAll(',', '.')) ??
-              0,
-          'kmExpenses': double.tryParse(
-                  _kmExpensesController.text.replaceAll(',', '.')) ??
-              0,
         },
+        // Cleanup des anciens champs au niveau racine si existaient déjà
+        'financialInfo.careExpenses': FieldValue.delete(),
+        'financialInfo.mealExpenses': FieldValue.delete(),
+        'financialInfo.kmExpenses': FieldValue.delete(),
         // Ajouter l'email du membre ACTUEL (qui ajoute l'enfant)
         'assignedMemberEmail': currentUserEmail,
         // Stockez également ces informations supplémentaires pour plus de robustesse
@@ -1374,7 +1346,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'Tableau mensuel',
+                      'Mémo mensuel',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -1525,7 +1497,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                     SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Configuration du tableau mensuel",
+                                        "Configuration du mémo mensuel",
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -1537,7 +1509,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                                 ),
                                 SizedBox(height: 16),
                                 Text(
-                                  "Le tableau mensuel permet de suivre automatiquement la facturation et de générer le récapitulatif mensuels.",
+                                  "Le mémo mensuel permet de suivre et de générer le récapitulatif mensuel.",
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
@@ -1548,7 +1520,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                                 // Question
                                 Text(
-                                  "Souhaitez-vous utiliser le tableau mensuel ?",
+                                  "Souhaitez-vous utiliser le mémo mensuel ?",
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -1579,7 +1551,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                           ),
                         ),
 
-                        // Détails du tableau mensuel
+                        // Détails du mémo mensuel
                         if (_useMonthlyTable == true) ...[
                           const SizedBox(height: 20),
                           Card(
@@ -1623,7 +1595,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                                   // Salaire mensuel
                                   Text(
-                                    "Salaire net mensuel :",
+                                    "Salaire net :",
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -1638,52 +1610,18 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
                                   const SizedBox(height: 20),
 
-                                  // Frais d'entretien
-                                  Text(
-                                    "Frais d'entretien par jour :",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildCurrencyTextField(
-                                      _careExpensesController,
-                                      "Montant en €",
-                                      "€/jour"),
+                                  // (champs supprimés dans le mémo mensuel)
+                                  // (supprimé dans le mémo mensuel)
 
                                   const SizedBox(height: 20),
 
-                                  // Frais de repas
-                                  Text(
-                                    "Frais de repas par jour :",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildCurrencyTextField(
-                                      _mealExpensesController,
-                                      "Montant en €",
-                                      "€/jour"),
+                                  // (champs supprimés dans le mémo mensuel)
+                                  // (supprimé dans le mémo mensuel)
 
                                   const SizedBox(height: 20),
 
-                                  // Frais kilométriques
-                                  Text(
-                                    "Frais kilométriques par km :",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildCurrencyTextField(_kmExpensesController,
-                                      "Montant en €", "€/km"),
+                                  // (champs supprimés dans le mémo mensuel)
+                                  // (supprimé dans le mémo mensuel)
                                 ],
                               ),
                             ),

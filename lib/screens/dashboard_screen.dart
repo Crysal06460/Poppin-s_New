@@ -1708,7 +1708,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       for (var doc in childrenSnapshot.docs) {
         final data = doc.data();
 
-        // Vérifier si l'enfant utilise le tableau mensuel
+        // Vérifier si l'enfant utilise le mémo mensuel
         bool usesMonthlyTable = data.containsKey('financialInfo') &&
             data['financialInfo'] != null &&
             data['financialInfo']['useMonthlyTable'] == true;
@@ -1718,18 +1718,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           String assignedEmail =
               data['assignedMemberEmail']?.toString().toLowerCase() ?? '';
 
-          // L'enfant doit à la fois utiliser le tableau mensuel ET être assigné au membre connecté
+          // L'enfant doit à la fois utiliser le mémo mensuel ET être assigné au membre connecté
           if (usesMonthlyTable && assignedEmail == currentUserEmail) {
             hasMonthlyTableEnabled = true;
             print(
-                "✅ Enfant ${data['firstName']} assigné au membre actuel utilise le tableau mensuel");
+                "✅ Enfant ${data['firstName']} assigné au membre actuel utilise le mémo mensuel");
             break; // Un seul enfant suffit pour activer la section Rapports
           }
         } else {
-          // Pour une assistante maternelle, il suffit qu'un enfant utilise le tableau mensuel
+          // Pour une assistante maternelle, il suffit qu'un enfant utilise le mémo mensuel
           if (usesMonthlyTable) {
             hasMonthlyTableEnabled = true;
-            print("✅ Enfant ${data['firstName']} utilise le tableau mensuel");
+            print("✅ Enfant ${data['firstName']} utilise le mémo mensuel");
             break; // Un seul enfant suffit pour activer la section Rapports
           }
         }
@@ -1741,7 +1741,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       print("📊 Affichage de la section Rapports: $hasMonthlyTableEnabled");
     } catch (e) {
-      print("❌ Erreur lors de la vérification du tableau mensuel: $e");
+      print("❌ Erreur lors de la vérification du mémo mensuel: $e");
       // En cas d'erreur, par précaution, ne pas afficher la section
       setState(() {
         showMonthlyTableReports = false;
@@ -2183,7 +2183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             if (showMonthlyTableReports) ...[
                               SizedBox(height: maxHeight * 0.02),
                               _buildSectionItem(
-                                title: "Tableau mensuel",
+                                title: "Mémo mensuel",
                                 icon: Icons.assessment,
                                 imagePath:
                                     'assets/images/Icone_Recaptitulatif.png',
@@ -2988,7 +2988,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         _buildTabletActionItem(
           icon: Icons.calendar_month,
-          title: "Tableau mensuel",
+          title: "Mémo mensuel",
           description: "Consulter les tableaux mensuels",
           onTap: () => context.go('/monthly-report-selection'),
           maxWidth: maxWidth,
@@ -3407,7 +3407,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            "Tableau mensuel",
+                            "Mémo mensuel",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -3420,7 +3420,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     SizedBox(height: 16),
                     _buildActionItem(
                       icon: Icons.calendar_month,
-                      title: "Tableau mensuel",
+                      title: "Mémo mensuel",
                       onTap: () => context.go('/monthly-report-selection'),
                     ),
                   ],

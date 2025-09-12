@@ -413,7 +413,7 @@ class _TestDataGeneratorScreenState extends State<TestDataGeneratorScreen> {
                         padding: EdgeInsets.symmetric(vertical: 16),
                       ),
                       child: Text(
-                        'Aller au Tableau Mensuel',
+                        'Aller au Mémo mensuel',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white,

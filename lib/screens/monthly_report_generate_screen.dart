@@ -67,11 +67,7 @@ class _MonthlyReportGenerateScreenState
     final data = childDoc.data() ?? {};
     final financialInfo = data['financialInfo'] as Map<String, dynamic>?;
 
-    if (financialInfo == null ||
-        financialInfo['monthlySalary'] == null ||
-        financialInfo['careExpenses'] == null ||
-        financialInfo['mealExpenses'] == null ||
-        financialInfo['kmExpenses'] == null) {
+    if (financialInfo == null || financialInfo['monthlySalary'] == null) {
       // Créer des informations financières par défaut
       await FirebaseFirestore.instance
           .collection('structures')
@@ -81,10 +77,7 @@ class _MonthlyReportGenerateScreenState
           .update({
         'financialInfo': {
           'useMonthlyTable': true,
-          'monthlySalary': 500.0, // Salaire net mensuel par défaut
-          'careExpenses': 3.5, // Indemnité d'entretien journalière
-          'mealExpenses': 4.0, // Indemnité de repas
-          'kmExpenses': 0.35, // Indemnité kilométrique
+          'monthlySalary': 500.0, // Salaire net par défaut
         }
       });
     }
@@ -212,12 +205,18 @@ class _MonthlyReportGenerateScreenState
 
     // Initialiser les totaux
     double totalHours = 0;
+    double plannedHours = 0; // Heures prévues au contrat sur le mois
+    int totalAbsences = 0;
     int totalDays = 0;
     int totalMeals = 0;
     double totalKm = 0;
 
     // Préparer la liste des enregistrements quotidiens
     List<Map<String, dynamic>> records = [];
+
+    // Planning contractuel hebdomadaire de l'enfant (si présent)
+    final Map<String, dynamic>? weeklySchedule =
+        (childData['schedule'] as Map<String, dynamic>?);
 
     // Pour chaque jour du mois
     for (int day = 1; day <= lastDayOfMonth.day; day++) {
@@ -235,6 +234,7 @@ class _MonthlyReportGenerateScreenState
       int meal = 0;
       double km = 0;
       bool isPresent = false;
+      bool isAbsent = false;
       double dayTotalHours = 0.0;
 
       // Récupérer les données d'horaire pour cette journée
@@ -258,6 +258,7 @@ class _MonthlyReportGenerateScreenState
           // Si l'enfant était absent, on continue avec les valeurs par défaut
           if (childHoraire['actionType'] == 'absent') {
             isPresent = false;
+            isAbsent = true;
           } else {
             // Si l'enfant était présent, on définit isPresent à true
             isPresent = true;
@@ -451,7 +452,44 @@ class _MonthlyReportGenerateScreenState
         }
       }
 
-      // N'ajouter l'enregistrement que si l'enfant était présent ce jour-là
+      // Calcul des heures prévues au contrat pour ce jour
+      try {
+        if (weeklySchedule != null) {
+          final String dayKey =
+              frenchDayName[0].toUpperCase() + frenchDayName.substring(1).toLowerCase();
+          if (weeklySchedule.containsKey(dayKey) && weeklySchedule[dayKey] != null) {
+            List<dynamic> segmentsDuJour = [];
+            final entry = weeklySchedule[dayKey];
+            if (entry is List) {
+              segmentsDuJour = entry;
+            } else if (entry is Map) {
+              segmentsDuJour = [
+                {
+                  'start': entry['start'] ?? entry['arrival'],
+                  'end': entry['end'] ?? entry['departure'],
+                }
+              ];
+            }
+            for (final seg in segmentsDuJour) {
+              final String? s = (seg['start'] ?? seg['heureDebut'])?.toString();
+              final String? e = (seg['end'] ?? seg['heureFin'])?.toString();
+              if (s != null && e != null && s.contains(':') && e.contains(':')) {
+                final sp = s.split(':');
+                final ep = e.split(':');
+                int sm = (int.tryParse(sp[0]) ?? 0) * 60 + (int.tryParse(sp[1]) ?? 0);
+                int em = (int.tryParse(ep[0]) ?? 0) * 60 + (int.tryParse(ep[1]) ?? 0);
+                int diff = em - sm;
+                if (diff < 0) diff += 24 * 60; // gestion minuit si besoin
+                plannedHours += diff / 60.0;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('Erreur calcul heures prévues: $e');
+      }
+
+      // Ajouter l'enregistrement: présent avec heures, ou absent clairement indiqué
       if (isPresent) {
         records.add({
           'date': formattedDate,
@@ -459,25 +497,24 @@ class _MonthlyReportGenerateScreenState
           'arrivalTime': arrivalTime,
           'departureTime': departureTime,
           'realHours': realHours,
-          'maintenance': maintenance,
-          'meal': meal,
-          'km': km,
+          'status': 'Présent',
         });
+      } else if (isAbsent) {
+        records.add({
+          'date': formattedDate,
+          'dayName': capitalize(frenchDayName),
+          'arrivalTime': '',
+          'departureTime': '',
+          'realHours': 'ABSENT',
+          'status': 'ABSENT',
+        });
+        totalAbsences += 1;
       }
     }
 
     // Calculer les montants financiers en utilisant les données de financialInfo
     final Map<String, dynamic> financialInfo = childData['financialInfo'] ?? {};
-    final double netSalary = financialInfo['monthlySalary'] ?? 0.0;
-    final double maintenanceRate = financialInfo['careExpenses'] ?? 0.0;
-    final double mealRate = financialInfo['mealExpenses'] ?? 0.0;
-    final double kmRate = financialInfo['kmExpenses'] ?? 0.0;
-
-    final double maintenanceAmount = totalDays * maintenanceRate;
-    final double mealAmount = totalMeals * mealRate;
-    final double kmAmount = totalKm * kmRate;
-    final double totalAmount =
-        netSalary + maintenanceAmount + mealAmount + kmAmount;
+    final double netSalary = (financialInfo['monthlySalary'] ?? 0.0).toDouble();
 
     // Stocker toutes les données du rapport
     reportData = {
@@ -488,16 +525,10 @@ class _MonthlyReportGenerateScreenState
       'month': DateFormat('MMMM yyyy', 'fr_FR').format(firstDayOfMonth),
       'totalHours': totalHours,
       'totalDays': totalDays,
-      'totalMeals': totalMeals,
-      'totalKm': totalKm,
       'netSalary': netSalary,
-      'maintenanceRate': maintenanceRate,
-      'mealRate': mealRate,
-      'kmRate': kmRate,
-      'maintenanceAmount': maintenanceAmount,
-      'mealAmount': mealAmount,
-      'kmAmount': kmAmount,
-      'totalAmount': totalAmount,
+      'plannedHours': plannedHours,
+      'hoursDiff': (totalHours - plannedHours),
+      'totalAbsences': totalAbsences,
     };
 
     dailyRecords = records;
@@ -549,7 +580,7 @@ class _MonthlyReportGenerateScreenState
               ),
               pw.Center(
                 child: pw.Text(
-                  'Vous devez vérifier les éléments du tableau',
+                  'Vous devez vérifier les éléments du mémo',
                   style: pw.TextStyle(
                     font: fontBold,
                     fontSize: 12,
@@ -562,7 +593,7 @@ class _MonthlyReportGenerateScreenState
               // En-tête de la page
               pw.Center(
                 child: pw.Text(
-                  'TABLEAU MENSUEL',
+                  'MÉMO MENSUEL',
                   style: pw.TextStyle(
                     font: fontBold,
                     fontSize: 16,
@@ -588,7 +619,7 @@ class _MonthlyReportGenerateScreenState
               ),
               pw.SizedBox(height: 15),
 
-              // Tableau des présences journalières (uniquement jours présents)
+              // Tableau des présences journalières (présences et absences)
               pw.Table(
                 border: pw.TableBorder.all(
                   color: PdfColors.black,
@@ -600,35 +631,23 @@ class _MonthlyReportGenerateScreenState
                     decoration: pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
                       _buildTableCell('Jour', fontBold, isBold: true),
+                      _buildTableCell('Statut', fontBold, isBold: true),
                       _buildTableCell('Arrivée', fontBold, isBold: true),
                       _buildTableCell('Départ', fontBold, isBold: true),
                       _buildTableCell('Heures', fontBold, isBold: true),
-                      _buildTableCell('Entretien', fontBold, isBold: true),
-                      _buildTableCell('Repas', fontBold, isBold: true),
-                      _buildTableCell('KM', fontBold, isBold: true),
                     ],
                   ),
 
-                  // Lignes du tableau pour chaque jour où l'enfant était présent
+                  // Lignes du tableau pour chaque jour
                   ...dailyRecords
-                      .map((record) => pw.TableRow(
-                            children: [
-                              _buildTableCell(
-                                  '${record['dayName']} ${record['date']}',
-                                  font),
-                              _buildTableCell(record['arrivalTime'], font),
-                              _buildTableCell(record['departureTime'], font),
-                              _buildTableCell(record['realHours'], font),
-                              _buildTableCell(
-                                  record['maintenance'].toString(), font),
-                              _buildTableCell(record['meal'].toString(), font),
-                              _buildTableCell(
-                                  record['km'] > 0
-                                      ? record['km'].toString()
-                                      : '',
-                                  font),
-                            ],
-                          ))
+                      .map((record) => pw.TableRow(children: [
+                            _buildTableCell(
+                                '${record['dayName']} ${record['date']}', font),
+                            _buildTableCell((record['status'] ?? '') as String, font),
+                            _buildTableCell((record['arrivalTime'] ?? '') as String, font),
+                            _buildTableCell((record['departureTime'] ?? '') as String, font),
+                            _buildTableCell((record['realHours'] ?? '') as String, font),
+                          ]))
                       .toList(),
 
                   // Ligne des totaux
@@ -636,18 +655,12 @@ class _MonthlyReportGenerateScreenState
                     decoration: pw.BoxDecoration(color: PdfColors.grey200),
                     children: [
                       _buildTableCell('TOTAL', fontBold, isBold: true),
-                      _buildTableCell('', font),
+                      _buildTableCell(
+                          'Absences: ${reportData['totalAbsences']}', font,
+                          isBold: true),
                       _buildTableCell('', font),
                       _buildTableCell(
                           '${reportData['totalHours'].toStringAsFixed(2)}h',
-                          fontBold,
-                          isBold: true),
-                      _buildTableCell('${reportData['totalDays']}', fontBold,
-                          isBold: true),
-                      _buildTableCell('${reportData['totalMeals']}', fontBold,
-                          isBold: true),
-                      _buildTableCell(
-                          '${reportData['totalKm'].toStringAsFixed(2)}',
                           fontBold,
                           isBold: true),
                     ],
@@ -674,7 +687,7 @@ class _MonthlyReportGenerateScreenState
       ),
     );
 
-    // Deuxième page : Récapitulatif financier
+    // Deuxième page : Récapitulatif
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -711,7 +724,7 @@ class _MonthlyReportGenerateScreenState
               ),
               pw.SizedBox(height: 20),
 
-              // Tableau récapitulatif financier
+              // Tableau récapitulatif simple
               pw.Container(
                 width: 400,
                 padding: pw.EdgeInsets.all(15),
@@ -730,16 +743,48 @@ class _MonthlyReportGenerateScreenState
                     ),
                     pw.SizedBox(height: 15),
 
-                    // Nombre d'heures total
+                    // Heures prévues au contrat
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
                         pw.Text(
-                          'Nombre total d\'heures :',
+                          'Heures prévues au contrat:',
+                          style: pw.TextStyle(font: font, fontSize: 10),
+                        ),
+                        pw.Text(
+                          '${reportData['plannedHours'].toStringAsFixed(2)} heures',
+                          style: pw.TextStyle(font: fontBold, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 10),
+
+                    // Nombre d'heures réelles total
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'Nombre d\'heures réelles total:',
                           style: pw.TextStyle(font: font, fontSize: 10),
                         ),
                         pw.Text(
                           '${reportData['totalHours'].toStringAsFixed(2)} heures',
+                          style: pw.TextStyle(font: fontBold, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 10),
+
+                    // Écart (réel - prévu)
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'Écart (réel - prévu):',
+                          style: pw.TextStyle(font: font, fontSize: 10),
+                        ),
+                        pw.Text(
+                          '${reportData['hoursDiff'].toStringAsFixed(2)} heures',
                           style: pw.TextStyle(font: fontBold, fontSize: 10),
                         ),
                       ],
@@ -762,69 +807,14 @@ class _MonthlyReportGenerateScreenState
                     ),
                     pw.SizedBox(height: 10),
 
-                    // Indemnité d'entretien
+                    // Nombre d'absences total
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text(
-                          'Indemnité d\'entretien (${reportData['totalDays']} jours x ${reportData['maintenanceRate']} €):',
-                          style: pw.TextStyle(font: font, fontSize: 10),
-                        ),
-                        pw.Text(
-                          '${reportData['maintenanceAmount'].toStringAsFixed(2)} €',
-                          style: pw.TextStyle(font: fontBold, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 10),
-
-                    // Indemnité repas
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'Indemnité repas (${reportData['totalMeals']} repas x ${reportData['mealRate']} €):',
-                          style: pw.TextStyle(font: font, fontSize: 10),
-                        ),
-                        pw.Text(
-                          '${reportData['mealAmount'].toStringAsFixed(2)} €',
-                          style: pw.TextStyle(font: fontBold, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 10),
-
-                    // Indemnité kilométrique
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'Indemnité kilométrique (${reportData['totalKm'].toStringAsFixed(2)} km x ${reportData['kmRate']} €):',
-                          style: pw.TextStyle(font: font, fontSize: 10),
-                        ),
-                        pw.Text(
-                          '${reportData['kmAmount'].toStringAsFixed(2)} €',
-                          style: pw.TextStyle(font: fontBold, fontSize: 10),
-                        ),
-                      ],
-                    ),
-
-                    pw.SizedBox(height: 15),
-                    pw.Divider(thickness: 1),
-                    pw.SizedBox(height: 15),
-
-                    // Total
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'TOTAL:',
-                          style: pw.TextStyle(font: fontBold, fontSize: 12),
-                        ),
-                        pw.Text(
-                          '${reportData['totalAmount'].toStringAsFixed(2)} €',
-                          style: pw.TextStyle(font: fontBold, fontSize: 12),
-                        ),
+                        pw.Text('Nombre d\'absences total:',
+                            style: pw.TextStyle(font: font, fontSize: 10)),
+                        pw.Text('${reportData['totalAbsences']}',
+                            style: pw.TextStyle(font: fontBold, fontSize: 10)),
                       ],
                     ),
                   ],
@@ -871,7 +861,7 @@ class _MonthlyReportGenerateScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tableau Mensuel'),
+        title: const Text('Mémo mensuel'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
