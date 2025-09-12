@@ -2010,6 +2010,60 @@ class _SiesteScreenState extends State<SiesteScreen> {
     );
   }
 
+  // Vérifie si l'enfant a une heure d'arrivée enregistrée aujourd'hui
+  Future<bool> _isChildArrivedToday(String structureId, String childId) async {
+    try {
+      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final doc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('horaires')
+          .doc(dateKey)
+          .get();
+      if (!doc.exists) return false;
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null || !data.containsKey(childId)) return false;
+      final ch = data[childId] as Map<String, dynamic>?;
+      if (ch == null) return false;
+      if (ch['actionType'] == 'absent') return false;
+      if (ch['segments'] is List) {
+        for (final seg in (ch['segments'] as List)) {
+          final arr = seg['arrivee'];
+          if (arr != null && arr.toString().isNotEmpty) return true;
+        }
+      }
+      final arr = ch['arrivee'];
+      if (arr != null && arr.toString().isNotEmpty) return true;
+      return false;
+    } catch (e) {
+      print('Erreur vérification arrivée (sieste): $e');
+      return false;
+    }
+  }
+
+  Future<void> _guardAddSieste(String structureId, String childId) async {
+    final arrived = await _isChildArrivedToday(structureId, childId);
+    if (!arrived) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Arrivée requise'),
+          content: Text(
+              "Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une sieste."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    _showAddSiestePopup(childId);
+  }
+
   Widget _buildSleepQualityButton(
     String quality,
     String selectedQuality,
@@ -2258,7 +2312,10 @@ class _SiesteScreenState extends State<SiesteScreen> {
                     ),
                     child: Icon(Icons.add, color: primaryColor, size: 24),
                   ),
-                  onPressed: () => _showAddSiestePopup(enfant['id']),
+                  onPressed: () => _guardAddSieste(
+                      enfant['structureId'] ??
+                          FirebaseAuth.instance.currentUser?.uid,
+                      enfant['id']),
                 ),
               ],
             ),
@@ -2590,7 +2647,10 @@ class _SiesteScreenState extends State<SiesteScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(Icons.add, color: avatarColor, size: 24),
-                      onPressed: () => _showAddSiestePopup(enfant['id']),
+                      onPressed: () => _guardAddSieste(
+                          enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                          enfant['id']),
                       tooltip: "Ajouter une sieste",
                       padding: EdgeInsets.all(10),
                       constraints: BoxConstraints(minWidth: 0, minHeight: 0),
