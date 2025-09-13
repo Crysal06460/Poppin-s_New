@@ -77,157 +77,164 @@ class InvitationValidatedScreen extends StatelessWidget {
   }
 
   Widget _buildPhoneContent(
-      BuildContext context, // AJOUTER ce paramètre
+      BuildContext context,
       String messageTitle,
       String messageText,
       IconData invitationIcon,
       Color accentColor,
       String email) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Icône d'invitation validée
-          Icon(
-            Icons.check_circle_outline,
-            size: 80,
-            color: accentColor,
-          ),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Ajouter un peu d'espace en haut
+            const SizedBox(height: 20),
 
-          const SizedBox(height: 30),
-
-          // Titre du message
-          Text(
-            messageTitle,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: primaryBlue,
+            // Icône d'invitation validée
+            Icon(
+              Icons.check_circle_outline,
+              size: 60, // Réduire de 80 à 60
+              color: accentColor,
             ),
-            textAlign: TextAlign.center,
-          ),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 20), // Réduire de 30 à 20
 
-          // Message contextualisé
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+            // Titre du message
+            Text(
+              messageTitle,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryBlue,
+              ),
+              textAlign: TextAlign.center,
             ),
-            elevation: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+
+            const SizedBox(height: 15), // Réduire de 20 à 15
+
+            // Message contextualisé
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Icon(
+                      invitationIcon,
+                      size: 35, // Réduire de 40 à 35
+                      color: accentColor,
+                    ),
+                    const SizedBox(height: 12), // Réduire de 15 à 12
+                    Text(
+                      messageText,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 12), // Réduire de 15 à 12
+                      Text(
+                        "Email associé: $email",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25), // Réduire de 40 à 25
+
+            // Texte de guidance
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: lightBlue,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: primaryBlue.withOpacity(0.3)),
+              ),
               child: Column(
                 children: [
-                  Icon(
-                    invitationIcon,
-                    size: 40,
-                    color: accentColor,
-                  ),
-                  const SizedBox(height: 15),
-                  Text(
-                    messageText,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (email.isNotEmpty) ...[
-                    const SizedBox(height: 15),
-                    Text(
-                      "Email associé: $email",
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: primaryBlue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Prochaine étape",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: primaryBlue,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Veuillez continuer pour créer votre compte.",
+                    style: TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
                 ],
               ),
             ),
-          ),
 
-          const SizedBox(height: 40),
+            const SizedBox(height: 30), // Réduire de 40 à 30
 
-          // Texte de guidance
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: lightBlue,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: primaryBlue.withOpacity(0.3)),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: primaryBlue),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Prochaine étape",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
-                        ),
-                      ),
-                    ),
-                  ],
+            // Bouton pour continuer
+            SizedBox(
+              height: 54,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Rediriger vers la page d'inscription avec les données de l'invitation
+                  context.go('/invitation-signup', extra: invitationInfo);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  "Veuillez continuer pour créer votre compte.",
-                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                child: const Text(
+                  "CONTINUER",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 40),
+            const SizedBox(height: 15), // Réduire de 20 à 15
 
-          // Bouton pour continuer
-          SizedBox(
-            height: 54,
-            child: ElevatedButton(
+            // Option pour retourner à l'accueil
+            TextButton.icon(
               onPressed: () {
-                // Rediriger vers la page d'inscription avec les données de l'invitation
-                context.go('/invitation-signup', extra: invitationInfo);
+                context.go('/');
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                "CONTINUER",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              icon: Icon(Icons.arrow_back, size: 16, color: primaryBlue),
+              label: Text(
+                "Retour à l'accueil",
+                style: TextStyle(color: primaryBlue),
               ),
             ),
-          ),
 
-          const SizedBox(height: 20),
-
-          // Option pour retourner à l'accueil
-          TextButton.icon(
-            onPressed: () {
-              context.go('/');
-            },
-            icon: Icon(Icons.arrow_back, size: 16, color: primaryBlue),
-            label: Text(
-              "Retour à l'accueil",
-              style: TextStyle(color: primaryBlue),
-            ),
-          ),
-        ],
+            // Ajouter un peu d'espace en bas pour éviter que le contenu touche le bas
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }

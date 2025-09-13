@@ -380,6 +380,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
 
+      Set<String> delegatedTodayChildIds = {};
+      String? myMemberId;
       if (structureType == "MAM") {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
@@ -390,6 +392,48 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
         print(
             "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        // ➕ Ajouter enfants délégués aujourd'hui
+        try {
+          final memSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('members')
+              .where('email', isEqualTo: currentUserEmail)
+              .limit(1)
+              .get();
+          if (memSnap.docs.isNotEmpty) {
+            myMemberId = memSnap.docs.first.id;
+            final now = DateTime.now();
+            final start = DateTime(now.year, now.month, now.day);
+            final end = start.add(const Duration(days: 1));
+            final delSnap = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .collection('delegations')
+                .where('status', isEqualTo: 'accepted')
+                .where('amDelegateId', isEqualTo: myMemberId)
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date', isLessThan: Timestamp.fromDate(end))
+                .get();
+            delegatedTodayChildIds = delSnap.docs
+                .map((d) => (d.data()['childId'] ?? '').toString())
+                .where((id) => id.isNotEmpty)
+                .toSet();
+            if (delegatedTodayChildIds.isNotEmpty) {
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
+              final toAddIds = delegatedTodayChildIds.difference(already);
+              if (toAddIds.isNotEmpty) {
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
+                print('➕ Horaires: ajout enfants délégués: ${toAddIds.length}');
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ Horaires: erreur overlay délégation: $e');
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -433,8 +477,10 @@ class _HorairesScreenState extends State<HorairesScreen> {
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
         // Vérifier si l'enfant a un programme pour aujourd'hui
-        if (child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null) {
+        final isScheduledToday = child['schedule'] != null &&
+            child['schedule'][capitalizedWeekday] != null;
+        final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
+        if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
 
           // Pour chaque enfant prévu aujourd'hui, créer une entrée dans la liste
@@ -1815,65 +1861,76 @@ class _HorairesScreenState extends State<HorairesScreen> {
         enfant['segments'][segmentIndex]['arrivee'] == null &&
         !enfant['absent']); // Seule condition de désactivation réelle
 
-    return SizedBox(
-      width: 70,
-      height: 32,
-      child: time != null
-          ? GestureDetector(
-              onLongPress: () {
-                // Appui long pour modifier l'horaire (même si absent)
-                _showEditTimeDialog(type, enfant, segmentIndex);
-              },
-              child: ElevatedButton(
-                onPressed:
-                    null, // Désactivé visuellement mais modifiable par appui long
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor.withOpacity(0.8),
-                  disabledBackgroundColor: primaryColor.withOpacity(0.8),
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+    return Expanded(
+      // CHANGEMENT: Utiliser Expanded au lieu de SizedBox fixe
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+            horizontal: 2), // Petit espacement entre les boutons
+        child: SizedBox(
+          height: 32,
+          child: time != null
+              ? GestureDetector(
+                  onLongPress: () {
+                    // Appui long pour modifier l'horaire (même si absent)
+                    _showEditTimeDialog(type, enfant, segmentIndex);
+                  },
+                  child: ElevatedButton(
+                    onPressed:
+                        null, // Désactivé visuellement mais modifiable par appui long
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor.withOpacity(0.8),
+                      disabledBackgroundColor: primaryColor.withOpacity(0.8),
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 4), // Réduire le padding horizontal
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
+                      child: Text(
+                        time,
+                        style: TextStyle(
+                          fontSize:
+                              12, // Réduire légèrement la taille de police
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                ),
-                child: FittedBox(
-                  child: Text(
-                    time,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                )
+              : ElevatedButton(
+                  onPressed: isDisabled ? null : onPressed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isDisabled ? Colors.grey[300] : primaryColor,
+                    disabledBackgroundColor: Colors.grey[300],
+                    elevation: isDisabled ? 0 : 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: EdgeInsets.symmetric(
+                        horizontal: 4), // Réduire le padding horizontal
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12, // Réduire légèrement la taille de police
+                        fontWeight: FontWeight.w600,
+                        color: isDisabled ? Colors.grey[500] : Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            )
-          : ElevatedButton(
-              onPressed: isDisabled ? null : onPressed,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDisabled ? Colors.grey[300] : primaryColor,
-                disabledBackgroundColor: Colors.grey[300],
-                elevation: isDisabled ? 0 : 1,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: FittedBox(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDisabled ? Colors.grey[500] : Colors.white,
-                  ),
-                ),
-              ),
-            ),
+        ),
+      ),
     );
   }
 
-  // BOUTON ABSENT MODIFIÉ avec possibilité d'annulation
   Widget _buildAbsentButton(Map<String, dynamic> enfant) {
     // Vérifier si aucun horaire n'a été enregistré
     bool aucunHoraireEnregistre = true;
@@ -1884,16 +1941,17 @@ class _HorairesScreenState extends State<HorairesScreen> {
       }
     }
 
-    // CORRECTION : Vérification explicite du statut absent avec logs debug
     print(
         "🔍 DEBUG _buildAbsentButton() appelée - Enfant ${enfant['prenom']}: absent=${enfant['absent']}, aucunHoraire=$aucunHoraireEnregistre");
 
     // Si l'enfant est déjà marqué absent, montrer le bouton pour annuler
     if (enfant['absent'] == true) {
       print("🟠 CRÉATION du bouton Annuler Absent pour ${enfant['prenom']}");
-      return SizedBox(
-        width: 120,
+      return Container(
+        width:
+            double.infinity, // CHANGEMENT: Prendre toute la largeur disponible
         height: 32,
+        padding: EdgeInsets.symmetric(horizontal: 8), // Padding interne
         child: ElevatedButton(
           onPressed: () {
             print("🟠 Bouton Annuler Absent pressé pour ${enfant['prenom']}");
@@ -1905,9 +1963,10 @@ class _HorairesScreenState extends State<HorairesScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: 4), // Réduire le padding
           ),
           child: FittedBox(
+            fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
             child: Text(
               'Annuler Absent',
               style: TextStyle(
@@ -1924,9 +1983,12 @@ class _HorairesScreenState extends State<HorairesScreen> {
     // Sinon, montrer le bouton Absent classique uniquement si aucun horaire enregistré
     if (aucunHoraireEnregistre) {
       print("🔴 CRÉATION du bouton Absent pour ${enfant['prenom']}");
-      return SizedBox(
-        width: 80,
+      return Container(
+        width:
+            double.infinity, // CHANGEMENT: Prendre toute la largeur disponible
         height: 32,
+        padding: EdgeInsets.symmetric(
+            horizontal: 20), // Plus de padding pour centrer
         child: ElevatedButton(
           onPressed: () {
             print("🔴 Bouton Absent pressé pour ${enfant['prenom']}");
@@ -1938,13 +2000,14 @@ class _HorairesScreenState extends State<HorairesScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: 4), // Réduire le padding
           ),
           child: FittedBox(
+            fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
             child: Text(
               'Absent',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12, // Légèrement plus grand que "Annuler Absent"
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),

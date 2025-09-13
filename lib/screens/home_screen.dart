@@ -197,6 +197,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // NOUVEAU: Filtrer les enfants selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
 
+      Set<String> delegatedTodayChildIds = {};
+      String? myMemberId;
       if (fetchedStructureType == "MAM") {
         // Tous les membres ne voient que leurs enfants assignés
         filteredChildren = allChildren.where((child) {
@@ -214,6 +216,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
         print(
             "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+
+        // ⛱️ Overlay délégation du jour: ajouter les enfants que j'accueille par délégation aujourd'hui
+        try {
+          // Trouver mon memberId via l'email
+          final membersSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureDocId)
+              .collection('members')
+              .where('email', isEqualTo: currentUserEmail)
+              .limit(1)
+              .get();
+          if (membersSnap.docs.isNotEmpty) {
+            myMemberId = membersSnap.docs.first.id;
+            final todayStart = DateTime.now();
+            final start = DateTime(todayStart.year, todayStart.month, todayStart.day);
+            final end = start.add(const Duration(days: 1));
+            final delSnap = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureDocId)
+                .collection('delegations')
+                .where('status', isEqualTo: 'accepted')
+                .where('amDelegateId', isEqualTo: myMemberId)
+                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date', isLessThan: Timestamp.fromDate(end))
+                .get();
+            delegatedTodayChildIds = delSnap.docs
+                .map((d) => (d.data()['childId'] ?? '').toString())
+                .where((id) => id.isNotEmpty)
+                .toSet();
+
+            if (delegatedTodayChildIds.isNotEmpty) {
+              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final toAddIds = delegatedTodayChildIds.difference(already);
+              if (toAddIds.isNotEmpty) {
+                final add = allChildren.where((c) => toAddIds.contains(c['id'] as String));
+                filteredChildren.addAll(add);
+                print('➕ Délégations du jour ajoutées au Home: ${toAddIds.length} enfant(s)');
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ Erreur overlay délégations Home: $e');
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -247,11 +292,16 @@ class _HomeScreenState extends State<HomeScreen> {
           todayWeekday.substring(1).toLowerCase();
 
       // Filtrer les enfants pour aujourd'hui (conservant le filtre par membre)
-      List<Map<String, dynamic>> todayChildren = filteredChildren
-          .where((child) =>
-              child['schedule'] != null &&
-              child['schedule'].containsKey(capitalizedWeekday))
-          .toList();
+      // et inclure systématiquement ceux arrivés via délégation aujourd'hui
+      final List<Map<String, dynamic>> todayChildren = [];
+      final filteredBySchedule = filteredChildren.where((child) =>
+          child['schedule'] != null && child['schedule'].containsKey(capitalizedWeekday));
+      todayChildren.addAll(filteredBySchedule);
+      if (delegatedTodayChildIds.isNotEmpty) {
+        final existingIds = todayChildren.map((c) => c['id'] as String).toSet();
+        final add = filteredChildren.where((c) => delegatedTodayChildIds.contains(c['id']) && !existingIds.contains(c['id']));
+        todayChildren.addAll(add);
+      }
 
       setState(() {
         structureName = fetchedStructureName;

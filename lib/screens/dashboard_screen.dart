@@ -12,6 +12,7 @@ import 'package:poppins_app/screens/mam_member_add_screen.dart';
 import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
+import 'package:poppins_app/screens/delegations_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
@@ -107,6 +108,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(
         builder: (context) => AdminCleanupScreen(),
       ),
+    );
+  }
+
+  // Compteur des délégations à traiter aujourd'hui pour le membre courant
+  Future<int> _fetchPendingDelegationsCountToday() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 0;
+      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      // Trouver la structure
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserEmail)
+          .get();
+      final String structureId = (userDoc.exists &&
+              (userDoc.data()?['structureId'] ?? '').toString().isNotEmpty)
+          ? userDoc.data()!['structureId']
+          : user.uid;
+
+      // Trouver le memberId correspondant à l'email
+      final memSnap = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('members')
+          .where('email', isEqualTo: currentUserEmail)
+          .limit(1)
+          .get();
+      if (memSnap.docs.isEmpty) return 0;
+      final memberId = memSnap.docs.first.id;
+
+      // Filtrer les délégations proposées pour aujourd'hui
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
+      final end = start.add(const Duration(days: 1));
+      final snap = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('delegations')
+          .where('status', isEqualTo: 'proposed')
+          .where('amDelegateId', isEqualTo: memberId)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('date', isLessThan: Timestamp.fromDate(end))
+          .get();
+      return snap.size;
+    } catch (e) {
+      print('Erreur compteur délégations: $e');
+      return 0;
+    }
+  }
+
+  Widget _buildDelegationsBadgeFuture() {
+    return FutureBuilder<int>(
+      future: _fetchPendingDelegationsCountToday(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        if (count <= 0) return SizedBox.shrink();
+        return Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            count.toString(),
+            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        );
+      },
     );
   }
 
@@ -239,6 +308,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => PlanningScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // ✅ NOUVEAU: Délégations (MAM)
+                ListTile(
+                  leading: Icon(Icons.swap_horiz, color: primaryColor),
+                  title: Text(
+                    "Délégations (MAM)",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  trailing: _buildDelegationsBadgeFuture(),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DelegationsScreen(),
                       ),
                     );
                   },
@@ -1209,6 +1297,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => PlanningScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // Délégations MAM - gestion des délégations à la journée
+                ListTile(
+                  leading: Icon(Icons.swap_horiz, color: primaryColor),
+                  title: Text(
+                    "Délégations (MAM)",
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  trailing: _buildDelegationsBadgeFuture(),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DelegationsScreen(),
                       ),
                     );
                   },

@@ -287,6 +287,184 @@ function generateEmailHtml(content) {
     `;
 }
 
+// ======= DÉLÉGATIONS MAM =======
+exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) {
+    throw new Error('unauthenticated');
+  }
+  const { delegationId } = request.data || {};
+  if (!delegationId) throw new Error('invalid-argument');
+
+  const delSnap = await db.collectionGroup('delegations').where('__name__', '==', delegationId).get();
+  // collectionGroup on __name__ doesn't work; fetch needs structureId. Fallback: client provides structureId in doc path.
+  // Simpler: try common path from request.data.structureId if provided
+  let delegationDoc = null;
+  if (delSnap && delSnap.docs && delSnap.docs.length > 0) {
+    delegationDoc = delSnap.docs[0];
+  } else if (request.data.structureId) {
+    delegationDoc = await db
+      .collection('structures')
+      .doc(request.data.structureId)
+      .collection('delegations')
+      .doc(delegationId)
+      .get();
+  } else {
+    throw new Error('invalid-argument');
+  }
+
+  if (!delegationDoc.exists) throw new Error('not-found');
+  const d = delegationDoc.data();
+  if (d.status !== 'proposed') return { success: false, message: 'Already processed' };
+  // Vérifier que l'appelant correspond bien au membre délégué
+  const userRec = await getAuth().getUser(request.auth.uid);
+  const email = (userRec.email || '').toLowerCase();
+  let allowed = false;
+  if (d.amDelegateId === request.auth.uid) allowed = true; // compat
+  if (!allowed && email) {
+    const memSnap = await db.collection('structures').doc(d.structureId).collection('members')
+      .where('email', '==', email).limit(5).get();
+    memSnap.forEach(m => { if (m.id === d.amDelegateId) allowed = true; });
+  }
+  if (!allowed) throw new Error('permission-denied');
+
+  const structureId = d.structureId;
+  const date = d.date.toDate ? d.date.toDate() : new Date(d.date);
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  // Map weekday: JS 0=Sun..6=Sat => Flutter 1=Mon..7=Sun
+  const jsDay = start.getDay();
+  const jourSemaine = jsDay === 0 ? 7 : jsDay; // 1..7
+
+  // Compter enfants pour l'AM déléguée ce jour
+  const gardesRef = db.collection('structures').doc(structureId).collection('gardes');
+  const recSnap = await gardesRef
+    .where('recurrent', '==', true)
+    .where('jourSemaine', '==', jourSemaine)
+    .where('membreId', '==', d.amDelegateId)
+    .get();
+  const excSnap = await gardesRef
+    .where('recurrent', '==', false)
+    .where('membreId', '==', d.amDelegateId)
+    .where('dateException', '>=', start)
+    .where('dateException', '<', end)
+    .get();
+
+  const enfantSet = new Set();
+  recSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
+  excSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
+
+  // Ajouter délégations acceptées existantes de ce jour
+  const acceptedSnap = await db
+    .collection('structures')
+    .doc(structureId)
+    .collection('delegations')
+    .where('status', '==', 'accepted')
+    .where('amDelegateId', '==', d.amDelegateId)
+    .where('date', '>=', start)
+    .where('date', '<', end)
+    .get();
+  acceptedSnap.forEach((doc) => enfantSet.add(doc.data().childId));
+
+  // Si l'enfant à déléguer est déjà dans le set, ne pas compter deux fois
+  const currentCount = enfantSet.has(d.childId) ? enfantSet.size : enfantSet.size + 1;
+  if (currentCount > 4) {
+    return { success: false, message: 'capacity-exceeded' };
+  }
+
+  await delegationDoc.ref.update({
+    status: 'accepted',
+    acceptedBy: request.auth.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { success: true };
+});
+
+exports.declineDelegation = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) throw new Error('unauthenticated');
+  const { delegationId, structureId } = request.data || {};
+  if (!delegationId || !structureId) throw new Error('invalid-argument');
+  const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('not-found');
+  const d = snap.data();
+  const userRec = await getAuth().getUser(request.auth.uid);
+  const email = (userRec.email || '').toLowerCase();
+  let allowed = [d.createdBy].includes(request.auth.uid) || [d.amDelegateId, d.amOriginId].includes(request.auth.uid);
+  if (!allowed && email) {
+    const memSnap = await db.collection('structures').doc(structureId).collection('members')
+      .where('email', '==', email).limit(10).get();
+    const ids = memSnap.docs.map(d => d.id);
+    if (ids.includes(d.amDelegateId) || ids.includes(d.amOriginId)) allowed = true;
+  }
+  if (!allowed) throw new Error('permission-denied');
+  await ref.update({ status: 'declined', updatedAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+exports.cancelDelegation = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) throw new Error('unauthenticated');
+  const { delegationId, structureId } = request.data || {};
+  if (!delegationId || !structureId) throw new Error('invalid-argument');
+  const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('not-found');
+  const d = snap.data();
+  const userRec = await getAuth().getUser(request.auth.uid);
+  const email = (userRec.email || '').toLowerCase();
+  let allowed = [d.createdBy, d.amOriginId].includes(request.auth.uid);
+  if (!allowed && email) {
+    const memSnap = await db.collection('structures').doc(structureId).collection('members')
+      .where('email', '==', email).limit(10).get();
+    const ids = memSnap.docs.map(d => d.id);
+    if (ids.includes(d.amOriginId)) allowed = true;
+  }
+  if (!allowed) throw new Error('permission-denied');
+  await ref.update({ status: 'canceled', updatedAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+// 🔔 Notifier le membre destinataire lors d'une nouvelle délégation proposée
+exports.onDelegationCreated = onDocumentCreated({
+  document: 'structures/{structureId}/delegations/{delegationId}',
+  region: 'europe-west1'
+}, async (event) => {
+  try {
+    const data = event.data.data();
+    if (!data || data.status !== 'proposed') return;
+    const structureId = event.params.structureId;
+
+    // Récupérer l'email du membre délégué
+    const delegateMemberRef = db.collection('structures').doc(structureId).collection('members').doc(data.amDelegateId);
+    const delegateMemberSnap = await delegateMemberRef.get();
+    if (!delegateMemberSnap.exists) return;
+    const delegateEmail = (delegateMemberSnap.data().email || '').toLowerCase();
+    if (!delegateEmail) return;
+
+    // Récupérer le prénom de l'enfant pour le message
+    let childName = 'un enfant';
+    try {
+      const childSnap = await db.collection('structures').doc(structureId).collection('children').doc(data.childId).get();
+      if (childSnap.exists) {
+        const cd = childSnap.data();
+        childName = `${cd.firstName || ''} ${cd.lastName || ''}`.trim() || childName;
+      }
+    } catch (_) {}
+
+    const title = 'Nouvelle délégation à traiter';
+    const body = `Vous avez une demande de délégation pour ${childName}`;
+    await createNotificationDoc(db, {
+      recipientUserId: delegateEmail,
+      title,
+      body,
+      childId: data.childId,
+      messageId: event.params.delegationId,
+      senderType: 'assistante'
+    });
+  } catch (e) {
+    console.error('❌ Erreur onDelegationCreated:', e);
+  }
+});
+
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
 exports.processEmailQueue = onDocumentCreated({
     document: 'emailQueue/{emailId}',
