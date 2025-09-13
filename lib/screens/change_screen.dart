@@ -199,6 +199,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
 
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
+      Set<String> delegatedTodayChildIds = {};
+      String? myMemberId;
 
       if (structureType == "MAM") {
         // Pour une MAM: filtrer par assignedMemberEmail
@@ -210,6 +212,46 @@ class _ChangeScreenState extends State<ChangeScreen> {
 
         print(
             "👨‍👧‍👦 Change: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        // ➕ Ajouter enfants délégués aujourd'hui
+        try {
+          final memSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('members')
+              .where('email', isEqualTo: currentUserEmail)
+              .limit(1)
+              .get();
+          if (memSnap.docs.isNotEmpty) {
+            myMemberId = memSnap.docs.first.id;
+            final now = DateTime.now();
+            final start = DateTime(now.year, now.month, now.day);
+            final end = start.add(const Duration(days: 1));
+            final delSnap = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .collection('delegations')
+                .where('status', isEqualTo: 'accepted')
+                .where('amDelegateId', isEqualTo: myMemberId)
+                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date', isLessThan: Timestamp.fromDate(end))
+                .get();
+            delegatedTodayChildIds = delSnap.docs
+                .map((d) => (d.data()['childId'] ?? '').toString())
+                .where((id) => id.isNotEmpty)
+                .toSet();
+            if (delegatedTodayChildIds.isNotEmpty) {
+              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final toAddIds = delegatedTodayChildIds.difference(already);
+              if (toAddIds.isNotEmpty) {
+                filteredChildren.addAll(
+                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
+                print('➕ Change: ajout enfants délégués: ${toAddIds.length}');
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ Change: erreur overlay délégation: $e');
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -220,8 +262,10 @@ class _ChangeScreenState extends State<ChangeScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
-        if (child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null) {
+        final isScheduledToday = child['schedule'] != null &&
+            child['schedule'][capitalizedWeekday] != null;
+        final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
+        if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
           enfants.add({
             'id': child['id'],

@@ -9,6 +9,8 @@ import 'package:poppins_app/models/garde_model.dart';
 import 'package:poppins_app/models/enfant_model.dart';
 import 'package:poppins_app/models/membre_model.dart';
 import 'package:poppins_app/services/planning_service.dart';
+import 'package:poppins_app/services/delegation_service.dart';
+import 'package:poppins_app/models/delegation_model.dart';
 import 'package:poppins_app/screens/planning_history_screen.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,6 +24,7 @@ class PlanningScreen extends StatefulWidget {
 class _PlanningScreenState extends State<PlanningScreen> {
   // Services
   final PlanningService _planningService = PlanningService();
+  final DelegationService _delegationService = DelegationService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // État et données
@@ -30,6 +33,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
   List<Enfant> _enfants = [];
   List<Membre> _membres = [];
   List<Garde> _gardes = [];
+  List<Delegation> _acceptedDelegationsForDay = [];
   String _structureName = "Chargement...";
   String _structureId = "";
   bool _isMAMStructure = false;
@@ -91,6 +95,9 @@ class _PlanningScreenState extends State<PlanningScreen> {
       ]);
 
       await _loadGardes();
+      // Charger les délégations acceptées pour le jour
+      _acceptedDelegationsForDay =
+          await _delegationService.getDelegationsForDay(_selectedDate);
 
       setState(() => _isLoading = false);
     } catch (e) {
@@ -332,6 +339,54 @@ class _PlanningScreenState extends State<PlanningScreen> {
 
       // Mettre à jour allGardes avec les gardes fusionnées
       allGardes = mergedGardes;
+
+      // Appliquer les délégations acceptées pour ce jour (déplacement à la journée)
+      try {
+        // S'assurer que les délégations du jour sont chargées (si appel direct)
+        if (_acceptedDelegationsForDay.isEmpty) {
+          _acceptedDelegationsForDay =
+              await _delegationService.getDelegationsForDay(_selectedDate);
+        }
+
+        if (_acceptedDelegationsForDay.isNotEmpty) {
+          final List<Garde> adjusted = [];
+          for (final garde in allGardes) {
+            final d = _acceptedDelegationsForDay.firstWhere(
+              (del) =>
+                  del.childId == garde.enfantId &&
+                  // déplacer uniquement si la garde appartient à l'AM d'origine
+                  del.amOriginId == garde.membreId,
+              orElse: () =>
+                  Delegation(
+                      id: '',
+                      structureId: '',
+                      childId: '',
+                      amOriginId: '',
+                      amDelegateId: '',
+                      date: DateTime.now(),
+                      status: 'proposed',
+                      createdBy: '',
+                      createdAt: DateTime.now()),
+            );
+
+            if (d.id.isNotEmpty) {
+              // Créer une copie de la garde déplacée vers l'AM déléguée
+              adjusted.add(garde.copyWith(
+                membreId: d.amDelegateId,
+                isDelegated: true,
+                delegatedFromMembreId: d.amOriginId,
+                delegationId: d.id,
+              ));
+              // Ne pas ajouter la garde d'origine (masquée ce jour)
+            } else {
+              adjusted.add(garde);
+            }
+          }
+          allGardes = adjusted;
+        }
+      } catch (e) {
+        print('Erreur application des délégations: $e');
+      }
 
       // Récupérer tous les enfants pour leur planning schedule
       final childrenSnapshot = await FirebaseFirestore.instance

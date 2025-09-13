@@ -10,6 +10,10 @@ class Garde {
   final String heureFin; // Format "HH:MM"
   final bool recurrent;
   final DateTime? dateException; // Pour un jour spécifique, nullable
+  // Champs d'affichage (non persistés) pour gérer les délégations à la journée
+  final bool isDelegated; // True si garde déléguée pour ce jour
+  final String? delegatedFromMembreId; // Membre d'origine
+  final String? delegationId; // Id de la délégation
 
   Garde({
     required this.id,
@@ -21,6 +25,9 @@ class Garde {
     required this.heureFin,
     this.recurrent = true,
     this.dateException,
+    this.isDelegated = false,
+    this.delegatedFromMembreId,
+    this.delegationId,
   });
 
   Map<String, dynamic> toJson() {
@@ -48,6 +55,9 @@ class Garde {
     bool? recurrent,
     DateTime? dateException,
     bool clearDateException = false,
+    bool? isDelegated,
+    String? delegatedFromMembreId,
+    String? delegationId,
   }) {
     return Garde(
       id: id ?? this.id,
@@ -60,6 +70,10 @@ class Garde {
       recurrent: recurrent ?? this.recurrent,
       dateException:
           clearDateException ? null : (dateException ?? this.dateException),
+      isDelegated: isDelegated ?? this.isDelegated,
+      delegatedFromMembreId:
+          delegatedFromMembreId ?? this.delegatedFromMembreId,
+      delegationId: delegationId ?? this.delegationId,
     );
   }
 }
