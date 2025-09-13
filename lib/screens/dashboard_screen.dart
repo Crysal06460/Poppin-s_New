@@ -644,7 +644,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () => _launchURL(
-                  'https://www.poppin-s.fr/wp-content/administratif/Politique-de-confidentialite.pdf'),
+                  'https://www.poppin-s.fr/politique-de-confidentialite/'),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(
@@ -698,7 +698,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () => _launchURL(
-                  'https://www.poppin-s.fr/wp-content/administratif/Condition-d-utilisation.pdf'),
+                  'https://www.poppin-s.fr/condition-dutilisation/'),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(

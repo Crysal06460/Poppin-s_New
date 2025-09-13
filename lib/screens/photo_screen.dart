@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
@@ -37,10 +39,14 @@ class _PhotosScreenState extends State<PhotosScreen>
   String structureName = "Chargement...";
   int _selectedIndex = 1;
   bool _isUploadingFile = false;
+  double _uploadProgress = 0.0;
   Uint8List? _webImage;
   XFile? _pickedFile;
   String _mediaTime = '';
   bool _isVideoSelected = false;
+  String? _videoDurationText;
+  Future<Uint8List?>? _videoThumbFuture;
+  VideoPlayerController? _previewController;
   // Limites pour les vidéos
   static const int _maxVideoSeconds = 15; // Durée maximale d'une vidéo capturée
   static const int _maxVideoBytes = 200 * 1024 * 1024; // 200 Mo pour la taille max
@@ -75,6 +81,26 @@ class _PhotosScreenState extends State<PhotosScreen>
       print("Erreur lors du nettoyage automatique des photos: $e");
       // Ne pas montrer d'erreur à l'utilisateur car c'est un processus en arrière-plan
     }
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildChip(String text) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: Colors.white, fontSize: 12),
+      ),
+    );
   }
 
   Future<void> _selectMediaTime(
@@ -326,7 +352,24 @@ class _PhotosScreenState extends State<PhotosScreen>
           _pickedFile = video;
           _isVideoSelected = true;
           _webImage = null;
+          _videoThumbFuture = VideoThumbnail.thumbnailData(
+            video: video.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 640,
+            quality: 75,
+          );
         });
+        // Calculer la durée (mm:ss) de façon asynchrone et légère
+        try {
+          final file = File(video.path);
+          final tmp = VideoPlayerController.file(file);
+          await tmp.initialize();
+          final dur = tmp.value.duration;
+          await tmp.dispose();
+          setStateDialog(() {
+            _videoDurationText = _formatDuration(dur);
+          });
+        } catch (_) {}
       }
     } catch (e) {
       print("Erreur lors de la sélection vidéo: $e");
@@ -358,7 +401,23 @@ class _PhotosScreenState extends State<PhotosScreen>
           _pickedFile = video;
           _isVideoSelected = true;
           _webImage = null;
+          _videoThumbFuture = VideoThumbnail.thumbnailData(
+            video: video.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 640,
+            quality: 75,
+          );
         });
+        try {
+          final file = File(video.path);
+          final tmp = VideoPlayerController.file(file);
+          await tmp.initialize();
+          final dur = tmp.value.duration;
+          await tmp.dispose();
+          setStateDialog(() {
+            _videoDurationText = _formatDuration(dur);
+          });
+        } catch (_) {}
       }
     } catch (e) {
       print("Erreur lors de la prise de vidéo: $e");
@@ -440,7 +499,53 @@ class _PhotosScreenState extends State<PhotosScreen>
   Future<void> _uploadAndSaveVideo(String childId) async {
     if (_pickedFile == null) return;
 
-    setState(() => _isUploadingFile = true);
+    setState(() {
+      _isUploadingFile = true;
+      _uploadProgress = 0.0;
+    });
+
+    // Afficher un dialogue de progression pendant l'upload
+    StateSetter? dialogSetState;
+    bool dialogOpen = false;
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setStateDialog) {
+              dialogSetState = setStateDialog;
+              return WillPopScope(
+                onWillPop: () async => false,
+                child: AlertDialog(
+                  title: Text('Envoi de la vidéo'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LinearProgressIndicator(
+                        value: (_uploadProgress > 0 && _uploadProgress <= 1)
+                            ? _uploadProgress
+                            : null,
+                      ),
+                      SizedBox(height: 12),
+                      Text('${(_uploadProgress * 100).toStringAsFixed(0)} %',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      SizedBox(height: 4),
+                      Text(
+                        "Merci de patienter, l'envoi peut prendre du temps en 4G",
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+      dialogOpen = true;
+    }
 
     try {
       final User? user = FirebaseAuth.instance.currentUser;
@@ -464,9 +569,36 @@ class _PhotosScreenState extends State<PhotosScreen>
         if (fileSize > _maxVideoBytes) {
           throw Exception('Fichier vidéo trop volumineux (> ${(_maxVideoBytes / (1024*1024)).round()} Mo)');
         }
-        await ref
-            .putFile(file, SettableMetadata(contentType: 'video/mp4'))
-            .timeout(Duration(minutes: 10));
+        final uploadTask = ref.putFile(
+          file,
+          SettableMetadata(contentType: 'video/mp4'),
+        );
+
+        final sub = uploadTask.snapshotEvents.listen((snapshot) {
+          if (snapshot.totalBytes > 0) {
+            final prog = snapshot.bytesTransferred / snapshot.totalBytes;
+            if (mounted) {
+              setState(() {
+                _uploadProgress = prog.clamp(0.0, 1.0);
+              });
+              // Rafraîchir aussi le contenu du dialogue
+              if (dialogSetState != null) {
+                dialogSetState!(() {});
+              }
+            }
+            // Fermer automatiquement le dialogue à 100%
+            if (snapshot.state == TaskState.success ||
+                (snapshot.bytesTransferred >= snapshot.totalBytes && snapshot.totalBytes > 0)) {
+              if (dialogOpen && mounted) {
+                Navigator.of(context, rootNavigator: true).pop();
+                dialogOpen = false;
+              }
+            }
+          }
+        });
+
+        await uploadTask.timeout(Duration(minutes: 20));
+        await sub.cancel();
 
         print("Vidéo uploadée avec succès");
         downloadUrl = await ref.getDownloadURL();
@@ -489,7 +621,17 @@ class _PhotosScreenState extends State<PhotosScreen>
         );
       }
     } finally {
-      setState(() => _isUploadingFile = false);
+      if (mounted) {
+        // Fermer le dialogue si affiché
+        if (dialogOpen) {
+          Navigator.of(context, rootNavigator: true).pop();
+          dialogOpen = false;
+        }
+        setState(() {
+          _isUploadingFile = false;
+          _uploadProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -571,7 +713,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
-                                Icons.photo_camera,
+                                _isVideoSelected ? Icons.videocam : Icons.photo_camera,
                                 color: Colors.white,
                                 size: isTabletDevice ? 30 : 24,
                               ),
@@ -582,7 +724,9 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Ajouter une photo - ${enfant['prenom']}",
+                                    _isVideoSelected
+                                        ? "Ajouter une vidéo - ${enfant['prenom']}"
+                                        : "Ajouter une photo - ${enfant['prenom']}",
                                     style: TextStyle(
                                       fontSize: isTabletDevice ? 22 : 18,
                                       fontWeight: FontWeight.bold,
@@ -682,32 +826,106 @@ class _PhotosScreenState extends State<PhotosScreen>
                                     ),
                                     SizedBox(height: 12),
                                     Container(
-                                      height: 200,
+                                      height: 220,
                                       width: double.infinity,
                                       decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
+                                        color: Colors.black12,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: _isVideoSelected
-                                          ? Center(
-                                              child: Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
+                                          ? InkWell(
+                                              onTap: () async {
+                                                if (_pickedFile == null) return;
+                                                final file = File(_pickedFile!.path);
+                                                _previewController = VideoPlayerController.file(file);
+                                                await _previewController!.initialize();
+                                                _previewController!.setLooping(true);
+                                                if (!mounted) return;
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) => AlertDialog(
+                                                    contentPadding: EdgeInsets.zero,
+                                                    content: AspectRatio(
+                                                      aspectRatio: _previewController!.value.aspectRatio,
+                                                      child: Stack(
+                                                        alignment: Alignment.center,
+                                                        children: [
+                                                          VideoPlayer(_previewController!),
+                                                          Positioned(
+                                                            bottom: 12,
+                                                            child: FloatingActionButton.small(
+                                                              onPressed: () {
+                                                                if (_previewController!.value.isPlaying) {
+                                                                  _previewController!.pause();
+                                                                } else {
+                                                                  _previewController!.play();
+                                                                }
+                                                              },
+                                                              child: Icon(_previewController!.value.isPlaying
+                                                                  ? Icons.pause
+                                                                  : Icons.play_arrow),
+                                                            ),
+                                                          )
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ).then((_) async {
+                                                  await _previewController?.pause();
+                                                  await _previewController?.dispose();
+                                                  _previewController = null;
+                                                });
+                                              },
+                                              child: Stack(
+                                                alignment: Alignment.center,
                                                 children: [
-                                                  Icon(Icons.videocam,
-                                                      size: 56,
-                                                      color: Colors.grey[700]),
-                                                  SizedBox(height: 8),
-                                                  Text(
-                                                    'Vidéo sélectionnée',
-                                                    style: TextStyle(
-                                                        color:
-                                                            Colors.grey.shade700),
+                                                  FutureBuilder<Uint8List?>(
+                                                    future: _videoThumbFuture,
+                                                    builder: (ctx, snap) {
+                                                      if (snap.connectionState == ConnectionState.waiting) {
+                                                        return Center(child: CircularProgressIndicator());
+                                                      }
+                                                      final bytes = snap.data;
+                                                      if (bytes == null) {
+                                                        return Icon(Icons.videocam, size: 64, color: Colors.grey[700]);
+                                                      }
+                                                      return ClipRRect(
+                                                        borderRadius: BorderRadius.circular(10),
+                                                        child: Image.memory(bytes, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                                                      );
+                                                    },
+                                                  ),
+                                                  Container(
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black45,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    padding: EdgeInsets.all(8),
+                                                    child: Icon(Icons.play_arrow, size: 36, color: Colors.white),
+                                                  ),
+                                                  Positioned(
+                                                    bottom: 8,
+                                                    left: 12,
+                                                    right: 12,
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                      children: [
+                                                        if (_videoDurationText != null) _buildChip(_videoDurationText!),
+                                                        FutureBuilder<int>(
+                                                          future: _pickedFile != null ? File(_pickedFile!.path).length() : Future.value(0),
+                                                          builder: (ctx, snap) {
+                                                            final sz = (snap.data ?? 0);
+                                                            final mb = (sz / (1024*1024)).toStringAsFixed(1);
+                                                            return _buildChip('Vidéo • $mb Mo');
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ),
                                                   )
                                                 ],
                                               ),
                                             )
-                                          : (kIsWeb
+                                           : (kIsWeb
                                               ? (_webImage != null
                                                   ? ClipRRect(
                                                       borderRadius:
@@ -718,15 +936,15 @@ class _PhotosScreenState extends State<PhotosScreen>
                                                         fit: BoxFit.contain,
                                                       ),
                                                     )
-                                                  : Center(
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        valueColor:
-                                                            AlwaysStoppedAnimation<
-                                                                    Color>(
-                                                                primaryColor),
-                                                      ),
-                                                    ))
+                                                 : Center(
+                                                     child:
+                                                         CircularProgressIndicator(
+                                                           valueColor:
+                                                               AlwaysStoppedAnimation<
+                                                                       Color>(
+                                                                   primaryColor),
+                                                         ),
+                                                   ))
                                               : ClipRRect(
                                                   borderRadius:
                                                       BorderRadius.circular(10),
@@ -1080,7 +1298,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                       ),
                                     ),
                                     child: Text(
-                                      "CONFIRMER",
+                                      _isVideoSelected ? "ENVOYER LA VIDÉO" : "CONFIRMER",
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 16 : 14,
                                         fontWeight: FontWeight.w600,
