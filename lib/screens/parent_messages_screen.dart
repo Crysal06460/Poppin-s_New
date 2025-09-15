@@ -18,6 +18,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 // 🔥 AJOUT DE L'IMPORT
 import '../services/notification_service.dart';
+import '../utils/safe_query.dart';
 
 class ParentMessagesScreen extends StatefulWidget {
   final String?
@@ -1035,120 +1036,105 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     );
   }
 
-  // Dans le fichier parent_messages_screen.dart, modifiez la méthode _buildMessagesStream :
-
+  // Dans le fichier parent_messages_screen.dart, méthode _buildMessagesStream robuste
   Widget _buildMessagesStream(String childId, String structureId) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('exchanges')
-          .where('childId', isEqualTo: childId)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Erreur de chargement des messages'));
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return FutureBuilder<Stream<QuerySnapshot>>(
+      future: SafeQuery.exchangesStream(childId),
+      builder: (context, streamSnap) {
+        if (streamSnap.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator());
         }
-
-        final messages = snapshot.data?.docs ?? [];
-
-        // Liste pour stocker les mises à jour de messages
-        List<Future<void>> messageUpdates = [];
-
-        // Marquer les messages comme lus UNIQUEMENT pour les messages de l'assistante maternelle
-        for (final doc in messages) {
-          final message = doc.data() as Map<String, dynamic>;
-          // CORRIGÉ: 'assistante' au lieu de 'staff'
-          if (message['senderType'] == 'assistante' &&
-              message['nonLu'] == true) {
-            // Ajouter la mise à jour à la liste sans attendre
-            messageUpdates.add(_firestore
-                .collection('exchanges')
-                .doc(doc.id)
-                .update({'nonLu': false}).then((_) {
-              print("✅ Message ${doc.id} marqué comme lu");
-            }).catchError((error) {
-              print(
-                  "❌ Erreur lors de la mise à jour du statut de lecture: $error");
-            }));
-          }
+        if (streamSnap.hasError || !streamSnap.hasData) {
+          return Center(child: Text('Erreur de chargement des messages'));
         }
+        return StreamBuilder<QuerySnapshot>(
+          stream: streamSnap.data!,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Erreur de chargement des messages'));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator());
+            }
 
-        // Si des messages ont été marqués comme lus
-        if (messageUpdates.isNotEmpty) {
-          // Effectuer toutes les mises à jour en parallèle
-          Future.wait(messageUpdates).then((_) {
-            // 🔥 AJOUTER : Réinitialiser le badge iOS en premier
-            NotificationService.clearBadge();
-
-            // Une fois toutes les mises à jour terminées, réinitialiser le badge
-            MessageBadgeUtil.resetBadge().then((_) {
-              if (mounted) {
-                setState(() {
-                  _showMessageBadge = false;
-                });
-              }
+            // Sort messages client-side by timestamp desc (works for both indexed and fallback)
+            final messages = List<QueryDocumentSnapshot>.from(
+                (snapshot.data?.docs ?? const []));
+            messages.sort((a, b) {
+              final aTs = (a.data() as Map<String, dynamic>)['timestamp']
+                  as Timestamp?;
+              final bTs = (b.data() as Map<String, dynamic>)['timestamp']
+                  as Timestamp?;
+              final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+              final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+              return bMillis.compareTo(aMillis); // desc
             });
 
-            // Mise à jour explicite du compteur de messages non lus
-            final user = _auth.currentUser;
-            if (user != null) {
-              _firestore
-                  .collection('users')
-                  .doc(user.email?.toLowerCase())
-                  .update({'unreadMessages': 0}).then((_) {
-                print("✅ Compteur de messages non lus réinitialisé");
-              }).catchError((error) {
-                print(
-                    "❌ Erreur lors de la réinitialisation du compteur: $error");
+            // Liste pour stocker les mises à jour de messages
+            List<Future<void>> messageUpdates = [];
+
+            // Marquer comme lus les messages de l'assistante maternelle
+            for (final doc in messages) {
+              final message = doc.data() as Map<String, dynamic>;
+              if (message['senderType'] == 'assistante' &&
+                  message['nonLu'] == true) {
+                messageUpdates.add(_firestore
+                    .collection('exchanges')
+                    .doc(doc.id)
+                    .update({'nonLu': false}).then((_) {
+                  print("✅ Message ${doc.id} marqué comme lu");
+                }).catchError((error) {
+                  print(
+                      "❌ Erreur lors de la mise à jour du statut de lecture: $error");
+                }));
+              }
+            }
+
+            if (messageUpdates.isNotEmpty) {
+              Future.wait(messageUpdates).then((_) {
+                NotificationService.clearBadge();
+                MessageBadgeUtil.resetBadge().then((_) {
+                  if (mounted) setState(() => _showMessageBadge = false);
+                });
+                final user = _auth.currentUser;
+                if (user != null) {
+                  _firestore
+                      .collection('users')
+                      .doc(user.email?.toLowerCase())
+                      .update({'unreadMessages': 0}).catchError((error) {
+                    print(
+                        "❌ Erreur lors de la réinitialisation du compteur: $error");
+                  });
+                }
               });
             }
-          });
-        }
 
-        if (messages.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 64,
-                  color: Colors.grey[400],
+            if (messages.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                    SizedBox(height: 16),
+                    Text("Aucun message", style: TextStyle(fontSize: 18, color: Colors.grey[700])),
+                    SizedBox(height: 8),
+                    Text("Envoyez un premier message à la structure",
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                  ],
                 ),
-                SizedBox(height: 16),
-                Text(
-                  "Aucun message",
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  "Envoyez un premier message à la structure",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
+              );
+            }
 
-        return ListView.builder(
-          reverse: true,
-          padding: EdgeInsets.all(8),
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            final message = messages[index].data() as Map<String, dynamic>;
-            final isMe = message['senderType'] == 'parent';
-
-            return _buildMessageBubble(message, isMe);
+            return ListView.builder(
+              reverse: true,
+              padding: EdgeInsets.all(8),
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index].data() as Map<String, dynamic>;
+                final isMe = message['senderType'] == 'parent';
+                return _buildMessageBubble(message, isMe);
+              },
+            );
           },
         );
       },

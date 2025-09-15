@@ -72,8 +72,11 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
       _acceptedForMe = await _delegationService.getAcceptedForMe(_selectedDate);
       // My proposals (for the day)
       final user = _auth.currentUser;
-      final startTs = Timestamp.fromDate(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day));
-      final endTs = Timestamp.fromDate(DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day).add(const Duration(days: 1)));
+      final startTs = Timestamp.fromDate(
+          DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day));
+      final endTs = Timestamp.fromDate(
+          DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day)
+              .add(const Duration(days: 1)));
       final snap = await FirebaseFirestore.instance
           .collection('structures')
           .doc(_structureId)
@@ -83,7 +86,8 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
           .where('date', isLessThan: endTs)
           .get();
       _myProposals = snap.docs
-          .map((d) => Delegation.fromDoc(d as DocumentSnapshot<Map<String, dynamic>>))
+          .map((d) =>
+              Delegation.fromDoc(d as DocumentSnapshot<Map<String, dynamic>>))
           .toList();
       if (mounted) setState(() {});
     } catch (e) {
@@ -104,18 +108,16 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
           .doc(_structureId)
           .collection('members')
           .get();
-      _membres = membersSnap.docs
-          .map((doc) {
-            final data = doc.data();
-            return Membre(
-                id: doc.id,
-                nom: data['lastName'] ?? '',
-                prenom: data['firstName'] ?? '',
-                mamId: _structureId,
-                role: data['role'] ?? 'membre',
-                email: data['email'] ?? '');
-          })
-          .toList();
+      _membres = membersSnap.docs.map((doc) {
+        final data = doc.data();
+        return Membre(
+            id: doc.id,
+            nom: data['lastName'] ?? '',
+            prenom: data['firstName'] ?? '',
+            mamId: _structureId,
+            role: data['role'] ?? 'membre',
+            email: data['email'] ?? '');
+      }).toList();
     } catch (e) {
       _membres = [];
     }
@@ -129,24 +131,22 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
           .doc(_structureId)
           .collection('children')
           .get();
-      _enfants = childrenSnap.docs
-          .map((doc) {
-            final data = doc.data();
-            return Enfant(
-              id: doc.id,
-              nom: data['lastName'] ?? '',
-              prenom: data['firstName'] ?? 'Sans nom',
-              dateNaissance: data['birthDate'] != null
-                  ? (data['birthDate'] as Timestamp).toDate()
-                  : DateTime.now(),
-              membresIds: data['assignedTo'] != null
-                  ? List<String>.from(data['assignedTo'])
-                  : [],
-              photoUrl: data['photoUrl'],
-              couleur: data['planningColor'],
-            );
-          })
-          .toList();
+      _enfants = childrenSnap.docs.map((doc) {
+        final data = doc.data();
+        return Enfant(
+          id: doc.id,
+          nom: data['lastName'] ?? '',
+          prenom: data['firstName'] ?? 'Sans nom',
+          dateNaissance: data['birthDate'] != null
+              ? (data['birthDate'] as Timestamp).toDate()
+              : DateTime.now(),
+          membresIds: data['assignedTo'] != null
+              ? List<String>.from(data['assignedTo'])
+              : [],
+          photoUrl: data['photoUrl'],
+          couleur: data['planningColor'],
+        );
+      }).toList();
     } catch (e) {
       _enfants = [];
     }
@@ -163,7 +163,8 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
           onPressed: () => Navigator.of(context).pop(),
           tooltip: 'Retour',
         ),
-        title: const Text('Délégations', style: TextStyle(color: Colors.white)),
+        title: const Text('Délégation d\'accueil',
+            style: TextStyle(color: Colors.white)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -187,14 +188,14 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
                     onRefresh: () async => _refreshLists(),
                     child: ListView(
                       children: [
-                        _sectionTitle('À traiter (pour moi)'),
+                        _sectionTitle('À traiter'),
                         if (_pendingForMe.isEmpty)
                           const ListTile(
                             title: Text('Aucune demande pour ce jour'),
                           ),
                         ..._pendingForMe.map(_buildPendingTile),
                         const Divider(height: 24),
-                        _sectionTitle('Acceptées (pour moi)'),
+                        _sectionTitle('Accepter'),
                         if (_acceptedForMe.isEmpty)
                           const ListTile(
                             title: Text('Aucune délégation acceptée ce jour'),
@@ -256,7 +257,8 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
   Widget _sectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      child: Text(title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -278,12 +280,27 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
   }
 
   Widget _buildPendingTile(Delegation d) {
-    final enfant = _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
-    final origin = _membres.where((m) => m.id == d.amOriginId).cast<Membre?>().firstOrNull;
+    final enfant =
+        _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
+    final origin =
+        _membres.where((m) => m.id == d.amOriginId).cast<Membre?>().firstOrNull;
+    final originFullName = [origin?.prenom, origin?.nom]
+        .where((s) => (s ?? '').trim().isNotEmpty)
+        .join(' ');
+    final dateStr = DateFormat('EEEE d MMMM', 'fr_FR')
+        .format(DateTime(d.date.year, d.date.month, d.date.day));
     return Card(
       child: ListTile(
-        title: Text(enfant != null ? '${enfant.prenom} ${enfant.nom}' : 'Enfant inconnu'),
-        subtitle: Text('Demande de ${origin != null ? origin.prenom : '—'} • ${_statusLabel(d.status)}'),
+        title: Text(enfant != null
+            ? '${enfant.prenom} ${enfant.nom}'
+            : 'Enfant inconnu'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Demandé par : ${originFullName.isNotEmpty ? originFullName : '—'}'),
+            Text('Date : $dateStr'),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -300,7 +317,9 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
                 final ok = await _delegationService.acceptDelegation(d.id);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ok ? 'Délégation acceptée' : 'Echec de l\'acceptation')));
+                    content: Text(ok
+                        ? 'Délégation acceptée'
+                        : 'Echec de l\'acceptation')));
                 if (ok) _refreshLists();
               },
               style: ElevatedButton.styleFrom(backgroundColor: primaryBlue),
@@ -313,9 +332,13 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
   }
 
   Widget _buildMyProposalTile(Delegation d) {
-    final enfant = _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
-    final delegate = _membres.where((m) => m.id == d.amDelegateId).cast<Membre?>().firstOrNull;
-    final dateStr = DateFormat('EEEE d MMMM yyyy', 'fr_FR')
+    final enfant =
+        _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
+    final delegate = _membres
+        .where((m) => m.id == d.amDelegateId)
+        .cast<Membre?>()
+        .firstOrNull;
+    final dateStr = DateFormat('EEEE d MMMM', 'fr_FR')
         .format(DateTime(d.date.year, d.date.month, d.date.day));
     final reason = (d.reason ?? '').trim();
     return Card(
@@ -323,14 +346,16 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 6.0),
         child: ListTile(
           title: Text(
-            enfant != null ? '${enfant.prenom} ${enfant.nom}' : 'Enfant inconnu',
+            enfant != null
+                ? '${enfant.prenom} ${enfant.nom}'
+                : 'Enfant inconnu',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 2),
-              Text('Demandée à : ${delegate != null ? delegate.prenom : '—'}'),
+              Text('Demandé à : ${delegate != null ? delegate.prenom : '—'}'),
               Text('Date : $dateStr'),
               if (reason.isNotEmpty) Text('Motif : $reason'),
               Text('Statut : ${_statusLabel(d.status)}'),
@@ -355,15 +380,30 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
   }
 
   Widget _buildAcceptedForMeTile(Delegation d) {
-    final enfant = _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
-    final origin = _membres.where((m) => m.id == d.amOriginId).cast<Membre?>().firstOrNull;
-    final dateStr = DateFormat('EEEE d MMMM yyyy', 'fr_FR')
+    final enfant =
+        _enfants.where((e) => e.id == d.childId).cast<Enfant?>().firstOrNull;
+    final origin =
+        _membres.where((m) => m.id == d.amOriginId).cast<Membre?>().firstOrNull;
+    // Affichage demandé: "Date : lundi 12 avril" (sans année)
+    final dateStr = DateFormat('EEEE d MMMM', 'fr_FR')
         .format(DateTime(d.date.year, d.date.month, d.date.day));
+    final originFullName = [origin?.prenom, origin?.nom]
+        .where((s) => (s ?? '').trim().isNotEmpty)
+        .join(' ');
     return Card(
       child: ListTile(
-        title: Text(enfant != null ? '${enfant.prenom} ${enfant.nom}' : 'Enfant inconnu',
+        title: Text(
+            enfant != null
+                ? '${enfant.prenom} ${enfant.nom}'
+                : 'Enfant inconnu',
             style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('Accueilli par délégation • de ${origin?.prenom ?? '—'} • le $dateStr'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Demandé par : ${originFullName.isNotEmpty ? originFullName : '—'}'),
+            Text('Date : $dateStr'),
+          ],
+        ),
       ),
     );
   }
@@ -376,7 +416,9 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
 
     // Identifier les IDs de membre correspondant à l'utilisateur courant
     final myMemberIds = _membres
-        .where((m) => m.id == myUid || (m.email.isNotEmpty && m.email.toLowerCase() == myEmail))
+        .where((m) =>
+            m.id == myUid ||
+            (m.email.isNotEmpty && m.email.toLowerCase() == myEmail))
         .map((m) => m.id)
         .toSet();
 
@@ -389,13 +431,15 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
     }).toList();
 
     // Délégataires possibles: tous les autres membres de la MAM
-    final delegates = _membres.where((m) => !myMemberIds.contains(m.id)).toList();
+    final delegates =
+        _membres.where((m) => !myMemberIds.contains(m.id)).toList();
 
     // Proposer TOUS les enfants de la MAM (pas seulement ceux de l'assistante)
     final childrenForPicker = _enfants;
     String? selectedChildId =
         childrenForPicker.isNotEmpty ? childrenForPicker.first.id : null;
-    String? selectedDelegateId = delegates.isNotEmpty ? delegates.first.id : null;
+    String? selectedDelegateId =
+        delegates.isNotEmpty ? delegates.first.id : null;
     DateTime selectedDate = _selectedDate;
     String? reason;
 
@@ -414,7 +458,8 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('Demander une délégation',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: selectedDelegateId,
@@ -437,26 +482,28 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
                           ))
                       .toList(),
                   onChanged: (v) => setStateModal(() => selectedChildId = v),
-                  decoration:
-                      const InputDecoration(labelText: 'Enfant à déléguer'),
+                  decoration: const InputDecoration(labelText: 'Enfant'),
                 ),
                 // Si aucun enfant assigné, la liste reste vide (pas d'astuce affichée)
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Date'),
-                  subtitle: Text(DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(selectedDate)),
+                  subtitle: Text(DateFormat('EEEE d MMMM yyyy', 'fr_FR')
+                      .format(selectedDate)),
                   trailing: IconButton(
                     icon: const Icon(Icons.date_range),
                     onPressed: () async {
                       final picked = await showDatePicker(
                         context: ctx,
                         initialDate: selectedDate,
-                        firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                        firstDate:
+                            DateTime.now().subtract(const Duration(days: 30)),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                         locale: const Locale('fr', 'FR'),
                       );
-                      if (picked != null) setStateModal(() => selectedDate = picked);
+                      if (picked != null)
+                        setStateModal(() => selectedDate = picked);
                     },
                   ),
                 ),
@@ -470,10 +517,12 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: (selectedChildId == null || selectedDelegateId == null)
+                    onPressed: (selectedChildId == null ||
+                            selectedDelegateId == null)
                         ? null
                         : () async {
-                            final id = await _delegationService.proposeDelegation(
+                            final id =
+                                await _delegationService.proposeDelegation(
                               childId: selectedChildId!,
                               amDelegateId: selectedDelegateId!,
                               date: selectedDate,
@@ -487,7 +536,8 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
                                     : 'Échec de la demande')));
                             _refreshLists();
                           },
-                    style: ElevatedButton.styleFrom(backgroundColor: primaryBlue),
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: primaryBlue),
                     child: const Text('Envoyer la demande'),
                   ),
                 )

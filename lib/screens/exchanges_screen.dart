@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/safe_query.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -1501,13 +1502,30 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         child: // Dans exchanges_screen.dart, dans la méthode _showChatPopup
 // Remplacer le StreamBuilder existant par celui-ci :
 
-                            StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('exchanges')
-                          .where('childId', isEqualTo: enfant['id'])
-                          .orderBy('timestamp', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
+                            FutureBuilder<Stream<QuerySnapshot>>(
+                      future: SafeQuery.exchangesStream(enfant['id']),
+                      builder: (context, streamSnap) {
+                        if (streamSnap.connectionState == ConnectionState.waiting) {
+                          return Center(
+                              child: CircularProgressIndicator(
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(primaryBlue),
+                          ));
+                        }
+                        if (streamSnap.hasError || !streamSnap.hasData) {
+                          return Center(
+                            child: Text(
+                              'Erreur de chargement des messages',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: isTabletDevice ? 16 : 14,
+                              ),
+                            ),
+                          );
+                        }
+                        return StreamBuilder<QuerySnapshot>(
+                          stream: streamSnap.data!,
+                          builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           print('Erreur de chargement: ${snapshot.error}');
                           return Center(
@@ -1555,7 +1573,20 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                           );
                         }
 
-                        final messages = snapshot.data!.docs;
+                        // Sort messages client-side by timestamp desc
+                        final messages = List<QueryDocumentSnapshot>.from(
+                            snapshot.data!.docs);
+                        messages.sort((a, b) {
+                          final aTs =
+                              (a.data() as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
+                          final bTs =
+                              (b.data() as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
+                          final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+                          final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+                          return bMillis.compareTo(aMillis); // desc
+                        });
 
                         // 🔥 CORRECTION CRITIQUE : Marquer les messages DES PARENTS comme lus
                         List<Future<void>> messageUpdates = [];
@@ -1626,6 +1657,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                               isMe,
                               isTabletDevice,
                             );
+                          },
+                        );
                           },
                         );
                       },
@@ -2095,15 +2128,23 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                       color: Colors.grey.shade600,
                     ),
                   ),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('exchanges')
-                        .where('childId', isEqualTo: enfant['id'])
-                        .orderBy('timestamp', descending: true)
-                        .limit(1)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  FutureBuilder<Stream<QuerySnapshot>>(
+                    future: SafeQuery.exchangesStream(enfant['id'], lastOnly: true),
+                    builder: (context, streamSnap) {
+                      if (streamSnap.connectionState == ConnectionState.waiting) {
+                        return Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            "Chargement...",
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        );
+                      }
+                      if (streamSnap.hasError || !streamSnap.hasData) {
                         return Padding(
                           padding: EdgeInsets.only(top: 4),
                           child: Text(
@@ -2116,34 +2157,58 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                           ),
                         );
                       }
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: streamSnap.data!,
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                            return Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                "Aucun message",
+                                style: TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 12,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            );
+                          }
+                          // Pick latest by timestamp
+                          final docs = List<QueryDocumentSnapshot>.from(snapshot.data!.docs);
+                          docs.sort((a, b) {
+                            final aTs = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                            final bTs = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                            final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+                            final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+                            return bMillis.compareTo(aMillis);
+                          });
+                          final lastMessage = docs.first.data() as Map<String, dynamic>;
+                          final isFile = lastMessage['type'] == 'file';
 
-                      final lastMessage = snapshot.data!.docs.first.data()
-                          as Map<String, dynamic>;
-                      final isFile = lastMessage['type'] == 'file';
-
-                      return Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          isFile
-                              ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
-                              : lastMessage['content'] != null
-                                  ? (lastMessage['content'].toString().length >
-                                          30
-                                      ? "${lastMessage['content'].toString().substring(0, 30)}..."
-                                      : lastMessage['content'].toString())
-                                  : "",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: lastMessage['nonLu'] == true
-                                ? Colors.black87
-                                : Colors.grey.shade500,
-                            fontWeight: lastMessage['nonLu'] == true
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          return Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text(
+                              isFile
+                                  ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
+                                  : lastMessage['content'] != null
+                                      ? (lastMessage['content'].toString().length > 30
+                                          ? "${lastMessage['content'].toString().substring(0, 30)}..."
+                                          : lastMessage['content'].toString())
+                                      : "",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: lastMessage['nonLu'] == true
+                                    ? Colors.black87
+                                    : Colors.grey.shade500,
+                                fontWeight: lastMessage['nonLu'] == true
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -2379,15 +2444,33 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.all(16),
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('exchanges')
-                          .where('childId', isEqualTo: enfant['id'])
-                          .orderBy('timestamp', descending: true)
-                          .limit(1)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    child: FutureBuilder<Stream<QuerySnapshot>>(
+                      future: SafeQuery.exchangesStream(enfant['id'], lastOnly: true),
+                      builder: (context, streamSnap) {
+                        if (streamSnap.connectionState == ConnectionState.waiting) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Chargement...",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        if (streamSnap.hasError || !streamSnap.hasData) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -2410,66 +2493,96 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             ),
                           );
                         }
-
-                        final lastMessage = snapshot.data!.docs.first.data()
-                            as Map<String, dynamic>;
-                        final isFile = lastMessage['type'] == 'file';
-                        final timestamp =
-                            lastMessage['timestamp'] as Timestamp?;
-                        final formattedTime = timestamp != null
-                            ? DateFormat('HH:mm').format(timestamp.toDate())
-                            : '';
-
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    isFile
-                                        ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
-                                        : lastMessage['content'] != null
-                                            ? (lastMessage['content']
-                                                        .toString()
-                                                        .length >
-                                                    40
-                                                ? "${lastMessage['content'].toString().substring(0, 40)}..."
-                                                : lastMessage['content']
-                                                    .toString())
-                                            : "",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: lastMessage['nonLu'] == true
-                                          ? Colors.black87
-                                          : Colors.grey.shade600,
-                                      fontWeight: lastMessage['nonLu'] == true
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
+                        return StreamBuilder<QuerySnapshot>(
+                          stream: streamSnap.data!,
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 40,
+                                      color: Colors.grey.shade400,
                                     ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  if (formattedTime.isNotEmpty) ...[
-                                    SizedBox(height: 4),
+                                    SizedBox(height: 8),
                                     Text(
-                                      formattedTime,
+                                      "Aucun message",
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 14,
                                         color: Colors.grey.shade500,
+                                        fontStyle: FontStyle.italic,
                                       ),
                                     ),
                                   ],
-                                ],
-                              ),
-                            ),
-                          ],
+                                ),
+                              );
+                            }
+                            // Pick latest by timestamp
+                            final docs = List<QueryDocumentSnapshot>.from(snapshot.data!.docs);
+                            docs.sort((a, b) {
+                              final aTs = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                              final bTs = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                              final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+                              final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+                              return bMillis.compareTo(aMillis);
+                            });
+                            final lastMessage = docs.first.data() as Map<String, dynamic>;
+                            final isFile = lastMessage['type'] == 'file';
+                            final timestamp = lastMessage['timestamp'] as Timestamp?;
+                            final formattedTime = timestamp != null
+                                ? DateFormat('HH:mm').format(timestamp.toDate())
+                                : '';
+
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        isFile
+                                            ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
+                                            : lastMessage['content'] != null
+                                                ? (lastMessage['content'].toString().length > 40
+                                                    ? "${lastMessage['content'].toString().substring(0, 40)}..."
+                                                    : lastMessage['content'].toString())
+                                                : "",
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: lastMessage['nonLu'] == true
+                                              ? Colors.black87
+                                              : Colors.grey.shade600,
+                                          fontWeight: lastMessage['nonLu'] == true
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      if (formattedTime.isNotEmpty) ...[
+                                        SizedBox(height: 4),
+                                        Text(
+                                          formattedTime,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         );
                       },
                     ),
