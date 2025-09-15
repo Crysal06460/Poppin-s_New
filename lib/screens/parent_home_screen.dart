@@ -13,6 +13,7 @@ import '../utils/message_badge_util.dart';
 import '../utils/actualites_badge_util.dart';
 import '../utils/photos_badge_util.dart';
 import '../utils/session_util.dart';
+import '../services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
@@ -219,6 +220,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   void _showPhotoHistory() {
     // Marquer les photos comme vues et retirer le badge avant d'ouvrir
     PhotosBadgeUtil.markSeen().catchError((e) => print('📸 markSeen error: $e'));
+    // Nettoyer le badge de l'icône (iOS/Android)
+    NotificationService.clearBadge();
     if (mounted && _showPhotosBadge) {
       setState(() => _showPhotosBadge = false);
     }
@@ -799,13 +802,16 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         print("Menu non trouvé");
       }
 
-      // 2. Chargement des événements
+      // 2. Chargement des événements (uniquement à venir)
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day);
       final eventsSnapshot = await _firestore
           .collection('structures')
           .doc(structureId)
           .collection('actualites')
           .doc('events')
           .collection('items')
+          .where('date', isGreaterThanOrEqualTo: startOfToday)
           .orderBy('date')
           .get();
 
@@ -823,13 +829,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }
       print("Événements chargés: ${tempEvents.length}");
 
-      // 3. Chargement des sorties
+      // 3. Chargement des sorties (uniquement à venir)
       final sortiesSnapshot = await _firestore
           .collection('structures')
           .doc(structureId)
           .collection('actualites')
           .doc('sorties')
           .collection('items')
+          .where('date', isGreaterThanOrEqualTo: startOfToday)
           .orderBy('date')
           .get();
 
@@ -1732,6 +1739,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       // Pas bloquant
       print('📰 ❌ Erreur mark seen ($type): $e');
     }
+    // Nettoyer le badge de l'icône quand l'utilisateur ouvre la section
+    NotificationService.clearBadge();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2082,13 +2091,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         "Événements",
                                         Icons.event,
                                         () => _showActualiteDetails("evenement"),
-                                        showBadge: _showActualitesBadge,
+                                        showBadge: _showEventsBadge,
                                       ),
                                       _buildHeaderIcon(
                                         "Sorties",
                                         Icons.directions_bus,
                                         () => _showActualiteDetails("sortie"),
-                                        showBadge: _showActualitesBadge,
+                                        showBadge: _showSortiesBadge,
                                       ),
                                       _buildHeaderIcon(
                                         "Photos",
@@ -2163,7 +2172,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         // Navigation vers les événements
                                         _showActualiteDetails("evenement");
                                       },
-                                      showBadge: _showActualitesBadge,
+                                      showBadge: _showEventsBadge,
                                     ),
                                     SizedBox(width: 12),
                                     _buildActualiteCard(
@@ -2175,7 +2184,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         // Navigation vers les sorties
                                         _showActualiteDetails("sortie");
                                       },
-                                      showBadge: _showActualitesBadge,
+                                      showBadge: _showSortiesBadge,
                                     ),
                                   ],
                                 ),
@@ -2372,12 +2381,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             setState(() {
               _showMessageBadge = false; // Réinitialiser le badge
             });
+            NotificationService.clearBadge();
             context.go('/parent/messages');
           } else if (index == 2) {
             // Vers les stocks
             setState(() {
               _showStockBadge = false; // Réinitialiser le badge
             });
+            NotificationService.clearBadge();
             context.go('/parent/stocks');
           }
         },

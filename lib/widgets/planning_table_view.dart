@@ -31,24 +31,8 @@ class _PlanningTableViewState extends State<PlanningTableView> {
   Membre? _selectedMembre;
   bool _showRecap = true;
 
-  // Liste des heures (horaires fixes pour le planning) - MODIFIÉ ici pour élargir l'amplitude de 6h à 20h
-  final List<String> _heures = [
-    '6h',
-    '7h',
-    '8h',
-    '9h',
-    '10h',
-    '11h',
-    '12h',
-    '13h',
-    '14h',
-    '15h',
-    '16h',
-    '17h',
-    '18h',
-    '19h',
-    '20h'
-  ];
+  // Créneaux de 30 minutes de 06:00 à 20:00
+  late final List<String> _heures = _generateSlots();
 
   @override
   void initState() {
@@ -100,6 +84,19 @@ class _PlanningTableViewState extends State<PlanningTableView> {
           "Garde: ${enfant.prenom} avec ${membre.prenom} de ${garde.heureDebut} à ${garde.heureFin}, jour ${garde.jourSemaine}");
     }
     print("===== FIN DEBUG =====");
+  }
+
+  List<String> _generateSlots() {
+    final List<String> slots = [];
+    DateTime t = DateTime(2000, 1, 1, 6, 0);
+    final DateTime end = DateTime(2000, 1, 1, 20, 0);
+    while (!t.isAfter(end)) {
+      final hh = t.hour.toString().padLeft(2, '0');
+      final mm = t.minute.toString().padLeft(2, '0');
+      slots.add('$hh:$mm');
+      t = t.add(const Duration(minutes: 30));
+    }
+    return slots;
   }
 
 // NOUVELLE MÉTHODE À AJOUTER : Calculer la hauteur du récapitulatif en fonction du nombre de membres
@@ -335,12 +332,12 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                         ..._heures
                             .map((heure) => DataColumn(
                                   label: Container(
-                                    width: 35,
+                                    width: 40,
                                     child: Text(
                                       heure,
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 12),
+                                          fontSize: 10),
                                       textAlign: TextAlign.center,
                                     ),
                                   ),
@@ -375,19 +372,51 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                                   final membreColor =
                                       _getMemberColor(membreIndex);
 
-                                  // MODIFIÉ: Supprimer l'interaction avec GestureDetector
+                                  final delegated = _isDelegatedAt(
+                                      enfant.id, membre.id, heure, gardesFiltrees);
                                   return DataCell(
-                                    Container(
-                                      width: 35,
-                                      height: 35,
-                                      color: membreColor.withOpacity(0.7),
+                                    Stack(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 30,
+                                          decoration: BoxDecoration(
+                                            color: membreColor.withOpacity(0.65),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                        ),
+                                        if (delegated)
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 4, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange,
+                                                borderRadius: BorderRadius.only(
+                                                  bottomLeft: Radius.circular(4),
+                                                  topRight: Radius.circular(4),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'D',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   );
                                 }
                               }
 
                               // Cellule vide si pas présent
-                              return DataCell(Container(width: 35, height: 35));
+                              return DataCell(Container(width: 40, height: 30));
                             }).toList(),
                           ],
                         );
@@ -446,12 +475,12 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                           ..._heures
                               .map((heure) => DataColumn(
                                     label: Container(
-                                      width: 35,
+                                      width: 40,
                                       child: Text(
                                         heure,
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 11),
+                                            fontSize: 10),
                                         textAlign: TextAlign.center,
                                       ),
                                     ),
@@ -486,8 +515,8 @@ class _PlanningTableViewState extends State<PlanningTableView> {
 
                                 return DataCell(
                                   Container(
-                                    width: 35,
-                                    height: 30,
+                                    width: 40,
+                                    height: 24,
                                     color: isTooMany
                                         ? Colors.red.withOpacity(0.2)
                                         : null,
@@ -556,32 +585,33 @@ class _PlanningTableViewState extends State<PlanningTableView> {
     return enfantsParHeure;
   }
 
-  // Vérifier si une heure est dans la plage de la garde
+  // Vérifier si le créneau de 30 min (heure) intersecte la garde
   bool _isHeureInGarde(String heure, Garde garde) {
     try {
-      // Convertir l'heure du format "8h" en heures (8)
-      int heureNum = int.parse(heure.replaceAll('h', ''));
-
-      // Convertir heureDebut et heureFin en heures
-      List<String> debutParts = garde.heureDebut.split(':');
-      List<String> finParts = garde.heureFin.split(':');
-
-      if (debutParts.isEmpty || finParts.isEmpty) return false;
-
-      int debutHeure = int.parse(debutParts[0]);
-      int finHeure = int.parse(finParts[0]);
-
-      // Cas spécial: si heureDebut == heureFin, on considère que c'est pour l'heure exacte
-      if (debutHeure == finHeure) {
-        return heureNum == debutHeure;
-      }
-
-      // Si l'heure est dans la plage
-      return heureNum >= debutHeure && heureNum < finHeure;
+      final slotStart = _parseSlotMinutes(heure);
+      final slotEnd = slotStart + 30; // créneau de 30 minutes
+      final debut = _parseTimeMinutes(garde.heureDebut);
+      final fin = _parseTimeMinutes(garde.heureFin);
+      // intersection stricte: slotStart < fin && slotEnd > debut
+      return slotStart < fin && slotEnd > debut;
     } catch (e) {
       print("Erreur dans _isHeureInGarde: $e");
       return false;
     }
+  }
+
+  int _parseSlotMinutes(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.parse(parts[0]);
+    final m = int.parse(parts[1]);
+    return h * 60 + m;
+  }
+
+  int _parseTimeMinutes(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.parse(parts[0]);
+    final m = int.parse(parts[1]);
+    return h * 60 + m;
   }
 
   // Déterminer si un enfant est présent à une heure donnée, et retourne l'ID du membre responsable
@@ -600,6 +630,17 @@ class _PlanningTableViewState extends State<PlanningTableView> {
 
     // Si aucune garde n'est trouvée pour cette heure, retourner null
     return null;
+  }
+
+  bool _isDelegatedAt(String enfantId, String membreId, String heure,
+      List<Garde> gardesDuJour) {
+    for (var g in gardesDuJour) {
+      if (g.enfantId == enfantId && g.membreId == membreId &&
+          _isHeureInGarde(heure, g)) {
+        return g.isDelegated;
+      }
+    }
+    return false;
   }
 
   // Obtenir une couleur pour un membre en fonction de son index

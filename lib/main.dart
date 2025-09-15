@@ -64,6 +64,14 @@ void main() async {
       },
     );
     print('✅ Notifications initialisées');
+
+    // 🔔 Important iOS/Android: remettre le badge à 0 au démarrage
+    // Évite le "1" persistant sur l'icône après lecture des messages
+    try {
+      await NotificationService.clearBadge();
+    } catch (e) {
+      print('⚠️ Impossible de réinitialiser le badge au démarrage: $e');
+    }
   } catch (e) {
     print('⚠️ Erreur notifications: $e - continuer sans');
   }
@@ -140,6 +148,12 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     // Remettre en portrait si nécessaire
     if (state == AppLifecycleState.resumed) {
       _setPortraitOrientation();
+      // 🔔 Remettre le badge de l'icône à 0 quand l'app revient au premier plan
+      try {
+        NotificationService.clearBadge();
+      } catch (e) {
+        print('⚠️ Impossible de clear le badge en reprise: $e');
+      }
     }
 
     // 🔒 GESTION DU CYCLE DE VIE POUR LA SÉCURITÉ

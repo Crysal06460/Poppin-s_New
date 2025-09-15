@@ -388,7 +388,7 @@ class PlanningDailyView extends StatelessWidget {
       child: Container(
         margin: EdgeInsets.fromLTRB(40, 2, 10, 2),
         decoration: BoxDecoration(
-          color: Colors.red, // Rouge vif pour test de visibilité
+          color: couleur.withOpacity(0.9),
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
@@ -398,35 +398,63 @@ class PlanningDailyView extends StatelessWidget {
             ),
           ],
         ),
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.child_care, color: Colors.white, size: 16),
-                  SizedBox(width: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.child_care, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          enfant.prenom,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
                   Text(
-                    enfant.prenom,
+                    "${garde.heureDebut} - ${garde.heureFin}",
                     style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 4),
-              Text(
-                "${garde.heureDebut} - ${garde.heureFin}",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
+            ),
+            if (garde.isDelegated)
+              Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade600,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Dél.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );

@@ -48,12 +48,12 @@ class SubscriptionService {
         'mam_4_members': '$_bundleId.subscription.mam_4_members',
       };
     } else {
-      // 🔧 IDs Android corrigés selon Google Play Console
+      // 🔧 IDs Android (alignés avec Google Play + services Android)
       return {
-        'assistante_maternelle': 'abonement_assmat',
-        'mam_2_members': 'abonement_mam2',
-        'mam_3_members': 'abonement_mam3',
-        'mam_4_members': 'abonement_mam4',
+        'assistante_maternelle': 'abonnement_assmat',
+        'mam_2_members': 'abonnement_mam2',
+        'mam_3_members': 'abonnement_mam3',
+        'mam_4_members': 'abonnement_mam4',
       };
     }
   }
@@ -74,10 +74,14 @@ class SubscriptionService {
 
       print('🔍 Vérification abonnement pour: ${user.uid}');
 
+      // Résoudre le bon structureId (MAM vs utilisateur solo)
+      final String structureId = await _getCurrentStructureId(user);
+      print('🔎 structureId résolu: $structureId');
+
       // 1. PRIORITÉ 1 : Vérifier dans Firestore (fiable et rapide)
       final subscriptionQuery = await FirebaseFirestore.instance
           .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
+          .where('structureId', isEqualTo: structureId)
           .where('status', isEqualTo: 'active')
           .limit(1)
           .get();
@@ -175,7 +179,13 @@ class SubscriptionService {
       bool hasActiveSubscription = false;
 
       for (PurchaseDetails purchase in purchaseDetailsList) {
-        if (productIds.values.contains(purchase.productID) &&
+        // Accepter les nouveaux et anciens IDs Android
+        final Set<String> acceptedProductIds = {
+          ...productIds.values,
+          'abonnement_assmat', 'abonnement_mam2', 'abonnement_mam3', 'abonnement_mam4',
+          'abonement_assmat', 'abonement_mam2', 'abonement_mam3', 'abonement_mam4',
+        };
+        if (acceptedProductIds.contains(purchase.productID) &&
             (purchase.status == PurchaseStatus.purchased ||
                 purchase.status == PurchaseStatus.restored)) {
           hasActiveSubscription = true;
@@ -247,16 +257,19 @@ class SubscriptionService {
           else if (productId.contains('4_members')) memberCount = 4;
         }
       } else {
-        // 🔧 FIX ANDROID : Format Android corrigé : abonement_mam2, abonement_mam3, abonement_mam4, abonement_assmat
-        if (productId.startsWith('abonement_mam')) {
+        // 🔧 FIX ANDROID : Gérer les deux formats (abonnement_* et abonement_*)
+        if (productId.startsWith('abonnement_mam') ||
+            productId.startsWith('abonement_mam')) {
           structureType = 'MAM';
-          if (productId == 'abonement_mam2')
+          if (productId.endsWith('mam2')) {
             memberCount = 2;
-          else if (productId == 'abonement_mam3')
+          } else if (productId.endsWith('mam3')) {
             memberCount = 3;
-          else if (productId == 'abonement_mam4') memberCount = 4;
+          } else if (productId.endsWith('mam4')) {
+            memberCount = 4;
+          }
         }
-        // Si c'est 'abonement_assmat', les valeurs par défaut sont déjà correctes
+        // assistante_maternelle: valeurs par défaut déjà correctes
       }
 
       print(
@@ -272,9 +285,12 @@ class SubscriptionService {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      // Résoudre structureId correct pour la sauvegarde
+      final String structureId = await _getCurrentStructureId(user);
+
       // Mettre à jour ou créer l'abonnement
       await FirebaseFirestore.instance.collection('subscriptions').add({
-        'structureId': user.uid,
+        'structureId': structureId,
         'structureType': structureType,
         'memberCount': memberCount,
         'status': 'active',
@@ -289,7 +305,7 @@ class SubscriptionService {
       // Mettre à jour la structure
       await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(structureId)
           .update({
         'maxMemberCount': memberCount,
         'subscriptionActive': true,
@@ -301,6 +317,23 @@ class SubscriptionService {
     } catch (e) {
       print('❌ Erreur mise à jour Firestore: $e');
     }
+  }
+
+  // Helper: récupérer le structureId courant depuis le profil
+  static Future<String> _getCurrentStructureId(User user) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? user.uid)
+          .get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>?
+            ?? <String, dynamic>{};
+        final String? sid = data['structureId'] as String?;
+        if (sid != null && sid.isNotEmpty) return sid;
+      }
+    } catch (_) {}
+    return user.uid;
   }
 
   // ✅ MÉTHODE CORRIGÉE : Simulation fiable en mode dev
