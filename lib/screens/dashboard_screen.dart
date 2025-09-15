@@ -55,6 +55,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool needAssmatFridgeTemperatureCheck = false;
   bool needAssmatFreezerTemperatureCheck = false;
 
+  // Couleurs dédiées aux tuiles de la grille (style 2025)
+  final Color _tileBlue = const Color(0xFF3D9DF2);
+  final Color _tileRed = const Color(0xFFD94350);
+  final Color _tileYellow = const Color(0xFFF2B705);
+  final Color _tileCyan = const Color(0xFF05C7F2);
+
   // Définition des couleurs de la palette
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -172,7 +178,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Text(
             count.toString(),
-            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         );
       },
@@ -785,8 +792,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => _launchURL(
-                  'https://www.poppin-s.fr/condition-dutilisation/'),
+              onTap: () =>
+                  _launchURL('https://www.poppin-s.fr/condition-dutilisation/'),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 decoration: BoxDecoration(
@@ -1333,6 +1340,350 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ====== Quick actions (Grille + feuilles) ======
+  Widget _sheetAction({
+    required String label,
+    required VoidCallback onTap,
+    Color? bulletColor,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      horizontalTitleGap: 8,
+      minLeadingWidth: 0,
+      leading: Container(
+        width: 14,
+        height: 14,
+        decoration: BoxDecoration(
+          color: (bulletColor ?? primaryColor).withOpacity(0.85),
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 16, color: Colors.black87),
+      ),
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
+    );
+  }
+
+  void _showCategorySheet({
+    required String title,
+    required Color color,
+    required List<Widget> children,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.65,
+          minChildSize: 0.45,
+          maxChildSize: 0.9,
+          builder: (context, controller) {
+            return SingleChildScrollView(
+              controller: controller,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...children,
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openMamAdministration() {
+    _showCategorySheet(
+      title: 'Administration',
+      color: _tileBlue,
+      children: [
+        _sheetAction(
+          label: 'Modifier coordonnées de la MAM',
+          onTap: () => context.go('/structure-management'),
+          bulletColor: _tileBlue,
+        ),
+        if (isMAMStructure)
+          _sheetAction(
+            label: 'Gérer membres (Ajouter / Retirer)',
+            onTap: _showMemberManagement,
+            bulletColor: _tileBlue,
+          ),
+        _sheetAction(
+          label: 'Gestion équipements / matériel',
+          onTap: _showEquipmentManagement,
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Messagerie interne MAM (groupe)',
+          onTap: () => context.go('/parent/messages'),
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Politique de confidentialité',
+          onTap: () => _launchURL(
+              'https://www.poppin-s.fr/politique-de-confidentialite/'),
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: "Conditions d'utilisation",
+          onTap: () =>
+              _launchURL('https://www.poppin-s.fr/condition-dutilisation/'),
+          bulletColor: _tileBlue,
+        ),
+      ],
+    );
+  }
+
+  void _openDailyOps() {
+    if (isMAMStructure) {
+      _showCategorySheet(
+        title: 'Fonctionnement quotidien',
+        color: _tileRed,
+        children: [
+          _sheetAction(
+            label: 'Planning entretien (qui fait quoi)',
+            onTap: () => context.go('/cleaning-schedule'),
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
+            label: 'Planning enfants / horaires',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PlanningScreen()),
+            ),
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
+            label: 'Délégations / Remplacement',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (c) => const DelegationsScreen()),
+            ),
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
+            label: 'Température frigo / congélateur + alertes',
+            onTap: _showMAMFunctioning,
+            bulletColor: _tileRed,
+          ),
+        ],
+      );
+    } else {
+      _showCategorySheet(
+        title: 'Fonctionnement quotidien',
+        color: _tileRed,
+        children: [
+          _sheetAction(
+            label: 'Planning enfants / horaires',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PlanningScreen()),
+            ),
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
+            label: 'Température frigo / congélateur + alertes',
+            onTap: _showAssmatDailyFunctioning,
+            bulletColor: _tileRed,
+          ),
+        ],
+      );
+    }
+  }
+
+  void _openChildrenParents() {
+    _showCategorySheet(
+      title: 'Enfants et Parents',
+      color: _tileCyan,
+      children: [
+        _sheetAction(
+          label: 'Profils enfants complets (santé, besoins, alimentation…)',
+          onTap: _showChildProfilesSelection,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Modifier horaires enfants',
+          onTap: _showScheduleModification,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Coordonnées des parents',
+          onTap: _showParentCoordonneeSelection,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Modifier photo profil enfant',
+          onTap: _showPhotoManagement,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Retirer un enfant',
+          onTap: _showChildRemoval,
+          bulletColor: _tileCyan,
+        ),
+      ],
+    );
+  }
+
+  void _openReportsHistory() {
+    _showCategorySheet(
+      title: 'Mémo et Historique',
+      color: _tileYellow,
+      children: [
+        _sheetAction(
+          label: 'Mémo mensuel',
+          onTap: () => context.go('/monthly-report-selection'),
+          bulletColor: _tileYellow,
+        ),
+        _sheetAction(
+          label: 'Historique complet (présences, repas, sieste…)',
+          onTap: _showHistorySelection,
+          bulletColor: _tileYellow,
+        ),
+      ],
+    );
+  }
+
+  Widget _quickTile({
+    required List<String> lines,
+    required Color color,
+    required VoidCallback onTap,
+    required double size,
+  }) {
+    final List<Widget> titleLines = List<Widget>.generate(
+      lines.length,
+      (i) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Text(
+          lines[i],
+          textAlign: TextAlign.center,
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            height: 1.12,
+            letterSpacing: 0.0,
+          ),
+        ),
+      ),
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: SizedBox(
+            height: size,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: titleLines,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double tileWidth = (constraints.maxWidth - 14) / 2; // 2 colonnes, 14 d'écart
+        final double tileSize = tileWidth; // carrés
+        return GridView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            childAspectRatio: 1,
+          ),
+          children: [
+            _quickTile(
+              lines: ['Administration'],
+              color: _tileBlue,
+              onTap: _openMamAdministration,
+              size: tileSize,
+            ),
+            _quickTile(
+              lines: ['Fonctionnement', 'quotidien'],
+              color: _tileRed,
+              onTap: _openDailyOps,
+              size: tileSize,
+            ),
+            _quickTile(
+              lines: ['Enfants', '& parents'],
+              color: _tileCyan,
+              onTap: _openChildrenParents,
+              size: tileSize,
+            ),
+            _quickTile(
+              lines: ['Mémo', '& Historique'],
+              color: _tileYellow,
+              onTap: _openReportsHistory,
+              size: tileSize,
             ),
           ],
         );
@@ -3199,289 +3550,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildPhoneContent() {
     return SingleChildScrollView(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Section Gestion de la Structure
-            Container(
-              margin: EdgeInsets.only(bottom: 16),
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, 3),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _abacusClickCount++;
-                            print(
-                                "🧮 Image structure cliquée: $_abacusClickCount fois");
-                            if (_abacusClickCount >= 5) {
-                              _abacusClickCount = 0;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text("Accès administrateur déverrouillé"),
-                                  duration: Duration(seconds: 1),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => AdminScreen()),
-                              );
-                            }
-                          });
-                        },
-                        child: Image.asset(
-                          'assets/images/Icone_Structure.png',
-                          width: 60,
-                          height: 60,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.business,
-                            color: primaryColor,
-                            size: 60,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          isMAMStructure
-                              ? "Gestion de la MAM"
-                              : "Gestion administrative",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-
-                  // Modifier les coordonnées - TOUJOURS disponible
-                  _buildActionItem(
-                    icon: Icons.edit_note,
-                    title: "Modifier les coordonnées",
-                    onTap: () => context.go('/structure-management'),
-                  ),
-
-                  // Sections spécifiques selon le type de structure
-                  if (isMAMStructure) ...[
-                    // ✅ POUR MAM : Membres + Fonctionnement + Équipements
-                    _buildActionItem(
-                      icon: Icons.people,
-                      title: "Modifier les membres",
-                      onTap: _showMemberManagement,
-                    ),
-
-                    _buildActionItem(
-                      icon: Icons.settings,
-                      title: "Fonctionnement de la MAM",
-                      onTap: _showMAMFunctioning,
-                      badge: (needFridgeTemperatureCheck ||
-                              (needFreezerTemperatureCheck &&
-                                  hasFreezer == true))
-                          ? Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                ((needFridgeTemperatureCheck ? 1 : 0) +
-                                        (needFreezerTemperatureCheck &&
-                                                hasFreezer == true
-                                            ? 1
-                                            : 0))
-                                    .toString(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-
-                    // ✅ NOUVEAU : Gestion équipements pour MAM aussi
-                    _buildActionItem(
-                      icon: Icons.kitchen,
-                      title: "Gestion des équipements",
-                      onTap: _showEquipmentManagement,
-                    ),
-                  ] else ...[
-                    // ✅ POUR ASSISTANTE MATERNELLE : Fonctionnement + Équipements
-                    _buildActionItem(
-                      icon: Icons.settings,
-                      title: "Fonctionnement quotidien",
-                      onTap: _showAssmatDailyFunctioning,
-                      badge: ((needAssmatFridgeTemperatureCheck &&
-                                  hasAssmatFridge == true) ||
-                              (needAssmatFreezerTemperatureCheck &&
-                                  hasAssmatFreezer == true))
-                          ? Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                ((needAssmatFridgeTemperatureCheck &&
-                                                hasAssmatFridge == true
-                                            ? 1
-                                            : 0) +
-                                        (needAssmatFreezerTemperatureCheck &&
-                                                hasAssmatFreezer == true
-                                            ? 1
-                                            : 0))
-                                    .toString(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-
-                    // ✅ MAINTENU : Gestion équipements pour Assistante Maternelle
-                    _buildActionItem(
-                      icon: Icons.kitchen,
-                      title: "Gestion des équipements",
-                      onTap: _showEquipmentManagement,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Section Gestion des Enfants
-            Container(
-              margin: EdgeInsets.only(bottom: 16),
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, 3),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _abacusClickCount++;
-                            print(
-                                "🧮 Image enfant cliquée: $_abacusClickCount fois");
-                            if (_abacusClickCount >= 5) {
-                              _abacusClickCount = 0;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text("Accès administrateur déverrouillé"),
-                                  duration: Duration(seconds: 1),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => AdminScreen()),
-                              );
-                            }
-                          });
-                        },
-                        child: Image.asset(
-                          'assets/images/Icone_Enfant_Present.png',
-                          width: 60,
-                          height: 60,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.child_care,
-                            color: primaryColor,
-                            size: 60,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          "Gestion des enfants",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  _buildActionItem(
-                    icon: Icons.access_time,
-                    title: "Modifier les horaires",
-                    onTap: _showScheduleModification,
-                  ),
-                  _buildActionItem(
-                    icon: Icons.contact_page,
-                    title: "Coordonnées des parents",
-                    onTap: _showParentCoordonneeSelection,
-                  ),
-                  _buildActionItem(
-                    icon: Icons.photo_library,
-                    title: "Gestion des photos",
-                    onTap: _showPhotoManagement,
-                  ),
-                  _buildActionItem(
-                    icon: Icons.edit_note,
-                    title: "Modifier les profils complets",
-                    onTap: _showChildProfilesSelection,
-                  ),
-                  _buildActionItem(
-                    icon: Icons.person_remove,
-                    title: "Retirer un enfant",
-                    onTap: _showChildRemoval,
-                  ),
-                  if (kDebugMode)
-                    _buildActionItem(
-                      icon: Icons.admin_panel_settings,
-                      title: "🔧 Administration des photos (DEBUG)",
-                      onTap: _showPhotoAdministration,
-                    ),
-                ],
-              ),
-            ),
-
-            // Section Rapports - Affichée conditionnellement
-            if (showMonthlyTableReports)
+            // Espace pour décoller la grille du header
+            const SizedBox(height: 24),
+            // Grille d'accès rapide (nouvelle UI inspirée des maquettes)
+            _buildQuickGrid(),
+            const SizedBox(height: 16),
+            // Masqué: anciennes sections détaillées (remplacées par la grille)
+            if (false) // garde-fou pour ne rien afficher
+              ...[
+              // Section Gestion de la Structure
               Container(
                 margin: EdgeInsets.only(bottom: 16),
                 padding: EdgeInsets.all(16),
@@ -3501,20 +3582,218 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Row(
                       children: [
-                        Image.asset(
-                          'assets/images/Icone_Recaptitulatif.png',
-                          width: 60,
-                          height: 60,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.assessment,
-                            color: primaryColor,
-                            size: 60,
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _abacusClickCount++;
+                              print(
+                                  "🧮 Image structure cliquée: $_abacusClickCount fois");
+                              if (_abacusClickCount >= 5) {
+                                _abacusClickCount = 0;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        "Accès administrateur déverrouillé"),
+                                    duration: Duration(seconds: 1),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => AdminScreen()),
+                                );
+                              }
+                            });
+                          },
+                          child: Image.asset(
+                            'assets/images/Icone_Structure.png',
+                            width: 60,
+                            height: 60,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.business,
+                              color: primaryColor,
+                              size: 60,
+                            ),
                           ),
                         ),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            "Mémo mensuel",
+                            isMAMStructure
+                                ? "Gestion de la MAM"
+                                : "Gestion administrative",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+
+                    // Modifier les coordonnées - TOUJOURS disponible
+                    _buildActionItem(
+                      icon: Icons.edit_note,
+                      title: "Modifier les coordonnées",
+                      onTap: () => context.go('/structure-management'),
+                    ),
+
+                    // Sections spécifiques selon le type de structure
+                    if (isMAMStructure) ...[
+                      // ✅ POUR MAM : Membres + Fonctionnement + Équipements
+                      _buildActionItem(
+                        icon: Icons.people,
+                        title: "Modifier les membres",
+                        onTap: _showMemberManagement,
+                      ),
+
+                      _buildActionItem(
+                        icon: Icons.settings,
+                        title: "Fonctionnement de la MAM",
+                        onTap: _showMAMFunctioning,
+                        badge: (needFridgeTemperatureCheck ||
+                                (needFreezerTemperatureCheck &&
+                                    hasFreezer == true))
+                            ? Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  ((needFridgeTemperatureCheck ? 1 : 0) +
+                                          (needFreezerTemperatureCheck &&
+                                                  hasFreezer == true
+                                              ? 1
+                                              : 0))
+                                      .toString(),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+
+                      // ✅ NOUVEAU : Gestion équipements pour MAM aussi
+                      _buildActionItem(
+                        icon: Icons.kitchen,
+                        title: "Gestion des équipements",
+                        onTap: _showEquipmentManagement,
+                      ),
+                    ] else ...[
+                      // ✅ POUR ASSISTANTE MATERNELLE : Fonctionnement + Équipements
+                      _buildActionItem(
+                        icon: Icons.settings,
+                        title: "Fonctionnement quotidien",
+                        onTap: _showAssmatDailyFunctioning,
+                        badge: ((needAssmatFridgeTemperatureCheck &&
+                                    hasAssmatFridge == true) ||
+                                (needAssmatFreezerTemperatureCheck &&
+                                    hasAssmatFreezer == true))
+                            ? Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  ((needAssmatFridgeTemperatureCheck &&
+                                                  hasAssmatFridge == true
+                                              ? 1
+                                              : 0) +
+                                          (needAssmatFreezerTemperatureCheck &&
+                                                  hasAssmatFreezer == true
+                                              ? 1
+                                              : 0))
+                                      .toString(),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+
+                      // ✅ MAINTENU : Gestion équipements pour Assistante Maternelle
+                      _buildActionItem(
+                        icon: Icons.kitchen,
+                        title: "Gestion des équipements",
+                        onTap: _showEquipmentManagement,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Section Gestion des Enfants
+              Container(
+                margin: EdgeInsets.only(bottom: 16),
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _abacusClickCount++;
+                              print(
+                                  "🧮 Image enfant cliquée: $_abacusClickCount fois");
+                              if (_abacusClickCount >= 5) {
+                                _abacusClickCount = 0;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        "Accès administrateur déverrouillé"),
+                                    duration: Duration(seconds: 1),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => AdminScreen()),
+                                );
+                              }
+                            });
+                          },
+                          child: Image.asset(
+                            'assets/images/Icone_Enfant_Present.png',
+                            width: 60,
+                            height: 60,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.child_care,
+                              color: primaryColor,
+                              size: 60,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            "Gestion des enfants",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -3526,15 +3805,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     SizedBox(height: 16),
                     _buildActionItem(
-                      icon: Icons.calendar_month,
-                      title: "Mémo mensuel",
-                      onTap: () => context.go('/monthly-report-selection'),
+                      icon: Icons.access_time,
+                      title: "Modifier les horaires",
+                      onTap: _showScheduleModification,
                     ),
+                    _buildActionItem(
+                      icon: Icons.contact_page,
+                      title: "Coordonnées des parents",
+                      onTap: _showParentCoordonneeSelection,
+                    ),
+                    _buildActionItem(
+                      icon: Icons.photo_library,
+                      title: "Gestion des photos",
+                      onTap: _showPhotoManagement,
+                    ),
+                    _buildActionItem(
+                      icon: Icons.edit_note,
+                      title: "Modifier les profils complets",
+                      onTap: _showChildProfilesSelection,
+                    ),
+                    _buildActionItem(
+                      icon: Icons.person_remove,
+                      title: "Retirer un enfant",
+                      onTap: _showChildRemoval,
+                    ),
+                    if (kDebugMode)
+                      _buildActionItem(
+                        icon: Icons.admin_panel_settings,
+                        title: "🔧 Administration des photos (DEBUG)",
+                        onTap: _showPhotoAdministration,
+                      ),
                   ],
                 ),
               ),
 
-            // Section Historique
+              // Section Rapports - Affichée conditionnellement
+              if (showMonthlyTableReports)
+                Container(
+                  margin: EdgeInsets.only(bottom: 16),
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        offset: const Offset(0, 3),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/Icone_Recaptitulatif.png',
+                            width: 60,
+                            height: 60,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.assessment,
+                              color: primaryColor,
+                              size: 60,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Mémo mensuel",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      _buildActionItem(
+                        icon: Icons.calendar_month,
+                        title: "Mémo mensuel",
+                        onTap: () => context.go('/monthly-report-selection'),
+                      ),
+                    ],
+                  ),
+                ),
+
+              /*// Section Historique
             Container(
               margin: EdgeInsets.only(bottom: 16),
               padding: EdgeInsets.all(16),
@@ -3585,10 +3944,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-            ),
+            ),*/
+            ],
 
-            // 🆕 SECTION LÉGALE - PHONE
-            Container(
+            // Section légale déplacée dans la tuile Administration
+            /*Container(
               margin: EdgeInsets.only(bottom: 24),
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -3646,10 +4006,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildLegalButtons(isTablet: false),
                 ],
               ),
-            ),
+            ),*/
           ],
         ),
       ),
+    );
+  }
+
+  // Version centrée verticalement de la grille pour mobile
+  Widget _buildPhoneContentCentered() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gridOuterWidth = constraints.maxWidth - 32; // padding latéral 16
+        final tileWidth = (gridOuterWidth - 14) / 2; // 2 colonnes, écart 14
+        final tileSize = tileWidth;
+        final gridHeight = 12 + tileSize + 14 + tileSize + 8; // padding + espaces
+        final available = constraints.maxHeight;
+        final topGap = (available > gridHeight)
+            ? ((available - gridHeight) / 2).clamp(16.0, 160.0)
+            : 16.0;
+
+        return SingleChildScrollView(
+          physics: available > gridHeight
+              ? const NeverScrollableScrollPhysics()
+              : const BouncingScrollPhysics(),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, topGap, 16, 16),
+            child: _buildQuickGrid(),
+          ),
+        );
+      },
     );
   }
 
@@ -3851,55 +4237,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Titre et date (responsive, pas d'overflow)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "Tableau de bord",
-                                style: TextStyle(
-                                  fontSize: screenSize.width *
-                                      (isTablet ? 0.032 : 0.06),
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        // Date du jour (sans le titre 'Tableau de bord')
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal:
+                                  screenSize.width * (isTablet ? 0.018 : 0.03),
+                              vertical:
+                                  screenSize.height * (isTablet ? 0.01 : 0.006),
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(
+                                screenSize.width * (isTablet ? 0.025 : 0.05),
                               ),
                             ),
-                            SizedBox(width: screenSize.width * 0.02),
-                            Flexible(
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: screenSize.width *
-                                      (isTablet ? 0.018 : 0.03),
-                                  vertical: screenSize.height *
-                                      (isTablet ? 0.01 : 0.006),
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(
-                                    screenSize.width *
-                                        (isTablet ? 0.025 : 0.05),
-                                  ),
-                                ),
-                                child: Text(
-                                  DateFormat('EEEE d MMMM', 'fr_FR')
-                                      .format(DateTime.now()),
-                                  style: TextStyle(
-                                    fontSize: screenSize.width *
-                                        (isTablet ? 0.018 : 0.035),
-                                    color: Colors.white.withOpacity(0.95),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                            child: Text(
+                              DateFormat('EEEE d MMMM', 'fr_FR')
+                                  .format(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: screenSize.width *
+                                    (isTablet ? 0.018 : 0.035),
+                                color: Colors.white.withOpacity(0.95),
+                                fontWeight: FontWeight.w500,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
+                          ),
                         ),
                         SizedBox(height: 8),
                         // Nom de la structure
@@ -3957,7 +4323,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               // Contenu principal avec adaptation pour iPad
               Expanded(
-                child: isTablet ? _buildTabletContent() : _buildPhoneContent(),
+                child: isTablet
+                    ? _buildTabletContent()
+                    : _buildPhoneContentCentered(),
               ),
             ],
           ),
