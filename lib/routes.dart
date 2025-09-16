@@ -68,6 +68,7 @@ import 'package:poppins_app/screens/parent_second_address_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import 'package:poppins_app/screens/splash_screen.dart';
 import 'package:poppins_app/screens/account_deletion_screen.dart';
+import 'package:poppins_app/screens/mam_group_chat_screen.dart';
 
 // 🔒 NOUVEAUX IMPORTS POUR LE SYSTÈME DE SÉCURITÉ
 import 'package:poppins_app/screens/auth_check_screen.dart';
@@ -812,3 +813,5 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
   print("✅ Utilisateur connecté ou route autorisée: $path");
   return null;
 }
+    // Messagerie interne MAM
+    
