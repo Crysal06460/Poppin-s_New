@@ -68,6 +68,7 @@ import 'package:poppins_app/screens/parent_second_address_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import 'package:poppins_app/screens/splash_screen.dart';
 import 'package:poppins_app/screens/account_deletion_screen.dart';
+import 'package:poppins_app/screens/mam_group_chat_screen.dart';
 
 // 🔒 NOUVEAUX IMPORTS POUR LE SYSTÈME DE SÉCURITÉ
 import 'package:poppins_app/screens/auth_check_screen.dart';
@@ -812,3 +813,28 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
   print("✅ Utilisateur connecté ou route autorisée: $path");
   return null;
 }
+    // Messagerie interne MAM
+    GoRoute(
+      path: '/mam/chat',
+      builder: (context, state) {
+        return FutureBuilder<String>(
+          future: _getStructureId(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final structureId = snapshot.data ?? '';
+            if (structureId.isEmpty) {
+              return const Scaffold(
+                body: Center(
+                  child: Text('Aucune structure MAM trouvée pour cet utilisateur'),
+                ),
+              );
+            }
+            return MamGroupChatScreen(structureId: structureId);
+          },
+        );
+      },
+    ),
