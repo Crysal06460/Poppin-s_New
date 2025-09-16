@@ -658,6 +658,44 @@ final GoRouter router = GoRouter(
       builder: (context, state) => const CleaningScheduleScreen(),
     ),
     GoRoute(
+      path: '/mam/messages',
+      builder: (context, state) {
+        return FutureBuilder<String>(
+          future: _getStructureId(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Text(
+                    "Erreur lors du chargement de la structure: ${snapshot.error}",
+                  ),
+                ),
+              );
+            }
+
+            final mamId = snapshot.data ?? '';
+            if (mamId.isEmpty) {
+              return const Scaffold(
+                body: Center(
+                  child: Text(
+                    "Aucune structure MAM trouvée pour cet utilisateur",
+                  ),
+                ),
+              );
+            }
+
+            return MamGroupChatScreen(mamId: mamId);
+          },
+        );
+      },
+    ),
+    GoRoute(
       path: '/parent/messages',
       builder: (context, state) => const ParentMessagesScreen(),
     ),
@@ -813,28 +851,3 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
   print("✅ Utilisateur connecté ou route autorisée: $path");
   return null;
 }
-    // Messagerie interne MAM
-    GoRoute(
-      path: '/mam/chat',
-      builder: (context, state) {
-        return FutureBuilder<String>(
-          future: _getStructureId(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final structureId = snapshot.data ?? '';
-            if (structureId.isEmpty) {
-              return const Scaffold(
-                body: Center(
-                  child: Text('Aucune structure MAM trouvée pour cet utilisateur'),
-                ),
-              );
-            }
-            return MamGroupChatScreen(structureId: structureId);
-          },
-        );
-      },
-    ),

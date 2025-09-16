@@ -1501,6 +1501,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bulletColor: _tileRed,
           ),
           _sheetAction(
+            label: 'Messagerie interne MAM (groupe)',
+            onTap: () => context.go('/mam/messages'),
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
             label: 'Température frigo / congélateur + alertes',
             onTap: _showMAMFunctioning,
             bulletColor: _tileRed,
