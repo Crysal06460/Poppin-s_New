@@ -1722,7 +1722,7 @@ SPEC CHECKSUMS:
   FirebaseMessagingInterop: 63e504b147a7206cfe64cbe2f40c2ddd009945bd
   FirebaseSharedSwift: e17c654ef1f1a616b0b33054e663ad1035c8fd40
   FirebaseStorage: e83d1b9c8a5318d46ccfb2955f0d98095e0bf598
-  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_local_notifications: 4cde75091f6327eb8517fa068a0a5950212d2086
   flutter_pdfview: 2e4d13ffb774858562ffbdfdb61b40744b191adc
   gal: 6a522c75909f1244732d4596d11d6a2f86ff37a5
@@ -1751,6 +1751,6 @@ SPEC CHECKSUMS:
   video_player_avfoundation: 7c6c11d8470e1675df7397027218274b6d2360b3
   video_thumbnail: c4e2a3c539e247d4de13cd545344fd2d26ffafd1
 
-PODFILE CHECKSUM: f7be65b521adb48e32613ae7993f5f7c822654df
+PODFILE CHECKSUM: 2a72d7432f0567da6d4912a45d0e275aeafc136e
 
 COCOAPODS: 1.16.2
