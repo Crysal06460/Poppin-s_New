@@ -814,27 +814,4 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
   return null;
 }
     // Messagerie interne MAM
-    GoRoute(
-      path: '/mam/chat',
-      builder: (context, state) {
-        return FutureBuilder<String>(
-          future: _getStructureId(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final structureId = snapshot.data ?? '';
-            if (structureId.isEmpty) {
-              return const Scaffold(
-                body: Center(
-                  child: Text('Aucune structure MAM trouvée pour cet utilisateur'),
-                ),
-              );
-            }
-            return MamGroupChatScreen(structureId: structureId);
-          },
-        );
-      },
-    ),
+    
