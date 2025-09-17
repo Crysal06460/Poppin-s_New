@@ -172,7 +172,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (structureDoc.data() != null) {
         final data = structureDoc.data() as Map<String, dynamic>;
         if (data.containsKey('structureType')) {
-          fetchedStructureType = data['structureType'];
+          fetchedStructureType =
+              (data['structureType'] ?? fetchedStructureType).toString();
         } else {
           // Ajouter le champ s'il n'existe pas
           await FirebaseFirestore.instance
@@ -181,6 +182,9 @@ class _HomeScreenState extends State<HomeScreen> {
               .update({'structureType': fetchedStructureType});
         }
       }
+
+      fetchedStructureType = fetchedStructureType.trim().toLowerCase();
+      final bool isMamStructure = fetchedStructureType == 'mam';
 
       // Récupérer les enfants de la structure
       QuerySnapshot childrenSnapshot = await FirebaseFirestore.instance
@@ -199,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
-      if (fetchedStructureType == "MAM") {
+      if (isMamStructure) {
         // Tous les membres ne voient que leurs enfants assignés
         filteredChildren = allChildren.where((child) {
           // Vérifier si l'enfant est assigné à ce membre
@@ -267,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Remplacer les logs de diagnostic pour ne plus mentionner le fondateur
-      if (fetchedStructureType == "MAM") {
+      if (isMamStructure) {
         print(
             "🔍 DIAGNOSTIC - Type de structure: MAM, Utilisateur: $currentUserEmail");
         print(
@@ -322,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bool shouldShowPopup = false;
       String popupType = "";
 
-      if (fetchedStructureType == "MAM") {
+      if (isMamStructure) {
         // Pour les MAM: vérifier d'abord s'il y a assez de membres
         final membersSnapshot = await FirebaseFirestore.instance
             .collection('structures')
