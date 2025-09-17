@@ -64,6 +64,12 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                         ? DateFormat('dd/MM HH:mm').format(ts.toDate())
                         : '';
                     final type = (data['type'] ?? 'text').toString();
+                    final senderName =
+                        (data['senderName'] ?? '').toString().trim();
+                    final senderEmail =
+                        (data['senderEmail'] ?? '').toString().trim();
+                    final senderLabel =
+                        senderName.isNotEmpty ? senderName : senderEmail;
 
                     return Align(
                       alignment:
@@ -84,8 +90,7 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                           children: [
                             if (!isMe)
                               Text(
-                                (data['senderName'] ?? data['senderEmail'] ?? '')
-                                    .toString(),
+                                senderLabel,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600, fontSize: 12),
                               ),
@@ -167,6 +172,50 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
     );
   }
 
+  Future<String> _resolveSenderName(User user) async {
+    final email = (user.email ?? '').toLowerCase().trim();
+
+    String _formatName(Map<String, dynamic>? data) {
+      if (data == null) return '';
+      final firstName = (data['firstName'] ?? '').toString().trim();
+      final lastName = (data['lastName'] ?? '').toString().trim();
+      return [firstName, lastName]
+          .where((part) => part.isNotEmpty)
+          .join(' ')
+          .trim();
+    }
+
+    try {
+      if (email.isNotEmpty) {
+        final userDoc =
+            await _firestore.collection('users').doc(email).get();
+        final resolved = _formatName(userDoc.data());
+        if (resolved.isNotEmpty) return resolved;
+      }
+
+      final membersRef = _firestore
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('members');
+
+      if (email.isNotEmpty) {
+        final byEmail =
+            await membersRef.where('email', isEqualTo: email).limit(1).get();
+        if (byEmail.docs.isNotEmpty) {
+          final resolved = _formatName(byEmail.docs.first.data());
+          if (resolved.isNotEmpty) return resolved;
+        }
+      }
+
+      final byId = await membersRef.doc(user.uid).get();
+      final resolved = _formatName(byId.data());
+      if (resolved.isNotEmpty) return resolved;
+    } catch (_) {}
+
+    if (email.isNotEmpty) return email;
+    return (user.displayName ?? user.uid).trim();
+  }
+
   Future<void> _sendText() async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -174,6 +223,7 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
     if (text.isEmpty) return;
     setState(() => _sending = true);
     try {
+      final senderName = await _resolveSenderName(user);
       final fcmToken = await FirebaseMessaging.instance.getToken();
       await _firestore
           .collection('structures')
@@ -186,7 +236,7 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
         'text': text,
         'senderId': user.uid,
         'senderEmail': (user.email ?? '').toLowerCase(),
-        'senderName': user.displayName ?? '',
+        'senderName': senderName,
         'timestamp': FieldValue.serverTimestamp(),
         'structureId': widget.structureId,
         'senderFcmToken': fcmToken ?? '',
@@ -240,13 +290,14 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
       final url = await storageRef.getDownloadURL();
 
       final fcmToken = await FirebaseMessaging.instance.getToken();
+      final senderName = await _resolveSenderName(user);
       await messageRef.set({
         'type': 'file',
         'fileName': file.name,
         'fileUrl': url,
         'senderId': user.uid,
         'senderEmail': (user.email ?? '').toLowerCase(),
-        'senderName': user.displayName ?? '',
+        'senderName': senderName,
         'timestamp': FieldValue.serverTimestamp(),
         'structureId': widget.structureId,
         'senderFcmToken': fcmToken ?? '',
