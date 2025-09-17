@@ -3128,40 +3128,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _showChildDisplaySettings() async {
     final structureId = await _getStructureId();
+    final user = FirebaseAuth.instance.currentUser;
 
-    if (structureId.isEmpty) {
+    if (structureId.isEmpty || user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Structure introuvable"),
+          content: Text("Impossible de déterminer votre structure."),
           backgroundColor: Colors.redAccent,
         ),
       );
       return;
     }
 
-    bool showAllChildren = false;
+    final String currentUserEmail = user.email?.toLowerCase() ?? '';
+    if (currentUserEmail.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Aucun e-mail utilisateur disponible."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final membersCollection = FirebaseFirestore.instance
+        .collection('structures')
+        .doc(structureId)
+        .collection('members');
+
+    QueryDocumentSnapshot<Map<String, dynamic>>? memberSnapshot;
+
     try {
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
+      final memberQuery = await membersCollection
+          .where('email', isEqualTo: currentUserEmail)
+          .limit(1)
           .get();
 
-      final data = structureDoc.data();
-      if (data != null && data['showAllChildrenOnHome'] is bool) {
-        showAllChildren = data['showAllChildrenOnHome'] as bool;
+      if (memberQuery.docs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Impossible de trouver votre profil membre."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
       }
+
+      memberSnapshot = memberQuery.docs.first;
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text("Impossible de récupérer les préférences d'affichage."),
+          content: Text("Erreur lors du chargement de vos préférences."),
           backgroundColor: Colors.redAccent,
         ),
       );
       return;
     }
+
+    final memberData = memberSnapshot.data();
+    bool showAllChildren =
+        memberData['showAllChildrenOnHome'] is bool
+            ? memberData['showAllChildrenOnHome'] as bool
+            : false;
 
     int selectedValue = showAllChildren ? 1 : 0;
 
@@ -3180,7 +3212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    "Choisissez les enfants à afficher sur la page d'accueil.",
+                    "Choisissez les enfants que vous souhaitez voir sur votre page d'accueil.",
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
@@ -3219,10 +3251,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onPressed: () async {
                     final bool newValue = selectedValue == 1;
                     try {
-                      await FirebaseFirestore.instance
-                          .collection('structures')
-                          .doc(structureId)
-                          .update({'showAllChildrenOnHome': newValue});
+                      await membersCollection
+                          .doc(memberSnapshot!.id)
+                          .set({'showAllChildrenOnHome': newValue},
+                              SetOptions(merge: true));
 
                       if (!mounted) return;
 
@@ -3232,8 +3264,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         SnackBar(
                           content: Text(
                             newValue
-                                ? "Tous les enfants seront affichés sur l'accueil."
-                                : "Seuls vos enfants seront affichés sur l'accueil.",
+                                ? "Tous les enfants de la structure seront affichés pour vous sur l'accueil."
+                                : "Seuls vos enfants seront affichés pour vous sur l'accueil.",
                           ),
                           behavior: SnackBarBehavior.floating,
                         ),
