@@ -168,6 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Récupération du type de structure existant
       String fetchedStructureType = "AssistanteMaternelle"; // Valeur par défaut
+      bool showAllChildrenOnHome = false;
 
       if (structureDoc.data() != null) {
         final data = structureDoc.data() as Map<String, dynamic>;
@@ -181,6 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
               .doc(structureDocId)
               .update({'structureType': fetchedStructureType});
         }
+
+        showAllChildrenOnHome = data['showAllChildrenOnHome'] == true;
       }
 
       fetchedStructureType = fetchedStructureType.trim().toLowerCase();
@@ -204,22 +207,28 @@ class _HomeScreenState extends State<HomeScreen> {
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
       if (isMamStructure) {
-        // Tous les membres ne voient que leurs enfants assignés
-        filteredChildren = allChildren.where((child) {
-          // Vérifier si l'enfant est assigné à ce membre
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          bool isAssigned = assignedEmail == currentUserEmail;
+        if (showAllChildrenOnHome) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Membre MAM: affichage de tous les enfants (mode structure)");
+        } else {
+          // Tous les membres ne voient que leurs enfants assignés
+          filteredChildren = allChildren.where((child) {
+            // Vérifier si l'enfant est assigné à ce membre
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            bool isAssigned = assignedEmail == currentUserEmail;
+
+            print(
+                "🔍 DEBUG - Enfant: ${child['firstName']}, assignedEmail: '$assignedEmail', currentUserEmail: '$currentUserEmail', isAssigned: $isAssigned");
+
+            // Comparaison stricte, et on s'assure que les deux emails sont en minuscules
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
           print(
-              "🔍 DEBUG - Enfant: ${child['firstName']}, assignedEmail: '$assignedEmail', currentUserEmail: '$currentUserEmail', isAssigned: $isAssigned");
-
-          // Comparaison stricte, et on s'assure que les deux emails sont en minuscules
-          return assignedEmail == currentUserEmail;
-        }).toList();
-
-        print(
-            "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+              "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
 
         // ⛱️ Overlay délégation du jour: ajouter les enfants que j'accueille par délégation aujourd'hui
         try {
@@ -251,7 +260,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 .toSet();
 
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
                 final add = allChildren.where((c) => toAddIds.contains(c['id'] as String));
@@ -277,6 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
         print(
             "🔍 DIAGNOSTIC - Nombre total d'enfants dans la structure: ${allChildren.length}");
         print(
+            "🔍 DIAGNOSTIC - Mode affichage tous les enfants: $showAllChildrenOnHome");
+        print(
             "🔍 DIAGNOSTIC - Nombre d'enfants filtrés pour cet utilisateur: ${filteredChildren.length}");
 
         print("🔍 LISTE DÉTAILLÉE DES ENFANTS:");
@@ -298,14 +310,28 @@ class _HomeScreenState extends State<HomeScreen> {
       // Filtrer les enfants pour aujourd'hui (conservant le filtre par membre)
       // et inclure systématiquement ceux arrivés via délégation aujourd'hui
       final List<Map<String, dynamic>> todayChildren = [];
+      final Set<String> todayChildIds = {};
       final filteredBySchedule = filteredChildren.where((child) =>
           child['schedule'] != null && child['schedule'].containsKey(capitalizedWeekday));
-      todayChildren.addAll(filteredBySchedule);
+      for (final child in filteredBySchedule) {
+        final id = (child['id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        if (todayChildIds.add(id)) {
+          todayChildren.add(child);
+        }
+      }
       if (delegatedTodayChildIds.isNotEmpty) {
-        final existingIds = todayChildren.map((c) => c['id'] as String).toSet();
-        final add = filteredChildren.where((c) => delegatedTodayChildIds.contains(c['id']) && !existingIds.contains(c['id']));
+        final add = filteredChildren.where((c) {
+          final id = (c['id'] ?? '').toString();
+          return id.isNotEmpty &&
+              delegatedTodayChildIds.contains(id) &&
+              todayChildIds.add(id);
+        });
         todayChildren.addAll(add);
       }
+
+      print(
+          "📅 ENFANTS DU JOUR - Mode tous les enfants: $showAllChildrenOnHome, total: ${todayChildren.length}");
 
       setState(() {
         structureName = fetchedStructureName;
