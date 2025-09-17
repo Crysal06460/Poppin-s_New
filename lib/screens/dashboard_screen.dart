@@ -10,6 +10,7 @@ import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:poppins_app/screens/photo_management_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
 import 'package:poppins_app/screens/mam_member_add_screen.dart';
+import 'package:poppins_app/screens/mam_group_chat_screen.dart';
 import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
@@ -1450,6 +1451,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bulletColor: _tileRed,
           ),
           _sheetAction(
+            label: 'Messagerie interne MAM',
+            onTap: _openMamGroupChat,
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
             label: 'Température frigo / congélateur + alertes',
             onTap: _showMAMFunctioning,
             bulletColor: _tileRed,
@@ -1482,6 +1488,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       );
     }
+  }
+
+  Future<void> _openMamGroupChat() async {
+    final structureId = await _getStructureId();
+    if (!mounted) return;
+    if (structureId.isEmpty) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MamGroupChatScreen(structureId: structureId),
+      ),
+    );
   }
 
   void _openChildrenParents() {
