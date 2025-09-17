@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1404,6 +1405,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: _showEquipmentManagement,
           bulletColor: _tileBlue,
         ),
+        if (isMAMStructure)
+          _sheetAction(
+            label: 'Affichage des enfants',
+            onTap: _showChildDisplaySettings,
+            bulletColor: _tileBlue,
+          ),
         _sheetAction(
           label: 'Politique de confidentialité',
           onTap: () => _launchURL(
@@ -3110,6 +3117,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showChildDisplaySettings() async {
+    final structureId = await _getStructureId();
+
+    if (structureId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Structure introuvable"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    bool showAllChildren = false;
+    try {
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      final data = structureDoc.data();
+      if (data != null && data['showAllChildrenOnHome'] is bool) {
+        showAllChildren = data['showAllChildrenOnHome'] as bool;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text("Impossible de récupérer les préférences d'affichage."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    int selectedValue = showAllChildren ? 1 : 0;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text('Affichage des enfants',
+                  textAlign: TextAlign.center),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Choisissez les enfants à afficher sur la page d'accueil.",
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  CupertinoSlidingSegmentedControl<int>(
+                    groupValue: selectedValue,
+                    children: const {
+                      0: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text('Seulement mes enfants'),
+                      ),
+                      1: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text('Tous les enfants'),
+                      ),
+                    },
+                    onValueChanged: (value) {
+                      setState(() {
+                        selectedValue = value ?? 0;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text(
+                    'ANNULER',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final bool newValue = selectedValue == 1;
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('structures')
+                          .doc(structureId)
+                          .update({'showAllChildrenOnHome': newValue});
+
+                      if (!mounted) return;
+
+                      Navigator.of(dialogContext).pop();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            newValue
+                                ? "Tous les enfants seront affichés sur l'accueil."
+                                : "Seuls vos enfants seront affichés sur l'accueil.",
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Échec de la mise à jour des préférences.'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('VALIDER'),
                 ),
               ],
             );
