@@ -1485,6 +1485,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: _showAssmatDailyFunctioning,
             bulletColor: _tileRed,
           ),
+          _sheetAction(
+            label: 'Gestion équipements / matériel',
+            onTap: _showEquipmentManagement,
+            bulletColor: _tileRed,
+          ),
         ],
       );
     }
