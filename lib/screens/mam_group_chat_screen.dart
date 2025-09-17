@@ -173,7 +173,11 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
   }
 
   Future<String> _resolveSenderName(User user) async {
-    final email = (user.email ?? '').toLowerCase().trim();
+    final rawEmail = (user.email ?? '').trim();
+    final lowerEmail = rawEmail.toLowerCase();
+    final emailCandidates = <String>{rawEmail, lowerEmail}
+        .where((value) => value.isNotEmpty)
+        .toList();
 
     String _formatName(Map<String, dynamic>? data) {
       if (data == null) return '';
@@ -186,9 +190,16 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
     }
 
     try {
-      if (email.isNotEmpty) {
+      if (rawEmail.isNotEmpty) {
         final userDoc =
-            await _firestore.collection('users').doc(email).get();
+            await _firestore.collection('users').doc(rawEmail).get();
+        final resolved = _formatName(userDoc.data());
+        if (resolved.isNotEmpty) return resolved;
+      }
+
+      if (lowerEmail.isNotEmpty && lowerEmail != rawEmail) {
+        final userDoc =
+            await _firestore.collection('users').doc(lowerEmail).get();
         final resolved = _formatName(userDoc.data());
         if (resolved.isNotEmpty) return resolved;
       }
@@ -198,9 +209,11 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
           .doc(widget.structureId)
           .collection('members');
 
-      if (email.isNotEmpty) {
-        final byEmail =
-            await membersRef.where('email', isEqualTo: email).limit(1).get();
+      if (emailCandidates.isNotEmpty) {
+        final byEmail = await membersRef
+            .where('email', whereIn: emailCandidates)
+            .limit(1)
+            .get();
         if (byEmail.docs.isNotEmpty) {
           final resolved = _formatName(byEmail.docs.first.data());
           if (resolved.isNotEmpty) return resolved;
@@ -212,7 +225,7 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
       if (resolved.isNotEmpty) return resolved;
     } catch (_) {}
 
-    if (email.isNotEmpty) return email;
+    if (rawEmail.isNotEmpty) return rawEmail;
     return (user.displayName ?? user.uid).trim();
   }
 
