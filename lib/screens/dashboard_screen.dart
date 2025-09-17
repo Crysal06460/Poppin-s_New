@@ -1400,11 +1400,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: _showMemberManagement,
             bulletColor: _tileBlue,
           ),
-        _sheetAction(
-          label: 'Gestion équipements / matériel',
-          onTap: _showEquipmentManagement,
-          bulletColor: _tileBlue,
-        ),
         if (isMAMStructure)
           _sheetAction(
             label: 'Affichage des enfants',
@@ -1457,6 +1452,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _sheetAction(
             label: 'Température frigo / congélateur + alertes',
             onTap: _showMAMFunctioning,
+            bulletColor: _tileRed,
+          ),
+          _sheetAction(
+            label: 'Gestion équipements / matériel',
+            onTap: _showEquipmentManagement,
             bulletColor: _tileRed,
           ),
         ],
@@ -1546,7 +1546,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> titleLines = List<Widget>.generate(
       lines.length,
       (i) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 1), // Réduit de 2 à 1
         child: Text(
           lines[i],
           textAlign: TextAlign.center,
@@ -1554,9 +1554,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           overflow: TextOverflow.fade,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 18,
+            fontSize: 16, // Réduit de 18 à 16
             fontWeight: FontWeight.w600,
-            height: 1.12,
+            height: 1.1, // Réduit de 1.12 à 1.1
             letterSpacing: 0.0,
           ),
         ),
@@ -1566,30 +1566,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
+        // Ombre moderne multicouche pour effet de profondeur 2025
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 20,
+            color: color.withOpacity(0.15),
+            blurRadius: 25,
             spreadRadius: 0,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+          // Ombre de proximité pour l'effet moderne
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
-        color: color,
-        borderRadius: BorderRadius.circular(28),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
-          child: SizedBox(
-            height: size,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: titleLines,
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color,
+                color.withOpacity(0.85),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            // Bordure subtile moderne
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(28),
+            // Effet de pression moderne
+            highlightColor: Colors.white.withOpacity(0.1),
+            splashColor: Colors.white.withOpacity(0.2),
+            child: Container(
+              height: size,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                // Reflet subtil sur le dessus pour l'effet glassmorphism
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.15),
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.05),
+                  ],
+                  stops: [0.0, 0.3, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12), // Augmenté de 10 à 12
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: titleLines,
+                  ),
                 ),
               ),
             ),
@@ -1603,16 +1652,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double tileWidth =
-            (constraints.maxWidth - 14) / 2; // 2 colonnes, 14 d'écart
-        final double tileSize = tileWidth; // carrés
+            (constraints.maxWidth - 16) / 2; // Espacement optimisé
+        final double tileSize = tileWidth;
         return GridView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+          padding: const EdgeInsets.fromLTRB(8, 16, 8, 12), // Padding ajusté
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
+            mainAxisSpacing: 16, // Espacement vertical augmenté
+            crossAxisSpacing: 16, // Espacement horizontal augmenté
             childAspectRatio: 1,
           ),
           children: [
@@ -2501,201 +2550,191 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildTabletContent() {
-    return LayoutBuilder(builder: (context, constraints) {
-      final double maxWidth = constraints.maxWidth;
-      final double maxHeight = constraints.maxHeight;
-      final double sideMargin = maxWidth * 0.03;
-      final double columnGap = maxWidth * 0.025;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double screenWidth = constraints.maxWidth;
+        final double screenHeight = constraints.maxHeight;
 
-      return Padding(
-        padding: EdgeInsets.fromLTRB(
-          sideMargin,
-          maxHeight * 0.02,
-          sideMargin,
-          maxHeight * 0.02,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Panneau latéral gauche (Sections principales)
-            Expanded(
-              flex: 4,
-              child: Container(
-                margin: EdgeInsets.only(right: columnGap),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      offset: const Offset(0, 3),
-                      blurRadius: 10,
+        // Calculs optimisés pour iPad (expérience 2025)
+        final double maxGridWidth = screenWidth * 0.75; // Max 75% de l'écran
+        final double gridWidth =
+            maxGridWidth.clamp(400.0, 600.0); // Entre 400px et 600px
+        final double tileSize =
+            (gridWidth - 24) / 2; // 2 colonnes avec espacement
+
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(
+              minHeight: screenHeight,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Espacement adaptatif en haut
+                SizedBox(
+                    height: screenHeight * 0.12), // Augmenté pour centrer mieux
+
+                // Grille des tuiles centrée
+                Container(
+                  width: gridWidth,
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: GridView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing:
+                          24, // Espacement vertical augmenté pour iPad
+                      crossAxisSpacing: 24, // Espacement horizontal augmenté
+                      childAspectRatio: 1,
                     ),
-                  ],
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(maxWidth * 0.025),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Titre avec icône
-                      Row(
-                        children: [
-                          Image.asset(
-                            'assets/images/Icone_Dashboard.png',
-                            width: maxWidth * 0.07,
-                            height: maxWidth * 0.07,
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.dashboard,
-                              color: primaryColor,
-                              size: maxWidth * 0.07,
-                            ),
-                          ),
-                          SizedBox(width: maxWidth * 0.015),
-                          Expanded(
-                            child: Text(
-                              "Paramètres",
-                              style: TextStyle(
-                                fontSize: maxWidth * 0.022,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
+                      _buildTabletTile(
+                        lines: ['Administration'],
+                        color: _tileBlue,
+                        onTap: _openMamAdministration,
+                        size: tileSize,
                       ),
-
-                      SizedBox(height: maxHeight * 0.025),
-
-                      // Liste des sections principales
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            _buildSectionItem(
-                              title: isMAMStructure
-                                  ? "Gestion de la MAM"
-                                  : "Gestion administrative",
-                              icon: Icons.business,
-                              imagePath: 'assets/images/Icone_Structure.png',
-                              index: 0,
-                              maxWidth: maxWidth,
-                              badge:
-                                  (isMAMStructure && needFridgeTemperatureCheck)
-                                      ? "1"
-                                      : null,
-                            ),
-                            SizedBox(height: maxHeight * 0.02),
-                            _buildSectionItem(
-                              title: "Gestion des enfants",
-                              icon: Icons.child_care,
-                              imagePath:
-                                  'assets/images/Icone_Enfant_Present.png',
-                              index: 1,
-                              maxWidth: maxWidth,
-                            ),
-                            if (showMonthlyTableReports) ...[
-                              SizedBox(height: maxHeight * 0.02),
-                              _buildSectionItem(
-                                title: "Mémo mensuel",
-                                icon: Icons.assessment,
-                                imagePath:
-                                    'assets/images/Icone_Recaptitulatif.png',
-                                index: 2,
-                                maxWidth: maxWidth,
-                              ),
-                            ],
-                            SizedBox(height: maxHeight * 0.02),
-                            _buildSectionItem(
-                              title: "Historique",
-                              icon: Icons.history,
-                              imagePath: 'assets/images/Icone_historique.png',
-                              index: 3,
-                              maxWidth: maxWidth,
-                            ),
-                          ],
-                        ),
+                      _buildTabletTile(
+                        lines: ['Fonctionnement', 'quotidien'],
+                        color: _tileRed,
+                        onTap: _openDailyOps,
+                        size: tileSize,
                       ),
-
-                      // 🆕 SECTION LÉGALE - TABLET
-                      SizedBox(height: maxHeight * 0.02),
-                      Container(
-                        padding: EdgeInsets.all(maxWidth * 0.02),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.grey.shade200,
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Informations légales",
-                              style: TextStyle(
-                                fontSize: maxWidth * 0.018,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                            SizedBox(height: maxHeight * 0.015),
-                            _buildLegalButtons(isTablet: true),
-                          ],
-                        ),
+                      _buildTabletTile(
+                        lines: ['Enfants', '& parents'],
+                        color: _tileCyan,
+                        onTap: _openChildrenParents,
+                        size: tileSize,
+                      ),
+                      _buildTabletTile(
+                        lines: ['Mémo', '& Historique'],
+                        color: _tileYellow,
+                        onTap: _openReportsHistory,
+                        size: tileSize,
                       ),
                     ],
                   ),
                 ),
-              ),
+
+                // Espacement adaptatif en bas (sans section légale)
+                SizedBox(height: screenHeight * 0.12),
+              ],
             ),
+          ),
+        );
+      },
+    );
+  }
 
-            // Panneau de droite (Actions détaillées)
-            Expanded(
-              flex: 6,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      offset: const Offset(0, 3),
-                      blurRadius: 10,
-                    ),
+  Widget _buildTabletTile({
+    required List<String> lines,
+    required Color color,
+    required VoidCallback onTap,
+    required double size,
+  }) {
+    final List<Widget> titleLines = List<Widget>.generate(
+      lines.length,
+      (i) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Text(
+          lines[i],
+          textAlign: TextAlign.center,
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22, // Taille optimisée pour iPad
+            fontWeight: FontWeight.w600,
+            height: 1.1,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(32), // Coins plus arrondis pour iPad
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.18),
+            blurRadius: 30,
+            spreadRadius: 0,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color,
+                color.withOpacity(0.85),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.25),
+              width: 2,
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(32),
+            highlightColor: Colors.white.withOpacity(0.1),
+            splashColor: Colors.white.withOpacity(0.2),
+            child: Container(
+              height: size,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.2),
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.05),
                   ],
+                  stops: [0.0, 0.4, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
+              ),
+              child: Center(
                 child: Padding(
-                  padding: EdgeInsets.all(maxWidth * 0.02),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20), // Plus d'espace pour iPad
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Titre de la section détaillée
-                      Text(
-                        _getSectionTitle(_selectedSection),
-                        style: TextStyle(
-                          fontSize: maxWidth * 0.022,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-
-                      SizedBox(height: maxHeight * 0.01),
-
-                      // Actions détaillées selon la section sélectionnée
-                      Expanded(
-                        child: _buildSectionDetails(
-                            _selectedSection, maxWidth, maxHeight),
-                      ),
-                    ],
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: titleLines,
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      );
-    });
+      ),
+    );
   }
 
   // Nouvelle méthode pour construire un élément de section
@@ -3155,8 +3194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text("Impossible de récupérer les préférences d'affichage."),
+          content: Text("Impossible de récupérer les préférences d'affichage."),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -3167,102 +3205,521 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     await showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: const Text('Affichage des enfants',
-                  textAlign: TextAlign.center),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Choisissez les enfants à afficher sur la page d'accueil.",
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  CupertinoSlidingSegmentedControl<int>(
-                    groupValue: selectedValue,
-                    children: const {
-                      0: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text('Seulement mes enfants'),
-                      ),
-                      1: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text('Tous les enfants'),
-                      ),
-                    },
-                    onValueChanged: (value) {
-                      setState(() {
-                        selectedValue = value ?? 0;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text(
-                    'ANNULER',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+            // Détecter iPad vs iPhone
+            final screenHeight = MediaQuery.of(context).size.height;
+            final screenWidth = MediaQuery.of(context).size.width;
+            final bool isTablet = screenWidth >= 600;
+
+            // Tailles adaptées selon l'appareil
+            final double dialogWidth = isTablet ? 500.0 : screenWidth * 0.9;
+            final double horizontalPadding =
+                isTablet ? 32.0 : screenWidth * 0.06;
+            final double verticalPadding =
+                isTablet ? 24.0 : screenHeight * 0.025;
+            final double iconSize = isTablet ? 32.0 : screenWidth * 0.08;
+            final double titleFontSize = isTablet ? 22.0 : screenWidth * 0.055;
+            final double subtitleFontSize =
+                isTablet ? 16.0 : screenWidth * 0.035;
+            final double bodyFontSize = isTablet ? 16.0 : screenWidth * 0.04;
+            final double cardPadding = isTablet ? 20.0 : screenWidth * 0.04;
+            final double buttonHeight = isTablet ? 50.0 : screenHeight * 0.06;
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: dialogWidth,
+                constraints: BoxConstraints(
+                  maxHeight: screenHeight * (isTablet ? 0.7 : 0.84),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final bool newValue = selectedValue == 1;
-                    try {
-                      await FirebaseFirestore.instance
-                          .collection('structures')
-                          .doc(structureId)
-                          .update({'showAllChildrenOnHome': newValue});
-
-                      if (!mounted) return;
-
-                      Navigator.of(dialogContext).pop();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            newValue
-                                ? "Tous les enfants seront affichés sur l'accueil."
-                                : "Seuls vos enfants seront affichés sur l'accueil.",
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      offset: const Offset(0, 10),
+                      blurRadius: 30,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // En-tête moderne
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(verticalPadding),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.8)
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          behavior: SnackBarBehavior.floating,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(28),
+                            topRight: Radius.circular(28),
+                          ),
                         ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Échec de la mise à jour des préférences.'),
-                          backgroundColor: Colors.redAccent,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                Icons.visibility_outlined,
+                                color: Colors.white,
+                                size: iconSize,
+                              ),
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Affichage des enfants',
+                              style: TextStyle(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              "Personnalisez votre page d'accueil",
+                              style: TextStyle(
+                                fontSize: subtitleFontSize,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
                         ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                      ),
+
+                      // Contenu principal
+                      Padding(
+                        padding: EdgeInsets.all(horizontalPadding),
+                        child: Column(
+                          children: [
+                            Text(
+                              "Choisissez les enfants à afficher sur votre page d'accueil",
+                              style: TextStyle(
+                                fontSize: bodyFontSize,
+                                color: Colors.grey.shade700,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 24),
+
+                            // Options de sélection
+                            Column(
+                              children: [
+                                // Option "Seulement mes enfants"
+                                _buildTabletOptionCard(
+                                  icon: Icons.person_outline,
+                                  title: "Mes enfants seulement",
+                                  subtitle:
+                                      "Afficher uniquement les enfants qui vous sont assignés",
+                                  isSelected: selectedValue == 0,
+                                  onTap: () {
+                                    setState(() {
+                                      selectedValue = 0;
+                                    });
+                                  },
+                                  cardPadding: cardPadding,
+                                  bodyFontSize: bodyFontSize,
+                                  subtitleFontSize: subtitleFontSize,
+                                  iconSize: iconSize * 0.7,
+                                ),
+
+                                SizedBox(height: 16),
+
+                                // Option "Tous les enfants"
+                                _buildTabletOptionCard(
+                                  icon: Icons.group_outlined,
+                                  title: "Tous les enfants",
+                                  subtitle:
+                                      "Afficher tous les enfants de la structure",
+                                  isSelected: selectedValue == 1,
+                                  onTap: () {
+                                    setState(() {
+                                      selectedValue = 1;
+                                    });
+                                  },
+                                  cardPadding: cardPadding,
+                                  bodyFontSize: bodyFontSize,
+                                  subtitleFontSize: subtitleFontSize,
+                                  iconSize: iconSize * 0.7,
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: 32),
+
+                            // Boutons d'action
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: buttonHeight,
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(dialogContext).pop(),
+                                      style: TextButton.styleFrom(
+                                        backgroundColor: Colors.grey.shade100,
+                                        foregroundColor: Colors.grey.shade700,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'ANNULER',
+                                        style: TextStyle(
+                                          fontSize: bodyFontSize * 0.9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Container(
+                                    height: buttonHeight,
+                                    child: ElevatedButton(
+                                      onPressed: () async {
+                                        final bool newValue =
+                                            selectedValue == 1;
+                                        try {
+                                          await FirebaseFirestore.instance
+                                              .collection('structures')
+                                              .doc(structureId)
+                                              .update({
+                                            'showAllChildrenOnHome': newValue
+                                          });
+
+                                          if (!mounted) return;
+                                          Navigator.of(dialogContext).pop();
+
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  Container(
+                                                    padding: EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.2),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons
+                                                          .check_circle_outline,
+                                                      color: Colors.white,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      newValue
+                                                          ? "Tous les enfants seront affichés"
+                                                          : "Seuls vos enfants seront affichés",
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w500),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              backgroundColor:
+                                                  Colors.green.shade600,
+                                              behavior:
+                                                  SnackBarBehavior.floating,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                              margin: EdgeInsets.all(16),
+                                              duration: Duration(seconds: 3),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  Icon(Icons.error_outline,
+                                                      color: Colors.white),
+                                                  SizedBox(width: 12),
+                                                  Text(
+                                                      'Échec de la mise à jour des préférences.'),
+                                                ],
+                                              ),
+                                              backgroundColor:
+                                                  Colors.red.shade600,
+                                              behavior:
+                                                  SnackBarBehavior.floating,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                              margin: EdgeInsets.all(16),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'VALIDER',
+                                        style: TextStyle(
+                                          fontSize: bodyFontSize * 0.9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Text('VALIDER'),
                 ),
-              ],
+              ),
             );
           },
         );
       },
+    );
+  }
+
+  Widget _buildTabletOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required double cardPadding,
+    required double bodyFontSize,
+    required double subtitleFontSize,
+    required double iconSize,
+  }) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: EdgeInsets.all(cardPadding),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? primaryColor.withOpacity(0.08)
+                  : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? primaryColor : Colors.grey.shade200,
+                width: isSelected ? 2 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? primaryColor : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                    size: iconSize,
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: bodyFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? primaryColor : Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: subtitleFontSize,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  child: Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? primaryColor : Colors.grey.shade400,
+                    size: iconSize,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required double screenWidth,
+    required bool isSmallScreen,
+  }) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: EdgeInsets.all(screenWidth *
+                (isSmallScreen ? 0.04 : 0.05)), // 4-5% padding adaptatif
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? primaryColor.withOpacity(0.08)
+                  : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? primaryColor : Colors.grey.shade200,
+                width: isSelected ? 2 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: primaryColor.withOpacity(0.15),
+                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  padding: EdgeInsets.all(screenWidth * 0.03), // 3% padding
+                  decoration: BoxDecoration(
+                    color: isSelected ? primaryColor : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                    size: screenWidth *
+                        (isSmallScreen
+                            ? 0.055
+                            : 0.06), // 5.5-6% de largeur écran
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.04), // 4% de largeur
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: screenWidth *
+                              (isSmallScreen
+                                  ? 0.04
+                                  : 0.045), // 4-4.5% de largeur
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? primaryColor : Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: screenWidth *
+                              (isSmallScreen
+                                  ? 0.032
+                                  : 0.035), // 3.2-3.5% de largeur
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  child: Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected ? primaryColor : Colors.grey.shade400,
+                    size: screenWidth *
+                        (isSmallScreen
+                            ? 0.055
+                            : 0.06), // 5.5-6% de largeur écran
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
