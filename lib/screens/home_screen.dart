@@ -183,7 +183,6 @@ class _HomeScreenState extends State<HomeScreen> {
               .update({'structureType': fetchedStructureType});
         }
 
-        showAllChildrenOnHome = data['showAllChildrenOnHome'] == true;
       }
 
       fetchedStructureType = fetchedStructureType.trim().toLowerCase();
@@ -207,6 +206,28 @@ class _HomeScreenState extends State<HomeScreen> {
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
       if (isMamStructure) {
+        try {
+          final membersSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureDocId)
+              .collection('members')
+              .where('email', isEqualTo: currentUserEmail)
+              .limit(1)
+              .get();
+          if (membersSnap.docs.isNotEmpty) {
+            final memberDoc = membersSnap.docs.first;
+            myMemberId = memberDoc.id;
+            final memberDataDynamic = memberDoc.data();
+            final memberData = memberDataDynamic is Map<String, dynamic>
+                ? memberDataDynamic
+                : <String, dynamic>{};
+            showAllChildrenOnHome =
+                memberData['showAllChildrenOnHome'] == true;
+          }
+        } catch (e) {
+          print('⚠️ Erreur récupération membre MAM: $e');
+        }
+
         if (showAllChildrenOnHome) {
           filteredChildren = List<Map<String, dynamic>>.from(allChildren);
           print(
@@ -232,16 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // ⛱️ Overlay délégation du jour: ajouter les enfants que j'accueille par délégation aujourd'hui
         try {
-          // Trouver mon memberId via l'email
-          final membersSnap = await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(structureDocId)
-              .collection('members')
-              .where('email', isEqualTo: currentUserEmail)
-              .limit(1)
-              .get();
-          if (membersSnap.docs.isNotEmpty) {
-            myMemberId = membersSnap.docs.first.id;
+          if (myMemberId != null) {
             final todayStart = DateTime.now();
             final start = DateTime(todayStart.year, todayStart.month, todayStart.day);
             final end = start.add(const Duration(days: 1));
@@ -269,6 +281,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 print('➕ Délégations du jour ajoutées au Home: ${toAddIds.length} enfant(s)');
               }
             }
+          } else {
+            print('ℹ️ Aucun document membre trouvé pour cet utilisateur MAM.');
           }
         } catch (e) {
           print('⚠️ Erreur overlay délégations Home: $e');
