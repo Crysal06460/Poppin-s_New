@@ -22,6 +22,7 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
   final TextEditingController _controller = TextEditingController();
+  final Map<String, Future<String>> _resolvedNames = {};
   bool _sending = false;
   bool _uploading = false;
 
@@ -68,9 +69,6 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                         (data['senderName'] ?? '').toString().trim();
                     final senderEmail =
                         (data['senderEmail'] ?? '').toString().trim();
-                    final senderLabel =
-                        senderName.isNotEmpty ? senderName : senderEmail;
-
                     return Align(
                       alignment:
                           isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -89,10 +87,38 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (!isMe)
-                              Text(
-                                senderLabel,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600, fontSize: 12),
+                              Builder(
+                                builder: (context) {
+                                  final shouldResolve = senderName.isEmpty ||
+                                      senderName.trim().toLowerCase() ==
+                                          senderEmail.toLowerCase();
+                                  if (!shouldResolve && senderName.isNotEmpty) {
+                                    return Text(
+                                      senderName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12),
+                                    );
+                                  }
+                                  final future =
+                                      _resolveDisplayNameForEmail(senderEmail);
+                                  return FutureBuilder<String>(
+                                    future: future,
+                                    builder: (context, snapshot) {
+                                      final resolved =
+                                          (snapshot.data ?? '').trim();
+                                      final label = resolved.isNotEmpty
+                                          ? resolved
+                                          : senderEmail;
+                                      return Text(
+                                        label,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12),
+                                      );
+                                    },
+                                  );
+                                },
                               ),
                             if (type == 'file')
                               _FileBubble(
@@ -227,6 +253,68 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
 
     if (rawEmail.isNotEmpty) return rawEmail;
     return (user.displayName ?? user.uid).trim();
+  }
+
+  Future<String> _resolveDisplayNameForEmail(String email) {
+    final rawEmail = email.trim();
+    if (rawEmail.isEmpty) return Future.value('');
+    final cached = _resolvedNames[rawEmail];
+    if (cached != null) return cached;
+
+    final future = () async {
+      final lowerEmail = rawEmail.toLowerCase();
+      final emailCandidates = <String>{rawEmail, lowerEmail}
+          .where((value) => value.isNotEmpty)
+          .toList();
+
+      String _formatName(Map<String, dynamic>? data) {
+        if (data == null) return '';
+        final firstName = (data['firstName'] ?? '').toString().trim();
+        final lastName = (data['lastName'] ?? '').toString().trim();
+        return [firstName, lastName]
+            .where((part) => part.isNotEmpty)
+            .join(' ')
+            .trim();
+      }
+
+      try {
+        final usersCollection = _firestore.collection('users');
+        final membersRef = _firestore
+            .collection('structures')
+            .doc(widget.structureId)
+            .collection('members');
+
+        final userDocRaw = await usersCollection.doc(rawEmail).get();
+        final resolvedRaw = _formatName(userDocRaw.data());
+        if (resolvedRaw.isNotEmpty) return resolvedRaw;
+
+        if (lowerEmail.isNotEmpty && lowerEmail != rawEmail) {
+          final userDocLower = await usersCollection.doc(lowerEmail).get();
+          final resolvedLower = _formatName(userDocLower.data());
+          if (resolvedLower.isNotEmpty) return resolvedLower;
+        }
+
+        if (emailCandidates.isNotEmpty) {
+          final byEmail = await membersRef
+              .where('email', whereIn: emailCandidates)
+              .limit(1)
+              .get();
+          if (byEmail.docs.isNotEmpty) {
+            final resolved = _formatName(byEmail.docs.first.data());
+            if (resolved.isNotEmpty) return resolved;
+          }
+        }
+      } catch (_) {}
+
+      return rawEmail;
+    }();
+
+    _resolvedNames[rawEmail] = future;
+    final lowerEmail = rawEmail.toLowerCase();
+    if (lowerEmail != rawEmail) {
+      _resolvedNames[lowerEmail] = future;
+    }
+    return future;
   }
 
   Future<void> _sendText() async {
