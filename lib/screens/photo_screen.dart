@@ -40,8 +40,9 @@ class _PhotosScreenState extends State<PhotosScreen>
   int _selectedIndex = 1;
   bool _isUploadingFile = false;
   double _uploadProgress = 0.0;
-  Uint8List? _webImage;
-  XFile? _pickedFile;
+  List<Uint8List> _webImages = [];
+  List<XFile> _pickedPhotos = [];
+  XFile? _pickedVideo;
   String _mediaTime = '';
   bool _isVideoSelected = false;
   String? _videoDurationText;
@@ -317,22 +318,52 @@ class _PhotosScreenState extends State<PhotosScreen>
   Future<void> _pickImage(String childId, StateSetter setStateDialog) async {
     final ImagePicker picker = ImagePicker();
     try {
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
+      List<XFile> selectedImages = [];
 
-      if (image != null) {
+      try {
+        final multiImages = await picker.pickMultiImage(
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 85,
+        );
+        if (multiImages != null) {
+          selectedImages = multiImages;
+        }
+      } catch (e) {
+        // Certains environnements ne supportent pas pickMultiImage
+        print('pickMultiImage indisponible, fallback vers pickImage: $e');
+      }
+
+      if (selectedImages.isEmpty) {
+        final XFile? image = await picker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 85,
+        );
+        if (image != null) {
+          selectedImages = [image];
+        }
+      }
+
+      if (selectedImages.isNotEmpty) {
+        final List<Uint8List> newWebImages = [];
+        if (kIsWeb) {
+          for (final image in selectedImages) {
+            final bytes = await image.readAsBytes();
+            newWebImages.add(bytes);
+            print("Image web chargée: ${bytes.length} bytes");
+          }
+        }
+
         setStateDialog(() {
-          _pickedFile = image;
+          _pickedPhotos.addAll(selectedImages);
           _isVideoSelected = false;
+          _pickedVideo = null;
+          _videoThumbFuture = null;
+          _videoDurationText = null;
           if (kIsWeb) {
-            image.readAsBytes().then((value) {
-              setStateDialog(() => _webImage = value);
-              print("Image web chargée: ${value.length} bytes");
-            });
+            _webImages.addAll(newWebImages);
           }
         });
       }
@@ -355,14 +386,20 @@ class _PhotosScreenState extends State<PhotosScreen>
       );
 
       if (image != null) {
+        Uint8List? webBytes;
+        if (kIsWeb) {
+          webBytes = await image.readAsBytes();
+          print("Image web chargée: ${webBytes.length} bytes");
+        }
+
         setStateDialog(() {
-          _pickedFile = image;
+          _pickedPhotos.add(image);
           _isVideoSelected = false;
-          if (kIsWeb) {
-            image.readAsBytes().then((value) {
-              setStateDialog(() => _webImage = value);
-              print("Image web chargée: ${value.length} bytes");
-            });
+          _pickedVideo = null;
+          _videoThumbFuture = null;
+          _videoDurationText = null;
+          if (kIsWeb && webBytes != null) {
+            _webImages.add(webBytes);
           }
         });
       }
@@ -393,9 +430,10 @@ class _PhotosScreenState extends State<PhotosScreen>
           return;
         }
         setStateDialog(() {
-          _pickedFile = video;
+          _pickedVideo = video;
           _isVideoSelected = true;
-          _webImage = null;
+          _pickedPhotos.clear();
+          _webImages.clear();
           _videoThumbFuture = VideoThumbnail.thumbnailData(
             video: video.path,
             imageFormat: ImageFormat.JPEG,
@@ -405,7 +443,6 @@ class _PhotosScreenState extends State<PhotosScreen>
         });
         // Calculer la durée (mm:ss) de façon asynchrone et légère
         try {
-          final file = File(video.path);
           final tmp = VideoPlayerController.file(file);
           await tmp.initialize();
           final dur = tmp.value.duration;
@@ -442,9 +479,10 @@ class _PhotosScreenState extends State<PhotosScreen>
           return;
         }
         setStateDialog(() {
-          _pickedFile = video;
+          _pickedVideo = video;
           _isVideoSelected = true;
-          _webImage = null;
+          _pickedPhotos.clear();
+          _webImages.clear();
           _videoThumbFuture = VideoThumbnail.thumbnailData(
             video: video.path,
             imageFormat: ImageFormat.JPEG,
@@ -453,7 +491,6 @@ class _PhotosScreenState extends State<PhotosScreen>
           );
         });
         try {
-          final file = File(video.path);
           final tmp = VideoPlayerController.file(file);
           await tmp.initialize();
           final dur = tmp.value.duration;
@@ -471,59 +508,81 @@ class _PhotosScreenState extends State<PhotosScreen>
   }
 
   Future<void> _uploadAndSaveImage(String childId) async {
-    if (_pickedFile == null) return;
+    if (_pickedPhotos.isEmpty) return;
 
-    setState(() => _isUploadingFile = true);
+    setState(() {
+      _isUploadingFile = true;
+      _uploadProgress = 0.0;
+    });
 
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('medias')
-          .child(user.uid)
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final int total = _pickedPhotos.length;
 
-      String? downloadUrl;
+      for (int index = 0; index < total; index++) {
+        final XFile photo = _pickedPhotos[index];
+        final Reference ref = FirebaseStorage.instance
+            .ref()
+            .child('medias')
+            .child(user.uid)
+            .child('${DateTime.now().millisecondsSinceEpoch}_$index.jpg');
 
-      try {
-        print("Début upload image...");
+        try {
+          print("Début upload image ${index + 1}/$total...");
 
-        if (kIsWeb && _webImage != null) {
-          await ref
-              .putData(
-                _webImage!,
-                SettableMetadata(contentType: 'image/jpeg'),
-              )
-              .timeout(Duration(minutes: 2));
-        } else {
-          final file = File(_pickedFile!.path);
-          final bytes = await file.readAsBytes();
-          await ref
-              .putData(
-                bytes,
-                SettableMetadata(contentType: 'image/jpeg'),
-              )
-              .timeout(Duration(minutes: 2));
-        }
+          if (kIsWeb) {
+            Uint8List data;
+            if (index < _webImages.length) {
+              data = _webImages[index];
+            } else {
+              data = await photo.readAsBytes();
+            }
+            await ref
+                .putData(
+                  data,
+                  SettableMetadata(contentType: 'image/jpeg'),
+                )
+                .timeout(Duration(minutes: 2));
+          } else {
+            final file = File(photo.path);
+            final bytes = await file.readAsBytes();
+            await ref
+                .putData(
+                  bytes,
+                  SettableMetadata(contentType: 'image/jpeg'),
+                )
+                .timeout(Duration(minutes: 2));
+          }
 
-        print("Image uploadée avec succès");
-        downloadUrl = await ref.getDownloadURL();
-
-        // Mise à jour Firestore
-        if (downloadUrl != null) {
+          final String downloadUrl = await ref.getDownloadURL();
           await _addMediaToFirebase(childId, downloadUrl, type: 'Photo');
-        }
-      } catch (e) {
-        print("Erreur détaillée: $e");
 
-        if (e is FirebaseException) {
-          print("Code d'erreur Firebase: ${e.code}");
-          print("Message Firebase: ${e.message}");
-        }
+          if (mounted) {
+            setState(() {
+              _uploadProgress = (index + 1) / total;
+            });
+          }
+        } catch (e) {
+          print("Erreur détaillée: $e");
 
-        rethrow;
+          if (e is FirebaseException) {
+            print("Code d'erreur Firebase: ${e.code}");
+            print("Message Firebase: ${e.message}");
+          }
+
+          rethrow;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Photos envoyées ($total)'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
       }
     } catch (e) {
       print("Erreur globale: $e");
@@ -536,12 +595,32 @@ class _PhotosScreenState extends State<PhotosScreen>
         );
       }
     } finally {
-      setState(() => _isUploadingFile = false);
+      _previewController?.dispose();
+      _previewController = null;
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = false;
+          _uploadProgress = 0.0;
+          _pickedPhotos.clear();
+          _webImages.clear();
+          _pickedVideo = null;
+          _isVideoSelected = false;
+          _videoThumbFuture = null;
+          _videoDurationText = null;
+        });
+      } else {
+        _pickedPhotos.clear();
+        _webImages.clear();
+        _pickedVideo = null;
+        _isVideoSelected = false;
+        _videoThumbFuture = null;
+        _videoDurationText = null;
+      }
     }
   }
 
   Future<void> _uploadAndSaveVideo(String childId) async {
-    if (_pickedFile == null) return;
+    if (_pickedVideo == null) return;
 
     setState(() {
       _isUploadingFile = true;
@@ -608,7 +687,7 @@ class _PhotosScreenState extends State<PhotosScreen>
         print("Début upload vidéo...");
 
         // Mobile: vérifier la taille et uploader via le fichier directement
-        final file = File(_pickedFile!.path);
+        final file = File(_pickedVideo!.path);
         final fileSize = await file.length();
         if (fileSize > _maxVideoBytes) {
           throw Exception('Fichier vidéo trop volumineux (> ${(_maxVideoBytes / (1024*1024)).round()} Mo)');
@@ -674,7 +753,24 @@ class _PhotosScreenState extends State<PhotosScreen>
         setState(() {
           _isUploadingFile = false;
           _uploadProgress = 0.0;
+          _pickedVideo = null;
+          _isVideoSelected = false;
+          _videoThumbFuture = null;
+          _videoDurationText = null;
+          _pickedPhotos.clear();
+          _webImages.clear();
         });
+        _previewController?.dispose();
+        _previewController = null;
+      } else {
+        _pickedVideo = null;
+        _isVideoSelected = false;
+        _videoThumbFuture = null;
+        _videoDurationText = null;
+        _pickedPhotos.clear();
+        _webImages.clear();
+        _previewController?.dispose();
+        _previewController = null;
       }
     }
   }
@@ -684,13 +780,6 @@ class _PhotosScreenState extends State<PhotosScreen>
     String? errorMessage;
     String localMediaTime = _mediaTime;
     bool showPhotoWarning = enfant['photosAllowed'] == false;
-    bool showPreview = false;
-    Uint8List? localWebImage;
-    XFile? localPickedFile;
-
-    // Reset des valeurs globales
-    _pickedFile = null;
-    _webImage = null;
 
     // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
@@ -844,164 +933,252 @@ class _PhotosScreenState extends State<PhotosScreen>
                                   ],
                                 ),
                               ),
-
-                            // Affichage de l'aperçu du média si disponible
-                            if (_pickedFile != null) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.all(16),
-                                margin: EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border:
-                                      Border.all(color: Colors.grey.shade300),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      "Aperçu du média",
-                                      style: TextStyle(
-                                        fontSize: isTabletDevice ? 18 : 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade800,
+                              // Aperçu des médias sélectionnés
+                              if (_isVideoSelected && _pickedVideo != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(16),
+                                  margin: EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "Aperçu de la vidéo",
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 18 : 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade800,
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(height: 12),
-                                    Container(
-                                      height: 220,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black12,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: _isVideoSelected
-                                          ? InkWell(
-                                              onTap: () async {
-                                                if (_pickedFile == null) return;
-                                                final file = File(_pickedFile!.path);
-                                                _previewController = VideoPlayerController.file(file);
-                                                await _previewController!.initialize();
-                                                _previewController!.setLooping(true);
-                                                if (!mounted) return;
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (_) => AlertDialog(
-                                                    contentPadding: EdgeInsets.zero,
-                                                    content: AspectRatio(
-                                                      aspectRatio: _previewController!.value.aspectRatio,
-                                                      child: Stack(
-                                                        alignment: Alignment.center,
-                                                        children: [
-                                                          VideoPlayer(_previewController!),
-                                                          Positioned(
-                                                            bottom: 12,
-                                                            child: FloatingActionButton.small(
-                                                              onPressed: () {
-                                                                if (_previewController!.value.isPlaying) {
-                                                                  _previewController!.pause();
-                                                                } else {
-                                                                  _previewController!.play();
-                                                                }
-                                                              },
-                                                              child: Icon(_previewController!.value.isPlaying
-                                                                  ? Icons.pause
-                                                                  : Icons.play_arrow),
-                                                            ),
-                                                          )
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ).then((_) async {
-                                                  await _previewController?.pause();
-                                                  await _previewController?.dispose();
-                                                  _previewController = null;
-                                                });
-                                              },
-                                              child: Stack(
-                                                alignment: Alignment.center,
-                                                children: [
-                                                  FutureBuilder<Uint8List?>(
-                                                    future: _videoThumbFuture,
-                                                    builder: (ctx, snap) {
-                                                      if (snap.connectionState == ConnectionState.waiting) {
-                                                        return Center(child: CircularProgressIndicator());
-                                                      }
-                                                      final bytes = snap.data;
-                                                      if (bytes == null) {
-                                                        return Icon(Icons.videocam, size: 64, color: Colors.grey[700]);
-                                                      }
-                                                      return ClipRRect(
-                                                        borderRadius: BorderRadius.circular(10),
-                                                        child: Image.memory(bytes, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-                                                      );
-                                                    },
-                                                  ),
-                                                  Container(
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black45,
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    padding: EdgeInsets.all(8),
-                                                    child: Icon(Icons.play_arrow, size: 36, color: Colors.white),
-                                                  ),
-                                                  Positioned(
-                                                    bottom: 8,
-                                                    left: 12,
-                                                    right: 12,
-                                                    child: Row(
-                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                      children: [
-                                                        if (_videoDurationText != null) _buildChip(_videoDurationText!),
-                                                        FutureBuilder<int>(
-                                                          future: _pickedFile != null ? File(_pickedFile!.path).length() : Future.value(0),
-                                                          builder: (ctx, snap) {
-                                                            final sz = (snap.data ?? 0);
-                                                            final mb = (sz / (1024*1024)).toStringAsFixed(1);
-                                                            return _buildChip('Vidéo • $mb Mo');
+                                      SizedBox(height: 12),
+                                      Container(
+                                        height: 220,
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black12,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: InkWell(
+                                          onTap: () async {
+                                            final file = File(_pickedVideo!.path);
+                                            _previewController = VideoPlayerController.file(file);
+                                            await _previewController!.initialize();
+                                            _previewController!.setLooping(true);
+                                            if (!mounted) return;
+                                            showDialog(
+                                              context: context,
+                                              builder: (_) => AlertDialog(
+                                                contentPadding: EdgeInsets.zero,
+                                                content: AspectRatio(
+                                                  aspectRatio: _previewController!.value.aspectRatio,
+                                                  child: Stack(
+                                                    alignment: Alignment.center,
+                                                    children: [
+                                                      VideoPlayer(_previewController!),
+                                                      Positioned(
+                                                        bottom: 12,
+                                                        child: FloatingActionButton.small(
+                                                          onPressed: () {
+                                                            if (_previewController!.value.isPlaying) {
+                                                              _previewController!.pause();
+                                                            } else {
+                                                              _previewController!.play();
+                                                            }
                                                           },
+                                                          child: Icon(_previewController!.value.isPlaying
+                                                              ? Icons.pause
+                                                              : Icons.play_arrow),
                                                         ),
-                                                      ],
-                                                    ),
-                                                  )
-                                                ],
-                                              ),
-                                            )
-                                           : (kIsWeb
-                                              ? (_webImage != null
-                                                  ? ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius
-                                                              .circular(10),
-                                                      child: Image.memory(
-                                                        _webImage!,
-                                                        fit: BoxFit.contain,
-                                                      ),
-                                                    )
-                                                 : Center(
-                                                     child:
-                                                         CircularProgressIndicator(
-                                                           valueColor:
-                                                               AlwaysStoppedAnimation<
-                                                                       Color>(
-                                                                   primaryColor),
-                                                         ),
-                                                   ))
-                                              : ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  child: Image.file(
-                                                    File(_pickedFile!.path),
-                                                    fit: BoxFit.contain,
+                                                      )
+                                                    ],
                                                   ),
-                                                )),
-                                    ),
-                                  ],
+                                                ),
+                                              ),
+                                            ).then((_) async {
+                                              await _previewController?.pause();
+                                              await _previewController?.dispose();
+                                              _previewController = null;
+                                            });
+                                          },
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              FutureBuilder<Uint8List?>(
+                                                future: _videoThumbFuture,
+                                                builder: (ctx, snap) {
+                                                  if (snap.connectionState == ConnectionState.waiting) {
+                                                    return Center(child: CircularProgressIndicator());
+                                                  }
+                                                  final bytes = snap.data;
+                                                  if (bytes == null) {
+                                                    return Icon(Icons.videocam, size: 64, color: Colors.grey[700]);
+                                                  }
+                                                  return ClipRRect(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    child: Image.memory(
+                                                      bytes,
+                                                      fit: BoxFit.cover,
+                                                      width: double.infinity,
+                                                      height: double.infinity,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black45,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                padding: EdgeInsets.all(8),
+                                                child: Icon(Icons.play_arrow, size: 36, color: Colors.white),
+                                              ),
+                                              Positioned(
+                                                bottom: 8,
+                                                left: 12,
+                                                right: 12,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    if (_videoDurationText != null) _buildChip(_videoDurationText!),
+                                                    FutureBuilder<int>(
+                                                      future: File(_pickedVideo!.path).length(),
+                                                      builder: (ctx, snap) {
+                                                        final sz = (snap.data ?? 0);
+                                                        final mb = (sz / (1024 * 1024)).toStringAsFixed(1);
+                                                        return _buildChip('Vidéo • $mb Mo');
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 12,
+                                                right: 12,
+                                                child: GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _pickedVideo = null;
+                                                      _isVideoSelected = false;
+                                                      _videoThumbFuture = null;
+                                                      _videoDurationText = null;
+                                                    });
+                                                    _previewController?.dispose();
+                                                    _previewController = null;
+                                                  },
+                                                  child: CircleAvatar(
+                                                    radius: 16,
+                                                    backgroundColor: Colors.black.withOpacity(0.6),
+                                                    child: Icon(Icons.close, color: Colors.white, size: 18),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                              if (!_isVideoSelected && _pickedPhotos.isNotEmpty) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: EdgeInsets.all(16),
+                                  margin: EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Photos sélectionnées (${_pickedPhotos.length})",
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 18 : 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade800,
+                                        ),
+                                      ),
+                                      SizedBox(height: 12),
+                                      Wrap(
+                                        spacing: 12,
+                                        runSpacing: 12,
+                                        children: List.generate(_pickedPhotos.length, (index) {
+                                          final double previewSize = isTabletDevice ? 140 : 110;
+                                          final XFile photo = _pickedPhotos[index];
+                                          Widget preview;
+                                          if (kIsWeb) {
+                                            Uint8List? bytes;
+                                            if (index < _webImages.length) {
+                                              bytes = _webImages[index];
+                                            }
+                                            preview = bytes != null
+                                                ? Image.memory(bytes, fit: BoxFit.cover)
+                                                : Center(
+                                                    child: CircularProgressIndicator(
+                                                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                                                    ),
+                                                  );
+                                          } else {
+                                            preview = Image.file(
+                                              File(photo.path),
+                                              fit: BoxFit.cover,
+                                            );
+                                          }
+
+                                          return Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(10),
+                                                child: Container(
+                                                  width: previewSize,
+                                                  height: previewSize,
+                                                  color: Colors.black12,
+                                                  child: preview,
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 6,
+                                                right: 6,
+                                                child: GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      if (kIsWeb && _webImages.length > index) {
+                                                        _webImages.removeAt(index);
+                                                      }
+                                                      _pickedPhotos.removeAt(index);
+                                                      if (_pickedPhotos.isEmpty) {
+                                                        _isVideoSelected = false;
+                                                        _pickedVideo = null;
+                                                        _videoThumbFuture = null;
+                                                        _videoDurationText = null;
+                                                      }
+                                                    });
+                                                  },
+                                                  child: CircleAvatar(
+                                                    radius: 14,
+                                                    backgroundColor: Colors.black.withOpacity(0.6),
+                                                    child: Icon(Icons.close, size: 16, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
 
                             // Heure du média
                             Container(
@@ -1070,90 +1247,89 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 ],
                               ),
                             ),
-
-                            // Options de choix (Photo/Vidéo depuis Appareil photo ou Galerie) - seulement si pas d'aperçu
-                            if (_pickedFile == null)
-                              Container(
-                                margin: EdgeInsets.only(
-                                    bottom: isTabletDevice ? 24 : 16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "Source du média",
-                                      style: TextStyle(
-                                        fontSize: isTabletDevice ? 18 : 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade800,
+                            // Options de choix (Photo/Vidéo depuis Appareil photo ou Galerie)
+                            Container(
+                              margin: EdgeInsets.only(
+                                  bottom: isTabletDevice ? 24 : 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Source du média",
+                                    style: TextStyle(
+                                      fontSize: isTabletDevice ? 18 : 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            if (localMediaTime.isEmpty) {
+                                              setState(() {
+                                                errorMessage =
+                                                    'Veuillez sélectionner une heure';
+                                              });
+                                              return;
+                                            }
+                                            _pickCameraImage(
+                                                enfant['id'], setState);
+                                          },
+                                          icon: Icon(Icons.camera_alt),
+                                          label: Text('Photo (caméra)'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.symmetric(
+                                              vertical:
+                                                  isTabletDevice ? 16 : 12,
+                                              horizontal: 16,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: ElevatedButton.icon(
-                                            onPressed: () {
-                                              if (localMediaTime.isEmpty) {
-                                                setState(() {
-                                                  errorMessage =
-                                                      'Veuillez sélectionner une heure';
-                                                });
-                                                return;
-                                              }
-                                              _pickCameraImage(
-                                                  enfant['id'], setState);
-                                            },
-                                            icon: Icon(Icons.camera_alt),
-                                            label: Text('Photo (caméra)'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: primaryColor,
-                                              foregroundColor: Colors.white,
-                                              padding: EdgeInsets.symmetric(
-                                                vertical:
-                                                    isTabletDevice ? 16 : 12,
-                                                horizontal: 16,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            if (localMediaTime.isEmpty) {
+                                              setState(() {
+                                                errorMessage =
+                                                    'Veuillez sélectionner une heure';
+                                              });
+                                              return;
+                                            }
+                                            _pickImage(
+                                                enfant['id'], setState);
+                                          },
+                                          icon: Icon(Icons.photo_library),
+                                          label: Text('Photo (galerie)'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                primaryColor.withOpacity(0.8),
+                                            foregroundColor: Colors.white,
+                                            padding: EdgeInsets.symmetric(
+                                              vertical:
+                                                  isTabletDevice ? 16 : 12,
+                                              horizontal: 16,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
                                             ),
                                           ),
                                         ),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: ElevatedButton.icon(
-                                            onPressed: () {
-                                              if (localMediaTime.isEmpty) {
-                                                setState(() {
-                                                  errorMessage =
-                                                      'Veuillez sélectionner une heure';
-                                                });
-                                                return;
-                                              }
-                                              _pickImage(
-                                                  enfant['id'], setState);
-                                            },
-                                            icon: Icon(Icons.photo_library),
-                                            label: Text('Photo (galerie)'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  primaryColor.withOpacity(0.8),
-                                              foregroundColor: Colors.white,
-                                              padding: EdgeInsets.symmetric(
-                                                vertical:
-                                                    isTabletDevice ? 16 : 12,
-                                                horizontal: 16,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_pickedPhotos.isEmpty) ...[
                                     SizedBox(height: 10),
                                     Row(
                                       children: [
@@ -1221,7 +1397,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                           ),
                                         ),
                                       ],
-                                      ),
+                                    ),
                                     SizedBox(height: 8),
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1243,8 +1419,22 @@ class _PhotosScreenState extends State<PhotosScreen>
                                       ],
                                     ),
                                   ],
-                                ),
+                                  if (_pickedPhotos.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Text(
+                                        'Retirez les photos sélectionnées pour accéder aux options vidéo.',
+                                        style: TextStyle(
+                                          fontSize: isTabletDevice ? 13 : 12,
+                                          color: Colors.grey.shade600,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
+                            ),
+
 
                             // Message d'erreur si présent
                             if (errorMessage != null)
@@ -1277,8 +1467,16 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 // Bouton Annuler
                                 OutlinedButton(
                                   onPressed: () {
-                                    _pickedFile = null;
-                                    _webImage = null;
+                                    this.setState(() {
+                                      _pickedPhotos.clear();
+                                      _webImages.clear();
+                                      _pickedVideo = null;
+                                      _isVideoSelected = false;
+                                      _videoThumbFuture = null;
+                                      _videoDurationText = null;
+                                    });
+                                    _previewController?.dispose();
+                                    _previewController = null;
                                     Navigator.of(context).pop();
                                   },
                                   style: OutlinedButton.styleFrom(
@@ -1302,7 +1500,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                 ),
 
                                 // Bouton Confirmer - visible seulement quand un média est sélectionné
-                                if (_pickedFile != null)
+                                if (_pickedVideo != null || _pickedPhotos.isNotEmpty)
                                   ElevatedButton(
                                     onPressed: () async {
                                       if (localMediaTime.isEmpty) {
@@ -1320,7 +1518,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                         print(
                                             "Début de l'upload après confirmation");
                                         // Faire l'upload seulement après confirmation
-                                        if (_isVideoSelected) {
+                                        if (_pickedVideo != null && _isVideoSelected) {
                                           await _uploadAndSaveVideo(childId);
                                         } else {
                                           await _uploadAndSaveImage(childId);
@@ -1342,7 +1540,11 @@ class _PhotosScreenState extends State<PhotosScreen>
                                       ),
                                     ),
                                     child: Text(
-                                      _isVideoSelected ? "ENVOYER LA VIDÉO" : "CONFIRMER",
+                                      _isVideoSelected
+                                          ? "ENVOYER LA VIDÉO"
+                                          : (_pickedPhotos.length > 1
+                                              ? "ENVOYER ${_pickedPhotos.length} PHOTOS"
+                                              : "ENVOYER LA PHOTO"),
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 16 : 14,
                                         fontWeight: FontWeight.w600,
@@ -2157,18 +2359,35 @@ class _PhotosScreenState extends State<PhotosScreen>
                                             MainAxisAlignment.center,
                                         children: [
                                           CircularProgressIndicator(
+                                            value: (_uploadProgress > 0 &&
+                                                    _uploadProgress <= 1)
+                                                ? _uploadProgress
+                                                : null,
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
                                                     Colors.white),
                                           ),
                                           SizedBox(height: 16),
                                           Text(
-                                            "Téléchargement en cours...",
+                                            _isVideoSelected
+                                                ? "Téléchargement de la vidéo..."
+                                                : "Envoi des photos...",
                                             style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize:
                                                     isTabletDevice ? 20 : 18),
-                                          )
+                                          ),
+                                          if (_uploadProgress > 0)
+                                            SizedBox(height: 8),
+                                          if (_uploadProgress > 0)
+                                            Text(
+                                              '${(_uploadProgress * 100).toStringAsFixed(0)} %',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize:
+                                                    isTabletDevice ? 16 : 14,
+                                              ),
+                                            )
                                         ],
                                       ),
                                     ),
