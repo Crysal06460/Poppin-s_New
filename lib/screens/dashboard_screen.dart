@@ -1568,6 +1568,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Color color,
     required VoidCallback onTap,
     required double size,
+    String? badgeCount, // Ajout du paramètre badge optionnel
   }) {
     final List<Widget> titleLines = List<Widget>.generate(
       lines.length,
@@ -1672,6 +1673,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  String _getTemperatureNotificationCount() {
+    int notificationCount = 0;
+
+    if (isMAMStructure) {
+      // Pour MAM
+      if (needFridgeTemperatureCheck) notificationCount++;
+      if (needFreezerTemperatureCheck && hasFreezer == true)
+        notificationCount++;
+    } else {
+      // Pour Assistante Maternelle
+      if (needAssmatFridgeTemperatureCheck && hasAssmatFridge == true)
+        notificationCount++;
+      if (needAssmatFreezerTemperatureCheck && hasAssmatFreezer == true)
+        notificationCount++;
+    }
+
+    return notificationCount > 0 ? notificationCount.toString() : '';
   }
 
   Widget _buildQuickGrid() {
