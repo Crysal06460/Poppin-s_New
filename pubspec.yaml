@@ -118,3 +118,7 @@ flutter:
     - assets/images/app_icon.png
     - assets/images/app_icon_fore.png
     - assets/images/Icone_historique.png
+    - assets/images/Administration.png
+    - assets/images/Enfant.png
+    - assets/images/Fonctionnement.png
+    - assets/images/Memo.png

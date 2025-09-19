@@ -1564,62 +1564,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _quickTile({
-    required List<String> lines,
+    List<String>? lines,
     required Color color,
     required VoidCallback onTap,
     required double size,
-    String? badgeCount, // Ajout du paramètre badge optionnel
+    String? badgeCount,
+    String? assetPath,
   }) {
-    final List<Widget> titleLines = List<Widget>.generate(
-      lines.length,
-      (i) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1), // Réduit de 2 à 1
-        child: Text(
-          lines[i],
-          textAlign: TextAlign.center,
-          softWrap: false,
-          overflow: TextOverflow.fade,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16, // Réduit de 18 à 16
-            fontWeight: FontWeight.w600,
-            height: 1.1, // Réduit de 1.12 à 1.1
-            letterSpacing: 0.0,
+    final bool showImage = assetPath != null && assetPath.isNotEmpty;
+    final BorderRadius borderRadius = BorderRadius.circular(28);
+    final List<Widget> titleLines = lines != null
+        ? List<Widget>.generate(
+            lines.length,
+            (i) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text(
+                lines[i],
+                textAlign: TextAlign.center,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                  letterSpacing: 0.0,
+                ),
+              ),
+            ),
+          )
+        : const [];
+
+    final Widget badge = (badgeCount == null || badgeCount.isEmpty)
+        ? const SizedBox.shrink()
+        : Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Text(
+                badgeCount!,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          );
+
+    final List<BoxShadow> shadows = [
+      BoxShadow(
+        color: color.withOpacity(0.15),
+        blurRadius: 25,
+        spreadRadius: 0,
+        offset: const Offset(0, 8),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.08),
+        blurRadius: 15,
+        spreadRadius: 0,
+        offset: const Offset(0, 4),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.04),
+        blurRadius: 6,
+        spreadRadius: 0,
+        offset: const Offset(0, 2),
+      ),
+    ];
+
+    if (showImage) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          boxShadow: shadows,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: borderRadius,
+            highlightColor: Colors.white.withOpacity(0.1),
+            splashColor: Colors.white.withOpacity(0.2),
+            child: SizedBox(
+              height: size,
+              child: ClipRRect(
+                borderRadius: borderRadius,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      assetPath!,
+                      fit: BoxFit.cover,
+                    ),
+                    badge,
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        // Ombre moderne multicouche pour effet de profondeur 2025
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.15),
-            blurRadius: 25,
-            spreadRadius: 0,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            spreadRadius: 0,
-            offset: const Offset(0, 4),
-          ),
-          // Ombre de proximité pour l'effet moderne
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            spreadRadius: 0,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: borderRadius,
+        boxShadow: shadows,
       ),
       child: Material(
         color: Colors.transparent,
+        borderRadius: borderRadius,
         child: Container(
           decoration: BoxDecoration(
+            borderRadius: borderRadius,
             gradient: LinearGradient(
               colors: [
                 color,
@@ -1628,8 +1699,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(28),
-            // Bordure subtile moderne
             border: Border.all(
               color: Colors.white.withOpacity(0.2),
               width: 1.5,
@@ -1637,35 +1706,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(28),
-            // Effet de pression moderne
+            borderRadius: borderRadius,
             highlightColor: Colors.white.withOpacity(0.1),
             splashColor: Colors.white.withOpacity(0.2),
-            child: Container(
+            child: SizedBox(
               height: size,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                // Reflet subtil sur le dessus pour l'effet glassmorphism
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withOpacity(0.15),
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.05),
+              child: ClipRRect(
+                borderRadius: borderRadius,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.15),
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.05),
+                          ],
+                          stops: const [0.0, 0.3, 1.0],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: titleLines,
+                        ),
+                      ),
+                    ),
+                    badge,
                   ],
-                  stops: [0.0, 0.3, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12), // Augmenté de 10 à 12
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: titleLines,
-                  ),
                 ),
               ),
             ),
@@ -1712,25 +1788,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           children: [
             _quickTile(
-              lines: ['Administration'],
+              assetPath: 'assets/images/Administration.png',
               color: _tileBlue,
               onTap: _openMamAdministration,
               size: tileSize,
             ),
             _quickTile(
-              lines: ['Fonctionnement', 'quotidien'],
+              assetPath: 'assets/images/Fonctionnement.png',
               color: _tileRed,
               onTap: _openDailyOps,
               size: tileSize,
+              badgeCount: _getTemperatureNotificationCount(),
             ),
             _quickTile(
-              lines: ['Enfants', '& parents'],
+              assetPath: 'assets/images/Enfant.png',
               color: _tileCyan,
               onTap: _openChildrenParents,
               size: tileSize,
             ),
             _quickTile(
-              lines: ['Mémo', '& Historique'],
+              assetPath: 'assets/images/Memo.png',
               color: _tileYellow,
               onTap: _openReportsHistory,
               size: tileSize,
