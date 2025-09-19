@@ -41,7 +41,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   // Nouveau: contrôleur pour faire défiler automatiquement la zone de saisie multiline
   final ScrollController _inputScrollController = ScrollController();
   bool _isUploadingFile = false;
-  int _selectedIndex = 1;
+  int _selectedIndex = 2;
   String? selectedParentForMessage;
   Map<String, List<Map<String, dynamic>>> parentsCache = {};
 
@@ -1961,7 +1961,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     } else if (index == 1) {
       context.go('/home');
     } else if (index == 2) {
-      context.go('/child-info');
+      context.go('/exchanges');
     }
   }
 
@@ -2710,11 +2710,11 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Ajout_Enfant.png',
+            'assets/images/Icone_Echanges.png',
             width: 60,
             height: 60,
           ),
-          label: "Ajouter",
+          label: "Echanges",
         ),
       ],
     );

@@ -2400,7 +2400,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     } else if (index == 1) {
       context.go('/home');
     } else if (index == 2) {
-      context.go('/child-info');
+      context.go('/exchanges');
     }
   }
 
@@ -3081,11 +3081,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Ajout_Enfant.png',
+            'assets/images/Icone_Echanges.png',
             width: 60,
             height: 60,
           ),
-          label: "Ajouter",
+          label: "Echanges",
         ),
       ],
     );

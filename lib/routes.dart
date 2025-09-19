@@ -26,6 +26,7 @@ import 'package:poppins_app/screens/change_screen.dart';
 import 'package:poppins_app/screens/photo_screen.dart';
 import 'package:poppins_app/screens/exchanges_screen.dart';
 import 'package:poppins_app/screens/stock_screen.dart';
+import 'package:poppins_app/screens/agenda_screen.dart';
 import 'package:poppins_app/screens/dashboard_screen.dart';
 import 'package:poppins_app/screens/photo_management_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
@@ -556,6 +557,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/exchanges',
       builder: (context, state) => const ExchangesScreen(),
+    ),
+    GoRoute(
+      path: '/agenda',
+      builder: (context, state) => const AgendaScreen(),
     ),
     GoRoute(path: '/stock', builder: (context, state) => const StockScreen()),
     GoRoute(

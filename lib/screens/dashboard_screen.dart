@@ -56,6 +56,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool showAssmatFreezerChoice = false;
   bool needAssmatFridgeTemperatureCheck = false;
   bool needAssmatFreezerTemperatureCheck = false;
+  int _pendingDelegationsCount = 0;
 
   // Couleurs dédiées aux tuiles de la grille (style 2025)
   final Color _tileBlue = const Color(0xFF3D9DF2);
@@ -96,6 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _loadData();
       _checkMonthlyTableEnabled();
       _checkIfMAMStructure();
+      _refreshDelegationsCount();
     });
   }
 
@@ -164,6 +166,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print('Erreur compteur délégations: $e');
       return 0;
     }
+  }
+
+  Future<void> _refreshDelegationsCount() async {
+    final int count = await _fetchPendingDelegationsCountToday();
+    if (!mounted) return;
+    setState(() {
+      _pendingDelegationsCount = count;
+    });
   }
 
   Widget _buildDelegationsBadgeFuture() {
@@ -1306,7 +1316,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String label,
     required VoidCallback onTap,
     Color? bulletColor,
+    String? badgeText,
+    Widget? trailing,
   }) {
+    final bool showBadge = badgeText != null && badgeText!.isNotEmpty;
+    final Widget? trailingWidget = trailing ?? (showBadge
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.redAccent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.redAccent.withOpacity(0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              badgeText!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        : null);
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       horizontalTitleGap: 8,
@@ -1323,6 +1361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         label,
         style: const TextStyle(fontSize: 16, color: Colors.black87),
       ),
+      trailing: trailingWidget,
       onTap: () {
         Navigator.pop(context);
         onTap();
@@ -1424,6 +1463,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _openDailyOps() {
+    _refreshDelegationsCount();
+    final String temperatureBadge = _getTemperatureNotificationCount();
     if (isMAMStructure) {
       _showCategorySheet(
         title: 'Fonctionnement quotidien',
@@ -1449,6 +1490,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               MaterialPageRoute(builder: (c) => const DelegationsScreen()),
             ),
             bulletColor: _tileRed,
+            trailing: _buildDelegationsBadgeFuture(),
           ),
           _sheetAction(
             label: 'Messagerie interne MAM',
@@ -1456,9 +1498,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bulletColor: _tileRed,
           ),
           _sheetAction(
-            label: 'Température frigo / congélateur + alertes',
+            label: 'Température réfrigérateur / congélateur',
             onTap: _showMAMFunctioning,
             bulletColor: _tileRed,
+            badgeText: temperatureBadge,
           ),
           _sheetAction(
             label: 'Gestion équipements / matériel',
@@ -1481,9 +1524,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bulletColor: _tileRed,
           ),
           _sheetAction(
-            label: 'Température frigo / congélateur + alertes',
+            label: 'Température réfrigérateur / congélateur',
             onTap: _showAssmatDailyFunctioning,
             bulletColor: _tileRed,
+            badgeText: temperatureBadge,
           ),
           _sheetAction(
             label: 'Gestion équipements / matériel',
@@ -1515,6 +1559,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       title: 'Enfants et Parents',
       color: _tileCyan,
       children: [
+        _sheetAction(
+          label: 'Ajouter un enfant',
+          onTap: () => context.go('/child-info'),
+          bulletColor: _tileCyan,
+        ),
         _sheetAction(
           label: 'Profils enfants complets (santé, besoins, alimentation…)',
           onTap: _showChildProfilesSelection,
@@ -1751,7 +1800,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _getTemperatureNotificationCount() {
+  int _getTemperatureAlertCount() {
     int notificationCount = 0;
 
     if (isMAMStructure) {
@@ -1766,8 +1815,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (needAssmatFreezerTemperatureCheck && hasAssmatFreezer == true)
         notificationCount++;
     }
+    return notificationCount;
+  }
 
-    return notificationCount > 0 ? notificationCount.toString() : '';
+  String _formatBadgeCount(int count) => count > 0 ? count.toString() : '';
+
+  String _getTemperatureNotificationCount() {
+    return _formatBadgeCount(_getTemperatureAlertCount());
+  }
+
+  String _getDailyOpsTileBadge() {
+    final int total = _getTemperatureAlertCount() + _pendingDelegationsCount;
+    return _formatBadgeCount(total);
   }
 
   Widget _buildQuickGrid() {
@@ -1798,7 +1857,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: _tileRed,
               onTap: _openDailyOps,
               size: tileSize,
-              badgeCount: _getTemperatureNotificationCount(),
+              badgeCount: _getDailyOpsTileBadge(),
             ),
             _quickTile(
               assetPath: 'assets/images/Enfant.png',
@@ -2668,7 +2727,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (index == 1) {
       context.go('/home');
     } else if (index == 2) {
-      context.go('/child-info');
+      context.go('/exchanges');
     }
   }
 
@@ -5024,11 +5083,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               BottomNavigationBarItem(
                 icon: Image.asset(
-                  'assets/images/Icone_Ajout_Enfant.png',
+                  'assets/images/Icone_Echanges.png',
                   width: screenSize.width * (isTablet ? 0.07 : 0.14),
                   height: screenSize.width * (isTablet ? 0.07 : 0.14),
                 ),
-                label: "Ajouter",
+                label: "Echanges",
               ),
             ],
           ),

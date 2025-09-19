@@ -18,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String structureName = "Chargement...";
   List<Map<String, dynamic>> children = [];
   List<Map<String, dynamic>> upcomingBirthdays = [];
+  List<Map<String, dynamic>> todayAgendaEntries = [];
   bool isLoading = true;
   bool hasChildren = false;
 
@@ -38,8 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _hasShownBirthdayAlert = false;
+  bool _hasShownAgendaAlert = false;
   static const String _birthdayAlertShownKey = 'birthday_alert_shown_date';
+  static const String _agendaAlertShownKey = 'agenda_alert_shown_date';
   static const Color primaryRed = Color(0xFFD94350); // #D94350
+
+  int _todayAgendaCount = 0;
 
   // Méthode pour définir les couleurs en fonction du type de structure
   void _setThemeColors() {
@@ -347,6 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Trouver les anniversaires à venir (uniquement parmi les enfants filtrés)
       _findUpcomingBirthdays(filteredChildren);
+
+      // Vérifier les rappels d'agenda du jour
+      _loadTodayAgendaReminders(structureDocId, currentUserEmail);
 
       // NOUVELLE LOGIQUE HIÉRARCHIQUE POUR LES POPUPS
       bool shouldShowPopup = false;
@@ -786,6 +794,302 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _loadTodayAgendaReminders(
+      String structureDocId, String userEmailLower) async {
+    try {
+      final String normalizedEmail = userEmailLower.toLowerCase();
+      final DateTime now = DateTime.now();
+      final DateTime startOfDay = DateTime(now.year, now.month, now.day);
+      final DateTime endOfDay = startOfDay.add(const Duration(days: 1));
+
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureDocId)
+          .collection('agendaEntries')
+          .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('dueDate', isLessThan: Timestamp.fromDate(endOfDay))
+          .get();
+
+      final List<Map<String, dynamic>> entries = [];
+
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+
+        final dueField = data['dueDate'];
+        DateTime dueDate;
+        if (dueField is Timestamp) {
+          dueDate = dueField.toDate();
+        } else if (dueField is DateTime) {
+          dueDate = dueField;
+        } else if (dueField is String) {
+          final parsed = DateTime.tryParse(dueField);
+          if (parsed == null) continue;
+          dueDate = parsed;
+        } else {
+          continue;
+        }
+        dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+
+        final List<String> visibilityRaw = [];
+        if (data['visibleTo'] is Iterable) {
+          for (final item in (data['visibleTo'] as Iterable)) {
+            if (item != null) {
+              visibilityRaw.add(item.toString().toLowerCase());
+            }
+          }
+        }
+
+        final bool isShared = visibilityRaw.contains('all');
+        final bool isVisibleForUser = isShared ||
+            (normalizedEmail.isNotEmpty &&
+                visibilityRaw.contains(normalizedEmail));
+
+        if (!isVisibleForUser) continue;
+
+        entries.add({
+          'id': doc.id,
+          'title': (data['title'] ?? 'Rappel').toString(),
+          'notes': (data['notes'] ?? '').toString().trim(),
+          'dueDate': dueDate,
+          'isShared': isShared,
+        });
+      }
+
+      entries.sort((a, b) {
+        final aDate = a['dueDate'] as DateTime;
+        final bDate = b['dueDate'] as DateTime;
+        return aDate.compareTo(bDate);
+      });
+
+      final String todayFormatted = DateFormat('yyyy-MM-dd').format(startOfDay);
+      final prefs = await SharedPreferences.getInstance();
+      final String lastShownDate = prefs.getString(_agendaAlertShownKey) ?? '';
+      final bool alreadyShownToday = lastShownDate == todayFormatted;
+
+      if (!mounted) return;
+      setState(() {
+        todayAgendaEntries = entries;
+        _todayAgendaCount = entries.length;
+      });
+
+      if (entries.isNotEmpty && !alreadyShownToday && !_hasShownAgendaAlert) {
+        _hasShownAgendaAlert = true;
+        await prefs.setString(_agendaAlertShownKey, todayFormatted);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showAgendaAlert(entries);
+        });
+      }
+    } catch (e) {
+      print('📅 Erreur lors du chargement des rappels agenda: $e');
+      if (!mounted) return;
+      setState(() {
+        todayAgendaEntries = [];
+        _todayAgendaCount = 0;
+      });
+    }
+  }
+
+  void _showAgendaAlert(List<Map<String, dynamic>> entries) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final Size screenSize = MediaQuery.of(context).size;
+        final bool isTabletDevice = screenSize.shortestSide >= 600;
+
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isTabletDevice ? 32 : 20),
+          ),
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isTabletDevice ? 80 : 24,
+            vertical: isTabletDevice ? 60 : 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: screenSize.height * (isTabletDevice ? 0.6 : 0.7),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(isTabletDevice ? 32 : 20),
+                      topRight: Radius.circular(isTabletDevice ? 32 : 20),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Rappels du jour',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isTabletDevice ? 24 : 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Voici ce qu’il ne faut pas oublier aujourd’hui.',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: isTabletDevice ? 16 : 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, index) {
+                      final entry = entries[index];
+                      final String title = entry['title'] as String? ?? 'Rappel';
+                      final String notes = entry['notes'] as String? ?? '';
+                      final bool isShared = entry['isShared'] as bool? ?? false;
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isShared
+                                ? Colors.teal.withOpacity(0.4)
+                                : Colors.grey.shade200,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.event_available,
+                                  color: primaryColor,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (notes.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                notes,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: Chip(
+                                label: Text(
+                                  isShared
+                                      ? 'Partagé avec la MAM'
+                                      : 'Rappel perso',
+                                  style: TextStyle(
+                                    color: isShared
+                                        ? Colors.teal.shade800
+                                        : Colors.grey.shade800,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                backgroundColor: isShared
+                                    ? Colors.teal.shade50
+                                    : Colors.grey.shade200,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text('Compris'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAgendaBadge(bool isLarge) {
+    final String displayCount =
+        _todayAgendaCount > 9 ? '9+' : _todayAgendaCount.toString();
+    final double horizontalPadding = isLarge ? 10 : 6;
+    final double verticalPadding = isLarge ? 4 : 3;
+    final double fontSize = isLarge ? 14 : 10;
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2B705),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        displayCount,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+        ),
+      ),
     );
   }
 
@@ -1413,7 +1717,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTabletGridItem(BuildContext context, String route, String name,
       String imagePath, double maxWidth) {
     // Augmentation de la taille des icônes
-    final double imageSize = maxWidth * 0.08; // Augmenté de 6% à 8%
+    final bool isAgendaIcon = route == '/agenda';
+    final double baseSize = maxWidth * 0.08; // Augmenté de 6% à 8%
+    final double imageSize = isAgendaIcon ? baseSize * 0.85 : baseSize;
 
     // Vérifier si c'est l'icône des échanges pour ajouter le badge de notification
     final bool isExchangeIcon = route == '/exchanges';
@@ -1501,6 +1807,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         },
                       ),
+                    ),
+                  if (isAgendaIcon && _todayAgendaCount > 0)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _buildAgendaBadge(true),
                     ),
                 ],
               ),
@@ -1792,7 +2104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (index == 1) {
       context.go('/home');
     } else if (index == 2) {
-      context.go('/child-info');
+      context.go('/exchanges');
     }
   }
 
@@ -1934,9 +2246,9 @@ class _HomeScreenState extends State<HomeScreen> {
             'imagePath': 'assets/images/Icone_Photos.png'
           },
           {
-            'route': '/exchanges',
-            'name': 'Échanges',
-            'imagePath': 'assets/images/Icone_Echanges.png'
+            'route': '/agenda',
+            'name': 'Agenda',
+            'imagePath': 'assets/images/Icone_Agenda.png'
           },
           {
             'route': '/stock',
@@ -2116,11 +2428,11 @@ class _HomeScreenState extends State<HomeScreen> {
               // Troisième item - Ajouter enfant
               BottomNavigationBarItem(
                 icon: Image.asset(
-                  'assets/images/Icone_Ajout_Enfant.png',
+                  'assets/images/Icone_Echanges.png',
                   width: screenSize.width * (isTablet ? 0.07 : 0.14),
                   height: screenSize.width * (isTablet ? 0.07 : 0.14),
                 ),
-                label: "Ajouter",
+                label: "Echanges",
               ),
             ],
           ),
@@ -2281,7 +2593,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildGridItem(BuildContext context, String route, String name,
       String imagePath, bool isTablet) {
     // Tailles adaptées pour tablette avec proportions améliorées
-    final double imageSize = isTablet ? 80.0 : 60.0;
+    final bool isAgendaIcon = route == '/agenda';
+    final double baseSize = isTablet ? 80.0 : 60.0;
+    final double imageSize = isAgendaIcon ? baseSize * 0.85 : baseSize;
     final double fontSize = isTablet ? 16.0 : 10.0;
 
     // Vérifier si c'est l'icône des échanges pour ajouter le badge de notification
@@ -2374,6 +2688,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                         ),
+                      ),
+                    if (isAgendaIcon && _todayAgendaCount > 0)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _buildAgendaBadge(isTablet),
                       ),
                   ],
                 ),

@@ -1252,11 +1252,11 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Ajout_Enfant.png',
+            'assets/images/Icone_Echanges.png',
             width: 60,
             height: 60,
           ),
-          label: "Ajouter",
+          label: "Echanges",
         ),
       ],
     );

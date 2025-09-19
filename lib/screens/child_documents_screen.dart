@@ -1275,11 +1275,11 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/Icone_Ajout_Enfant.png',
+              'assets/images/Icone_Echanges.png',
               width: 50,
               height: 50,
             ),
-            label: "Ajouter",
+            label: "Echanges",
           ),
         ],
       ),
