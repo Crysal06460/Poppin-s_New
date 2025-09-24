@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'utils/user_role_cache.dart';
 import 'package:poppins_app/screens/signup_screen.dart';
 import 'package:poppins_app/screens/structure_details_screen.dart';
 import 'package:poppins_app/screens/subscription_screen.dart';
@@ -48,6 +50,7 @@ import 'package:poppins_app/screens/test_data_generator.dart';
 import 'package:poppins_app/screens/parent_home_screen.dart';
 import 'package:poppins_app/screens/parent_messages_screen.dart';
 import 'package:poppins_app/screens/parent_stock_screen.dart';
+import 'package:poppins_app/screens/parent_child_photo_screen.dart';
 import 'package:poppins_app/screens/add-mam-members.dart';
 import 'package:poppins_app/screens/register_screen.dart';
 import 'package:poppins_app/screens/pricing_screen.dart';
@@ -357,7 +360,12 @@ final GoRouter router = GoRouter(
     ),
     GoRoute(
       path: '/child-info',
-      builder: (context, state) => ChildInfoScreen(),
+      builder: (context, state) {
+        final Map<String, dynamic> extra =
+            state.extra as Map<String, dynamic>? ?? const {};
+        final bool parentEmployerFlow = extra['parentEmployerFlow'] == true;
+        return ChildInfoScreen(parentEmployerFlow: parentEmployerFlow);
+      },
     ),
     GoRoute(
       path: '/parent-info',
@@ -676,6 +684,72 @@ final GoRouter router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/parent/child-profile',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final String childId = extra['childId']?.toString() ?? '';
+        if (childId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text("Erreur : ID d'enfant manquant")),
+          );
+        }
+        final String structureId =
+            extra['structureId']?.toString().trim().isNotEmpty == true
+                ? extra['structureId'].toString().trim()
+                : FirebaseAuth.instance.currentUser?.uid ?? '';
+        return ChildProfileDetailsScreen(
+          childId: childId,
+          structureId: structureId,
+          parentMode: true,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/parent/child-photo',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final String childId = extra['childId']?.toString() ?? '';
+        if (childId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text("Erreur : ID d'enfant manquant")),
+          );
+        }
+        final String structureId =
+            extra['structureId']?.toString().trim().isNotEmpty == true
+                ? extra['structureId'].toString().trim()
+                : FirebaseAuth.instance.currentUser?.uid ?? '';
+        final String childName = extra['childName']?.toString() ?? 'Mon enfant';
+        return ParentChildPhotoScreen(
+          childId: childId,
+          structureId: structureId,
+          childName: childName,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/parent/child-schedule',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final String childId = extra['childId']?.toString() ?? '';
+        if (childId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text("Erreur : ID d'enfant manquant")),
+          );
+        }
+        final String structureId =
+            extra['structureId']?.toString().trim().isNotEmpty == true
+                ? extra['structureId'].toString().trim()
+                : FirebaseAuth.instance.currentUser?.uid ?? '';
+        final String childName = extra['childName']?.toString() ?? 'Mon enfant';
+        return ScheduleInfoScreen(
+          childId: childId,
+          parentMode: true,
+          structureIdOverride: structureId,
+          childName: childName,
+        );
+      },
+    ),
+    GoRoute(
       path: '/parent/stocks',
       pageBuilder: (context, state) => MaterialPage(
         key: ValueKey('parent-stocks'), // Clé unique différente
@@ -814,9 +888,15 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
     return '/';
   }
 
+  if (path == '/home' && user != null) {
+    if (UserRoleCache.isParent) {
+      print('🔁 Redirect /home -> /parent/home (cache)');
+      return '/parent/home';
+    }
+  }
+
   // Sinon, laisser passer - AuthCheckScreen a déjà fait son travail
   print("✅ Utilisateur connecté ou route autorisée: $path");
   return null;
 }
-    // Messagerie interne MAM
-    
+// Messagerie interne MAM

@@ -166,20 +166,22 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Détermine le plan selon la configuration
   SubscriptionPlan _getCurrentPlan() {
-    if (widget.structureType == 'assistante_maternelle') {
+    final String normalizedType = widget.structureType.toLowerCase();
+
+    if (normalizedType == 'assistante_maternelle') {
       return SubscriptionPlan.assistantMaternel;
-    } else {
-      switch (_selectedMamMembers) {
-        case 2:
-          return SubscriptionPlan.mam2Members;
-        case 3:
-          return SubscriptionPlan.mam3Members;
-        case 4:
-          return SubscriptionPlan.mam4Members;
-        default:
-          return SubscriptionPlan.mam2Members;
-      }
     }
+
+    if (normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur') {
+      return SubscriptionPlan.parentEmployeur;
+    }
+
+    // MAM plans
+    if (_selectedMamMembers >= 4) {
+      return SubscriptionPlan.mam4PlusMembers;
+    }
+    return SubscriptionPlan.mamUpTo3Members;
   }
 
   /// Achète un abonnement
@@ -305,20 +307,38 @@ class _PricingScreenState extends State<PricingScreen> {
   }
 
   void _redirectToConfirmationScreen() {
-    final bool isAssMat = widget.structureType == 'assistante_maternelle';
+    final String normalizedType = widget.structureType.toLowerCase();
+    final bool isAssMat = normalizedType == 'assistante_maternelle';
+    final bool isParent = normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur';
 
-    final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
-    final int memberCount = isAssMat ? 1 : _selectedMamMembers;
-    final double priceAmount = isAssMat
-        ? 8.99
-        : (_selectedMamMembers == 2
-            ? 19.99
-            : (_selectedMamMembers == 3 ? 24.99 : 29.99));
-    final String priceDisplay = isAssMat
-        ? '8,99 € / mois'
-        : (_selectedMamMembers == 2
-            ? '19,99 € / mois'
-            : (_selectedMamMembers == 3 ? '24,99 € / mois' : '29,99 € / mois'));
+    final String structureType = isParent
+        ? 'parent_employeur'
+        : (isAssMat ? 'assistante_maternelle' : 'MAM');
+
+    int memberCount;
+    if (isAssMat) {
+      memberCount = 1;
+    } else if (isParent) {
+      memberCount = 1;
+    } else {
+      memberCount = _selectedMamMembers < 2 ? 2 : _selectedMamMembers;
+    }
+
+    double priceAmount;
+    String priceDisplay;
+
+    if (isAssMat) {
+      priceAmount = 6.99;
+      priceDisplay = '6,99 € / mois';
+    } else if (isParent) {
+      priceAmount = 4.99;
+      priceDisplay = '4,99 € / mois';
+    } else {
+      final bool isHighTier = memberCount >= 4;
+      priceAmount = isHighTier ? 24.99 : 19.99;
+      priceDisplay = isHighTier ? '24,99 € / mois' : '19,99 € / mois';
+    }
 
     context.go('/subscription-confirmed', extra: {
       'structureType': structureType,
@@ -356,29 +376,29 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Retourne le titre selon le type de structure
   String _getTitle() {
-    if (widget.structureType == 'assistante_maternelle') {
+    final String normalized = widget.structureType.toLowerCase();
+    if (normalized == 'assistante_maternelle') {
       return 'Abonnement Assistant Maternel';
-    } else {
-      return 'Abonnement MAM $_selectedMamMembers Membres';
     }
+    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
+      return 'Abonnement Parent employeur';
+    }
+    if (_selectedMamMembers >= 4) {
+      return 'Abonnement MAM 4 et + membres';
+    }
+    return 'Abonnement MAM 2 à 3 membres';
   }
 
   /// Retourne le prix selon le type
   String _getPrice() {
-    if (widget.structureType == 'assistante_maternelle') {
-      return '8,99€';
-    } else {
-      switch (_selectedMamMembers) {
-        case 2:
-          return '19,99€';
-        case 3:
-          return '24,99€';
-        case 4:
-          return '29,99€';
-        default:
-          return '19,99€';
-      }
+    final String normalized = widget.structureType.toLowerCase();
+    if (normalized == 'assistante_maternelle') {
+      return '6,99€';
     }
+    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
+      return '4,99€';
+    }
+    return _selectedMamMembers >= 4 ? '24,99€' : '19,99€';
   }
 
   /// Retourne la description des fonctionnalités
@@ -397,20 +417,17 @@ class _PricingScreenState extends State<PricingScreen> {
 
   /// Retourne le prix pour un nombre de membres donné
   String _getPriceForMembers(int members) {
-    switch (members) {
-      case 2:
-        return '19,99€';
-      case 3:
-        return '24,99€';
-      case 4:
-        return '29,99€';
-      default:
-        return '19,99€';
+    if (members >= 4) {
+      return '24,99€';
     }
+    return '19,99€';
   }
 
   @override
   Widget build(BuildContext context) {
+    final String normalizedType = widget.structureType.toLowerCase();
+    final bool isMam = normalizedType == 'mam';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Choisir un Abonnement'),
@@ -507,8 +524,8 @@ class _PricingScreenState extends State<PricingScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Sélecteur de nombre de membres pour MAM
-                  if (widget.structureType != 'assistante_maternelle') ...[
+                  // Sélecteur de nombre de membres uniquement pour les MAM
+                  if (isMam) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -564,7 +581,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                         child: Column(
                                           children: [
                                             Text(
-                                              '$members',
+                                              members >= 4 ? '4+' : '$members',
                                               style: TextStyle(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.bold,
@@ -576,7 +593,9 @@ class _PricingScreenState extends State<PricingScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              'membres',
+                                              members >= 4
+                                                  ? 'membres'
+                                                  : 'membres',
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 color: _selectedMamMembers ==
@@ -597,6 +616,9 @@ class _PricingScreenState extends State<PricingScreen> {
                                                     : Colors.blue[600],
                                               ),
                                             ),
+                                            if (members >= 4) ...[
+                                              const SizedBox(height: 4),
+                                            ],
                                           ],
                                         ),
                                       ),

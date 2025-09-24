@@ -18,6 +18,7 @@ import '../services/notification_service.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/safe_query.dart';
+import '../utils/structure_context.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -83,56 +84,19 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        throw Exception('Utilisateur non connecté');
-      }
+      final structureContext = await StructureResolver().resolve();
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Échanges: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
-
-      // Récupérer la structure pour déterminer le type
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureDoc.exists) {
-        setState(() {
-          structureName =
-              structureDoc.data()?['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureDoc.exists
-          ? (structureDoc.data()?['structureType'] ?? "AssistanteMaternelle")
-          : "AssistanteMaternelle";
 
       // Récupérer tous les enfants de la structure
       final childrenSnapshot = await FirebaseFirestore.instance
@@ -149,7 +113,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =

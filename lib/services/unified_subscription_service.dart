@@ -10,9 +10,9 @@ import 'android_subscription_service.dart';
 
 enum SubscriptionPlan {
   assistantMaternel,
-  mam2Members,
-  mam3Members,
-  mam4Members,
+  mamUpTo3Members,
+  mam4PlusMembers,
+  parentEmployeur,
 }
 
 enum SubscriptionStatus {
@@ -312,10 +312,11 @@ class UnifiedSubscriptionService {
 
   /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois
   String _getPriceFromProductId(String productId) {
-    if (productId.contains('assistante_maternelle')) return '8,99 € / mois';
-    if (productId.contains('mam_2_members')) return '19,99 € / mois';
-    if (productId.contains('mam_3_members')) return '24,99 € / mois';
-    if (productId.contains('mam_4_members')) return '29,99 € / mois';
+    if (productId.contains('assistante_maternelle')) return '6,99 € / mois';
+    if (productId.contains('parent_employeur')) return '4,99 € / mois';
+    if (productId.contains('mam_2')) return '19,99 € / mois';
+    if (productId.contains('mam_3')) return '24,99 € / mois';
+    if (productId.contains('mam_4')) return '24,99 € / mois';
     return 'Prix inconnu';
   }
 
@@ -455,10 +456,11 @@ class UnifiedSubscriptionService {
     switch (plan) {
       case SubscriptionPlan.assistantMaternel:
         return 'assistante_maternelle';
-      case SubscriptionPlan.mam2Members:
-      case SubscriptionPlan.mam3Members:
-      case SubscriptionPlan.mam4Members:
+      case SubscriptionPlan.mamUpTo3Members:
+      case SubscriptionPlan.mam4PlusMembers:
         return 'mam';
+      case SubscriptionPlan.parentEmployeur:
+        return 'parent_employeur';
     }
   }
 
@@ -467,12 +469,12 @@ class UnifiedSubscriptionService {
     switch (plan) {
       case SubscriptionPlan.assistantMaternel:
         return 1;
-      case SubscriptionPlan.mam2Members:
-        return 2;
-      case SubscriptionPlan.mam3Members:
+      case SubscriptionPlan.mamUpTo3Members:
         return 3;
-      case SubscriptionPlan.mam4Members:
+      case SubscriptionPlan.mam4PlusMembers:
         return 4;
+      case SubscriptionPlan.parentEmployeur:
+        return 1;
     }
   }
 

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ AJOUT : Import manquant
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/subscription_service.dart';
+import '../utils/user_role_cache.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -142,12 +143,30 @@ class _SplashScreenState extends State<SplashScreen>
 
         // ✅ AMÉLIORATION : Vérification avec timeout pour éviter les blocages
         try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.email?.toLowerCase() ?? '')
+              .get()
+              .timeout(Duration(seconds: 3));
+
+          final String userRole =
+              (userDoc.data()?['role'] ?? '').toString().toLowerCase();
+          print('🔍 Splash: rôle utilisateur Firestore = ' + userRole);
+          const parentRoles = {'parent', 'parent_employeur', 'parentemployeur'};
+
+          if (parentRoles.contains(userRole)) {
+            print("✅ Utilisateur parent détecté, redirection vers parent home");
+            UserRoleCache.setRole('parent');
+            if (mounted) context.go('/parent/home');
+            return;
+          }
+
           final structureDoc = await FirebaseFirestore.instance
               .collection('structures')
               .doc(user.uid)
               .get()
               .timeout(
-            Duration(seconds: 5), // Timeout de 5 secondes
+            Duration(seconds: 5),
             onTimeout: () {
               print("⚠️ Timeout vérification structure");
               throw TimeoutException('Vérification structure lente');
@@ -155,40 +174,36 @@ class _SplashScreenState extends State<SplashScreen>
           );
 
           if (structureDoc.exists) {
+            final String structureType =
+                (structureDoc.data()?['structureType'] ?? '')
+                    .toString()
+                    .toLowerCase();
+            print('🔍 Splash: structureType Firestore = ' + structureType);
+            UserRoleCache.setStructureType(structureType);
+            if (parentRoles.contains(structureType)) {
+              print(
+                  "✅ Structure parent employeur détectée, redirection vers parent home");
+              UserRoleCache.setRole('parent');
+              if (mounted) context.go('/parent/home');
+              return;
+            }
+
             print("✅ Structure trouvée, redirection vers dashboard");
+            UserRoleCache.setRole('structure');
             if (mounted) context.go('/dashboard');
           } else {
             print("⚠️ Structure non trouvée pour uid: ${user.uid}");
-
-            // ✅ NOUVEAU : Vérifier si c'est un utilisateur parent
-            try {
-              final userDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.email?.toLowerCase() ?? '')
-                  .get()
-                  .timeout(Duration(seconds: 3));
-
-              if (userDoc.exists && userDoc.data()?['role'] == 'parent') {
-                print(
-                    "✅ Utilisateur parent détecté, redirection vers parent home");
-                if (mounted) context.go('/parent/home');
-              } else {
-                print(
-                    "⚠️ Utilisateur sans structure définie, redirection vers Welcome");
-                if (mounted) context.go('/');
-              }
-            } catch (e) {
-              print("⚠️ Erreur vérification utilisateur parent: $e");
-              if (mounted) context.go('/');
-            }
+            UserRoleCache.setRole(null);
+            if (mounted) context.go('/');
           }
         } catch (e) {
-          print("⚠️ Erreur vérification structure: $e");
-          // En cas d'erreur Firestore, rediriger vers Welcome pour être sûr
+          print("⚠️ Erreur vérification structure/utilisateur: $e");
+          UserRoleCache.setRole(null);
           if (mounted) context.go('/');
         }
       } else {
         print("ℹ️ Utilisateur non connecté, redirection vers Welcome");
+        UserRoleCache.setRole(null);
         if (mounted) context.go('/');
       }
     } catch (e) {

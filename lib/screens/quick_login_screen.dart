@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:poppins_app/services/notification_service.dart';
+import '../utils/user_role_cache.dart';
 
 class QuickLoginScreen extends StatefulWidget {
   final Map<String, String> data;
@@ -110,7 +111,24 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
         return;
       }
 
-      // Vérifier si c'est une structure (assistante maternelle)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? '')
+          .get()
+          .timeout(Duration(seconds: 3));
+
+      final String userRole =
+          (userDoc.data()?['role'] ?? '').toString().toLowerCase();
+      print('🔍 QuickLogin: rôle utilisateur Firestore = $userRole');
+      const parentRoles = {'parent', 'parent_employeur', 'parentemployeur'};
+
+      if (parentRoles.contains(userRole)) {
+        print("✅ Utilisateur parent détecté, redirection vers parent home");
+        UserRoleCache.setRole('parent');
+        context.go('/parent/home');
+        return;
+      }
+
       final structureDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(user.uid)
@@ -118,28 +136,33 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
           .timeout(Duration(seconds: 5));
 
       if (structureDoc.exists) {
+        final String structureType =
+            (structureDoc.data()?['structureType'] ?? '')
+                .toString()
+                .toLowerCase();
+        print('🔍 QuickLogin: structureType = $structureType');
+        UserRoleCache.setStructureType(structureType);
+        if (parentRoles.contains(structureType)) {
+          print(
+              "✅ Structure parent employeur détectée, redirection vers parent home");
+          UserRoleCache.setRole('parent');
+          context.go('/parent/home');
+          return;
+        }
+
         print("✅ Structure trouvée, redirection vers home");
+        UserRoleCache.setRole('structure');
         context.go('/home');
         return;
       }
 
-      // Vérifier si c'est un parent
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.email?.toLowerCase() ?? '')
-          .get()
-          .timeout(Duration(seconds: 3));
-
-      if (userDoc.exists && userDoc.data()?['role'] == 'parent') {
-        print("✅ Utilisateur parent détecté, redirection vers parent home");
-        context.go('/parent/home');
-      } else {
-        print(
-            "⚠️ Utilisateur sans rôle défini, redirection vers home par défaut");
-        context.go('/home');
-      }
+      print(
+          "⚠️ Utilisateur sans rôle défini, redirection vers home par défaut");
+      UserRoleCache.setRole('structure');
+      context.go('/home');
     } catch (e) {
       print("⚠️ Erreur navigation: $e, fallback vers home");
+      UserRoleCache.setRole('structure');
       context.go('/home');
     }
   }

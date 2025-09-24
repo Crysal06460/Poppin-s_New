@@ -9,7 +9,7 @@ class PhotoCleanupService {
   static const int _retentionDays = 10;
 
   /// Vérifie si un nettoyage est nécessaire et l'exécute si c'est le cas
-  static Future<void> checkAndCleanupPhotos() async {
+  static Future<void> checkAndCleanupPhotos({List<String>? structureIds}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastCleanup = prefs.getString(_lastCleanupKey);
@@ -28,7 +28,7 @@ class PhotoCleanupService {
       }
 
       print("🧹 Début du nettoyage automatique des médias anciens (photos/vidéos)...");
-      await _performCleanup();
+      await _performCleanup(structureIds: structureIds);
 
       // Enregistrer la date du dernier nettoyage
       await prefs.setString(_lastCleanupKey, DateTime.now().toIso8601String());
@@ -39,7 +39,7 @@ class PhotoCleanupService {
   }
 
   /// Effectue le nettoyage des photos anciennes
-  static Future<void> _performCleanup() async {
+  static Future<void> _performCleanup({List<String>? structureIds}) async {
     final firestore = FirebaseFirestore.instance;
     final storage = FirebaseStorage.instance;
 
@@ -50,13 +50,38 @@ class PhotoCleanupService {
     print("🧹 Suppression des médias antérieurs au ${cutoffDate.toLocal()}");
 
     try {
-      // Récupérer toutes les structures
-      final structuresSnapshot = await firestore.collection('structures').get();
+      // Déterminer les structures à traiter (toutes ou filtrées)
+      final targetIds = structureIds
+          ?.map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final collectionRef = firestore.collection('structures');
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> structureDocs = [];
+
+      if (targetIds != null && targetIds.isNotEmpty) {
+        for (final chunk in _chunkList(targetIds, 10)) {
+          final snapshot = await collectionRef
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
+          structureDocs.addAll(snapshot.docs);
+        }
+
+        if (structureDocs.isEmpty) {
+          print(
+              "🧹 Aucun document structure trouvé pour les identifiants fournis (${targetIds.join(', ')})");
+          return;
+        }
+      } else {
+        final snapshot = await collectionRef.get();
+        structureDocs.addAll(snapshot.docs);
+      }
 
       int totalMediasDeleted = 0;
       int totalStorageFilesDeleted = 0;
 
-      for (var structureDoc in structuresSnapshot.docs) {
+      for (var structureDoc in structureDocs) {
         final structureId = structureDoc.id;
 
         // Récupérer tous les enfants de cette structure
@@ -123,9 +148,9 @@ class PhotoCleanupService {
   }
 
   /// Force le nettoyage immédiat (pour les tests ou maintenance manuelle)
-  static Future<void> forceCleanup() async {
+  static Future<void> forceCleanup({List<String>? structureIds}) async {
     print("🧹 Nettoyage forcé des médias anciens...");
-    await _performCleanup();
+    await _performCleanup(structureIds: structureIds);
 
     // Mettre à jour la date du dernier nettoyage
     final prefs = await SharedPreferences.getInstance();
@@ -145,6 +170,15 @@ class PhotoCleanupService {
 
   /// Récupère le nombre de jours de rétention configuré
   static int getRetentionDays() => _retentionDays;
+
+  static Iterable<List<T>> _chunkList<T>(List<T> items, int chunkSize) sync* {
+    if (chunkSize <= 0) {
+      throw ArgumentError.value(chunkSize, 'chunkSize', 'Must be greater than 0');
+    }
+    for (var i = 0; i < items.length; i += chunkSize) {
+      yield items.sublist(i, i + chunkSize > items.length ? items.length : i + chunkSize);
+    }
+  }
 
   /// Méthode pour obtenir des statistiques sur les médias anciens
   static Future<Map<String, int>> getCleanupStats() async {

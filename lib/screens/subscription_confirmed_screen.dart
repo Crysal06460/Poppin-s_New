@@ -43,21 +43,20 @@ class _SubscriptionConfirmedScreenState
     }
 
     // Sinon, calculer le prix comme avant (fallback) - ✅ PRIX CORRIGÉS
-    final bool isMam = structureType == 'MAM';
+    final String normalized = structureType.toLowerCase();
+    final bool isMam = normalized == 'mam';
     if (isMam) {
-      switch (memberCount) {
-        case 2:
-          return '19,99 € / mois'; // ✅ CORRIGÉ
-        case 3:
-          return '24,99 € / mois'; // ✅ CORRIGÉ
-        case 4:
-          return '29,99 € / mois'; // ✅ CORRIGÉ
-        default:
-          return '19,99 € / mois'; // ✅ CORRIGÉ
+      if (memberCount <= 3) {
+        return '19,99 € / mois';
       }
-    } else {
-      return '8,99 € / mois'; // ✅ CORRIGÉ
+      return '24,99 € / mois';
     }
+
+    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
+      return '4,99 € / mois';
+    }
+
+    return '6,99 € / mois';
   }
 
   @override
@@ -67,7 +66,8 @@ class _SubscriptionConfirmedScreenState
         widget.structureInfo['structureType'] ?? 'assistante_maternelle';
     final String structureId = widget.structureInfo['structureId'] ?? '';
     final int memberCount = widget.structureInfo['memberCount'] ?? 1;
-    final bool isMam = structureType == 'MAM';
+    final String normalizedType = structureType.toLowerCase();
+    final bool isMam = normalizedType == 'mam';
     print("🔍 DEBUG structureType reçu: '$structureType'");
     print("🔍 DEBUG widget.structureInfo: ${widget.structureInfo}");
     // Récupérer les dimensions de l'écran
@@ -84,6 +84,9 @@ class _SubscriptionConfirmedScreenState
           'Assistant(e) Maternel(le)', // ✅ FÉMINISÉ/PLURALISÉ
       'MAM': 'Maison d\'Assistant(e)s Maternel(le)s',
       'MaisonAssistantesMaternelles': 'Maison d\'Assistant(e)s Maternel(le)s',
+      'mam': 'Maison d\'Assistant(e)s Maternel(le)s',
+      'parent_employeur': 'Parent employeur',
+      'ParentEmployeur': 'Parent employeur',
     };
 
     // Version courte pour les détails (section Type)
@@ -92,16 +95,23 @@ class _SubscriptionConfirmedScreenState
       'AssistanteMaternelle': 'Assistant(e) Maternel(le)',
       'MAM': 'MAM', // ✅ VERSION COURTE
       'MaisonAssistantesMaternelles': 'MAM',
+      'mam': 'MAM',
+      'parent_employeur': 'Parent employeur',
+      'ParentEmployeur': 'Parent employeur',
     };
 
     // MODIFICATION : Utiliser la nouvelle méthode pour obtenir le prix
     String price = _getPrice(structureType, memberCount);
 
     // Obtenir le nom d'affichage (version longue pour les messages)
-    String displayName = structureDisplayNames[structureType] ?? "Structure";
+    String displayName = structureDisplayNames[structureType] ??
+        structureDisplayNames[normalizedType] ??
+        "Structure";
 
     // Obtenir le nom court pour les détails
-    String shortName = structureShortNames[structureType] ?? "Structure";
+    String shortName = structureShortNames[structureType] ??
+        structureShortNames[normalizedType] ??
+        "Structure";
 
     // Couleur principale en fonction du type de structure
     Color primaryColor = isMam ? primaryRed : primaryBlue;

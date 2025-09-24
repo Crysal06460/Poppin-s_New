@@ -43,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String structureName = "Chargement...";
   bool showMonthlyTableReports = false;
   bool isMAMStructure = false;
+  bool isParentEmployeurStructure = false;
   int maxMemberCount = 0;
   int currentMemberCount = 0;
   bool needFridgeTemperatureCheck = false;
@@ -1318,32 +1319,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color? bulletColor,
     String? badgeText,
     Widget? trailing,
+    bool enabled = true,
+    String? disabledMessage,
   }) {
     final bool showBadge = badgeText != null && badgeText!.isNotEmpty;
-    final Widget? trailingWidget = trailing ?? (showBadge
-        ? Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.redAccent,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.25),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+    Widget? trailingWidget = trailing ??
+        (showBadge
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.redAccent.withOpacity(0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Text(
-              badgeText!,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          )
-        : null);
+                child: Text(
+                  badgeText!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            : null);
+
+    if (!enabled && trailingWidget == null) {
+      trailingWidget = const Icon(Icons.lock_outline, color: Colors.grey);
+    }
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1353,16 +1361,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         width: 14,
         height: 14,
         decoration: BoxDecoration(
-          color: (bulletColor ?? primaryColor).withOpacity(0.85),
+          color: enabled
+              ? (bulletColor ?? primaryColor).withOpacity(0.85)
+              : Colors.grey.shade400,
           borderRadius: BorderRadius.circular(4),
         ),
       ),
       title: Text(
         label,
-        style: const TextStyle(fontSize: 16, color: Colors.black87),
+        style: TextStyle(
+          fontSize: 16,
+          color: enabled ? Colors.black87 : Colors.grey,
+        ),
       ),
       trailing: trailingWidget,
       onTap: () {
+        if (!enabled) {
+          if (disabledMessage != null && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(disabledMessage)),
+            );
+          }
+          return;
+        }
         Navigator.pop(context);
         onTap();
       },
@@ -1425,40 +1446,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _openMamAdministration() {
+    final List<Widget> actions = [
+      _sheetAction(
+        label: 'Modifier coordonnées de la structure',
+        onTap: () => context.go('/structure-management'),
+        bulletColor: _tileBlue,
+      ),
+    ];
+
+    const String lockedMessage =
+        'Fonctionnalité disponible avec l\'abonnement professionnel.';
+
+    if (isMAMStructure) {
+      actions.addAll([
+        _sheetAction(
+          label: 'Gérer membres (Ajouter / Retirer)',
+          onTap: _showMemberManagement,
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Affichage des enfants',
+          onTap: _showChildDisplaySettings,
+          bulletColor: _tileBlue,
+        ),
+      ]);
+    } else if (isParentEmployeurStructure) {
+      actions.addAll([
+        _sheetAction(
+          label: 'Gérer membres (Ajouter / Retirer)',
+          onTap: () {},
+          bulletColor: _tileBlue,
+          enabled: false,
+          disabledMessage: lockedMessage,
+        ),
+        _sheetAction(
+          label: 'Affichage des enfants',
+          onTap: () {},
+          bulletColor: _tileBlue,
+          enabled: false,
+          disabledMessage: lockedMessage,
+        ),
+      ]);
+    }
+
+    actions.addAll([
+      _sheetAction(
+        label: 'Politique de confidentialité',
+        onTap: () =>
+            _launchURL('https://www.poppin-s.fr/politique-de-confidentialite/'),
+        bulletColor: _tileBlue,
+      ),
+      _sheetAction(
+        label: "Conditions d'utilisation",
+        onTap: () =>
+            _launchURL('https://www.poppin-s.fr/condition-dutilisation/'),
+        bulletColor: _tileBlue,
+      ),
+    ]);
+
     _showCategorySheet(
       title: 'Administration',
       color: _tileBlue,
-      children: [
-        _sheetAction(
-          label: 'Modifier coordonnées de la MAM',
-          onTap: () => context.go('/structure-management'),
-          bulletColor: _tileBlue,
-        ),
-        if (isMAMStructure)
-          _sheetAction(
-            label: 'Gérer membres (Ajouter / Retirer)',
-            onTap: _showMemberManagement,
-            bulletColor: _tileBlue,
-          ),
-        if (isMAMStructure)
-          _sheetAction(
-            label: 'Affichage des enfants',
-            onTap: _showChildDisplaySettings,
-            bulletColor: _tileBlue,
-          ),
-        _sheetAction(
-          label: 'Politique de confidentialité',
-          onTap: () => _launchURL(
-              'https://www.poppin-s.fr/politique-de-confidentialite/'),
-          bulletColor: _tileBlue,
-        ),
-        _sheetAction(
-          label: "Conditions d'utilisation",
-          onTap: () =>
-              _launchURL('https://www.poppin-s.fr/condition-dutilisation/'),
-          bulletColor: _tileBlue,
-        ),
-      ],
+      children: actions,
     );
   }
 
@@ -1511,30 +1560,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       );
     } else {
+      final List<Widget> actions = [
+        _sheetAction(
+          label: 'Planning enfants / horaires',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PlanningScreen()),
+          ),
+          bulletColor: _tileRed,
+        ),
+        _sheetAction(
+          label: 'Température réfrigérateur / congélateur',
+          onTap: _showAssmatDailyFunctioning,
+          bulletColor: _tileRed,
+          badgeText: temperatureBadge,
+        ),
+        _sheetAction(
+          label: 'Gestion équipements / matériel',
+          onTap: _showEquipmentManagement,
+          bulletColor: _tileRed,
+        ),
+      ];
+
+      if (isParentEmployeurStructure) {
+        const String lockedMessage =
+            'Fonctionnalité disponible avec l\'abonnement professionnel.';
+        actions.addAll([
+          _sheetAction(
+            label: 'Planning entretien (qui fait quoi)',
+            onTap: () {},
+            bulletColor: _tileRed,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Délégations / Remplacement',
+            onTap: () {},
+            bulletColor: _tileRed,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Messagerie interne',
+            onTap: () {},
+            bulletColor: _tileRed,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+        ]);
+      }
+
       _showCategorySheet(
         title: 'Fonctionnement quotidien',
         color: _tileRed,
-        children: [
-          _sheetAction(
-            label: 'Planning enfants / horaires',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PlanningScreen()),
-            ),
-            bulletColor: _tileRed,
-          ),
-          _sheetAction(
-            label: 'Température réfrigérateur / congélateur',
-            onTap: _showAssmatDailyFunctioning,
-            bulletColor: _tileRed,
-            badgeText: temperatureBadge,
-          ),
-          _sheetAction(
-            label: 'Gestion équipements / matériel',
-            onTap: _showEquipmentManagement,
-            bulletColor: _tileRed,
-          ),
-        ],
+        children: actions,
       );
     }
   }
@@ -1555,6 +1634,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _openChildrenParents() {
+    if (isParentEmployeurStructure) {
+      const String lockedMessage =
+          'Gestion disponible avec l\'abonnement professionnel.';
+      _showCategorySheet(
+        title: 'Enfants et Parents',
+        color: _tileCyan,
+        children: [
+          _sheetAction(
+            label: 'Ajouter un enfant',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Profils enfants complets (santé, besoins, alimentation…)',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Modifier horaires enfants',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Coordonnées des parents',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Modifier photo profil enfant',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
+            label: 'Retirer un enfant',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+        ],
+      );
+      return;
+    }
+
     _showCategorySheet(
       title: 'Enfants et Parents',
       color: _tileCyan,
@@ -1650,8 +1783,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             top: 14,
             right: 14,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -2542,10 +2674,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
 
+      final String structureType =
+          (structureSnapshot.data()?['structureType'] ?? '')
+              .toString()
+              .toLowerCase();
+
       setState(() {
         structureName =
             structureSnapshot.data()?['structureName'] ?? 'Ma Structure';
         enfants = tempEnfants;
+        isParentEmployeurStructure = structureType == 'parent_employeur' ||
+            structureType == 'parentemployeur';
         isLoading = false;
       });
     } catch (e) {

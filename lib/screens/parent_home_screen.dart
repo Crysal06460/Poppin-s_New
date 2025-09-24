@@ -7,7 +7,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../widgets/badged_icon.dart';
 import '../utils/stock_badge_util.dart';
 import '../utils/message_badge_util.dart';
 import '../utils/actualites_badge_util.dart';
@@ -22,6 +21,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'parent_coordonnees_screen.dart';
 
 class ParentHomeScreen extends StatefulWidget {
   const ParentHomeScreen({Key? key}) : super(key: key);
@@ -41,9 +41,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
-  static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
-  static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
   // Variables pour les actualités
   Map<String, List<String>> _menuSemaine = {
@@ -69,14 +66,29 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   bool _showMessageBadge = false;
   bool _showEventsBadge = false;
   bool _showSortiesBadge = false;
-  bool _showActualitesBadge = false; // global: events OR sorties
   bool _showPhotosBadge = false;
+
+  static const String _assistantPopupPrefPrefix =
+      'parent_emp_assistant_prompt_';
+  static const String _childPopupPrefPrefix = 'parent_emp_child_prompt_';
+
+  bool _isParentEmployeur = false;
+  bool _hasAssistant = false;
+  Map<String, dynamic>? _assistantInfo;
+  String _structureId = '';
+  String _structureName = '';
+  String _parentLastName = '';
+  bool _parentOnboardingScheduled = false;
 
   // Variable pour suivre si l'application était en arrière-plan
   bool _wasInBackground = false;
 
   // Ajouter ces déclarations pour la gestion des streams
   List<StreamSubscription> _subscriptions = [];
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _assistantStructureSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _assistantUserSubscription;
   Map<String, List<Map<String, dynamic>>> _eventsMap = {
     'activity': [],
     'meal': [],
@@ -107,10 +119,1688 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
   Future<void> _performPhotoCleanup() async {
     try {
-      await PhotoCleanupService.checkAndCleanupPhotos();
+      final User? user = _auth.currentUser;
+      if (user == null) {
+        print("🧹 Nettoyage des médias ignoré: aucun utilisateur connecté");
+        return;
+      }
+
+      String? structureId;
+      final String email = user.email?.toLowerCase() ?? '';
+
+      if (email.isNotEmpty) {
+        final userDoc = await _firestore.collection('users').doc(email).get();
+        final data = userDoc.data();
+        final storedStructureId = data?['structureId']?.toString().trim();
+        if (storedStructureId != null && storedStructureId.isNotEmpty) {
+          structureId = storedStructureId;
+        }
+      }
+
+      structureId ??= user.uid;
+
+      if (structureId.isEmpty) {
+        print(
+            "🧹 Nettoyage des médias ignoré: structure introuvable pour l'utilisateur courant");
+        return;
+      }
+
+      await PhotoCleanupService.checkAndCleanupPhotos(
+          structureIds: [structureId]);
     } catch (e) {
       print("Erreur lors du nettoyage automatique des photos: $e");
       // Ne pas montrer d'erreur à l'utilisateur car c'est un processus en arrière-plan
+    }
+  }
+
+  String? _formatAssistantStatus(String? rawStatus) {
+    if (rawStatus == null || rawStatus.isEmpty) {
+      return null;
+    }
+
+    switch (rawStatus.toLowerCase()) {
+      case 'pending':
+        return 'Invitation envoyée';
+      case 'completed':
+        return 'Inscription finalisée';
+      case 'resent':
+        return 'Invitation renvoyée';
+      default:
+        return null;
+    }
+  }
+
+  Color _assistantStatusColor(String? rawStatus) {
+    switch (rawStatus?.toLowerCase()) {
+      case 'pending':
+        return Colors.orange.shade600;
+      case 'resent':
+        return Colors.blue.shade600;
+      case 'completed':
+        return Colors.green.shade600;
+      default:
+        return Colors.grey.shade600;
+    }
+  }
+
+  void _attachAssistantStructureListener(String structureId) {
+    _assistantStructureSubscription?.cancel();
+
+    if (structureId.isEmpty) {
+      return;
+    }
+
+    _assistantStructureSubscription = _firestore
+        .collection('structures')
+        .doc(structureId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) {
+        if (!mounted) return;
+        setState(() {
+          _hasAssistant = false;
+          _assistantInfo = null;
+        });
+        _assistantUserSubscription?.cancel();
+        return;
+      }
+
+      final data = snapshot.data() ?? {};
+      final assistantEmail =
+          (data['assistantEmail'] ?? '').toString().trim().toLowerCase();
+      final assistantStatus =
+          (data['assistantInvitationStatus'] ?? '').toString().trim();
+      final hasAssistant =
+          assistantEmail.isNotEmpty || assistantStatus.isNotEmpty;
+
+      if (!mounted) return;
+
+      setState(() {
+        _hasAssistant = hasAssistant;
+        if (!hasAssistant) {
+          _assistantInfo = null;
+        } else {
+          final updatedInfo =
+              Map<String, dynamic>.from(_assistantInfo ?? <String, dynamic>{});
+          if (assistantEmail.isNotEmpty) {
+            updatedInfo['email'] = assistantEmail;
+          }
+          final firstName = (data['assistantFirstName'] ?? '').toString();
+          if (firstName.isNotEmpty) {
+            updatedInfo['firstName'] = firstName;
+          }
+          final lastName = (data['assistantLastName'] ?? '').toString();
+          if (lastName.isNotEmpty) {
+            updatedInfo['lastName'] = lastName;
+          }
+          final phone = (data['assistantPhone'] ?? '').toString();
+          if (phone.isNotEmpty) {
+            updatedInfo['phone'] = phone;
+          }
+          if (assistantStatus.isNotEmpty) {
+            updatedInfo['status'] = assistantStatus;
+          }
+          final linkedUserId = (data['assistantLinkedUserId'] ?? '').toString();
+          if (linkedUserId.isNotEmpty) {
+            updatedInfo['linkedUserId'] = linkedUserId;
+          }
+          _assistantInfo = updatedInfo;
+        }
+      });
+
+      if (assistantEmail.isNotEmpty) {
+        _attachAssistantUserListener(assistantEmail);
+      } else {
+        _assistantUserSubscription?.cancel();
+      }
+    }, onError: (error) {
+      print('⚠️ Impossible de suivre la structure parent employeur: $error');
+    });
+  }
+
+  void _attachAssistantUserListener(String? email) {
+    final normalizedEmail = (email ?? '').trim().toLowerCase();
+    _assistantUserSubscription?.cancel();
+
+    if (normalizedEmail.isEmpty) {
+      return;
+    }
+
+    _assistantUserSubscription = _firestore
+        .collection('users')
+        .doc(normalizedEmail)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) {
+        return;
+      }
+
+      final data = snapshot.data() ?? {};
+      if (!mounted) return;
+
+      setState(() {
+        final updatedInfo =
+            Map<String, dynamic>.from(_assistantInfo ?? <String, dynamic>{});
+        updatedInfo['email'] = normalizedEmail;
+
+        final firstName = (data['firstName'] ?? '').toString();
+        if (firstName.isNotEmpty) {
+          updatedInfo['firstName'] = firstName;
+        }
+
+        final lastName = (data['lastName'] ?? '').toString();
+        if (lastName.isNotEmpty) {
+          updatedInfo['lastName'] = lastName;
+        }
+
+        final phone = (data['phone'] ?? '').toString();
+        if (phone.isNotEmpty) {
+          updatedInfo['phone'] = phone;
+        }
+
+        final linkedUserId =
+            (data['firebaseUid'] ?? data['uid'] ?? '').toString();
+        if (linkedUserId.isNotEmpty) {
+          updatedInfo['linkedUserId'] = linkedUserId;
+        }
+
+        _assistantInfo = updatedInfo;
+      });
+    }, onError: (error) {
+      print('⚠️ Impossible de suivre les coordonnées de l\'assistante: $error');
+    });
+  }
+
+  void _scheduleParentEmployeurOnboarding() {
+    if (!_isParentEmployeur || _parentOnboardingScheduled) return;
+    _parentOnboardingScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _runParentEmployeurOnboarding();
+    });
+  }
+
+  Widget _buildDashboardSection({
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...children.map((child) => Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: child,
+            )),
+      ],
+    );
+  }
+
+  Widget _buildModernTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback? onTap,
+    bool enabled = true,
+    bool badge = false,
+  }) {
+    final isEnabled = enabled && onTap != null;
+
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled ? onTap : null,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isEnabled ? Colors.white : Colors.grey[50],
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isEnabled
+                    ? color.withOpacity(0.2)
+                    : Colors.grey.withOpacity(0.2),
+                width: 1.5,
+              ),
+              boxShadow: isEnabled
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isEnabled
+                            ? color.withOpacity(0.15)
+                            : Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: isEnabled ? color : Colors.grey[400],
+                        size: 24,
+                      ),
+                    ),
+                    if (badge)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            Icons.priority_high,
+                            color: Colors.white,
+                            size: 10,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isEnabled ? Colors.black87 : Colors.grey[500],
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color:
+                              isEnabled ? Colors.grey[600] : Colors.grey[400],
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: isEnabled ? color : Colors.grey[400],
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runParentEmployeurOnboarding() async {
+    if (!_isParentEmployeur) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final String keyBase = _structureId.isNotEmpty
+        ? _structureId
+        : (_auth.currentUser?.uid ?? 'default');
+    final String assistantKey = '$_assistantPopupPrefPrefix$keyBase';
+    final String childKey = '$_childPopupPrefPrefix$keyBase';
+
+    if (!_hasAssistant) {
+      final bool assistantPromptShown = prefs.getBool(assistantKey) ?? false;
+      if (!assistantPromptShown) {
+        await prefs.setBool(assistantKey, true);
+        _showParentAssistantPrompt();
+        return;
+      }
+    }
+
+    if (_children.isEmpty) {
+      final bool childPromptShown = prefs.getBool(childKey) ?? false;
+      if (!childPromptShown) {
+        await prefs.setBool(childKey, true);
+        _showAddParentChildPopup();
+      }
+    }
+  }
+
+  void _showParentAssistantPrompt() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Ajouter votre assistante maternelle",
+              textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/images/Icone_Ajout_Enfant.png', height: 100),
+              const SizedBox(height: 12),
+              const Text(
+                "Invitez l'assistante maternelle qui accueille votre enfant afin qu'elle rejoigne Poppin's.",
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("PLUS TARD",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showParentAssistantForm();
+              },
+              child: Text("INVITER",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: primaryBlue)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showParentAssistantForm() {
+    final firstNameController = TextEditingController();
+    final lastNameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                "Inviter votre assistante",
+                textAlign: TextAlign.center,
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        controller: firstNameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Prénom',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Prénom requis';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: lastNameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Nom',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Nom requis';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Email requis';
+                          }
+                          final emailRegex = RegExp(
+                              r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+                          if (!emailRegex.hasMatch(value.trim())) {
+                            return 'Email invalide';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'Téléphone (optionnel)',
+                          hintText: '0601020304',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return null;
+                          }
+                          if (value.trim().length != 10) {
+                            return '10 chiffres requis';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                        },
+                  child: const Text('ANNULER'),
+                ),
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setModalState(() {
+                            isSubmitting = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            await _submitParentAssistantInvitation(
+                              firstNameController.text.trim(),
+                              lastNameController.text.trim(),
+                              emailController.text.trim().toLowerCase(),
+                              phoneController.text.trim(),
+                            );
+
+                            if (!mounted) return;
+                            Navigator.of(context).pop();
+
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text("Invitation envoyée à l'assistante"),
+                              ),
+                            );
+
+                            _parentOnboardingScheduled = false;
+                            await _loadUserData();
+                          } catch (e) {
+                            setModalState(() {
+                              errorMessage =
+                                  e.toString().replaceFirst('Exception: ', '');
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    disabledBackgroundColor: primaryBlue.withOpacity(0.5),
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.0),
+                        )
+                      : const Text('ENVOYER'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitParentAssistantInvitation(
+      String firstName, String lastName, String email, String phone) async {
+    final String normalizedEmail = email.trim().toLowerCase();
+    final String digitsPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final User? user = _auth.currentUser;
+    if (user == null) {
+      throw Exception("Utilisateur non connecté");
+    }
+
+    final String structureId =
+        _structureId.isNotEmpty ? _structureId : user.uid;
+
+    final DocumentReference structureRef =
+        _firestore.collection('structures').doc(structureId);
+
+    await structureRef.set({
+      'assistantFirstName': firstName,
+      'assistantLastName': lastName,
+      'assistantEmail': normalizedEmail,
+      'assistantPhone': digitsPhone,
+      'assistantInvitationStatus': 'pending',
+      'assistantInvitationSentAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    final DateTime expirationDate =
+        DateTime.now().add(const Duration(days: 30));
+    final String parentFullName = ('$_parentFirstName $_parentLastName')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    await _firestore.collection('invitations').add({
+      'email': normalizedEmail,
+      'type': 'assistant',
+      'structureId': structureId,
+      'structureName': _structureName,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expirationDate),
+      'status': 'active',
+      'assistantFirstName': firstName,
+      'assistantLastName': lastName,
+      'assistantPhone': digitsPhone,
+      'parentFullName': parentFullName,
+      'invitedBy': user.email?.toLowerCase() ?? user.uid,
+      'invitationSource': 'parent_employeur',
+    });
+
+    await _firestore.collection('users').doc(normalizedEmail).set({
+      'email': normalizedEmail,
+      'role': 'assistantFromParent',
+      'structureId': structureId,
+      'structureName': _structureName,
+      'invitedByParent': true,
+      'isFirstLogin': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _firestore
+        .collection('structures')
+        .doc(structureId)
+        .collection('assistants')
+        .doc(normalizedEmail)
+        .set({
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': normalizedEmail,
+      'phone': digitsPhone,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final templateData = {
+      'assistantFirstName': firstName,
+      'assistantLastName': lastName,
+      'assistantEmail': normalizedEmail,
+      'parentFullName':
+          parentFullName.isEmpty ? (user.email ?? '') : parentFullName,
+      'childFirstName': '',
+      'structureName': _structureName,
+      'iosLink': 'https://apps.apple.com/app/id123456789',
+      'androidLink':
+          'https://play.google.com/store/apps/details?id=com.example.poppins_app',
+      'year': DateTime.now().year.toString(),
+    };
+
+    await _firestore.collection('emailQueue').add({
+      'to': normalizedEmail,
+      'template': 'parent-assistant-invitation',
+      'subject':
+          "Invitation Poppins - Famille ${_structureName.isEmpty ? parentFullName : _structureName}",
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'priority': 'high',
+      'retryCount': 0,
+      'templateData': templateData,
+    });
+
+    if (mounted) {
+      setState(() {
+        _hasAssistant = true;
+        _assistantInfo = {
+          'email': normalizedEmail,
+          'firstName': firstName,
+          'lastName': lastName,
+          'phone': digitsPhone,
+          'status': 'pending',
+          'linkedUserId': '',
+        };
+      });
+    }
+  }
+
+  void _showAddParentChildPopup() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title:
+              const Text("Ajouter votre enfant ?", textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/images/Icone_Ajout_Enfant.png', height: 100),
+              const SizedBox(height: 10),
+              const Text(
+                "Vous pourrez ainsi partager les transmissions et documents avec votre assistante.",
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("PLUS TARD",
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                this
+                    .context
+                    .go('/child-info', extra: {'parentEmployerFlow': true});
+              },
+              child: Text("AJOUTER",
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: primaryBlue)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openParentEmployeurDashboard() {
+    if (!mounted) return;
+
+    final BuildContext navigatorContext = context;
+    final selectedChild = _selectedChild;
+    final bool hasChild = selectedChild != null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white,
+                const Color(0xFFF8FAFC),
+              ],
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Handle moderne
+              Container(
+                width: 48,
+                height: 5,
+                margin: EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+
+              // Header avec animation
+              Container(
+                padding: EdgeInsets.fromLTRB(24, 16, 24, 32),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [primaryBlue, primaryBlue.withOpacity(0.8)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryBlue.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.dashboard_customize_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Tableau de bord",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            "Gérez votre espace parent employeur",
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.grey[100],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Contenu scrollable
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: BouncingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Section Assistante
+                      _buildDashboardSection(
+                        title: "Mon assistante",
+                        subtitle: hasChild
+                            ? "Gérer la relation de travail"
+                            : "Inviter une assistante",
+                        children: [
+                          _buildModernTile(
+                            icon: Icons.handshake_rounded,
+                            title: _hasAssistant
+                                ? "Gérer mon assistante"
+                                : "Inviter une assistante",
+                            subtitle: _hasAssistant && _assistantInfo != null
+                                ? '${_assistantInfo?['firstName'] ?? ''} ${_assistantInfo?['lastName'] ?? ''}'
+                                : "Commencez par inviter votre assistante",
+                            color: Colors.green,
+                            onTap: () {
+                              Navigator.pop(context);
+                              _showManageAssistantSheet();
+                            },
+                            badge: !_hasAssistant,
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: 32),
+
+                      // Section Enfant
+                      _buildDashboardSection(
+                        title: "Mon enfant",
+                        subtitle: hasChild
+                            ? "Informations et paramètres"
+                            : "Ajouter votre enfant",
+                        children: [
+                          if (!hasChild)
+                            _buildModernTile(
+                              icon: Icons.child_friendly_rounded,
+                              title: "Ajouter un enfant",
+                              subtitle: "Créer le profil de votre enfant",
+                              color: Colors.pink,
+                              onTap: () {
+                                Navigator.pop(context);
+                                _showAddParentChildPopup();
+                              },
+                              badge: true,
+                            ),
+                          _buildModernTile(
+                            icon: Icons.contact_mail_rounded,
+                            title: "Mes coordonnées",
+                            subtitle: "Modifier vos informations de contact",
+                            color: Colors.orange,
+                            enabled: hasChild,
+                            onTap: hasChild
+                                ? () {
+                                    Navigator.pop(context);
+                                    final child =
+                                        selectedChild as Map<String, dynamic>;
+                                    _openParentCoordonnees(child);
+                                  }
+                                : null,
+                          ),
+                          _buildModernTile(
+                            icon: Icons.family_restroom_rounded,
+                            title: "Parent 2",
+                            subtitle: "Ajouter ou gérer le deuxième parent",
+                            color: Colors.purple,
+                            enabled: hasChild,
+                            onTap: hasChild
+                                ? () {
+                                    Navigator.pop(context);
+                                    final child =
+                                        selectedChild as Map<String, dynamic>;
+                                    _showParentTwoDialog(child['id']);
+                                  }
+                                : null,
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: 32),
+
+                      // Section Profil enfant
+                      if (hasChild) ...[
+                        _buildDashboardSection(
+                          title: "Profil enfant",
+                          subtitle:
+                              "Personnaliser le profil de ${selectedChild?['firstName'] ?? 'votre enfant'}",
+                          children: [
+                            _buildModernTile(
+                              icon: Icons.assignment_ind_rounded,
+                              title: "Fiche enfant",
+                              subtitle:
+                                  "Informations personnelles et médicales",
+                              color: Colors.teal,
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final child =
+                                    selectedChild as Map<String, dynamic>;
+                                await navigatorContext.push(
+                                  '/parent/child-profile',
+                                  extra: {
+                                    'childId': child['id'],
+                                    'structureId':
+                                        child['structureId'] ?? _structureId,
+                                  },
+                                );
+                              },
+                            ),
+                            _buildModernTile(
+                              icon: Icons.photo_camera_rounded,
+                              title: "Photo de profil",
+                              subtitle: "Modifier la photo de votre enfant",
+                              color: Colors.indigo,
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final child =
+                                    selectedChild as Map<String, dynamic>;
+                                final result = await navigatorContext.push(
+                                  '/parent/child-photo',
+                                  extra: {
+                                    'childId': child['id'],
+                                    'structureId':
+                                        child['structureId'] ?? _structureId,
+                                    'childName':
+                                        child['firstName'] ?? 'Mon enfant',
+                                  },
+                                );
+                                if (result == true && mounted) {
+                                  ScaffoldMessenger.of(navigatorContext)
+                                      .showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle,
+                                              color: Colors.white, size: 20),
+                                          SizedBox(width: 8),
+                                          Text('Photo mise à jour avec succès'),
+                                        ],
+                                      ),
+                                      backgroundColor: Colors.green,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                            _buildModernTile(
+                              icon: Icons.schedule_rounded,
+                              title: "Horaires de garde",
+                              subtitle: "Définir les créneaux d'accueil",
+                              color: Colors.amber,
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final child =
+                                    selectedChild as Map<String, dynamic>;
+                                final result = await navigatorContext.push(
+                                  '/parent/child-schedule',
+                                  extra: {
+                                    'childId': child['id'],
+                                    'structureId':
+                                        child['structureId'] ?? _structureId,
+                                    'childName':
+                                        child['firstName'] ?? 'Mon enfant',
+                                  },
+                                );
+                                if (result == true && mounted) {
+                                  ScaffoldMessenger.of(navigatorContext)
+                                      .showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle,
+                                              color: Colors.white, size: 20),
+                                          SizedBox(width: 8),
+                                          Text(
+                                              'Horaires mis à jour avec succès'),
+                                        ],
+                                      ),
+                                      backgroundColor: Colors.green,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // Espacement final
+                      SizedBox(height: MediaQuery.of(context).padding.bottom),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _openParentCoordonnees(Map<String, dynamic> child) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ParentCoordonneesScreen(
+          childId: child['id'],
+          childName: child['firstName'] ?? '',
+          structureId: _structureId,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showParentTwoDialog(String childId) async {
+    if (_structureId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Structure introuvable pour cet enfant')),
+      );
+      return;
+    }
+
+    Map<String, dynamic> existingParent2 = {};
+    String childFirstName = _selectedChild?['firstName']?.toString() ?? '';
+    try {
+      final snapshot = await _firestore
+          .collection('structures')
+          .doc(_structureId)
+          .collection('children')
+          .doc(childId)
+          .get();
+      final data = snapshot.data() ?? {};
+      existingParent2 = Map<String, dynamic>.from(
+          data['parent2'] ?? const <String, dynamic>{});
+      if (childFirstName.isEmpty) {
+        childFirstName = (data['firstName'] ?? '').toString();
+      }
+    } catch (_) {}
+
+    final firstNameController = TextEditingController(
+        text: (existingParent2['firstName'] ?? '').toString());
+    final lastNameController = TextEditingController(
+        text: (existingParent2['lastName'] ?? '').toString());
+    final emailController = TextEditingController(
+        text: (existingParent2['email'] ?? '').toString().toLowerCase());
+    final phoneController = TextEditingController(
+        text: (existingParent2['phone'] ?? '').toString());
+
+    String? errorMessage;
+    bool isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                'Ajouter ou modifier le Parent 2',
+                textAlign: TextAlign.center,
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: firstNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Prénom',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: lastNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom',
+                        border: OutlineInputBorder(),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Téléphone (facultatif)',
+                        hintText: '0601020304',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('ANNULER'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final firstName = firstNameController.text.trim();
+                          final lastName = lastNameController.text.trim();
+                          final email =
+                              emailController.text.trim().toLowerCase();
+                          final phoneDigits = phoneController.text
+                              .replaceAll(RegExp(r'\D'), '');
+
+                          if (firstName.isEmpty || lastName.isEmpty) {
+                            setState(() {
+                              errorMessage = 'Prénom et nom sont requis';
+                            });
+                            return;
+                          }
+
+                          if (email.isEmpty ||
+                              !RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                                  .hasMatch(email)) {
+                            setState(() {
+                              errorMessage = 'Adresse email invalide';
+                            });
+                            return;
+                          }
+
+                          if (phoneController.text.isNotEmpty &&
+                              phoneDigits.length != 10) {
+                            setState(() {
+                              errorMessage =
+                                  'Téléphone invalide (10 chiffres requis)';
+                            });
+                            return;
+                          }
+
+                          setState(() {
+                            isSaving = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            await _saveParentTwoDetails(
+                              childId,
+                              childFirstName,
+                              {
+                                'firstName': firstName,
+                                'lastName': lastName,
+                                'email': email,
+                                'phone': phoneDigits,
+                              },
+                            );
+
+                            if (!mounted) return;
+                            Navigator.of(dialogContext).pop();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Parent 2 enregistré et invitation envoyée à $email',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+
+                            await _loadUserData();
+                          } catch (e) {
+                            setState(() {
+                              errorMessage = e.toString();
+                              isSaving = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    disabledBackgroundColor: primaryBlue.withOpacity(0.5),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('ENREGISTRER'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveParentTwoDetails(
+      String childId, String childName, Map<String, String> parentData) async {
+    final String structureId = _structureId;
+    if (structureId.isEmpty) {
+      throw Exception('Structure introuvable');
+    }
+
+    final childRef = _firestore
+        .collection('structures')
+        .doc(structureId)
+        .collection('children')
+        .doc(childId);
+
+    Map<String, dynamic> existingParent2 = {};
+    try {
+      final snapshot = await childRef.get();
+      existingParent2 = Map<String, dynamic>.from(
+          snapshot.data()?['parent2'] ?? const <String, dynamic>{});
+    } catch (_) {}
+
+    final updatedParent2 = {
+      ...existingParent2,
+      ...parentData,
+    }..removeWhere((key, value) => value is String && value.trim().isEmpty);
+
+    await childRef.set({'parent2': updatedParent2}, SetOptions(merge: true));
+
+    final String email = parentData['email']?.toLowerCase() ?? '';
+    if (email.isEmpty) return;
+
+    final String firstName = parentData['firstName'] ?? '';
+    final String lastName = parentData['lastName'] ?? '';
+
+    await _firestore.collection('users').doc(email).set({
+      'role': 'parent',
+      'email': email,
+      'children': FieldValue.arrayUnion([childId]),
+      'structureId': structureId,
+      'structureName': _structureName,
+      'firstName': firstName,
+      'lastName': lastName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _firestore.collection('invitations').add({
+      'email': email,
+      'type': 'parent',
+      'structureId': structureId,
+      'structureName': _structureName,
+      'childId': childId,
+      'childName': childName,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt':
+          Timestamp.fromDate(DateTime.now().add(const Duration(days: 30))),
+      'status': 'active',
+      'invitationSource': 'parent_employeur',
+      'parentFullName': ('$_parentFirstName $_parentLastName').trim(),
+    });
+
+    await _firestore.collection('emailQueue').add({
+      'to': email,
+      'template': 'parent-invitation',
+      'subject': "Invitation Poppins - Pour $childName",
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'priority': 'high',
+      'retryCount': 0,
+      'templateData': {
+        'firstName': firstName,
+        'lastName': lastName,
+        'childName': childName,
+        'structureName': _structureName,
+        'structureId': structureId,
+        'androidLink':
+            'https://play.google.com/store/apps/details?id=com.example.poppins_app',
+        'iosLink': 'https://apps.apple.com/us/app/poppins/id6744274953',
+        'email': email,
+        'year': DateTime.now().year.toString(),
+      },
+    });
+  }
+
+  void _showManageAssistantSheet() {
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.8,
+          expand: false,
+          builder: (context, scrollController) {
+            final assistant = _assistantInfo;
+            final String? assistantStatusText = assistant != null
+                ? _formatAssistantStatus(assistant['status']?.toString())
+                : null;
+            final Color assistantStatusColor =
+                _assistantStatusColor(assistant?['status']?.toString());
+            return SafeArea(
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    width: 40,
+                    height: 5,
+                    margin: EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2.5),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.handshake, color: primaryBlue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Mon assistante",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: primaryBlue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Scrollable content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          if (assistant != null && _hasAssistant)
+                            Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        primaryBlue.withOpacity(0.1),
+                                    child: const Icon(Icons.person,
+                                        color: primaryBlue),
+                                  ),
+                                  title: Text(
+                                    '${assistant['firstName'] ?? ''} ${assistant['lastName'] ?? ''}'
+                                        .trim(),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if ((assistant['email'] ?? '')
+                                          .toString()
+                                          .isNotEmpty)
+                                        Text(assistant['email']),
+                                      if ((assistant['phone'] ?? '')
+                                          .toString()
+                                          .isNotEmpty)
+                                        Text(
+                                            'Téléphone : ${assistant['phone']}'),
+                                      if (assistantStatusText != null)
+                                        Text(
+                                          assistantStatusText,
+                                          style: TextStyle(
+                                            color: assistantStatusColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _showParentAssistantForm();
+                                        },
+                                        icon: const Icon(Icons.send),
+                                        label: const Text(
+                                            'Renvoyer une invitation'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryRed,
+                                        ),
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _confirmRemoveAssistant();
+                                        },
+                                        icon: const Icon(Icons.delete_outline),
+                                        label: const Text('Supprimer'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            )
+                          else
+                            Column(
+                              children: [
+                                const Text(
+                                  "Aucune assistante n'est encore associée à votre compte.",
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _showParentAssistantForm();
+                                  },
+                                  icon: const Icon(Icons.person_add_alt_1),
+                                  label: const Text('Inviter une assistante'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryBlue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          SizedBox(
+                              height:
+                                  MediaQuery.of(context).padding.bottom + 12),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmRemoveAssistant() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Supprimer l\'assistante ?'),
+          content: const Text(
+              "Cette action retirera l'assistante liée à votre compte. Vous pourrez en inviter une autre ensuite."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ANNULER'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _removeAssistant();
+              },
+              child:
+                  const Text('SUPPRIMER', style: TextStyle(color: primaryRed)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _removeAssistant() async {
+    final assistant = _assistantInfo;
+    if (assistant == null) return;
+
+    try {
+      final WriteBatch batch = _firestore.batch();
+      final String structureId = _structureId.isNotEmpty
+          ? _structureId
+          : (_auth.currentUser?.uid ?? '');
+      final DocumentReference structureRef =
+          _firestore.collection('structures').doc(structureId);
+
+      batch.update(structureRef, {
+        'assistantFirstName': FieldValue.delete(),
+        'assistantLastName': FieldValue.delete(),
+        'assistantEmail': FieldValue.delete(),
+        'assistantPhone': FieldValue.delete(),
+        'assistantInvitationStatus': FieldValue.delete(),
+        'assistantInvitationSentAt': FieldValue.delete(),
+        'assistantLinkedUserId': FieldValue.delete(),
+      });
+
+      final String assistantEmail =
+          (assistant['email'] ?? '').toString().trim().toLowerCase();
+      if (assistantEmail.isNotEmpty) {
+        final DocumentReference assistantUserRef =
+            _firestore.collection('users').doc(assistantEmail);
+        batch.set(
+            assistantUserRef,
+            {
+              'structureId': FieldValue.delete(),
+              'structureName': FieldValue.delete(),
+              'invitedByParent': FieldValue.delete(),
+              'role': 'assistantFromParentRemoved',
+            },
+            SetOptions(merge: true));
+
+        final DocumentReference assistantDocRef =
+            structureRef.collection('assistants').doc(assistantEmail);
+        batch.delete(assistantDocRef);
+      }
+
+      await batch.commit();
+
+      final prefs = await SharedPreferences.getInstance();
+      final String keyBase = structureId.isNotEmpty
+          ? structureId
+          : (_auth.currentUser?.uid ?? 'default');
+      await prefs.remove('$_assistantPopupPrefPrefix$keyBase');
+
+      if (mounted) {
+        setState(() {
+          _hasAssistant = false;
+          _assistantInfo = null;
+        });
+      }
+
+      _parentOnboardingScheduled = false;
+      await _loadUserData();
+    } catch (e) {
+      print('❌ Erreur suppression assistante: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                "Erreur lors de la suppression de l'assistante. Réessayez plus tard"),
+          ),
+        );
+      }
     }
   }
 
@@ -219,7 +1909,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   // Conservez UNIQUEMENT cette version de la méthode et supprimez l'autre
   void _showPhotoHistory() {
     // Marquer les photos comme vues et retirer le badge avant d'ouvrir
-    PhotosBadgeUtil.markSeen().catchError((e) => print('📸 markSeen error: $e'));
+    PhotosBadgeUtil.markSeen()
+        .catchError((e) => print('📸 markSeen error: $e'));
     // Nettoyer le badge de l'icône (iOS/Android)
     NotificationService.clearBadge();
     if (mounted && _showPhotosBadge) {
@@ -660,6 +2351,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     // Supprimer l'observateur lorsque le widget est disposé
     WidgetsBinding.instance.removeObserver(this);
     _disposeCurrentSubscriptions();
+    _assistantStructureSubscription?.cancel();
+    _assistantUserSubscription?.cancel();
     super.dispose();
   }
 
@@ -749,7 +2442,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         setState(() {
           _showEventsBadge = badges['events'] ?? false;
           _showSortiesBadge = badges['sorties'] ?? false;
-          _showActualitesBadge = _showEventsBadge || _showSortiesBadge;
         });
       }
     } catch (e) {
@@ -758,7 +2450,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         setState(() {
           _showEventsBadge = false;
           _showSortiesBadge = false;
-          _showActualitesBadge = false;
         });
       }
     }
@@ -874,43 +2565,155 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     try {
       final User? user = _auth.currentUser;
       if (user == null) {
-        context.go('/login');
+        if (mounted) {
+          context.go('/login');
+        }
         return;
       }
 
-      // Récupérer les informations du parent
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(user.email?.toLowerCase())
-          .get();
+      final String userEmail = user.email?.toLowerCase() ?? '';
+      final userDoc = await _firestore.collection('users').doc(userEmail).get();
+      final Map<String, dynamic> userData = userDoc.data() ?? {};
 
-      if (userDoc.exists) {
-        final userData = userDoc.data()!;
-        setState(() {
-          // Extraire uniquement le prénom pour un ton plus amical
-          _parentFirstName = userData['firstName'] ?? '';
-        });
+      String structureId =
+          (userData['structureId'] ?? user.uid).toString().trim();
+      List<String> childIds =
+          List<String>.from(userData['children'] ?? const <String>[]);
+      String parentFirstName = (userData['firstName'] ?? '').toString();
+      String parentLastName = (userData['lastName'] ?? '').toString();
 
-        // Récupérer les enfants associés à ce parent
-        final childIds = List<String>.from(userData['children'] ?? []);
-        final structureId = userData['structureId'];
+      Map<String, dynamic>? structureData;
+      if (structureId.isNotEmpty) {
+        final structureDoc =
+            await _firestore.collection('structures').doc(structureId).get();
+        if (structureDoc.exists) {
+          structureData = structureDoc.data();
+        }
+      }
 
-        print("📱 Parent: $_parentFirstName, Structure: $structureId");
-        print("📱 IDs des enfants trouvés: $childIds");
+      bool isParentEmployeur = false;
+      bool hasAssistant = false;
+      Map<String, dynamic>? assistantInfo;
+      String structureName = '';
 
-        if (childIds.isNotEmpty && structureId != null) {
-          List<Map<String, dynamic>> childrenData = [];
+      if (structureData != null) {
+        structureName = (structureData['structureName'] ?? '').toString();
 
-          for (final childId in childIds) {
-            final childDoc = await _firestore
+        final String structureType = (structureData['structureType'] ?? '')
+            .toString()
+            .toLowerCase()
+            .trim();
+        if (structureType == 'parent_employeur' ||
+            structureType == 'parentemployeur') {
+          isParentEmployeur = true;
+        }
+
+        if (parentFirstName.isEmpty) {
+          parentFirstName = (structureData['firstName'] ??
+                  structureData['ownerFirstName'] ??
+                  '')
+              .toString();
+        }
+        if (parentLastName.isEmpty) {
+          parentLastName = (structureData['lastName'] ??
+                  structureData['ownerLastName'] ??
+                  '')
+              .toString();
+        }
+
+        final String assistantEmail =
+            (structureData['assistantEmail'] ?? '').toString().trim();
+        final String assistantStatus =
+            (structureData['assistantInvitationStatus'] ?? '')
+                .toString()
+                .trim();
+
+        if (assistantEmail.isNotEmpty || assistantStatus.isNotEmpty) {
+          hasAssistant = true;
+
+          // Informations initiales (structure)
+          String assistantFirstName =
+              (structureData['assistantFirstName'] ?? '').toString();
+          String assistantLastName =
+              (structureData['assistantLastName'] ?? '').toString();
+          String assistantPhone =
+              (structureData['assistantPhone'] ?? '').toString();
+          String linkedUserId =
+              (structureData['assistantLinkedUserId'] ?? '').toString();
+
+          // Synchroniser avec le document utilisateur si disponible
+          if (assistantEmail.isNotEmpty) {
+            try {
+              final assistantUserDoc = await _firestore
+                  .collection('users')
+                  .doc(assistantEmail.toLowerCase())
+                  .get();
+              if (assistantUserDoc.exists) {
+                final userData = assistantUserDoc.data() ?? {};
+                if ((userData['firstName'] ?? '').toString().isNotEmpty) {
+                  assistantFirstName = userData['firstName'];
+                }
+                if ((userData['lastName'] ?? '').toString().isNotEmpty) {
+                  assistantLastName = userData['lastName'];
+                }
+                if ((userData['phone'] ?? '').toString().isNotEmpty) {
+                  assistantPhone = userData['phone'];
+                }
+                if ((userData['firebaseUid'] ?? '').toString().isNotEmpty) {
+                  linkedUserId = userData['firebaseUid'];
+                }
+              }
+            } catch (e) {
+              print('⚠️ Impossible de synchroniser les infos assistante: $e');
+            }
+          }
+
+          assistantInfo = {
+            'email': assistantEmail,
+            'firstName': assistantFirstName,
+            'lastName': assistantLastName,
+            'phone': assistantPhone,
+            'status': assistantStatus,
+            'linkedUserId': linkedUserId,
+          };
+        }
+      }
+
+      if (structureId.isEmpty) {
+        structureId = user.uid;
+      }
+
+      final List<Map<String, dynamic>> childrenData = [];
+      List<String> effectiveChildIds = List<String>.from(childIds);
+      if (structureId.isNotEmpty) {
+        if (effectiveChildIds.isEmpty && userDoc.exists) {
+          final userData = userDoc.data();
+          if (userData != null) {
+            if (userData['createdChildren'] is List) {
+              effectiveChildIds.addAll((userData['createdChildren'] as List)
+                  .map((e) => e.toString()));
+            }
+          }
+        }
+
+        if (effectiveChildIds.isNotEmpty) {
+          final chunks = <List<String>>[];
+          for (var i = 0; i < effectiveChildIds.length; i += 10) {
+            chunks.add(effectiveChildIds.sublist(
+                i,
+                i + 10 > effectiveChildIds.length
+                    ? effectiveChildIds.length
+                    : i + 10));
+          }
+          for (final chunk in chunks) {
+            final childDocs = await _firestore
                 .collection('structures')
                 .doc(structureId)
                 .collection('children')
-                .doc(childId)
+                .where(FieldPath.documentId, whereIn: chunk)
                 .get();
-
-            if (childDoc.exists) {
-              final data = childDoc.data()!;
+            for (final childDoc in childDocs.docs) {
+              final data = childDoc.data() ?? {};
               childrenData.add({
                 'id': childDoc.id,
                 'firstName': data['firstName'] ?? 'Sans nom',
@@ -921,55 +2724,107 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 'birthdate': data['birthdate'],
                 'parentId': data['parentId'] ?? '',
               });
-              print(
-                  "📱 Enfant chargé: ${data['firstName']} (ID: ${childDoc.id})");
-            } else {
-              print("⚠️ Enfant non trouvé: $childId");
             }
           }
-
-          setState(() {
-            _children = childrenData;
-            if (childrenData.isNotEmpty) {
-              _selectedChild = childrenData.first;
-              // Charger automatiquement la timeline du premier enfant
-              _loadChildTimeline(
-                  _selectedChild!['id'], _selectedChild!['structureId']);
-            }
-          });
-
-          print("📱 Nombre total d'enfants chargés: ${_children.length}");
-
-          // Chargement des actualités après avoir récupéré la structure
-          if (structureId != null) {
-            await _loadActualites(structureId);
-            print("📱 Actualités chargées pour structureId: $structureId");
-            // Vérifier/mettre à jour les badges Actualités maintenant que la structure est connue
-            await _checkActualitesBadges();
-          }
-        } else {
-          print(
-              "⚠️ Aucun enfant trouvé pour ce parent ou structureId manquant");
         }
-      } else {
-        print("⚠️ Document utilisateur non trouvé: ${user.email}");
+
+        if (childrenData.isEmpty) {
+          final createdChildrenSnap = await _firestore
+              .collection('structures')
+              .doc(structureId)
+              .collection('children')
+              .where('createdByEmail', isEqualTo: userEmail)
+              .get();
+
+          if (createdChildrenSnap.docs.isNotEmpty) {
+            final newIds = <String>[];
+            for (final childDoc in createdChildrenSnap.docs) {
+              final data = childDoc.data() ?? {};
+              final childId = childDoc.id;
+              newIds.add(childId);
+              childrenData.add({
+                'id': childId,
+                'firstName': data['firstName'] ?? 'Sans nom',
+                'lastName': data['lastName'] ?? '',
+                'photoUrl': data['photoUrl'],
+                'structureId': structureId,
+                'gender': data['gender'] ?? 'Non spécifié',
+                'birthdate': data['birthdate'],
+                'parentId': data['parentId'] ?? '',
+              });
+            }
+
+            if (newIds.isNotEmpty) {
+              await _firestore.collection('users').doc(userEmail).set({
+                'children': newIds,
+                'createdChildren': FieldValue.arrayUnion(newIds),
+                'structureId': structureId,
+                'structureName': structureName,
+                'role': 'parent',
+                'updatedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+            }
+          }
+        }
       }
+
+      Map<String, dynamic>? newSelectedChild;
+      if (childrenData.isNotEmpty) {
+        final String? currentSelectedId = _selectedChild?['id'];
+        newSelectedChild = childrenData.firstWhere(
+          (child) => child['id'] == currentSelectedId,
+          orElse: () => childrenData.first,
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _parentFirstName = parentFirstName;
+          _parentLastName = parentLastName;
+          _children = childrenData;
+          _selectedChild = newSelectedChild;
+          _isParentEmployeur = isParentEmployeur;
+          _hasAssistant = hasAssistant;
+          _assistantInfo = assistantInfo;
+          _structureId = structureId;
+          _structureName = structureName;
+        });
+      }
+
+      _attachAssistantStructureListener(structureId);
+      if (hasAssistant) {
+        _attachAssistantUserListener(assistantInfo?['email']?.toString());
+      } else {
+        _assistantUserSubscription?.cancel();
+      }
+
+      if (childrenData.isNotEmpty && newSelectedChild != null) {
+        await _loadChildTimeline(
+            newSelectedChild['id'], newSelectedChild['structureId']);
+      } else {
+        _disposeCurrentSubscriptions();
+      }
+
+      if (structureId.isNotEmpty) {
+        await _loadActualites(structureId);
+        await _checkActualitesBadges();
+      }
+
+      _setupMessageListener();
     } catch (e) {
       print('❌ Erreur lors du chargement des données: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur de chargement des données')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de chargement des données')),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _parentOnboardingScheduled = false;
+        _scheduleParentEmployeurOnboarding();
+      }
     }
-  }
-
-  void _selectChild(Map<String, dynamic> child) {
-    setState(() {
-      _selectedChild = child;
-      _loadChildTimeline(child['id'], child['structureId']);
-      _loadActualites(child['structureId']); // Charger aussi les actualités
-    });
   }
 
   Future<void> _loadChildTimeline(String childId, String structureId) async {
@@ -1266,7 +3121,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         'title': 'Change',
         'details': details.trim(),
         'changeType': data['type'] ?? '',
-        'soins': (data['soins'] is List) ? List<String>.from(data['soins']) : [],
+        'soins':
+            (data['soins'] is List) ? List<String>.from(data['soins']) : [],
         'iconData': Icons.baby_changing_station,
         'color': Colors.brown,
         'observations': data['observations'],
@@ -1337,6 +3193,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     }).toList();
   }
 
+  // ignore: unused_element
   void _processHoursSnapshot(QuerySnapshot snapshot) {
     // Conservé pour compatibilité si utilisé ailleurs, mais non appelé désormais.
     final events = <Map<String, dynamic>>[];
@@ -1367,9 +3224,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         'time': eventTime.isNotEmpty ? eventTime : timestamp,
         'type': normalized,
         'title': normalized == 'arrival' ? 'Arrivée' : 'Départ',
-        'details': normalized == 'arrival' ? (data['arrivee'] ?? '') : (data['depart'] ?? ''),
+        'details': normalized == 'arrival'
+            ? (data['arrivee'] ?? '')
+            : (data['depart'] ?? ''),
         'iconData': normalized == 'arrival' ? Icons.login : Icons.logout,
-        'color': normalized == 'arrival' ? Colors.green.shade700 : Colors.red.shade700,
+        'color': normalized == 'arrival'
+            ? Colors.green.shade700
+            : Colors.red.shade700,
       });
     }
     _eventsMap['hour'] = events;
@@ -1392,7 +3253,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
         // Format segments (nouveau)
         if (childData['segments'] is List) {
-          final segments = List<Map<String, dynamic>>.from(childData['segments']);
+          final segments =
+              List<Map<String, dynamic>>.from(childData['segments']);
           for (final seg in segments) {
             final arr = seg['arrivee'];
             final dep = seg['depart'];
@@ -1586,57 +3448,96 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
   Widget _buildHeaderIcon(String label, IconData icon, VoidCallback onTap,
       {bool showBadge = false}) {
-    // Obtenir la largeur de l'écran
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Ajuster la taille selon la largeur de l'écran
-    final iconSize = screenWidth < 360 ? 20.0 : 24.0;
-    final containerPadding = screenWidth < 360 ? 8.0 : 10.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                padding: EdgeInsets.all(containerPadding),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+        // Calculs plus conservateurs pour éviter l'overflow
+        final maxWidth = constraints.maxWidth > 0
+            ? constraints.maxWidth.clamp(45.0, screenWidth * 0.16)
+            : screenWidth * 0.16;
+        final maxHeight = constraints.maxHeight > 0
+            ? constraints.maxHeight.clamp(40.0, 60.0)
+            : 50.0;
+
+        // Ajuster les tailles selon l'espace disponible
+        final iconSize = (maxWidth * 0.4).clamp(16.0, 22.0);
+        final containerPadding = (maxWidth * 0.08).clamp(4.0, 8.0);
+        final fontSize = (maxWidth * 0.16).clamp(8.0, 11.0);
+        final badgeSize = (maxWidth * 0.15).clamp(8.0, 12.0);
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: maxWidth,
+            constraints: BoxConstraints(
+              maxHeight: maxHeight,
+              maxWidth: maxWidth,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Container pour l'icône avec taille fixe
+                Flexible(
+                  flex: 3,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(containerPadding),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: Colors.white,
+                          size: iconSize,
+                        ),
+                      ),
+                      if (showBadge)
+                        Positioned(
+                          right: -1,
+                          top: -1,
+                          child: Container(
+                            width: badgeSize,
+                            height: badgeSize,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: iconSize,
-                ),
-              ),
-              if (showBadge)
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+
+                // Espacement adaptatif
+                SizedBox(height: 2),
+
+                // Texte avec contrainte de hauteur
+                Flexible(
+                  flex: 2,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                      height: 1.0, // Réduire l'interligne
                     ),
                   ),
                 ),
-            ],
-          ),
-          SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: screenWidth < 360 ? 10 : 12,
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1731,7 +3632,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           setState(() {
             _showEventsBadge = false;
             _showSortiesBadge = false;
-            _showActualitesBadge = false;
           });
         }
       }
@@ -2014,269 +3914,315 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           const Color(0xFFF7F9FA), // Couleur de fond légère et moderne
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : _children.isEmpty
-              ? _buildEmptyState()
-              : CustomScrollView(
-                  slivers: [
-                    // Header avec effet parallaxe
-                    SliverAppBar(
-                      expandedHeight: 200.0,
-                      pinned: true,
-                      backgroundColor: primaryBlue,
-                      actions: [
-                        // Bouton d'actualisation
-                        IconButton(
-                          icon: Icon(Icons.refresh, color: Colors.white),
-                          onPressed: () {
-                            // Utiliser _refreshData pour actualiser toutes les données
-                            _refreshData();
-                          },
+          : CustomScrollView(
+              slivers: [
+                // Header avec effet parallaxe
+                SliverAppBar(
+                  expandedHeight: MediaQuery.of(context).size.height *
+                      0.25, // 25% de la hauteur d'écran
+                  pinned: true,
+                  backgroundColor: primaryBlue,
+                  actions: [
+                    // Bouton d'actualisation
+                    IconButton(
+                      icon: Icon(Icons.refresh, color: Colors.white),
+                      onPressed: () {
+                        // Utiliser _refreshData pour actualiser toutes les données
+                        _refreshData();
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.logout, color: Colors.white),
+                      onPressed: () async {
+                        await SessionUtil.signOut();
+                        context.go('/');
+                      },
+                    ),
+                  ],
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            primaryBlue,
+                            primaryBlue.withOpacity(0.85),
+                          ],
                         ),
-                        IconButton(
-                          icon: Icon(Icons.logout, color: Colors.white),
-                          onPressed: () async {
-                            await SessionUtil.signOut();
-                            context.go('/');
-                          },
-                        ),
-                      ],
-                      flexibleSpace: FlexibleSpaceBar(
-                        background: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                primaryBlue,
-                                primaryBlue.withOpacity(0.85),
-                              ],
-                            ),
-                          ),
-                          child: SafeArea(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 30, 24, 0),
+                      ),
+                      child: SafeArea(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final screenHeight =
+                                MediaQuery.of(context).size.height;
+                            final availableHeight = constraints.maxHeight;
+
+                            // Ajuster les espacements selon la hauteur disponible
+                            final topPadding =
+                                availableHeight > 150 ? 30.0 : 20.0;
+                            final titleFontSize =
+                                availableHeight > 150 ? 28.0 : 24.0;
+                            final dateFontSize =
+                                availableHeight > 150 ? 16.0 : 14.0;
+                            final middleSpacing =
+                                availableHeight > 150 ? 20.0 : 12.0;
+
+                            return Padding(
+                              padding:
+                                  EdgeInsets.fromLTRB(24, topPadding, 24, 8),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    "Bonjour, $_parentFirstName",
-                                    style: TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                  // Titre avec taille adaptative
+                                  Flexible(
+                                    child: Text(
+                                      "Bonjour, $_parentFirstName",
+                                      style: TextStyle(
+                                        fontSize: titleFontSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
+
                                   SizedBox(height: 8),
-                                  Text(
-                                    DateFormat('EEEE d MMMM yyyy', 'fr_FR')
-                                        .format(DateTime.now())
-                                        .toLowerCase(),
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white.withOpacity(0.9),
+
+                                  // Date avec taille adaptative
+                                  Flexible(
+                                    child: Text(
+                                      DateFormat('EEEE d MMMM yyyy', 'fr_FR')
+                                          .format(DateTime.now())
+                                          .toLowerCase(),
+                                      style: TextStyle(
+                                        fontSize: dateFontSize,
+                                        color: Colors.white.withOpacity(0.9),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  SizedBox(height: 20),
-                                  // Icônes pour Menu, Événements, Sorties
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceEvenly,
-                                    children: [
-                                      _buildHeaderIcon(
-                                        "Menu",
-                                        Icons.restaurant_menu,
-                                        () => _showActualiteDetails("menu"),
+
+                                  SizedBox(height: middleSpacing),
+
+                                  // Icônes avec espacement adaptatif
+                                  Flexible(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight:
+                                            availableHeight > 150 ? 50.0 : 40.0,
                                       ),
-                                      _buildHeaderIcon(
-                                        "Événements",
-                                        Icons.event,
-                                        () => _showActualiteDetails("evenement"),
-                                        showBadge: _showEventsBadge,
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            if (_isParentEmployeur) ...[
+                                              _buildHeaderIcon(
+                                                "Tableau",
+                                                Icons
+                                                    .dashboard_customize_rounded,
+                                                _openParentEmployeurDashboard,
+                                              ),
+                                              SizedBox(width: 6),
+                                            ],
+                                            _buildHeaderIcon(
+                                              "Menu",
+                                              Icons.restaurant_menu,
+                                              () =>
+                                                  _showActualiteDetails("menu"),
+                                            ),
+                                            SizedBox(width: 6),
+                                            _buildHeaderIcon(
+                                              "Événements",
+                                              Icons.event,
+                                              () => _showActualiteDetails(
+                                                  "evenement"),
+                                              showBadge: _showEventsBadge,
+                                            ),
+                                            SizedBox(width: 6),
+                                            _buildHeaderIcon(
+                                              "Sorties",
+                                              Icons.directions_bus,
+                                              () => _showActualiteDetails(
+                                                  "sortie"),
+                                              showBadge: _showSortiesBadge,
+                                            ),
+                                            SizedBox(width: 6),
+                                            _buildHeaderIcon(
+                                              "Photos",
+                                              Icons.photo_library,
+                                              () => _showPhotoHistory(),
+                                              showBadge: _showPhotosBadge,
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      _buildHeaderIcon(
-                                        "Sorties",
-                                        Icons.directions_bus,
-                                        () => _showActualiteDetails("sortie"),
-                                        showBadge: _showSortiesBadge,
-                                      ),
-                                      _buildHeaderIcon(
-                                        "Photos",
-                                        Icons.photo_library,
-                                        () => _showPhotoHistory(),
-                                        showBadge: _showPhotosBadge,
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ),
-
-                    // Sélecteur d'enfant (si plusieurs enfants)
-                    if (_children.length > 1)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEEF0FF),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.campaign_outlined,
-                                      color: primaryBlue,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text(
-                                    "Actualités",
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 12),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    _buildActualiteCard(
-                                      "Menu de la semaine",
-                                      "Découvrez les repas prévus",
-                                      Icons.restaurant_menu,
-                                      Colors.green.shade400,
-                                      () {
-                                        // Navigation vers les menus
-                                        _showActualiteDetails("menu");
-                                      },
-                                    ),
-                                    SizedBox(width: 12),
-                                    _buildActualiteCard(
-                                      "Événements",
-                                      "Activités spéciales à venir",
-                                      Icons.event,
-                                      Colors.orange.shade400,
-                                      () {
-                                        // Navigation vers les événements
-                                        _showActualiteDetails("evenement");
-                                      },
-                                      showBadge: _showEventsBadge,
-                                    ),
-                                    SizedBox(width: 12),
-                                    _buildActualiteCard(
-                                      "Sorties",
-                                      "Prévisions de sorties",
-                                      Icons.directions_bus,
-                                      Colors.blue.shade400,
-                                      () {
-                                        // Navigation vers les sorties
-                                        _showActualiteDetails("sortie");
-                                      },
-                                      showBadge: _showSortiesBadge,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // Résumé de la journée - En-tête
+                  ),
+                ),
+                if (_children.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _buildEmptyState(),
+                  )
+                else ...[
+                  if (_children.length > 1)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Icône et informations du journal
-                            Container(
-                              padding: EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEEF0FF),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.event_note_rounded,
-                                color: primaryBlue,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _selectedChild != null
-                                        ? "Journée de ${_selectedChild!['firstName']}"
-                                        : "Journée",
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEEF0FF),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                  Text(
-                                    "Activités, repas, siestes et plus",
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
-                                    ),
+                                  child: Icon(
+                                    Icons.campaign_outlined,
+                                    color: primaryBlue,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  "Actualités",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 12),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _buildActualiteCard(
+                                    "Menu de la semaine",
+                                    "Découvrez les repas prévus",
+                                    Icons.restaurant_menu,
+                                    Colors.green.shade400,
+                                    () {
+                                      _showActualiteDetails("menu");
+                                    },
+                                  ),
+                                  SizedBox(width: 12),
+                                  _buildActualiteCard(
+                                    "Événements",
+                                    "Activités spéciales à venir",
+                                    Icons.event,
+                                    Colors.orange.shade400,
+                                    () {
+                                      _showActualiteDetails("evenement");
+                                    },
+                                    showBadge: _showEventsBadge,
+                                  ),
+                                  SizedBox(width: 12),
+                                  _buildActualiteCard(
+                                    "Sorties",
+                                    "Prévisions de sorties",
+                                    Icons.directions_bus,
+                                    Colors.blue.shade400,
+                                    () {
+                                      _showActualiteDetails("sortie");
+                                    },
+                                    showBadge: _showSortiesBadge,
                                   ),
                                 ],
                               ),
                             ),
-                            // Photo de l'enfant sélectionné
-                            if (_selectedChild != null)
-                              Container(
-                                width: 70,
-                                height: 70,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3,
+                          ],
+                        ),
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF0FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.event_note_rounded,
+                              color: primaryBlue,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedChild != null
+                                      ? "Journée de ${_selectedChild!['firstName']}"
+                                      : "Journée",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 8,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
                                 ),
-                                child: ClipOval(
-                                  child: _selectedChild!['photoUrl'] != null
-                                      ? Image.network(
-                                          _selectedChild!['photoUrl'],
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
-                                                  Container(
-                                            color: Colors.grey[200],
-                                            child: Icon(
-                                              _selectedChild!['gender'] ==
-                                                      'Garçon'
-                                                  ? Icons.boy
-                                                  : Icons.girl,
-                                              color: Colors.grey[400],
-                                              size: 40,
-                                            ),
-                                          ),
-                                        )
-                                      : Container(
+                                Text(
+                                  "Activités, repas, siestes et plus",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_selectedChild != null)
+                            Container(
+                              width: 70,
+                              height: 70,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: _selectedChild!['photoUrl'] != null
+                                    ? Image.network(
+                                        _selectedChild!['photoUrl'],
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                Container(
                                           color: Colors.grey[200],
                                           child: Icon(
                                             _selectedChild!['gender'] ==
@@ -2287,84 +4233,95 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                             size: 40,
                                           ),
                                         ),
-                                ),
+                                      )
+                                    : Container(
+                                        color: Colors.grey[200],
+                                        child: Icon(
+                                          _selectedChild!['gender'] == 'Garçon'
+                                              ? Icons.boy
+                                              : Icons.girl,
+                                          color: Colors.grey[400],
+                                          size: 40,
+                                        ),
+                                      ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     ),
-
-                    // Timeline des événements avec info de mise à jour
-                    _loadingTimeline
-                        ? SliverToBoxAdapter(
-                            child: Container(
-                              height: 200,
-                              child: Center(child: CircularProgressIndicator()),
+                  ),
+                  _loadingTimeline
+                      ? SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 200,
+                            child: Center(
+                              child: CircularProgressIndicator(),
                             ),
-                          )
-                        : _timelineEvents.isEmpty
-                            ? SliverToBoxAdapter(
-                                child: Container(
-                                  margin: EdgeInsets.all(24),
-                                  padding: EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 10,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Image.asset(
-                                        'assets/images/no_activities.png', // Remplacer par votre image
-                                        height: 120,
-                                        fit: BoxFit.contain,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                Icon(
-                                          Icons.event_busy,
-                                          size: 80,
-                                          color: Colors.grey[300],
-                                        ),
-                                      ),
-                                      SizedBox(height: 16),
-                                      Text(
-                                        "Aucune activité enregistrée aujourd'hui",
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        "Consultez cette page plus tard pour voir les mises à jour",
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[500],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                          ),
+                        )
+                      : _timelineEvents.isEmpty
+                          ? SliverToBoxAdapter(
+                              child: Container(
+                                margin: EdgeInsets.all(24),
+                                padding: EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                              )
-                            : SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    final event = _timelineEvents[index];
-                                    return _buildTimelineItem(event);
-                                  },
-                                  childCount: _timelineEvents.length,
+                                child: Column(
+                                  children: [
+                                    Image.asset(
+                                      'assets/images/no_activities.png',
+                                      height: 120,
+                                      fit: BoxFit.contain,
+                                      errorBuilder:
+                                          (context, error, stackTrace) => Icon(
+                                        Icons.event_busy,
+                                        size: 80,
+                                        color: Colors.grey[300],
+                                      ),
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      "Aucune activité enregistrée aujourd'hui",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      "Consultez cette page plus tard pour voir les mises à jour",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                  ],
-                ),
+                            )
+                          : SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final event = _timelineEvents[index];
+                                  return _buildTimelineItem(event);
+                                },
+                                childCount: _timelineEvents.length,
+                              ),
+                            ),
+                ],
+              ],
+            ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: primaryBlue,
         child: Icon(Icons.refresh),
@@ -2576,6 +4533,20 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () async {
+                await SessionUtil.signOut();
+                if (!mounted) return;
+                context.go('/');
+              },
+              icon: const Icon(Icons.logout, color: primaryBlue),
+              label: const Text(
+                "Se déconnecter",
+                style:
+                    TextStyle(color: primaryBlue, fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
         ),
       ),
@@ -2781,8 +4752,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                     color: Colors.brown.withOpacity(0.08),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                        color:
-                                            Colors.brown.withOpacity(0.15)),
+                                        color: Colors.brown.withOpacity(0.15)),
                                   ),
                                   child: Text(
                                     s.toString(),
@@ -2896,7 +4866,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                         onTap: () async {
                           final url = Uri.parse(event['url']);
                           if (await canLaunchUrl(url)) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                            await launchUrl(url,
+                                mode: LaunchMode.externalApplication);
                           }
                         },
                         child: Container(

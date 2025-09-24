@@ -329,18 +329,10 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
 
   // Obtenir le prix pour un nombre donné de membres
   String _getPriceForMembers(int memberCount) {
-    switch (memberCount) {
-      case 2:
-        return '19,99 € / mois';
-      case 3:
-        return '24,99 € / mois';
-      case 4:
-        return '29,99 € / mois';
-      default:
-        // ✅ CORRECTION : Si < 2, renvoyer le prix pour 2 membres
-        if (memberCount < 2) return '19,99 € / mois';
-        return '29,99 € / mois'; // Pour > 4, utiliser le prix maximum
+    if (memberCount <= 3) {
+      return '19,99 € / mois';
     }
+    return '24,99 € / mois';
   }
 
   // ✅ OBTENIR L'ID PRODUIT POUR LES ACHATS IN-APP
@@ -349,29 +341,15 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     int actualMemberCount = memberCount < 2 ? 2 : memberCount;
 
     if (Platform.isIOS) {
-      // IDs iOS (définis dans subscription_service.dart)
-      switch (actualMemberCount) {
-        case 2:
-          return 'com.beylet.poppinsApp.subscription.mam_2_membres';
-        case 3:
-          return 'com.beylet.poppinsApp.subscription.mam_3_membres';
-        case 4:
-          return 'com.beylet.poppinsApp.subscription.mam_4_membres';
-        default:
-          return 'com.beylet.poppinsApp.subscription.mam_2_membres';
+      if (actualMemberCount <= 3) {
+        return 'com.beylet.poppinsApp.subscription.mam_2_membres';
       }
+      return 'com.beylet.poppinsApp.subscription.mam_3_membres';
     } else {
-      // IDs Android (définis dans subscription_service.dart)
-      switch (actualMemberCount) {
-        case 2:
-          return 'abonnement_mam2';
-        case 3:
-          return 'abonnement_mam3';
-        case 4:
-          return 'abonnement_mam4';
-        default:
-          return 'abonnement_mam2';
+      if (actualMemberCount <= 3) {
+        return 'abonnement_mam2';
       }
+      return 'abonnement_mam3';
     }
   }
 

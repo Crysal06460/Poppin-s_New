@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class ActualitesScreen extends StatefulWidget {
   const ActualitesScreen({Key? key}) : super(key: key);
@@ -75,74 +76,14 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     setState(() => isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        print("❌ Actualités: Utilisateur non connecté");
-        setState(() {
-          structureName = 'Utilisateur non connecté';
-          isLoading = false;
-        });
-        return;
-      }
+      final structureContext = await StructureResolver().resolve();
 
-      print("✅ Actualités: Utilisateur connecté - ${user.email}");
+      structureId = structureContext.structureId;
+      currentUserEmail = structureContext.currentUserEmail;
 
-      // Récupérer l'email de l'utilisateur actuel
-      currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Pour une MAM: utiliser l'ID de la structure MAM pour que tous les membres voient la même chose
-          structureId = userData['structureId'];
-          print(
-              "🔄 Actualités: Membre MAM détecté - Utilisation de l'ID de structure: $structureId");
-        } else {
-          print(
-              "🔄 Actualités: Assistante Maternelle - Utilisation de l'ID utilisateur: $structureId");
-        }
-      }
-
-      // Validation que structureId n'est pas vide
-      if (structureId.isEmpty) {
-        print("❌ Actualités: Structure ID vide");
-        setState(() {
-          structureName = 'Erreur de structure';
-          isLoading = false;
-        });
-        return;
-      }
-
-      // Récupération des informations de la structure avec l'ID correct
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureSnapshot.exists) {
-        final data = structureSnapshot.data() as Map<String, dynamic>;
-        setState(() {
-          structureName = data['structureName'] ?? 'Structure inconnue';
-        });
-        print("✅ Actualités: Structure trouvée - ${structureName}");
-      } else {
-        print("❌ Actualités: Structure non trouvée pour ID: $structureId");
-        setState(() {
-          structureName = 'Structure introuvable';
-          isLoading = false;
-        });
-        return;
-      }
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       // Charger les actualités avec le bon structureId
       await _loadActualites();

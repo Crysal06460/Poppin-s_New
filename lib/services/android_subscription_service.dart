@@ -40,11 +40,13 @@ class AndroidSubscriptionService {
     'abonnement_mam2',
     'abonnement_mam3',
     'abonnement_mam4',
+    'parent_employeur_google',
     // Offres d'essai 7 jours
     'essaigratuit-assmat',
     'essaigratuit-mam2',
     'essaigratuit-mam3',
     'essaigratuit-mam4',
+    'essai-gratuit-parent-employeur',
   };
 
   // Mapping des IDs pour compatibilité
@@ -53,6 +55,7 @@ class AndroidSubscriptionService {
     'abo-mam-2': 'abonnement_mam2',
     'abo-mam-3': 'abonnement_mam3',
     'abo-mam-4': 'abonnement_mam4',
+    'parent-employeur-google': 'parent_employeur_google',
   };
 
   /// Initialise le service Android
@@ -193,36 +196,45 @@ class AndroidSubscriptionService {
       return {
         'structureType': 'assistante_maternelle',
         'memberCount': 1,
-        'priceAmount': 8.99,
-        'priceDisplay': '8,99 € / mois',
+        'priceAmount': 6.99,
+        'priceDisplay': '6,99 € / mois',
         'productKey': 'ass-mat',
         'isTrialPurchase': false,
       };
     } else if (productId == 'abonnement_mam2') {
       return {
         'structureType': 'MAM',
-        'memberCount': 2,
+        'memberCount': 3,
         'priceAmount': 19.99,
         'priceDisplay': '19,99 € / mois',
-        'productKey': 'mam-2',
+        'productKey': 'mam-2-3',
         'isTrialPurchase': false,
       };
     } else if (productId == 'abonnement_mam3') {
       return {
         'structureType': 'MAM',
-        'memberCount': 3,
+        'memberCount': 6,
         'priceAmount': 24.99,
         'priceDisplay': '24,99 € / mois',
-        'productKey': 'mam-3',
+        'productKey': 'mam-4-plus',
         'isTrialPurchase': false,
       };
     } else if (productId == 'abonnement_mam4') {
       return {
         'structureType': 'MAM',
-        'memberCount': 4,
-        'priceAmount': 29.99,
-        'priceDisplay': '29,99 € / mois',
-        'productKey': 'mam-4',
+        'memberCount': 6,
+        'priceAmount': 24.99,
+        'priceDisplay': '24,99 € / mois',
+        'productKey': 'mam-4-legacy',
+        'isTrialPurchase': false,
+      };
+    } else if (productId == 'parent_employeur_google') {
+      return {
+        'structureType': 'parent_employeur',
+        'memberCount': 1,
+        'priceAmount': 4.99,
+        'priceDisplay': '4,99 € / mois',
+        'productKey': 'parent-employeur',
         'isTrialPurchase': false,
       };
     }
@@ -239,28 +251,37 @@ class AndroidSubscriptionService {
     } else if (productId == 'essaigratuit-mam2') {
       return {
         'structureType': 'MAM',
-        'memberCount': 2,
+        'memberCount': 3,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-2',
+        'productKey': 'trial-mam-2-3',
         'isTrialPurchase': true,
       };
     } else if (productId == 'essaigratuit-mam3') {
       return {
         'structureType': 'MAM',
-        'memberCount': 3,
+        'memberCount': 6,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-3',
+        'productKey': 'trial-mam-4-plus',
         'isTrialPurchase': true,
       };
     } else if (productId == 'essaigratuit-mam4') {
       return {
         'structureType': 'MAM',
-        'memberCount': 4,
+        'memberCount': 6,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-4',
+        'productKey': 'trial-mam-4-legacy',
+        'isTrialPurchase': true,
+      };
+    } else if (productId == 'essai-gratuit-parent-employeur') {
+      return {
+        'structureType': 'parent_employeur',
+        'memberCount': 1,
+        'priceAmount': 0.0,
+        'priceDisplay': 'Essai gratuit 7 jours',
+        'productKey': 'trial-parent-employeur',
         'isTrialPurchase': true,
       };
     }
@@ -270,8 +291,8 @@ class AndroidSubscriptionService {
     return {
       'structureType': 'assistante_maternelle',
       'memberCount': 1,
-      'priceAmount': 8.99,
-      'priceDisplay': '8,99 € / mois',
+      'priceAmount': 6.99,
+      'priceDisplay': '6,99 € / mois',
       'productKey': 'ass-mat',
       'isTrialPurchase': false,
     };
@@ -389,28 +410,26 @@ class AndroidSubscriptionService {
     String targetTrialId = '';
     String targetPaidId = '';
 
-    if (structureType == 'assistante_maternelle') {
+    final String normalizedType = structureType.toLowerCase();
+
+    if (normalizedType == 'assistante_maternelle') {
       targetTrialId = 'essaigratuit-assmat';
       targetPaidId = 'abonnement_assmat';
-    } else if (structureType == 'MAM') {
-      switch (memberCount) {
-        case 2:
-          targetTrialId = 'essaigratuit-mam2';
-          targetPaidId = 'abonnement_mam2';
-          break;
-        case 3:
-          targetTrialId = 'essaigratuit-mam3';
-          targetPaidId = 'abonnement_mam3';
-          break;
-        case 4:
-          targetTrialId = 'essaigratuit-mam4';
-          targetPaidId = 'abonnement_mam4';
-          break;
+    } else if (normalizedType == 'mam') {
+      if (memberCount <= 3) {
+        targetTrialId = 'essaigratuit-mam2';
+        targetPaidId = 'abonnement_mam2';
+      } else {
+        targetTrialId = 'essaigratuit-mam3';
+        targetPaidId = 'abonnement_mam3';
       }
+    } else if (normalizedType == 'parent_employeur') {
+      targetTrialId = 'essai-gratuit-parent-employeur';
+      targetPaidId = 'parent_employeur_google';
     }
 
     print(
-        '🎯 Recherche: trial=$targetTrialId, paid=$targetPaidId, preferTrial=$preferTrial');
+        '🎯 Recherche: type=$structureType, members=$memberCount, trial=$targetTrialId, paid=$targetPaidId, preferTrial=$preferTrial');
 
     // Chercher d'abord l'essai si préféré
     if (preferTrial && targetTrialId.isNotEmpty) {
@@ -432,7 +451,25 @@ class AndroidSubscriptionService {
       }
     }
 
-    print('❌ Aucun produit trouvé');
+    // Fallback pour anciens IDs MAM 4 membres
+    if (normalizedType == 'mam' && memberCount > 3) {
+      if (preferTrial) {
+        for (final product in _availableProducts) {
+          if (product.id == 'essaigratuit-mam4') {
+            print('✅ Essai legacy trouvé: ${product.id}');
+            return product;
+          }
+        }
+      }
+      for (final product in _availableProducts) {
+        if (product.id == 'abonnement_mam4') {
+          print('✅ Forfait legacy trouvé: ${product.id}');
+          return product;
+        }
+      }
+    }
+
+    print('❌ Aucun produit trouvé pour $structureType ($memberCount membres)');
     return null;
   }
 
@@ -491,11 +528,14 @@ class AndroidSubscriptionService {
     if (productId == 'ass-mat' || productId == 'abonnement_assmat') {
       return await purchaseSubscriptionByType('assistante_maternelle', 1);
     } else if (productId == 'abo-mam-2' || productId == 'abonnement_mam2') {
-      return await purchaseSubscriptionByType('MAM', 2);
-    } else if (productId == 'abo-mam-3' || productId == 'abonnement_mam3') {
       return await purchaseSubscriptionByType('MAM', 3);
+    } else if (productId == 'abo-mam-3' || productId == 'abonnement_mam3') {
+      return await purchaseSubscriptionByType('MAM', 4);
     } else if (productId == 'abo-mam-4' || productId == 'abonnement_mam4') {
       return await purchaseSubscriptionByType('MAM', 4);
+    } else if (productId == 'parent-employeur-google' ||
+        productId == 'parent_employeur_google') {
+      return await purchaseSubscriptionByType('parent_employeur', 0);
     } else {
       return await purchaseSubscriptionByType('assistante_maternelle', 1);
     }
@@ -503,20 +543,24 @@ class AndroidSubscriptionService {
 
   /// Retourne l'ID produit Android (compatibilité)
   static String getProductId(String structureType, int mamMembersCount) {
-    if (structureType == 'assistante_maternelle') {
+    final String normalizedType = structureType.toLowerCase();
+
+    if (normalizedType == 'assistante_maternelle') {
       return 'abonnement_assmat';
-    } else if (structureType == 'mam') {
-      switch (mamMembersCount) {
-        case 2:
-          return 'abonnement_mam2';
-        case 3:
-          return 'abonnement_mam3';
-        case 4:
-          return 'abonnement_mam4';
-        default:
-          return 'abonnement_mam2';
-      }
     }
+
+    if (normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur') {
+      return 'parent_employeur_google';
+    }
+
+    if (normalizedType == 'mam') {
+      if (mamMembersCount <= 3) {
+        return 'abonnement_mam2';
+      }
+      return 'abonnement_mam3';
+    }
+
     return 'abonnement_assmat';
   }
 

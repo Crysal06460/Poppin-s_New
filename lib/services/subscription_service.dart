@@ -30,12 +30,13 @@ class SubscriptionService {
   static bool get isDebugMode => _forceDevMode;
   static bool get isInitialized => _isInitialized;
 
+  static const int _parentGracePeriodDays = 30;
+
   // 🔧 BUNDLE ID CONFIGURÉ : com.beylet.poppinsApp
   static const String _bundleId = 'com.beylet.poppinsApp';
 
   // Stream pour écouter les changements d'abonnement
   static StreamSubscription<List<PurchaseDetails>>? _subscription;
-  static final InAppPurchase _inAppPurchase = InAppPurchase.instance;
 
   // IDs des produits selon la plateforme
   static Map<String, String> get productIds {
@@ -46,6 +47,7 @@ class SubscriptionService {
         'mam_2_members': '$_bundleId.subscription.mam_2_members',
         'mam_3_members': '$_bundleId.subscription.mam_3_members',
         'mam_4_members': '$_bundleId.subscription.mam_4_members',
+        'parent_employeur': 'parent_employeur',
       };
     } else {
       // 🔧 IDs Android (alignés avec Google Play + services Android)
@@ -54,14 +56,25 @@ class SubscriptionService {
         'mam_2_members': 'abonnement_mam2',
         'mam_3_members': 'abonnement_mam3',
         'mam_4_members': 'abonnement_mam4',
+        'parent_employeur': 'parent_employeur_google',
       };
     }
   }
 
   static String getProductId(String structureType, int memberCount) {
-    if (structureType == 'MAM') {
-      return productIds['mam_${memberCount}_members'] ??
-          productIds['mam_2_members']!;
+    final String normalizedType = structureType.toLowerCase();
+
+    if (normalizedType == 'mam') {
+      if (memberCount <= 3) {
+        return productIds['mam_2_members'] ?? productIds['mam_3_members']!;
+      }
+      return productIds['mam_3_members'] ?? productIds['mam_2_members']!;
+    }
+
+    if (normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur') {
+      return productIds['parent_employeur'] ??
+          productIds['assistante_maternelle']!;
     }
     return productIds['assistante_maternelle']!;
   }
@@ -82,26 +95,159 @@ class SubscriptionService {
       final subscriptionQuery = await FirebaseFirestore.instance
           .collection('subscriptions')
           .where('structureId', isEqualTo: structureId)
-          .where('status', isEqualTo: 'active')
-          .limit(1)
           .get();
 
       if (subscriptionQuery.docs.isNotEmpty) {
-        final data = subscriptionQuery.docs.first.data();
-        final Timestamp? trialEndsAt = data['trialEndsAt'];
+        QueryDocumentSnapshot<Map<String, dynamic>>? activeDoc;
+        for (final doc in subscriptionQuery.docs) {
+          if (_isSubscriptionDocActive(doc.data())) {
+            activeDoc = doc;
+            break;
+          }
+        }
 
-        // Vérifier si la période d'essai est encore valide
-        if (trialEndsAt != null &&
-            DateTime.now().isBefore(trialEndsAt.toDate())) {
-          print('✅ Abonnement actif trouvé dans Firestore (essai gratuit)');
+        if (activeDoc != null) {
+          print(
+              '✅ Abonnement actif trouvé dans Firestore (${activeDoc.id})');
           return true;
         }
 
-        // Vérifier si abonnement payant actif
-        if (data['status'] == 'active') {
-          print('✅ Abonnement actif trouvé dans Firestore (payant)');
-          return true;
+        for (final doc in subscriptionQuery.docs) {
+          final rawStatus = (doc.data()['status'] ?? '').toString();
+          print(
+              'ℹ️ Abonnement ignoré (${doc.id}) - statut: ${rawStatus.isEmpty ? 'inconnu' : rawStatus}');
         }
+      }
+
+      // ✅ FALLBACK STRUCTURE: vérifier si un abonnement est relié via la fiche structure
+      try {
+        final structureSnapshot = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .get();
+
+        if (structureSnapshot.exists) {
+          final Map<String, dynamic> structureData =
+              structureSnapshot.data() ?? <String, dynamic>{};
+
+          final String? subscriptionDocId =
+              (structureData['subscriptionDocId'] ?? '').toString();
+
+          if (subscriptionDocId != null && subscriptionDocId.isNotEmpty) {
+            final linkedSubscription = await FirebaseFirestore.instance
+                .collection('subscriptions')
+                .doc(subscriptionDocId)
+                .get();
+
+            if (linkedSubscription.exists) {
+              final linkedData = linkedSubscription.data() ?? {};
+              final Timestamp? linkedTrial = linkedData['trialEndsAt'];
+              if (linkedTrial != null &&
+                  DateTime.now().isBefore(linkedTrial.toDate())) {
+                print(
+                    '✅ Abonnement actif via doc lié (essai en cours): $subscriptionDocId');
+                return true;
+              }
+
+              if ((linkedData['status'] ?? '').toString().toLowerCase() ==
+                  'active') {
+                print(
+                    '✅ Abonnement actif via doc lié (statut actif): $subscriptionDocId');
+                return true;
+              }
+            }
+          }
+
+          if (structureData['subscriptionActive'] == true) {
+            final Timestamp? structureTrial =
+                structureData['subscriptionTrialEndsAt'] ??
+                    structureData['trialEndsAt'];
+            if (structureTrial is Timestamp &&
+                DateTime.now().isBefore(structureTrial.toDate())) {
+              print('✅ Abonnement actif via structure (essai en cours)');
+              return true;
+            }
+
+            final Timestamp? subscriptionUpdatedAt =
+                structureData['subscriptionUpdatedAt'];
+            if (subscriptionUpdatedAt is Timestamp) {
+              final Duration sinceUpdate =
+                  DateTime.now().difference(subscriptionUpdatedAt.toDate());
+              if (sinceUpdate.inDays <= 45) {
+                print('✅ Abonnement actif via structure (flag récent)');
+                return true;
+              }
+            } else {
+              print('✅ Abonnement actif via structure (flag booléen)');
+              return true;
+            }
+          }
+
+          final String structureStatus =
+              (structureData['subscriptionStatus'] ?? '').toString();
+          if (structureStatus.isNotEmpty &&
+              _isStatusLikelyActive(structureStatus)) {
+            print(
+                '✅ Abonnement actif via structure (subscriptionStatus=$structureStatus)');
+            return true;
+          }
+
+          final Timestamp? structureExpiresAt =
+              structureData['subscriptionExpiresAt'];
+          if (structureExpiresAt is Timestamp &&
+              DateTime.now().isBefore(structureExpiresAt.toDate())) {
+            print('✅ Abonnement actif via structure (subscriptionExpiresAt)');
+            return true;
+          }
+
+          final dynamic rawStructureExpiry =
+              structureData['subscriptionExpirationDate'];
+          if (rawStructureExpiry != null) {
+            final String structureExpiryStr = rawStructureExpiry.toString();
+            if (_isDateStringInFuture(structureExpiryStr)) {
+              print(
+                  '✅ Abonnement actif via structure (subscriptionExpirationDate)');
+              return true;
+            }
+          }
+
+          final dynamic rawStructureExpiresIso =
+              structureData['subscriptionExpiresAtIso'];
+          if (rawStructureExpiresIso is String &&
+              _isDateStringInFuture(rawStructureExpiresIso)) {
+            print('✅ Abonnement actif via structure (subscriptionExpiresAtIso)');
+            return true;
+          }
+
+          final dynamic rawStripeStatus = structureData['stripeStatus'];
+          if (rawStripeStatus is String &&
+              _isStatusLikelyActive(rawStripeStatus)) {
+            print(
+                '✅ Abonnement actif via structure (stripeStatus=$rawStripeStatus)');
+            return true;
+          }
+
+          final String structureType =
+              (structureData['structureType'] ?? '').toString().toLowerCase();
+          if (structureType == 'parent_employeur' ||
+              structureType == 'parentemployeur') {
+            final DateTime? createdAt = _extractTimestamp(structureData['createdAt']);
+            if (createdAt != null) {
+              final int daysSinceCreation =
+                  DateTime.now().difference(createdAt).inDays;
+              if (daysSinceCreation <= _parentGracePeriodDays) {
+                print(
+                    '✅ Abonnement parent-employeur en période de grâce (${daysSinceCreation}j ≤ ${_parentGracePeriodDays}j)');
+                return true;
+              }
+            }
+          }
+
+          print(
+              'ℹ️ Aucun abonnement actif via structure, champs disponibles: ${structureData.keys.toList()}');
+        }
+      } catch (structureCheckError) {
+        print('⚠️ Erreur lors de la vérification structure: $structureCheckError');
       }
 
       // 2. PRIORITÉ 2 : Si pas dans Firestore, essayer Google Play (avec timeout)
@@ -232,6 +378,124 @@ class SubscriptionService {
     return await isUserSubscribed();
   }
 
+  static bool _isSubscriptionDocActive(Map<String, dynamic> data) {
+    final String status = (data['status'] ?? '').toString().toLowerCase();
+
+    if (_isStatusLikelyActive(status)) {
+      return true;
+    }
+
+    final now = DateTime.now();
+
+    final dynamic trialEndsRaw = data['trialEndsAt'];
+    if (trialEndsRaw is Timestamp && now.isBefore(trialEndsRaw.toDate())) {
+      return true;
+    }
+
+    final dynamic expiresAtRaw = data['expiresAt'];
+    if (expiresAtRaw is Timestamp && now.isBefore(expiresAtRaw.toDate())) {
+      return true;
+    }
+
+    final dynamic expirationRaw = data['expirationDate'];
+    if (expirationRaw != null) {
+      final expirationStr = expirationRaw.toString();
+      if (_isDateStringInFuture(expirationStr)) {
+        return true;
+      }
+    }
+
+    final dynamic validUntilRaw = data['validUntil'];
+    if (validUntilRaw is Timestamp && now.isBefore(validUntilRaw.toDate())) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static DateTime? _extractTimestamp(dynamic value) {
+    if (value == null) return null;
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+
+    return null;
+  }
+
+  static bool _isStatusLikelyActive(String status) {
+    final normalized = status.toLowerCase().trim();
+    if (normalized.isEmpty) return false;
+
+    const activeStatuses = {
+      'active',
+      'trial',
+      'trialing',
+      'trial_active',
+      'trial-period',
+      'trialperiod',
+      'pending_activation',
+      'pending-activation',
+      'pending',
+      'approved',
+      'completed',
+      'succeeded',
+      'renewing',
+      'renewed',
+      'in_grace_period',
+      'grace_period',
+      'grace',
+      'paid',
+    };
+
+    if (activeStatuses.contains(normalized)) {
+      return true;
+    }
+
+    const inactiveStatuses = {
+      'cancelled',
+      'canceled',
+      'expired',
+      'inactive',
+      'ended',
+      'terminated',
+      'refunded',
+      'failed',
+      'replaced',
+      'pending_deletion',
+      'deleted',
+      'suspended',
+    };
+
+    if (inactiveStatuses.contains(normalized)) {
+      return false;
+    }
+
+    // Statut inconnu : considérer actif pour laisser l'utilisateur accéder
+    print('ℹ️ Statut abonnement inconnu, interprété comme actif: $status');
+    return true;
+  }
+
+  static bool _isDateStringInFuture(String value) {
+    try {
+      if (value.isEmpty) return false;
+
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) {
+        return DateTime.now().isBefore(parsed);
+      }
+    } catch (_) {}
+    return false;
+  }
+
   // 🆕 MÉTHODE : Mettre à jour l'abonnement dans Firestore
   static Future<void> _updateSubscriptionInFirestore(
       PurchaseDetails purchase) async {
@@ -327,8 +591,8 @@ class SubscriptionService {
           .doc(user.email?.toLowerCase() ?? user.uid)
           .get();
       if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>?
-            ?? <String, dynamic>{};
+        final Map<String, dynamic> data =
+            userDoc.data() ?? <String, dynamic>{};
         final String? sid = data['structureId'] as String?;
         if (sid != null && sid.isNotEmpty) return sid;
       }
@@ -423,25 +687,30 @@ class SubscriptionService {
     // Déterminer le type de structure et nombre de membres selon le produit
     String structureType = 'assistante_maternelle';
     int memberCount = 1;
-    double priceAmount = 8.99;
-    String priceDisplay = '8,99 € / mois';
+    double priceAmount = 6.99;
+    String priceDisplay = '6,99 € / mois';
 
-    if (productId.contains('mam')) {
+    if (productId.contains('parent')) {
+      structureType = 'parent_employeur';
+      memberCount = 1;
+      priceAmount = 4.99;
+      priceDisplay = '4,99 € / mois';
+    } else if (productId.contains('mam')) {
       structureType = 'MAM';
       if (productId.contains('2_members') || productId == 'abonement_mam2') {
-        memberCount = 2;
+        memberCount = 3;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
       } else if (productId.contains('3_members') ||
           productId == 'abonement_mam3') {
-        memberCount = 3;
+        memberCount = 4;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
       } else if (productId.contains('4_members') ||
           productId == 'abonement_mam4') {
         memberCount = 4;
-        priceAmount = 29.99;
-        priceDisplay = '29,99 € / mois';
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
       }
     }
 

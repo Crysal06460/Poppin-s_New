@@ -9,6 +9,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 
 class ChildInfoScreen extends StatefulWidget {
+  final bool parentEmployerFlow;
+
+  const ChildInfoScreen({Key? key, this.parentEmployerFlow = false})
+      : super(key: key);
+
   @override
   _ChildInfoScreenState createState() => _ChildInfoScreenState();
 }
@@ -933,6 +938,25 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         return;
       }
 
+      final structureData =
+          structureDoc.data() as Map<String, dynamic>? ?? const {};
+
+      Map<String, dynamic>? parent1Data;
+      if (widget.parentEmployerFlow) {
+        parent1Data = {
+          'firstName': structureData['ownerFirstName'] ??
+              structureData['firstName'] ??
+              '',
+          'lastName':
+              structureData['ownerLastName'] ?? structureData['lastName'] ?? '',
+          'email': structureData['email'] ?? currentUserEmail,
+          'phone': structureData['phone'] ?? '',
+          'address': structureData['address'] ?? '',
+          'postalCode': structureData['postalCode'] ?? '',
+          'city': structureData['city'] ?? '',
+        };
+      }
+
       DocumentReference newChildRef = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -943,20 +967,50 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         'gender': gender,
         'birthdate': selectedDate!.toIso8601String(),
         'createdAt': Timestamp.now(),
-        'assignedMemberEmail': currentUserEmail,
+        'assignedMemberEmail':
+            widget.parentEmployerFlow ? null : currentUserEmail,
         'createdByEmail': currentUserEmail,
         'lastUpdatedBy': currentUserEmail,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
         'status': 'incomplete', // NOUVEAU : marquer comme incomplet
+        'createdByParentEmployer': widget.parentEmployerFlow,
+        if (parent1Data != null) 'parent1': parent1Data,
+        if (parent1Data != null) 'parent2': {},
       });
 
       String childId = newChildRef.id;
       _createdChildId = childId; // NOUVEAU : stocker l'ID
       print("✅ Enfant créé avec ID: $childId");
 
+      if (widget.parentEmployerFlow) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .set({
+          'email': currentUserEmail,
+          'role': 'parent',
+          'structureId': structureId,
+          'structureName': structureData['structureName'] ?? '',
+          'children': FieldValue.arrayUnion([childId]),
+          'parentEmployer': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
       if (context.mounted) Navigator.of(context).pop();
 
-      if (context.mounted) {
+      if (!context.mounted) return;
+
+      if (widget.parentEmployerFlow) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Enfant ajouté. Vous pouvez compléter les infos plus tard.'),
+            backgroundColor: primaryBlue,
+          ),
+        );
+        context.go('/parent/home');
+      } else {
         context.go('/parent-info', extra: childId);
       }
     } catch (e) {

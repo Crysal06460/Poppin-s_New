@@ -995,6 +995,8 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
         password: passwordController.text.trim(),
       );
 
+      final invitationInfo = widget.invitationInfo;
+
       if (invitationType == 'mamMember') {
         // Créer le document utilisateur pour un membre MAM
         await FirebaseFirestore.instance
@@ -1011,6 +1013,59 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
         });
 
         // Redirection vers l'interface MAM
+        if (mounted) context.go('/home');
+      } else if (invitationType == 'assistant') {
+        final String assistantFirstName =
+            invitationInfo['assistantFirstName'] ?? '';
+        final String assistantLastName =
+            invitationInfo['assistantLastName'] ?? '';
+        final String assistantPhone = invitationInfo['assistantPhone'] ?? '';
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(email.toLowerCase())
+            .set({
+          'email': email.toLowerCase(),
+          'role': 'assistantFromParent',
+          'structureId': structureId,
+          'structureName': structureName,
+          'firstName': assistantFirstName,
+          'lastName': assistantLastName,
+          'phone': assistantPhone,
+          'invitedByParent': true,
+          'isFirstLogin': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'firebaseUid': userCredential.user?.uid,
+        }, SetOptions(merge: true));
+
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .set({
+          'assistantEmail': email.toLowerCase(),
+          'assistantFirstName': assistantFirstName,
+          'assistantLastName': assistantLastName,
+          'assistantPhone': assistantPhone,
+          'assistantInvitationStatus': 'completed',
+          'assistantLinkedUserId': userCredential.user?.uid,
+          'assistantLinkedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('assistants')
+            .doc(email.toLowerCase())
+            .set({
+          'firstName': assistantFirstName,
+          'lastName': assistantLastName,
+          'email': email.toLowerCase(),
+          'phone': assistantPhone,
+          'status': 'active',
+          'linkedUserId': userCredential.user?.uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
         if (mounted) context.go('/home');
       } else if (invitationType == 'parent') {
         // Ajouter un log pour déboguer

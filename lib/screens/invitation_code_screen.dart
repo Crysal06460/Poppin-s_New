@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class InvitationCodeScreen extends StatefulWidget {
   const InvitationCodeScreen({Key? key}) : super(key: key);
@@ -20,7 +19,6 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
   static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +83,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
               decoration: BoxDecoration(
                 color: lightBlue,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryBlue.withOpacity(0.3)),
+                border: Border.all(color: primaryBlue.withValues(alpha: 0.3)),
               ),
               child: Column(
                 children: [
@@ -196,9 +194,9 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: primaryRed.withOpacity(0.1),
+                    color: primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: primaryRed.withOpacity(0.5)),
+                    border: Border.all(color: primaryRed.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -244,7 +242,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   offset: const Offset(0, 8),
                   blurRadius: 24,
                   spreadRadius: 0,
@@ -262,11 +260,11 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                     height: maxWidth * 0.12,
                     margin: EdgeInsets.symmetric(vertical: maxHeight * 0.03),
                     decoration: BoxDecoration(
-                      color: lightBlue.withOpacity(0.3),
+                      color: lightBlue.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: primaryBlue.withOpacity(0.15),
+                          color: primaryBlue.withValues(alpha: 0.15),
                           blurRadius: 20,
                           offset: const Offset(0, 6),
                         ),
@@ -304,18 +302,18 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          lightBlue.withOpacity(0.7),
-                          lightBlue.withOpacity(0.9),
+                          lightBlue.withValues(alpha: 0.7),
+                          lightBlue.withValues(alpha: 0.9),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: primaryBlue.withOpacity(0.2),
+                        color: primaryBlue.withValues(alpha: 0.2),
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryBlue.withOpacity(0.1),
+                          color: primaryBlue.withValues(alpha: 0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 4),
                         ),
@@ -329,7 +327,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                             Container(
                               padding: EdgeInsets.all(maxWidth * 0.015),
                               decoration: BoxDecoration(
-                                color: primaryBlue.withOpacity(0.15),
+                                color: primaryBlue.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(Icons.info_outline,
@@ -421,7 +419,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: brightCyan.withOpacity(0.3),
+                          color: brightCyan.withValues(alpha: 0.3),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -436,7 +434,8 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        disabledBackgroundColor: brightCyan.withOpacity(0.6),
+                        disabledBackgroundColor:
+                            brightCyan.withValues(alpha: 0.6),
                       ),
                       child: isLoading
                           ? SizedBox(
@@ -494,15 +493,15 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                         width: double.infinity,
                         padding: EdgeInsets.all(maxWidth * 0.02),
                         decoration: BoxDecoration(
-                          color: primaryRed.withOpacity(0.1),
+                          color: primaryRed.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: primaryRed.withOpacity(0.3),
+                            color: primaryRed.withValues(alpha: 0.3),
                             width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: primaryRed.withOpacity(0.1),
+                              color: primaryRed.withValues(alpha: 0.1),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -513,7 +512,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                             Container(
                               padding: EdgeInsets.all(maxWidth * 0.01),
                               decoration: BoxDecoration(
-                                color: primaryRed.withOpacity(0.1),
+                                color: primaryRed.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(Icons.error_outline,
@@ -568,14 +567,12 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
     });
 
     try {
-      // Rechercher les invitations correspondant à cet email
-      final invitationsQuery = await FirebaseFirestore.instance
+      final snapshot = await FirebaseFirestore.instance
           .collection('invitations')
           .where('email', isEqualTo: email)
-          .where('status', isEqualTo: 'active')
           .get();
 
-      if (invitationsQuery.docs.isEmpty) {
+      if (snapshot.docs.isEmpty) {
         setState(() {
           errorMessage = "Aucune invitation trouvée pour cet email";
           isLoading = false;
@@ -583,8 +580,56 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
         return;
       }
 
-      // Récupérer les informations d'invitation
-      final invitationData = invitationsQuery.docs.first.data();
+      // Trier par date de création (la plus récente d'abord)
+      final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+          snapshot.docs);
+
+      Timestamp _extractTimestamp(Map<String, dynamic> data) {
+        final value = data['createdAt'];
+        if (value is Timestamp) return value;
+        if (value is DateTime) {
+          return Timestamp.fromDate(value);
+        }
+        return Timestamp.fromMillisecondsSinceEpoch(0);
+      }
+
+      docs.sort((a, b) =>
+          _extractTimestamp(b.data()).compareTo(_extractTimestamp(a.data())));
+
+      QueryDocumentSnapshot<Map<String, dynamic>>? selectedDoc;
+      for (final doc in docs) {
+        final status =
+            (doc.data()['status'] ?? '').toString().toLowerCase().trim();
+        if (status == 'active' || status == 'pending') {
+          selectedDoc = doc;
+          break;
+        }
+      }
+
+      selectedDoc ??= docs.first;
+
+      final invitationData = selectedDoc.data();
+      final String status =
+          (invitationData['status'] ?? '').toString().toLowerCase().trim();
+
+      if (status == 'completed') {
+        setState(() {
+          errorMessage =
+              "Cette invitation a déjà été utilisée. Vous pouvez vous connecter depuis l'écran de connexion.";
+          isLoading = false;
+        });
+        return;
+      }
+
+      if (status == 'revoked' || status == 'deleted' || status == 'cancelled') {
+        setState(() {
+          errorMessage =
+              "Cette invitation a été annulée. Demandez une nouvelle invitation à l'administrateur.";
+          isLoading = false;
+        });
+        return;
+      }
+
       final String invitationType = invitationData['type'] ?? 'unknown';
       final String structureId = invitationData['structureId'] ?? '';
 
@@ -623,6 +668,19 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
           'structureName': structureName,
           'childName': childName,
           'childId': childId,
+        });
+      } else if (invitationType == 'assistant') {
+        final String structureName = await _getStructureName(structureId);
+
+        context.go('/invitation-validated', extra: {
+          'invitationType': invitationType,
+          'email': email,
+          'structureId': structureId,
+          'structureName': structureName,
+          'assistantFirstName': invitationData['assistantFirstName'] ?? '',
+          'assistantLastName': invitationData['assistantLastName'] ?? '',
+          'assistantPhone': invitationData['assistantPhone'] ?? '',
+          'parentFullName': invitationData['parentFullName'] ?? '',
         });
       } else {
         setState(() {

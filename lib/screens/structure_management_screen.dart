@@ -5,9 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 
 class StructureManagementScreen extends StatefulWidget {
   const StructureManagementScreen({Key? key}) : super(key: key);
@@ -28,6 +30,10 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
   String? _logoUrl;
   bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
+  String _pageTitle = 'Gestion de la structure';
+  List<String> _citySuggestions = [];
+  String _lastPostalLookup = '';
+  bool _isFetchingCities = false;
 
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
@@ -75,6 +81,23 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     try {
       setState(() => _isLoading = true);
 
+      final user = FirebaseAuth.instance.currentUser;
+      final String? userEmail = user?.email?.toLowerCase();
+      String? userRole;
+      if (userEmail != null && userEmail.isNotEmpty) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userEmail)
+              .get();
+          if (userDoc.exists) {
+            userRole = (userDoc.data()?['role'] ?? '').toString().toLowerCase();
+          }
+        } catch (e) {
+          print('⚠️ Impossible de récupérer le rôle utilisateur: $e');
+        }
+      }
+
       final structureId = await _getStructureId();
       if (structureId.isEmpty) {
         setState(() => _isLoading = false);
@@ -96,6 +119,11 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
           _cityController.text = data['city'] ?? '';
           _postalCodeController.text = data['postalCode'] ?? '';
           _logoUrl = data['logoUrl'];
+          if (userRole == 'assistantfromparent') {
+            _pageTitle = 'Modifier ses coordonnées';
+          } else {
+            _pageTitle = 'Gestion de la structure';
+          }
           _isLoading = false;
         });
       } else {
@@ -183,6 +211,22 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         'postalCode': _postalCodeController.text,
       });
 
+      final user = FirebaseAuth.instance.currentUser;
+      final userEmail = user?.email?.toLowerCase();
+      if (userEmail != null && userEmail.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userEmail)
+            .set({
+          'phone': _phoneController.text,
+          'address': _addressController.text,
+          'city': _cityController.text,
+          'postalCode': _postalCodeController.text,
+          'structureName': _nameController.text,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Modifications enregistrées avec succès')),
       );
@@ -194,6 +238,97 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _handlePostalCodeChange(String value) async {
+    final postalCode = value.trim();
+    if (postalCode.length == 5 && RegExp(r'^\d{5}$').hasMatch(postalCode)) {
+      if (postalCode == _lastPostalLookup) return;
+      _lastPostalLookup = postalCode;
+      await _fetchCitiesForPostalCode(postalCode);
+    } else {
+      setState(() {
+        if (postalCode.isEmpty) {
+          _cityController.clear();
+        }
+        _citySuggestions = [];
+      });
+    }
+  }
+
+  Future<void> _fetchCitiesForPostalCode(String postalCode) async {
+    setState(() {
+      _isFetchingCities = true;
+      _citySuggestions = [];
+    });
+
+    try {
+      final url = Uri.parse(
+          'https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom');
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final List<String> cities =
+            data.map((city) => city['nom'].toString()).toSet().toList()..sort();
+
+        setState(() {
+          _citySuggestions = cities;
+          if (cities.isNotEmpty) {
+            _cityController.text = cities.first;
+          } else {
+            _cityController.clear();
+          }
+        });
+      } else {
+        print('⚠️ Erreur API villes: ${response.statusCode}');
+        setState(() {
+          _citySuggestions = [];
+          _cityController.clear();
+        });
+      }
+    } catch (e) {
+      print('⚠️ Erreur récupération villes: $e');
+      setState(() {
+        _citySuggestions = [];
+        _cityController.clear();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingCities = false;
+        });
+      }
+    }
+  }
+
+  void _showCitySelectionSheet() {
+    if (_citySuggestions.length <= 1) return;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _citySuggestions.length,
+            itemBuilder: (context, index) {
+              final city = _citySuggestions[index];
+              return ListTile(
+                title: Text(city),
+                onTap: () {
+                  setState(() {
+                    _cityController.text = city;
+                  });
+                  Navigator.of(context).pop();
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   String _getFullAddress() {
@@ -551,6 +686,22 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                                   }
                                   return null;
                                 },
+                                onChanged: _handlePostalCodeChange,
+                                suffixIcon: _isFetchingCities
+                                    ? Padding(
+                                        padding:
+                                            EdgeInsets.all(maxWidth * 0.015),
+                                        child: SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation(
+                                                primaryColor),
+                                          ),
+                                        ),
+                                      )
+                                    : null,
                               ),
 
                               SizedBox(height: maxHeight * 0.025),
@@ -568,6 +719,18 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                                   }
                                   return null;
                                 },
+                                onTap: _citySuggestions.length > 1
+                                    ? _showCitySelectionSheet
+                                    : null,
+                                suffixIcon: _citySuggestions.length > 1
+                                    ? IconButton(
+                                        icon: Icon(
+                                          Icons.expand_more,
+                                          color: primaryColor,
+                                        ),
+                                        onPressed: _showCitySelectionSheet,
+                                      )
+                                    : null,
                               ),
 
                               SizedBox(height: maxHeight * 0.04),
@@ -766,6 +929,10 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     int maxLines = 1,
     String? hintText,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
+    VoidCallback? onTap,
+    bool readOnly = false,
+    Widget? suffixIcon,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -784,6 +951,9 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         maxLength: maxLength,
         maxLines: maxLines,
         validator: validator,
+        readOnly: readOnly,
+        onChanged: onChanged,
+        onTap: onTap,
         style: TextStyle(
           fontSize: maxWidth * 0.018,
           color: Colors.black87,
@@ -838,6 +1008,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
             horizontal: maxWidth * 0.04,
             vertical: maxWidth * 0.02,
           ),
+          suffixIcon: suffixIcon,
         ),
       ),
     );
@@ -1018,6 +1189,14 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                 }
                 return null;
               },
+              onChanged: _handlePostalCodeChange,
+              suffixIcon: _isFetchingCities
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
             ),
 
             _buildPhoneFormField(
@@ -1031,6 +1210,15 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                 }
                 return null;
               },
+              onTap:
+                  _citySuggestions.length > 1 ? _showCitySelectionSheet : null,
+              suffixIcon: _citySuggestions.length > 1
+                  ? IconButton(
+                      icon: const Icon(Icons.expand_more),
+                      color: primaryColor,
+                      onPressed: _showCitySelectionSheet,
+                    )
+                  : null,
             ),
             SizedBox(height: 32),
 
@@ -1158,6 +1346,10 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
     int maxLines = 1,
     String? hintText,
     String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
+    VoidCallback? onTap,
+    bool readOnly = false,
+    Widget? suffixIcon,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -1176,6 +1368,9 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         maxLength: maxLength,
         maxLines: maxLines,
         validator: validator,
+        readOnly: readOnly,
+        onChanged: onChanged,
+        onTap: onTap,
         style: TextStyle(
           fontSize: 16,
           color: Colors.black87,
@@ -1227,6 +1422,7 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
             borderSide: BorderSide(color: Colors.red.shade400, width: 2),
           ),
           contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          suffixIcon: suffixIcon,
         ),
       ),
     );

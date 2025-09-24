@@ -598,15 +598,52 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
 
         print("✅ Compteur mis à jour pour le membre MAM: $assignedMemberEmail");
       } else {
-        // 3. Sinon, notifier l'assistante maternelle propriétaire de la structure
-        print("👩‍⚕️ Notification de l'assistante maternelle propriétaire");
+        // 3. Sinon, notifier l'assistante rattachée à la structure
+        print("👩‍⚕️ Notification de l'assistante maternelle liée à la structure");
 
-        // Récupérer la structure pour trouver le propriétaire
+        // Récupérer la structure pour trouver l'assistante
         final structureDoc =
             await _firestore.collection('structures').doc(structureId).get();
 
         if (structureDoc.exists) {
           final structureData = structureDoc.data()!;
+
+          // Priorité : champ assistantEmail (cas parent employeur)
+          final String? assistantEmail =
+              structureData['assistantEmail']?.toString().toLowerCase();
+          if (assistantEmail != null && assistantEmail.isNotEmpty) {
+            await _firestore
+                .collection('users')
+                .doc(assistantEmail)
+                .update({'unreadMessages': FieldValue.increment(1)});
+
+            print(
+                "✅ Compteur mis à jour pour l'assistante liée: $assistantEmail");
+            return;
+          }
+
+          // Deuxième option : récupérer via assistantLinkedUserId → firebaseUid
+          final String? assistantLinkedUid =
+              structureData['assistantLinkedUserId']?.toString();
+          if (assistantLinkedUid != null && assistantLinkedUid.isNotEmpty) {
+            final linkedQuery = await _firestore
+                .collection('users')
+                .where('firebaseUid', isEqualTo: assistantLinkedUid)
+                .limit(1)
+                .get();
+            if (linkedQuery.docs.isNotEmpty) {
+              final linkedEmail = linkedQuery.docs.first.id.toLowerCase();
+              await _firestore
+                  .collection('users')
+                  .doc(linkedEmail)
+                  .update({'unreadMessages': FieldValue.increment(1)});
+              print(
+                  "✅ Compteur mis à jour pour l'assistante liée (via firebaseUid): $linkedEmail");
+              return;
+            }
+          }
+
+          // Fallback : proprietaire de la structure
           final String? ownerEmail =
               structureData['ownerEmail']?.toString().toLowerCase();
 

@@ -40,6 +40,7 @@ class iOSSubscriptionService {
     'mam_2_members': 'com.beylet.poppinsApp.subscription.mam_2_membres',
     'mam_3_members': 'com.beylet.poppinsApp.subscription.mam_3_membres',
     'mam_4_members': 'com.beylet.poppinsApp.subscription.mam_4_membres',
+    'parent_employeur': 'parent_employeur',
   };
 
   static const Set<String> _allProductIds = {
@@ -47,6 +48,7 @@ class iOSSubscriptionService {
     'com.beylet.poppinsApp.subscription.mam_2_membres',
     'com.beylet.poppinsApp.subscription.mam_3_membres',
     'com.beylet.poppinsApp.subscription.mam_4_membres',
+    'parent_employeur',
   };
 
   /// Initialise le service iOS
@@ -242,25 +244,30 @@ class iOSSubscriptionService {
       // Déterminer le type de structure et nombre de membres
       String structureType = 'assistante_maternelle';
       int memberCount = 1;
-      double priceAmount = 8.99;
-      String priceDisplay = '8,99 € / mois';
+      double priceAmount = 6.99;
+      String priceDisplay = '6,99 € / mois';
 
       // ✅ MAPPING robuste basé sur les IDs produits iOS
       if (productId == _iOSProductIds['mam_2_members']) {
         structureType = 'MAM';
-        memberCount = 2;
+        memberCount = 3;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
       } else if (productId == _iOSProductIds['mam_3_members']) {
         structureType = 'MAM';
-        memberCount = 3;
+        memberCount = 6;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
       } else if (productId == _iOSProductIds['mam_4_members']) {
         structureType = 'MAM';
-        memberCount = 4;
-        priceAmount = 29.99;
-        priceDisplay = '29,99 € / mois';
+        memberCount = 6;
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
+      } else if (productId == _iOSProductIds['parent_employeur']) {
+        structureType = 'parent_employeur';
+        memberCount = 1;
+        priceAmount = 4.99;
+        priceDisplay = '4,99 € / mois';
       } else if (productId == _iOSProductIds['assistante_maternelle']) {
         // valeurs par défaut déjà correctes
       } else {
@@ -349,23 +356,25 @@ class iOSSubscriptionService {
 
   /// Retourne l'ID produit iOS
   static String getProductId(String structureType, int mamMembersCount) {
-    switch (structureType) {
-      case 'assistante_maternelle':
-        return _iOSProductIds['assistante_maternelle']!;
-      case 'mam':
-        switch (mamMembersCount) {
-          case 2:
-            return _iOSProductIds['mam_2_members']!;
-          case 3:
-            return _iOSProductIds['mam_3_members']!;
-          case 4:
-            return _iOSProductIds['mam_4_members']!;
-          default:
-            return _iOSProductIds['mam_2_members']!;
-        }
-      default:
-        return _iOSProductIds['assistante_maternelle']!;
+    final String normalizedType = structureType.toLowerCase();
+
+    if (normalizedType == 'assistante_maternelle') {
+      return _iOSProductIds['assistante_maternelle']!;
     }
+
+    if (normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur') {
+      return _iOSProductIds['parent_employeur']!;
+    }
+
+    if (normalizedType == 'mam') {
+      if (mamMembersCount <= 3) {
+        return _iOSProductIds['mam_2_members']!;
+      }
+      return _iOSProductIds['mam_3_members']!;
+    }
+
+    return _iOSProductIds['assistante_maternelle']!;
   }
 
   /// Récupère les produits disponibles
@@ -609,27 +618,23 @@ class iOSSubscriptionService {
     double priceAmount;
     String priceDisplay;
 
-    if (structureType == 'MAM') {
-      switch (memberCount) {
-        case 2:
-          priceAmount = 19.99;
-          priceDisplay = '19,99 € / mois';
-          break;
-        case 3:
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
-          break;
-        case 4:
-          priceAmount = 29.99;
-          priceDisplay = '29,99 € / mois';
-          break;
-        default:
-          priceAmount = 19.99;
-          priceDisplay = '19,99 € / mois';
+    final String normalizedType = structureType.toLowerCase();
+
+    if (normalizedType == 'mam') {
+      if (memberCount <= 3) {
+        priceAmount = 19.99;
+        priceDisplay = '19,99 € / mois';
+      } else {
+        priceAmount = 24.99;
+        priceDisplay = '24,99 € / mois';
       }
+    } else if (normalizedType == 'parent_employeur' ||
+        normalizedType == 'parentemployeur') {
+      priceAmount = 4.99;
+      priceDisplay = '4,99 € / mois';
     } else {
-      priceAmount = 8.99;
-      priceDisplay = '8,99 € / mois';
+      priceAmount = 6.99;
+      priceDisplay = '6,99 € / mois';
     }
 
     return {

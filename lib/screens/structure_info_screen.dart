@@ -88,6 +88,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
   String? structureId;
   Color primaryColor = primaryBlue;
   bool isMAM = false; // Pour contrôler l'affichage du champ Nom de la structure
+  bool isParent = false;
 
   @override
   void initState() {
@@ -104,16 +105,18 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
       print("📌 extraData reçu: ${widget.extraData}");
       print("📌 Structure Type reçu dans initState: $structureType");
 
-      // Vérification de différentes valeurs possibles pour MAM
-      // Accepter 'MAM', 'mam', ou toute valeur contenant 'mam'
-      isMAM = structureType == 'MAM' ||
-          structureType == 'mam' ||
-          structureType?.toLowerCase().contains('mam') == true;
+      // Vérification de différentes valeurs possibles pour les types
+      final normalizedType = structureType?.toLowerCase();
+      isMAM = normalizedType == 'mam' ||
+          normalizedType?.contains('mam') == true;
+      isParent = normalizedType == 'parent_employeur' ||
+          normalizedType == 'parentemployeur';
 
       // Gérer aussi le cas où le type est 'assistante_maternelle'
-      if (structureType == 'assistante_maternelle') {
+      if (normalizedType == 'assistante_maternelle') {
         structureType = 'AssistanteMaternelle';
         isMAM = false;
+        isParent = false;
       }
 
       print("📌 isMAM défini à: $isMAM dans initState");
@@ -139,13 +142,15 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
           setState(() {
             structureType = data['structureType'];
-            isMAM = structureType == 'MAM' ||
-                structureType?.toLowerCase() == 'mam' ||
-                structureType?.toLowerCase().contains('mam') == true;
+            final normalized = structureType?.toLowerCase();
+            isMAM = normalized == 'mam' ||
+                normalized?.contains('mam') == true;
+            isParent = normalized == 'parent_employeur' ||
+                normalized == 'parentemployeur';
             primaryColor = isMAM ? primaryRed : primaryBlue;
 
             // Si c'est une AssistanteMaternelle, pré-remplir le nom de la structure
-            if (!isMAM && data['firstName'] != null) {
+            if (!isMAM && !isParent && data['firstName'] != null) {
               firstNameController.text = data['firstName'];
               structureNameController.text =
                   data['firstName']; // Pré-remplir avec le prénom
@@ -175,6 +180,12 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
       }
 
       // Préparation des données communes
+      final String resolvedType = structureType != null
+          ? structureType!
+          : (isMAM
+              ? 'MAM'
+              : (isParent ? 'parent_employeur' : 'AssistanteMaternelle'));
+
       Map<String, dynamic> structureData = {
         'firstName': firstNameController.text.trim(),
         'lastName': lastNameController.text.trim(),
@@ -185,8 +196,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
         'city': cityController.text.trim(),
         'phone': phoneController.text.trim(), // Ajout du numéro de téléphone
         'email': user.email,
-        'structureType':
-            structureType ?? (isMAM ? 'MAM' : 'AssistanteMaternelle'),
+        'structureType': resolvedType,
       };
 
       // Si c'est une MAM, utiliser le nom saisi, sinon utiliser seulement le prénom comme nom de structure
@@ -194,7 +204,11 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
         structureData['structureName'] = structureNameController.text.trim();
       } else {
         // Pour AssistanteMaternelle, utiliser seulement le prénom
-        structureData['structureName'] = firstNameController.text.trim();
+        // Pour un parent employeur, on enregistre le nom complet
+        structureData['structureName'] = isParent
+            ? '${firstNameController.text.trim()} ${lastNameController.text.trim()}'
+                .trim()
+            : firstNameController.text.trim();
       }
 
       // Mise à jour du document structure
@@ -349,10 +363,16 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
   }
 
   void _updateStructureNameIfNeeded() {
-    if (!isMAM) {
+    if (!isMAM && !isParent) {
       // Pour AssistanteMaternelle: le nom de structure est le prénom
       structureNameController.text = firstNameController.text;
     }
+  }
+
+  String _getEntityLabel() {
+    if (isMAM) return 'MAM';
+    if (isParent) return 'profil parent employeur';
+    return 'activité';
   }
 
   @override
@@ -552,7 +572,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
                                   shouldCapitalize: true,
                                   capitalizeWords: true,
                                   onChanged: (value) {
-                                    if (!isMAM) {
+                                    if (!isMAM && !isParent) {
                                       structureNameController.text = value;
                                     }
                                   },
@@ -976,7 +996,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
           // Titre
           Text(
-            "Ajoutez les informations de votre ${isMAM ? 'MAM' : 'activité'}",
+            "Ajoutez les informations de votre ${_getEntityLabel()}",
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -1010,7 +1030,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
             capitalizeWords:
                 true, // Pour gérer les prénoms composés comme "Jean-Pierre"
             onChanged: (value) {
-              if (!isMAM) {
+              if (!isMAM && !isParent) {
                 structureNameController.text = value;
               }
             },

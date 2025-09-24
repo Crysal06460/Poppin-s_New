@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:poppins_app/services/notification_service.dart';
+import '../utils/user_role_cache.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -145,6 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Déterminer le rôle de l'utilisateur et naviguer
       final userRole = await _determineUserRole();
+      UserRoleCache.setRole(userRole == "parent" ? 'parent' : 'structure');
 
       if (mounted) {
         if (userRole == "parent") {
@@ -175,26 +177,37 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return "unknown";
 
-      // Vérifier si c'est une assistante maternelle (structure)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.email?.toLowerCase())
+          .get();
+
+      final String role =
+          (userDoc.data()?['role'] ?? '').toString().toLowerCase();
+      const parentRoles = {'parent', 'parent_employeur', 'parentemployeur'};
+
+      if (parentRoles.contains(role)) {
+        print('🔍 Login: rôle utilisateur Firestore = ' + role);
+        UserRoleCache.setRole('parent');
+        return "parent";
+      }
+
       final structureDoc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(user.uid)
           .get();
 
       if (structureDoc.exists) {
+        final structureType = (structureDoc.data()?['structureType'] ?? '')
+            .toString()
+            .toLowerCase();
+        print('🔍 Login: structureType Firestore = ' + structureType);
+        UserRoleCache.setStructureType(structureType);
+        UserRoleCache.setRole('structure');
         return "assistante";
       }
 
-      // Vérifier si c'est un parent
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.email?.toLowerCase())
-          .get();
-
-      if (userDoc.exists && userDoc.data()?['role'] == 'parent') {
-        return "parent";
-      }
-
+      UserRoleCache.setRole(null);
       return "unknown";
     } catch (e) {
       print("Erreur lors de la détermination du rôle: $e");

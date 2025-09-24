@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class TransmissionsScreen extends StatefulWidget {
   const TransmissionsScreen({Key? key}) : super(key: key);
@@ -58,57 +59,19 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        return;
-      }
-
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Transmissions: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final structureContext = await StructureResolver().resolve();
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      // Récupérer la structure pour déterminer le type
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureSnapshot.exists) {
-        setState(() {
-          structureName =
-              structureSnapshot['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -126,7 +89,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =

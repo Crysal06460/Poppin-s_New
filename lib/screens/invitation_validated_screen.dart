@@ -47,6 +47,13 @@ class InvitationValidatedScreen extends StatelessWidget {
           "Vous êtes invité(e) à rejoindre $structureName en tant que parent de $childName.";
       invitationIcon = Icons.family_restroom;
       accentColor = primaryYellow; // Utiliser primaryYellow pour les parents
+    } else if (invitationType == 'assistant') {
+      final String parentFullName =
+          invitationInfo['parentFullName'] ?? 'les parents';
+      messageText =
+          "${parentFullName.isEmpty ? 'Les parents' : parentFullName} vous invitent à collaborer avec eux sur Poppin's.";
+      invitationIcon = Icons.volunteer_activism;
+      accentColor = primaryRed;
     } else {
       messageText =
           "Type d'invitation inconnu. Veuillez contacter l'administrateur.";

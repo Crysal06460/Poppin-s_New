@@ -28,9 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // Variables pour identifier le membre actuel
   String currentUserEmail = "";
 
-  // Définition des thèmes de couleurs
-  late Color primaryColor;
-  late Color secondaryColor;
+  // Définition des thèmes de couleurs (défaut appliqué immédiatement pour éviter les accès tardifs)
+  Color primaryColor = const Color(0xFF3D9DF2);
+  Color secondaryColor = const Color(0xFFDFE9F2);
 
   @override
   void initState() {
@@ -142,13 +142,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
+        final String role = (userData['role'] ?? '')
+            .toString()
+            .toLowerCase()
+            .trim();
+        final String linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (role == 'mamMember'.toLowerCase() && linkedStructureId.isNotEmpty) {
           // C'est un membre MAM, utiliser structureId au lieu de l'ID utilisateur
-          structureDocId = userData['structureId'];
+          structureDocId = linkedStructureId;
           isMamMember = true;
           print(
               "👤 Utilisateur identifié comme membre MAM pour la structure: $structureDocId");
+        } else if (linkedStructureId.isNotEmpty &&
+            (role == 'assistantfromparent' || role == 'assistant')) {
+          // Invitation assistante par un parent : utiliser la structure du parent employeur
+          structureDocId = linkedStructureId;
+          print(
+              "👩‍⚕️ Utilisateur assistante lié à la structure: $structureDocId");
         }
       }
 
@@ -168,27 +180,31 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
+      final Map<String, dynamic> structureData =
+          (structureDoc.data() as Map<String, dynamic>?) ?? const {};
+
       String fetchedStructureName =
-          structureDoc['structureName'] ?? "Ma Structure";
+          (structureData['structureName'] ??
+                  structureData['ownerFirstName'] ??
+                  'Ma Structure')
+              .toString()
+              .trim();
+      if (fetchedStructureName.isEmpty) {
+        fetchedStructureName = 'Ma Structure';
+      }
 
       // Récupération du type de structure existant
-      String fetchedStructureType = "AssistanteMaternelle"; // Valeur par défaut
-      bool showAllChildrenOnHome = false;
+      String fetchedStructureType =
+          (structureData['structureType'] ?? 'AssistanteMaternelle').toString();
+      bool showAllChildrenOnHome =
+          structureData['showAllChildrenOnHome'] == true;
 
-      if (structureDoc.data() != null) {
-        final data = structureDoc.data() as Map<String, dynamic>;
-        if (data.containsKey('structureType')) {
-          fetchedStructureType =
-              (data['structureType'] ?? fetchedStructureType).toString();
-        } else {
-          // Ajouter le champ s'il n'existe pas
-          await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(structureDocId)
-              .update({'structureType': fetchedStructureType});
-        }
-
-        showAllChildrenOnHome = data['showAllChildrenOnHome'] == true;
+      if (!structureData.containsKey('structureType')) {
+        // Ajouter le champ s'il n'existe pas encore pour éviter les accès directs nullables
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureDocId)
+            .update({'structureType': fetchedStructureType});
       }
 
       fetchedStructureType = fetchedStructureType.trim().toLowerCase();
@@ -2272,6 +2288,11 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ];
 
+        final bool hideStructureName = structureType == 'parent_employeur' ||
+            structureType == 'parentemployeur';
+        final String displayStructureName =
+            hideStructureName ? '' : structureName;
+
         return Scaffold(
           backgroundColor: Colors.white,
           body: Column(
@@ -2319,18 +2340,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              child: Text(
-                                structureName,
-                                style: TextStyle(
-                                  fontSize: screenSize.width *
-                                      (isTablet
-                                          ? 0.032
-                                          : 0.06), // Taille relative
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: hideStructureName
+                                  ? const SizedBox.shrink()
+                                  : Text(
+                                      displayStructureName,
+                                      style: TextStyle(
+                                        fontSize: screenSize.width *
+                                            (isTablet
+                                                ? 0.032
+                                                : 0.06), // Taille relative
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ),
                             Row(
                               children: [
@@ -2427,15 +2450,75 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Troisième item - Ajouter enfant
               BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/Icone_Echanges.png',
-                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
+                icon: _buildMessagesNavIcon(
+                    screenSize.width * (isTablet ? 0.07 : 0.14)),
+                activeIcon: _buildMessagesNavIcon(
+                    screenSize.width * (isTablet ? 0.07 : 0.14)),
                 label: "Echanges",
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMessagesNavIcon(double size) {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email?.toLowerCase();
+
+    Widget baseIcon() => Image.asset(
+          'assets/images/Icone_Echanges.png',
+          width: size,
+          height: size,
+        );
+
+    if (email == null) {
+      return baseIcon();
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(email)
+          .snapshots(),
+      builder: (context, snapshot) {
+        int unread = 0;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data =
+              snapshot.data!.data() as Map<String, dynamic>? ?? const {};
+          unread = (data['unreadMessages'] ?? 0) as int;
+        }
+
+        if (unread <= 0) {
+          return baseIcon();
+        }
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            baseIcon(),
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: primaryRed,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  unread > 9 ? '9+' : unread.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -2638,53 +2721,47 @@ class _HomeScreenState extends State<HomeScreen> {
                       Positioned(
                         top: 0,
                         right: 0,
-                        child: FutureBuilder<List<String>>(
-                          future: _getAssignedChildrenIds(),
+                        child: StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseAuth.instance.currentUser?.email ==
+                                  null
+                              ? null
+                              : FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(FirebaseAuth.instance.currentUser!.email!
+                                      .toLowerCase())
+                                  .snapshots(),
                           builder: (context, snapshot) {
-                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                              return SizedBox.shrink();
+                            if (!snapshot.hasData || !snapshot.data!.exists) {
+                              return const SizedBox.shrink();
                             }
 
-                            final List<String> assignedChildIds =
-                                snapshot.data!;
+                            final data = snapshot.data!.data()
+                                as Map<String, dynamic>? ??
+                                const {};
+                            final int unreadMessages =
+                                (data['unreadMessages'] ?? 0) as int;
+                            final bool hasBadge = unreadMessages > 0;
 
-                            return StreamBuilder<QuerySnapshot>(
-                              // 🔥 CORRECTION CRITIQUE : Écouter les messages des PARENTS 🔥
-                              stream: FirebaseFirestore.instance
-                                  .collection('exchanges')
-                                  .where('childId', whereIn: assignedChildIds)
-                                  .where('nonLu', isEqualTo: true)
-                                  .where('senderType',
-                                      isEqualTo: 'parent') // ← AJOUTÉ !
-                                  .snapshots(),
-                              builder: (context, snapshot) {
-                                final int nonLuCount =
-                                    snapshot.data?.docs.length ?? 0;
-                                print(
-                                    "🔔 Badge Home - Messages non lus des PARENTS: $nonLuCount");
+                            if (!hasBadge) {
+                              return const SizedBox.shrink();
+                            }
 
-                                if (nonLuCount > 0) {
-                                  return Container(
-                                    padding: EdgeInsets.all(isTablet ? 6 : 4),
-                                    decoration: BoxDecoration(
-                                      color: primaryRed,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: Colors.white, width: 2),
-                                    ),
-                                    child: Text(
-                                      nonLuCount.toString(),
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: isTablet ? 14 : 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  );
-                                } else {
-                                  return SizedBox.shrink();
-                                }
-                              },
+                            return Container(
+                              padding: EdgeInsets.all(isTablet ? 6 : 4),
+                              decoration: BoxDecoration(
+                                color: primaryRed,
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: Text(
+                                unreadMessages.toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isTablet ? 14 : 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             );
                           },
                         ),

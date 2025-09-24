@@ -8,6 +8,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class RepasScreen extends StatefulWidget {
   const RepasScreen({Key? key}) : super(key: key);
@@ -171,58 +172,20 @@ class _RepasScreenState extends State<RepasScreen> {
 
   Future<void> _loadStructureInfo() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        return;
-      }
+      final structureContext = await StructureResolver().resolve();
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Repas: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
-
-      // Récupération des informations de la structure avec l'ID correct
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId) // Utiliser structureId au lieu de user.uid
-          .get();
-
-      if (structureDoc.exists) {
-        final data = structureDoc.data() as Map<String, dynamic>;
-        setState(() {
-          structureName = data['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      // Charger les enfants en passant l'ID de structure et l'email
-      _loadEnfantsDuJour(structureId, currentUserEmail);
+      await _loadEnfantsDuJour(structureContext);
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
       setState(() => isLoading = false);
     }
   }
 
-  Future<void> _loadEnfantsDuJour(
-      String structureId, String currentUserEmail) async {
+  Future<void> _loadEnfantsDuJour(StructureContext contextInfo) async {
     setState(() => isLoading = true);
     try {
       final today = DateTime.now();
@@ -231,15 +194,9 @@ class _RepasScreenState extends State<RepasScreen> {
           todayWeekday.substring(1).toLowerCase();
 
       // Récupérer la structure pour déterminer le type (MAM ou AssistanteMaternelle)
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      final String structureId = contextInfo.structureId;
+      final String currentUserEmail = contextInfo.currentUserEmail;
+      final String structureType = contextInfo.normalizedStructureType;
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -257,7 +214,7 @@ class _RepasScreenState extends State<RepasScreen> {
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
@@ -315,10 +272,10 @@ class _RepasScreenState extends State<RepasScreen> {
       }
 
       // Diagnostic des enfants filtrés
-      print(
-          "🔍 DIAGNOSTIC REPAS - Type de structure: $structureType, Utilisateur: $currentUserEmail");
-      print(
-          "🔍 DIAGNOSTIC REPAS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
+        print(
+            "🔍 DIAGNOSTIC REPAS - Type de structure: $structureType, Utilisateur: $currentUserEmail");
+        print(
+            "🔍 DIAGNOSTIC REPAS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
 
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui,
       // et inclure ceux délégués aujourd'hui même si le planning n'est pas présent
@@ -378,8 +335,7 @@ class _RepasScreenState extends State<RepasScreen> {
             'genre': child['gender'],
             'photoUrl': photoUrl,
             'age': ageText,
-            'structureId':
-                structureId, // Ajouter l'ID de structure pour les requêtes futures
+            'structureId': structureId, // Ajouter l'ID de structure pour les requêtes futures
             'birthdate': child['birthdate'],
           });
         }

@@ -7,6 +7,7 @@ enum SubscriptionStatus {
 enum SubscriptionPlan {
   assistantMaternelle,
   mam,
+  parentEmployeur,
 }
 
 class SubscriptionInfo {

@@ -22,43 +22,35 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
     const Color primaryBlue = Color(0xFF3D9DF2);
     const Color lightBlue = Color(0xFFDFE9F2);
 
-    // Déterminer les prix
-    String oldPrice;
-    String newPrice;
-
-    switch (oldMemberCount) {
-      case 1:
-        oldPrice = '8,99 € / mois'; // Assistant maternel
-        break;
-      case 2:
-        oldPrice = '19,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      case 3:
-        oldPrice = '24,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      case 4:
-        oldPrice = '29,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      default:
-        oldPrice = '19,99 € / mois';
+    String _formatPrice(String type, int count) {
+      final normalized = type.toLowerCase();
+      if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
+        return '4,99 € / mois';
+      }
+      if (normalized == 'mam') {
+        return count <= 3 ? '19,99 € / mois' : '24,99 € / mois';
+      }
+      return '6,99 € / mois';
     }
 
-    switch (memberCount) {
-      case 1:
-        newPrice = '8,99 € / mois';
-        break;
-      case 2:
-        newPrice = '19,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      case 3:
-        newPrice = '24,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      case 4:
-        newPrice = '29,99 € / mois'; // ✅ CORRIGÉ
-        break;
-      default:
-        newPrice = '29,99 € / mois';
+    String _formatMembersLabel(int count) {
+      final normalized = structureType.toLowerCase();
+      if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
+        return 'Parent employeur';
+      }
+      if (normalized == 'assistante_maternelle') {
+        return 'Assistant(e) Maternel(le)';
+      }
+      if (count >= 4) {
+        return '4 et + membres';
+      }
+      return '$count membre${count > 1 ? 's' : ''}';
     }
+
+    final String oldPrice = _formatPrice(structureType, oldMemberCount);
+    final String newPrice = _formatPrice(structureType, memberCount);
+    final String oldMembersLabel = _formatMembersLabel(oldMemberCount);
+    final String newMembersLabel = _formatMembersLabel(memberCount);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -167,7 +159,7 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      "$oldMemberCount membres",
+                                      oldMembersLabel,
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -201,7 +193,7 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      "$memberCount membres",
+                                      newMembersLabel,
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,

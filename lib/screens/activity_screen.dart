@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class ActivityScreen extends StatefulWidget {
   final BuildContext context;
@@ -484,56 +485,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        return;
-      }
-
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (structureId.isEmpty) {
-        structureId = user.uid;
-      }
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-          print(
-            "🔄 Activités: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId",
-          );
-        }
-      }
+      final structureContext = await StructureResolver().resolve();
+      structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureSnapshot.exists) {
-        final structureData = structureSnapshot.data() as Map<String, dynamic>?;
-        setState(() {
-          structureName =
-              structureData?['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       final snapshot = await FirebaseFirestore.instance
           .collection('structures')
@@ -548,7 +512,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
               child['assignedMemberEmail']?.toString().toLowerCase() ?? '';

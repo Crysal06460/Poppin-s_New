@@ -922,12 +922,20 @@ exports.onNewMessage = onDocumentCreated({
         console.log(`✅ Destinataire trouvé: ${recipientEmail}`);
 
         // 🔔 CRÉER LA NOTIFICATION (un destinataire)
-        await createNotificationDoc(db, { recipientUserId: recipientEmail, title, body, childId, messageId, senderType, suppressToken: senderFcmToken });
+        const notificationId = await createNotificationDoc(db, {
+            recipientUserId: recipientEmail,
+            title,
+            body,
+            childId,
+            messageId,
+            senderType,
+            suppressToken: senderFcmToken,
+        });
 
         // Marquer le message comme traité
         await event.data.ref.update({
             notificationSent: true,
-            notificationId: notificationRef.id,
+            notificationId,
             notificationCreatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -972,7 +980,28 @@ async function getAssistantEmail(childId) {
 
                 // Sinon, propriétaire de la structure
                 const structureData = structureDoc.data();
-                
+                // Priorité : champ assistantEmail (parent employeur)
+                if (structureData.assistantEmail && structureData.assistantEmail.trim() !== '') {
+                    const email = structureData.assistantEmail.toLowerCase().trim();
+                    console.log(`👩‍⚕️ Assistante liée trouvée (assistantEmail): ${email}`);
+                    return email;
+                }
+
+                // Si on a un assistantLinkedUserId mais pas l'email directement
+                if (structureData.assistantLinkedUserId && structureData.assistantLinkedUserId.trim() !== '') {
+                    const linkedUid = structureData.assistantLinkedUserId.trim();
+                    const userQuery = await db
+                        .collection('users')
+                        .where('firebaseUid', '==', linkedUid)
+                        .limit(1)
+                        .get();
+                    if (!userQuery.empty) {
+                        const email = userQuery.docs[0].id.toLowerCase().trim();
+                        console.log(`👩‍⚕️ Assistante retrouvée via firebaseUid: ${email}`);
+                        return email;
+                    }
+                }
+
                 // Essayer d'abord ownerEmail
                 if (structureData.ownerEmail && structureData.ownerEmail.trim() !== '') {
                     const email = structureData.ownerEmail.toLowerCase().trim();

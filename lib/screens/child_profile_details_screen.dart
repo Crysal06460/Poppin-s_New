@@ -6,19 +6,21 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 class ChildProfileDetailsScreen extends StatefulWidget {
   final String childId;
   final String structureId; // Ajout du paramètre structureId
+  final bool parentMode;
 
   const ChildProfileDetailsScreen({
     Key? key,
     required this.childId,
     required this.structureId, // Le rendre obligatoire
+    this.parentMode = false,
   }) : super(key: key);
 
   @override
@@ -43,6 +45,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
   static const Color secondaryColor = Color(0xFFDFE9F2); // Bleu clair #DFE9F2
+
+  bool get _isParentMode => widget.parentMode;
 
   @override
   void initState() {
@@ -333,7 +337,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       updateData[updatePath] = value;
 
       // Cas particulier: activation du mémo mensuel => assurer l'affichage Dashboard (MAM)
-      if (section == 'financialInfo' && field == 'useMonthlyTable' && value == true) {
+      if (section == 'financialInfo' &&
+          field == 'useMonthlyTable' &&
+          value == true) {
         updateData['assignedMemberEmail'] = currentUserEmail;
         updateData['lastUpdatedBy'] = currentUserEmail;
         updateData['lastUpdatedAt'] = FieldValue.serverTimestamp();
@@ -388,7 +394,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
             'Configuration du mémo mensuel',
             style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -447,7 +454,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
                   setState(() {
                     financialInfo['useMonthlyTable'] = true;
-                    financialInfo['monthlySalary'] = updates['financialInfo.monthlySalary'];
+                    financialInfo['monthlySalary'] =
+                        updates['financialInfo.monthlySalary'];
                     // Supprimer les anciens champs s'ils existent côté UI
                     financialInfo.remove('careExpenses');
                     financialInfo.remove('mealExpenses');
@@ -500,9 +508,11 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
           return AlertDialog(
             title: Text(
               'Mémo mensuel',
-              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SwitchListTile(
               title: Text('Utiliser le mémo mensuel ?'),
               value: switchValue,
@@ -514,13 +524,15 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, null),
-                child: Text('Annuler', style: TextStyle(color: Colors.grey[600])),
+                child:
+                    Text('Annuler', style: TextStyle(color: Colors.grey[600])),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, switchValue),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
                 child: Text('Confirmer'),
               ),
@@ -539,7 +551,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     }
   }
 
-  Widget _buildNumberField(TextEditingController ctl, String label, bool required) {
+  Widget _buildNumberField(
+      TextEditingController ctl, String label, bool required) {
     return TextField(
       controller: ctl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1125,7 +1138,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                     // Bouton retour avec meilleur contraste
                     GestureDetector(
                       onTap: () {
-                        if (Navigator.of(context).canPop()) {
+                        if (_isParentMode) {
+                          Navigator.of(context).maybePop();
+                        } else if (Navigator.of(context).canPop()) {
                           Navigator.of(context).pop();
                         }
                       },
@@ -1752,6 +1767,70 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
           // Bouton de fermeture en bas
         ],
       ),
+      bottomNavigationBar:
+          _isParentMode ? _buildParentBottomNavigationBar(context) : null,
+    );
+  }
+
+  BottomNavigationBar _buildParentBottomNavigationBar(BuildContext context) {
+    return BottomNavigationBar(
+      currentIndex: 0,
+      backgroundColor: Colors.white,
+      selectedItemColor: primaryColor,
+      unselectedItemColor: Colors.black87,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedLabelStyle:
+          const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+      unselectedLabelStyle:
+          const TextStyle(fontSize: 12, color: Colors.black87),
+      items: [
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/maison_icon.png',
+            width: 60,
+            height: 60,
+          ),
+          label: 'Accueil',
+        ),
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/Icone_Echanges.png',
+            width: 60,
+            height: 60,
+          ),
+          activeIcon: Image.asset(
+            'assets/images/Icone_Echanges.png',
+            width: 60,
+            height: 60,
+            color: primaryColor,
+          ),
+          label: 'Messages',
+        ),
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/images/Icone_Stock.png',
+            width: 60,
+            height: 60,
+          ),
+          activeIcon: Image.asset(
+            'assets/images/Icone_Stock.png',
+            width: 60,
+            height: 60,
+            color: primaryColor,
+          ),
+          label: 'Stocks',
+        ),
+      ],
+      onTap: (index) {
+        if (index == 0) {
+          context.go('/parent/home');
+        } else if (index == 1) {
+          context.go('/parent/messages');
+        } else if (index == 2) {
+          context.go('/parent/stocks');
+        }
+      },
     );
   }
 }

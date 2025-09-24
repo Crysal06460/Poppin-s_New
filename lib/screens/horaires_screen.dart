@@ -281,25 +281,29 @@ class _HorairesScreenState extends State<HorairesScreen> {
         return;
       }
 
-      // CORRECTION: Récupérer l'ID de structure en tenant compte des membres MAM
-      // Vérifier d'abord si l'utilisateur est un membre MAM
+      // Récupérer l'ID de structure en tenant compte des différents rôles (MAM, parent employeur...)
       final userEmail = user.email?.toLowerCase() ?? '';
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userEmail)
           .get();
 
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
+      String structureId = user.uid; // Par défaut, structure propre à l'assistante
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
+        final String role =
+            (userData['role'] ?? '').toString().toLowerCase().trim();
+        final String linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (linkedStructureId.isNotEmpty &&
+            (role == 'mammember' ||
+                role == 'assistantfromparent' ||
+                role == 'assistant')) {
+          structureId = linkedStructureId;
           print(
-              "📄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Horaires: Utilisateur lié à une structure externe ($role) → $structureId");
         }
       }
 
@@ -310,9 +314,29 @@ class _HorairesScreenState extends State<HorairesScreen> {
               structureId) // IMPORTANT: Utiliser structureId au lieu de user.uid
           .get();
 
+      if (!structureSnapshot.exists) {
+        print(
+            "⚠️ Horaires: structure introuvable pour l'ID $structureId (rôle parent employeur ?)");
+        setState(() {
+          structureName = 'Structure introuvable';
+          isLoading = false;
+        });
+        return;
+      }
+
+      final Map<String, dynamic> structureData =
+          (structureSnapshot.data() as Map<String, dynamic>?) ?? const {};
+      String resolvedName = (structureData['structureName'] ??
+              structureData['ownerFirstName'] ??
+              'Structure inconnue')
+          .toString()
+          .trim();
+      if (resolvedName.isEmpty) {
+        resolvedName = 'Structure inconnue';
+      }
+
       setState(() {
-        structureName =
-            structureSnapshot['structureName'] ?? 'Structure inconnue';
+        structureName = resolvedName;
       });
 
       // Continuer avec le chargement des enfants
@@ -333,37 +357,43 @@ class _HorairesScreenState extends State<HorairesScreen> {
           todayWeekday.substring(1).toLowerCase();
 
       // CORRECTION: Récupérer l'ID de structure en tenant compte des membres MAM
-      // Vérifier d'abord si l'utilisateur est un membre MAM
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserEmail)
           .get();
 
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
       String structureId = user?.uid ?? '';
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
+        final String role =
+            (userData['role'] ?? '').toString().toLowerCase().trim();
+        final String linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (linkedStructureId.isNotEmpty &&
+            (role == 'mammember' ||
+                role == 'assistantfromparent' ||
+                role == 'assistant')) {
+          structureId = linkedStructureId;
           print(
-              "📄 Horaires: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+              "📄 Horaires: Chargement via structure liée ($role) → $structureId");
         }
       }
 
-      // Récupérer la structure pour déterminer le type (MAM ou AssistanteMaternelle)
       final structureSnapshot = await FirebaseFirestore.instance
           .collection('structures')
           .doc(
               structureId) // IMPORTANT: Utiliser structureId au lieu de user.uid
           .get();
 
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
+      final Map<String, dynamic> structureData =
+          (structureSnapshot.data() as Map<String, dynamic>?) ?? const {};
+      final String structureType = (structureData['structureType'] ??
               "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+          .toString()
+          .trim()
+          .toLowerCase();
 
       // Récupérer tous les enfants de la structure avec le bon ID de structure
       final snapshot = await FirebaseFirestore.instance
@@ -382,7 +412,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
@@ -453,7 +483,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             child['assignedMemberEmail']?.toString().toLowerCase() ??
                 'NON ASSIGNÉ';
         bool isVisible =
-            structureType != "MAM" || assignedEmail == currentUserEmail;
+            structureType != 'mam' || assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à : '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
@@ -619,12 +649,18 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
+        final String role =
+            (userData['role'] ?? '').toString().toLowerCase().trim();
+        final String linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (linkedStructureId.isNotEmpty &&
+            (role == 'mammember' ||
+                role == 'assistantfromparent' ||
+                role == 'assistant')) {
+          structureId = linkedStructureId;
           print(
-              "📄 Horaires: Enregistrement pour la structure MAM: $structureId");
+              "📄 Horaires: Enregistrement sur la structure liée ($role) → $structureId");
         }
       }
 

@@ -9,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import '../widgets/common_app_bar.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
+import '../utils/structure_context.dart';
 
 class AgendaScreen extends StatefulWidget {
   const AgendaScreen({Key? key}) : super(key: key);
@@ -57,64 +58,15 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
   Future<void> _loadContext() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final email = (user.email ?? '').toLowerCase();
-      String structureDocId = user.uid;
-
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(email).get();
-
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        if (data != null &&
-            data['role'] == 'mamMember' &&
-            data['structureId'] != null) {
-          structureDocId = data['structureId'].toString();
-        }
-      }
-
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureDocId)
-          .get();
-
-      if (!structureSnapshot.exists) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Structure introuvable pour l\'agenda'),
-          ),
-        );
-        return;
-      }
-
-      final structureData =
-          structureSnapshot.data() as Map<String, dynamic>? ?? {};
-      final structureTypeRaw = (structureData['structureType'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      final structureName =
-          (structureData['structureName'] ?? 'Agenda').toString();
+      final structureContext = await StructureResolver().resolve();
 
       if (!mounted) return;
 
       setState(() {
-        _structureId = structureDocId;
-        _userEmail = email;
-        _structureName = structureName;
-        _isMamStructure = structureTypeRaw == 'mam';
+        _structureId = structureContext.structureId;
+        _userEmail = structureContext.currentUserEmail;
+        _structureName = structureContext.structureName;
+        _isMamStructure = structureContext.normalizedStructureType == 'mam';
       });
 
       _subscribeToAgenda();

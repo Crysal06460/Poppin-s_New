@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class RecapScreen extends StatefulWidget {
   const RecapScreen({Key? key}) : super(key: key);
@@ -59,43 +60,21 @@ class _RecapScreenState extends State<RecapScreen> {
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        return;
-      }
+      final structureContext = await StructureResolver().resolve();
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String normalizedRole =
+          (structureContext.userRole ?? '').toLowerCase().trim();
+      final bool isStructureAdmin = structureContext.userData['isAdmin'] == true ||
+          normalizedRole == 'structureadmin';
+      final bool isMamMember =
+          normalizedRole == 'mammember' &&
+              structureContext.normalizedStructureType == 'mam';
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-      bool isMamMember = false;
-      bool isStructureAdmin = false;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-
-        // Vérifier si l'utilisateur est un membre MAM
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          isMamMember = true;
-          print(
-              "🔄 Recap: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-
-        // Vérifier si l'utilisateur est un administrateur de la structure
-        isStructureAdmin =
-            userData['isAdmin'] == true || userData['role'] == 'structureAdmin';
-        print("👑 Recap: Statut admin: ${isStructureAdmin ? 'OUI' : 'NON'}");
+      print("👑 Recap: Statut admin: ${isStructureAdmin ? 'OUI' : 'NON'}");
+      if (isMamMember) {
+        print(
+            "🔄 Recap: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
       }
 
       final today = DateTime.now();
@@ -103,23 +82,11 @@ class _RecapScreenState extends State<RecapScreen> {
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      // Récupérer la structure pour déterminer le type
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
-      if (structureSnapshot.exists) {
-        setState(() {
-          structureName =
-              structureSnapshot['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      final String structureType = structureContext.normalizedStructureType;
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -135,7 +102,7 @@ class _RecapScreenState extends State<RecapScreen> {
       // Appliquer le filtrage selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
@@ -160,7 +127,7 @@ class _RecapScreenState extends State<RecapScreen> {
             child['assignedMemberEmail']?.toString().toLowerCase() ??
                 'NON ASSIGNÉ';
         bool isVisible =
-            structureType != "MAM" || assignedEmail == currentUserEmail;
+            structureType != 'mam' || assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
@@ -173,7 +140,7 @@ class _RecapScreenState extends State<RecapScreen> {
             child['assignedMemberEmail']?.toString().toLowerCase() ??
                 'NON ASSIGNÉ';
         bool isVisible = isStructureAdmin ||
-            structureType != "MAM" ||
+            structureType != 'mam' ||
             assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../utils/stock_badge_util.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({Key? key}) : super(key: key);
@@ -133,8 +134,8 @@ class _StockScreenState extends State<StockScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Obtenir l'ID de structure
-      structureId = await _getStructureId(user);
+      final structureContext = await StructureResolver().resolve();
+      structureId = structureContext.structureId;
 
       // Charger les articles personnalisés de la MAM depuis Firestore
       final customItemsDoc = await FirebaseFirestore.instance
@@ -162,22 +163,13 @@ class _StockScreenState extends State<StockScreen> {
 
   // Obtient l'ID de la structure de l'utilisateur
   Future<String> _getStructureId(User user) async {
-    String userStructureId = user.uid;
-
-    final String currentUserEmail = user.email?.toLowerCase() ?? '';
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUserEmail)
-        .get();
-
-    if (userDoc.exists) {
-      final userData = userDoc.data() ?? {};
-      if (userData['role'] == 'mamMember' && userData['structureId'] != null) {
-        userStructureId = userData['structureId'];
-      }
+    try {
+      final structureContext = await StructureResolver().resolve();
+      return structureContext.structureId;
+    } catch (e) {
+      print('⚠️ Stock: impossible de résoudre la structure via helper: $e');
+      return user.uid;
     }
-
-    return userStructureId;
   }
 
   // Ajoute un nouvel article personnalisé
@@ -290,31 +282,14 @@ class _StockScreenState extends State<StockScreen> {
         return;
       }
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      final structureContext = await StructureResolver().resolve();
+      structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
-      // Utiliser l'ID de structure déjà obtenu ou l'obtenir si pas encore fait
-      if (structureId.isEmpty) {
-        structureId = await _getStructureId(user);
-      }
-
-      // Récupérer la structure pour déterminer le type
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureSnapshot.exists) {
-        setState(() {
-          structureName =
-              structureSnapshot['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -376,7 +351,7 @@ class _StockScreenState extends State<StockScreen> {
       // Appliquer le filtrage selon le type de structure
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           return child['assignedMemberEmail'] == currentUserEmail;

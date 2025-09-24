@@ -7,8 +7,17 @@ import 'package:intl/date_symbol_data_local.dart';
 
 class ScheduleInfoScreen extends StatefulWidget {
   final String childId;
+  final bool parentMode;
+  final String? structureIdOverride;
+  final String? childName;
 
-  const ScheduleInfoScreen({Key? key, required this.childId}) : super(key: key);
+  const ScheduleInfoScreen({
+    Key? key,
+    required this.childId,
+    this.parentMode = false,
+    this.structureIdOverride,
+    this.childName,
+  }) : super(key: key);
 
   @override
   _ScheduleInfoScreenState createState() => _ScheduleInfoScreenState();
@@ -35,6 +44,8 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   // Map pour stocker les segments horaires par jour
   final Map<String, List<TimeSegment>> daySegments = {};
   int _selectedIndex = 2; // Pour la barre de navigation du bas
+  bool get _isParentMode => widget.parentMode;
+  String _resolvedStructureId = '';
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -46,6 +57,9 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   @override
   void initState() {
     super.initState();
+    if (_isParentMode) {
+      _selectedIndex = 0;
+    }
     // Initialiser la structure avec des listes vides pour chaque jour
     for (var day in weekDays) {
       daySegments[day] = [];
@@ -53,6 +67,81 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     initializeDateFormatting('fr_FR', null);
     // AJOUT : Charger les infos de structure
     _loadStructureInfo();
+  }
+
+  Future<void> _loadExistingSchedule(String structureId) async {
+    try {
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .get();
+
+      if (!childDoc.exists) {
+        if (mounted) setState(() {});
+        return;
+      }
+
+      final data = childDoc.data();
+      final dynamic existingSchedule = data?['schedule'];
+
+      if (existingSchedule is! Map) {
+        if (mounted) setState(() {});
+        return;
+      }
+
+      // Nettoyer les segments existants
+      for (final day in weekDays) {
+        final segments = daySegments[day] ?? [];
+        for (final segment in segments) {
+          segment.startController.dispose();
+          segment.endController.dispose();
+        }
+        daySegments[day] = [];
+      }
+
+      existingSchedule.forEach((dynamic key, dynamic value) {
+        final day = key.toString();
+        if (!weekDays.contains(day)) return;
+
+        final List<TimeSegment> segments = [];
+
+        if (value is List) {
+          for (final item in value) {
+            if (item is Map) {
+              final start = item['start'] ?? item['arrival'];
+              final end = item['end'] ?? item['departure'];
+              if (start != null && end != null) {
+                final segment = TimeSegment();
+                segment.startController.text = start.toString();
+                segment.endController.text = end.toString();
+                segments.add(segment);
+              }
+            }
+          }
+        } else if (value is Map) {
+          final start = value['start'] ?? value['arrival'];
+          final end = value['end'] ?? value['departure'];
+          if (start != null && end != null) {
+            final segment = TimeSegment();
+            segment.startController.text = start.toString();
+            segment.endController.text = end.toString();
+            segments.add(segment);
+          }
+        }
+
+        if (segments.isNotEmpty) {
+          daySegments[day] = segments;
+        }
+      });
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Erreur chargement horaires existants: $e');
+    }
   }
 
   Future<void> _showTimePicker(
@@ -145,16 +234,25 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           .get();
 
       // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
+      String structureId = (widget.structureIdOverride?.isNotEmpty ?? false)
+          ? widget.structureIdOverride!
+          : user.uid;
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
+        final role = (userData['role'] ?? '').toString().toLowerCase();
+        final linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (role == 'mammember' && linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
           print(
               "🔄 Schedule Info: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        } else if ((role == 'parent' || role == 'assistantfromparent') &&
+            linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
+          print(
+              "👪 Schedule Info: Parent employeur - Structure utilisée: $structureId");
         }
       }
 
@@ -176,6 +274,9 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           isLoadingStructure = false;
         });
       }
+
+      _resolvedStructureId = structureId;
+      await _loadExistingSchedule(structureId);
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
       setState(() {
@@ -411,7 +512,9 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       if (user == null) return;
 
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
+      String structureId = (widget.structureIdOverride?.isNotEmpty ?? false)
+          ? widget.structureIdOverride!
+          : user.uid;
 
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -420,9 +523,15 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
+        final role = (userData['role'] ?? '').toString().toLowerCase();
+        final linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (role == 'mammember' && linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
+        } else if ((role == 'parent' || role == 'assistantfromparent') &&
+            linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
         }
       }
 
@@ -1101,19 +1210,29 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           .doc(userEmail)
           .get();
 
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
+      // ID de structure à utiliser (par défaut, utiliser la valeur résolue ou l'ID utilisateur)
+      String structureId =
+          _resolvedStructureId.isNotEmpty ? _resolvedStructureId : user.uid;
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
+        final role = (userData['role'] ?? '').toString().toLowerCase();
+        final linkedStructureId =
+            (userData['structureId'] ?? '').toString().trim();
+
+        if (role == 'mammember' && linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
           print(
               "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
+        } else if ((role == 'parent' || role == 'assistantfromparent') &&
+            linkedStructureId.isNotEmpty) {
+          structureId = linkedStructureId;
+          print(
+              "👪 Utilisateur parent employeur - Structure utilisée: $structureId");
         }
       }
+
+      _resolvedStructureId = structureId;
 
       await FirebaseFirestore.instance
           .collection('structures')
@@ -1122,7 +1241,11 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           .doc(widget.childId)
           .update({'schedule': schedule});
 
-      if (mounted) {
+      if (!mounted) return;
+
+      if (_isParentMode) {
+        Navigator.of(context).pop(true);
+      } else {
         context.go('/child-final-details',
             extra: {'childId': widget.childId, 'structureId': structureId});
       }
@@ -1145,6 +1268,17 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   }
 
   void _onItemTapped(int index) {
+    if (_isParentMode) {
+      if (index == 0) {
+        context.go('/parent/home');
+      } else if (index == 1) {
+        context.go('/parent/messages');
+      } else if (index == 2) {
+        context.go('/parent/stocks');
+      }
+      return;
+    }
+
     if (index == 0) {
       // Dashboard
       _showExitWarning(context, '/dashboard');
@@ -1181,14 +1315,17 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                         IconButton(
                           icon: const Icon(Icons.arrow_back),
                           onPressed: () {
-                            // CHANGEMENT : Utiliser context.go au lieu de Navigator.pop
-                            if (widget.childId.isNotEmpty) {
-                              print(
-                                  "🔄 Retour vers add-second-parent avec childId: ${widget.childId}");
-                              context.go('/add-second-parent',
-                                  extra: widget.childId);
+                            if (_isParentMode) {
+                              Navigator.of(context).maybePop();
                             } else {
-                              _showError("Erreur : ID d'enfant manquant !");
+                              if (widget.childId.isNotEmpty) {
+                                print(
+                                    "🔄 Retour vers add-second-parent avec childId: ${widget.childId}");
+                                context.go('/add-second-parent',
+                                    extra: widget.childId);
+                              } else {
+                                _showError("Erreur : ID d'enfant manquant !");
+                              }
                             }
                           },
                           style: IconButton.styleFrom(
@@ -1220,7 +1357,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                         ),
                         const SizedBox(height: 20),
                         _buildButton(
-                          text: "Suivant",
+                          text: _isParentMode ? "Enregistrer" : "Suivant",
                           icon: Icons.arrow_forward,
                           onPressed: _saveSchedule,
                           color: primaryBlue,
@@ -1336,6 +1473,15 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   }
 
   Widget _buildAppBar() {
+    final String titleText = _isParentMode
+        ? (widget.childName?.isNotEmpty == true
+            ? 'Horaires de ${widget.childName}'
+            : 'Horaires de mon enfant')
+        : structureName;
+    final String subtitleText = _isParentMode
+        ? structureName
+        : DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now());
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1370,7 +1516,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      structureName, // CHANGEMENT : utiliser structureName au lieu de "Poppins"
+                      titleText,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -1387,7 +1533,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
+                      subtitleText,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.white.withOpacity(0.95),
@@ -1433,6 +1579,65 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
   }
 
   Widget _buildBottomNavigationBar() {
+    if (_isParentMode) {
+      return BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryBlue,
+        unselectedItemColor: Colors.black87,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle:
+            const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle:
+            const TextStyle(fontSize: 12, color: Colors.black87),
+        items: [
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/maison_icon.png',
+              width: 60,
+              height: 60,
+            ),
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_Echanges.png',
+              width: 60,
+              height: 60,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone_Echanges.png',
+              width: 60,
+              height: 60,
+              color: primaryBlue,
+            ),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_Stock.png',
+              width: 60,
+              height: 60,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone_Stock.png',
+              width: 60,
+              height: 60,
+              color: primaryBlue,
+            ),
+            label: 'Stocks',
+          ),
+        ],
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+          _onItemTapped(index);
+        },
+      );
+    }
+
     return BottomNavigationBar(
       onTap: _onItemTapped,
       backgroundColor: Colors.white,

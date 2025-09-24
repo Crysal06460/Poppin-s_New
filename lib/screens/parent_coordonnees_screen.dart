@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'email_composer_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart'; // AJOUT en haut du fichier
 import 'package:flutter/services.dart';
 
@@ -32,9 +32,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
   // Design System 2025 - Palette officielle de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
-  static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-  static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
   // Couleurs dérivées pour le design system
   static const Color surfaceColor = Color(0xFFFAFBFC);
@@ -74,17 +72,41 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
       if (childDoc.exists) {
         final data = childDoc.data() ?? {};
 
+        final parent1Data =
+            Map<String, dynamic>.from(data['parent1'] ?? const {});
+        final parent2Data =
+            Map<String, dynamic>.from(data['parent2'] ?? const {});
+        final parent1Addr =
+            Map<String, dynamic>.from(data['parentAddress'] ?? const {});
+        final parent2Addr =
+            Map<String, dynamic>.from(data['parent2Address'] ?? const {});
+
+        final currentEmail =
+            FirebaseAuth.instance.currentUser?.email?.toLowerCase() ?? '';
+        bool shouldPersistParent1 = false;
+        if (currentEmail.isNotEmpty &&
+            (parent1Data['email'] == null ||
+                parent1Data['email'].toString().isEmpty)) {
+          parent1Data['email'] = currentEmail;
+          shouldPersistParent1 = true;
+        }
+
         setState(() {
           parentInfo = {
-            'parent1': data['parent1'] ?? {},
-            'parent2': data['parent2'] ?? {},
+            'parent1': parent1Data,
+            'parent2': parent2Data,
           };
           parentAddress = {
-            'parent1': data['parentAddress'] ?? {},
-            'parent2': data['parent2Address'] ?? {},
+            'parent1': parent1Addr,
+            'parent2': parent2Addr,
           };
           isLoading = false;
         });
+
+        if (shouldPersistParent1) {
+          await childDoc.reference
+              .set({'parent1': parent1Data}, SetOptions(merge: true));
+        }
 
         _animationController.forward();
       } else {
@@ -100,12 +122,11 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
   }
 
   Widget _buildParentSection(String parentKey, String parentTitle, int index) {
-    final parent = parentInfo[parentKey] ?? {};
-    final parentAddr = parentAddress[parentKey] ?? {};
-
-    if (parent.isEmpty && parentAddr.isEmpty) {
-      return SizedBox.shrink();
-    }
+    final parent =
+        Map<String, dynamic>.from(parentInfo[parentKey] ?? const {});
+    final parentAddr =
+        Map<String, dynamic>.from(parentAddress[parentKey] ?? const {});
+    final bool hasInfo = parent.isNotEmpty || parentAddr.isNotEmpty;
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 400 + (index * 200)),
@@ -140,7 +161,6 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // En-tête avec gradient subtil
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.all(20),
@@ -159,6 +179,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                       ),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
                           width: 48,
@@ -198,11 +219,26 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              if (parent['firstName'] != null ||
-                                  parent['lastName'] != null)
+                              SizedBox(height: 4),
+                              if (hasInfo &&
+                                  ((parent['firstName'] ?? '')
+                                          .toString()
+                                          .isNotEmpty ||
+                                      (parent['lastName'] ?? '')
+                                          .toString()
+                                          .isNotEmpty))
                                 Text(
                                   "${parent['firstName'] ?? ''} ${parent['lastName'] ?? ''}"
                                       .trim(),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: textSecondary,
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Informations non renseignées',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -212,69 +248,119 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             ],
                           ),
                         ),
+                        IconButton(
+                          onPressed: () =>
+                              _showEditParentDetailsDialog(parentKey),
+                          icon: Icon(
+                            hasInfo ? Icons.edit : Icons.add_circle_outline,
+                            color: primaryBlue,
+                          ),
+                          tooltip: hasInfo
+                              ? 'Modifier les informations'
+                              : 'Ajouter les informations',
+                        ),
                       ],
                     ),
                   ),
-
-                  // Contenu des informations
                   Padding(
                     padding: EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        // Email avec fonctionnalité d'envoi
-                        if (parent['email'] != null &&
-                            parent['email'].toString().isNotEmpty) ...[
-                          _buildModernInfoRow(
-                            Icons.email_rounded,
-                            "Email",
-                            parent['email'].toString(),
-                            Colors.indigo,
-                            isClickable: true,
-                            onTap: () => _handleEmailTap(
-                                parent['email'].toString(), parentKey),
-                            isEditable: true,
-                            onEdit: () => _showEditEmailDialog(parentKey),
+                        if (!hasInfo) ...[
+                          Text(
+                            'Aucune information n\'a encore été renseignée pour ce parent.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: textSecondary,
+                            ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 16),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: () => _resendInvitation(parentKey),
-                              icon: const Icon(Icons.restart_alt_rounded),
-                              label: const Text("Renvoyer l'invitation"),
-                              style: TextButton.styleFrom(
+                            child: ElevatedButton.icon(
+                              onPressed: () =>
+                                  _showEditParentDetailsDialog(parentKey),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryBlue,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.edit),
+                              label: const Text('Renseigner les informations'),
+                            ),
+                          ),
+                        ],
+                        if (hasInfo) ...[
+                          if (parent['email'] != null &&
+                              parent['email'].toString().isNotEmpty) ...[
+                            _buildModernInfoRow(
+                              Icons.email_rounded,
+                              "Email",
+                              parent['email'].toString(),
+                              Colors.indigo,
+                              isClickable: true,
+                              onTap: () => _handleEmailTap(
+                                  parent['email'].toString(), parentKey),
+                              isEditable: true,
+                              onEdit: () => _showEditEmailDialog(parentKey),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => _resendInvitation(parentKey),
+                                icon: const Icon(Icons.restart_alt_rounded),
+                                label: const Text("Renvoyer l'invitation"),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: primaryBlue,
+                                  backgroundColor:
+                                      primaryBlue.withOpacity(0.08),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  shape: const StadiumBorder(),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (parent['phone'] != null &&
+                              parent['phone'].toString().isNotEmpty)
+                            _buildModernInfoRow(
+                              Icons.phone_rounded,
+                              "Téléphone",
+                              parent['phone'].toString(),
+                              Colors.green,
+                              isEditable: true,
+                              onEdit: () => _showEditPhoneDialog(parentKey),
+                            ),
+                          if (parentAddr.isNotEmpty)
+                            _buildModernInfoRow(
+                              Icons.location_on_rounded,
+                              "Adresse",
+                              _formatAddress(parentAddr),
+                              Colors.orange,
+                              isEditable: true,
+                              onEdit: () => _showEditAddressDialog(parentKey),
+                            ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _showEditParentDetailsDialog(parentKey),
+                              icon: const Icon(Icons.manage_accounts),
+                              label: const Text(
+                                  'Modifier les informations générales'),
+                              style: OutlinedButton.styleFrom(
                                 foregroundColor: primaryBlue,
-                                backgroundColor: primaryBlue.withOpacity(0.08),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                shape: const StadiumBorder(),
+                                side: BorderSide(color: primaryBlue),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
                         ],
-
-                        // Téléphone
-                        if (parent['phone'] != null &&
-                            parent['phone'].toString().isNotEmpty)
-                          _buildModernInfoRow(
-                            Icons.phone_rounded,
-                            "Téléphone",
-                            parent['phone'].toString(),
-                            Colors.green,
-                            isEditable: true,
-                            onEdit: () => _showEditPhoneDialog(parentKey),
-                          ),
-
-                        // Adresse
-                        if (parentAddr.isNotEmpty)
-                          _buildModernInfoRow(
-                            Icons.location_on_rounded,
-                            "Adresse",
-                            _formatAddress(parentAddr),
-                            Colors.orange,
-                            isEditable: true,
-                            onEdit: () => _showEditAddressDialog(parentKey),
-                          ),
                       ],
                     ),
                   ),
@@ -481,6 +567,264 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
 
     if (confirmed == true) {
       // Un snackbar est géré dans _saveSecondParent
+    }
+  }
+
+  Future<void> _showEditParentDetailsDialog(String parentKey) async {
+    final parent =
+        Map<String, dynamic>.from(parentInfo[parentKey] ?? const {});
+    final parentAddr =
+        Map<String, dynamic>.from(parentAddress[parentKey] ?? const {});
+
+    final firstCtl =
+        TextEditingController(text: (parent['firstName'] ?? '').toString());
+    final lastCtl =
+        TextEditingController(text: (parent['lastName'] ?? '').toString());
+    final emailCtl = TextEditingController(
+        text: (parent['email'] ?? '').toString().toLowerCase());
+    final phoneCtl =
+        TextEditingController(text: (parent['phone'] ?? '').toString());
+    final addressCtl = TextEditingController(
+        text: (parentAddr['address'] ?? '').toString());
+    final postalCtl = TextEditingController(
+        text: (parentAddr['postalCode'] ?? '').toString());
+    final cityCtl = TextEditingController(
+        text: (parentAddr['city'] ?? '').toString());
+
+    final previousEmail = (parent['email'] ?? '').toString().toLowerCase();
+    String? error;
+    bool isSaving = false;
+
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              title: Text(
+                parentKey == 'parent2'
+                    ? 'Renseigner le Parent 2'
+                    : 'Renseigner le Parent 1',
+                style: TextStyle(
+                  color: primaryBlue,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTextField(firstCtl, 'Prénom', TextInputType.name,
+                        hint: 'Ex: Marie'),
+                    SizedBox(height: 12),
+                    _buildTextField(lastCtl, 'Nom', TextInputType.name,
+                        hint: 'Ex: Dupont'),
+                    SizedBox(height: 12),
+                    _buildTextField(
+                      emailCtl,
+                      'Email',
+                      TextInputType.emailAddress,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'[\s]')),
+                      ],
+                      hint: 'prenom.nom@email.fr',
+                    ),
+                    SizedBox(height: 12),
+                    _buildTextField(
+                      phoneCtl,
+                      'Téléphone (facultatif)',
+                      TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      hint: '10 chiffres (ex: 0612345678)',
+                    ),
+                    SizedBox(height: 12),
+                    _buildTextField(addressCtl, 'Adresse', TextInputType.text,
+                        hint: 'Numéro et rue'),
+                    SizedBox(height: 12),
+                    _buildTextField(
+                      postalCtl,
+                      'Code postal',
+                      TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(5),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    _buildTextField(
+                      cityCtl,
+                      'Ville',
+                      TextInputType.text,
+                      hint: 'Votre ville',
+                    ),
+                    if (error != null) ...[
+                      SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          error!,
+                          style: const TextStyle(color: primaryRed),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(context, false),
+                  child: Text('Annuler', style: TextStyle(color: textSecondary)),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final first = firstCtl.text.trim();
+                          final last = lastCtl.text.trim();
+                          final email = emailCtl.text.trim().toLowerCase();
+                          final phoneDigits =
+                              phoneCtl.text.replaceAll(RegExp(r'\D'), '');
+
+                          if (first.isEmpty || last.isEmpty) {
+                            setState(() =>
+                                error = 'Prénom et nom sont requis');
+                            return;
+                          }
+
+                          if (email.isEmpty ||
+                              !RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                                  .hasMatch(email)) {
+                            setState(() => error = 'Email invalide');
+                            return;
+                          }
+
+                          if (phoneCtl.text.isNotEmpty &&
+                              phoneDigits.length != 10) {
+                            setState(() =>
+                                error = 'Téléphone invalide (10 chiffres requis)');
+                            return;
+                          }
+
+                          setState(() {
+                            error = null;
+                            isSaving = true;
+                          });
+
+                          final info = <String, String>{
+                            'firstName': first,
+                            'lastName': last,
+                            'email': email,
+                            if (phoneDigits.isNotEmpty) 'phone': phoneDigits,
+                          };
+
+                          final address = <String, String>{
+                            if (addressCtl.text.trim().isNotEmpty)
+                              'address': addressCtl.text.trim(),
+                            if (postalCtl.text.trim().isNotEmpty)
+                              'postalCode': postalCtl.text.trim(),
+                            if (cityCtl.text.trim().isNotEmpty)
+                              'city': cityCtl.text.trim(),
+                          };
+
+                          try {
+                            await _saveParentDetails(
+                              parentKey,
+                              info,
+                              address,
+                              previousEmail: previousEmail,
+                            );
+
+                            if (!mounted) return;
+                            Navigator.pop(context, true);
+
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  parentKey == 'parent2'
+                                      ? 'Parent 2 mis à jour'
+                                      : 'Informations parent 1 mises à jour',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } catch (e) {
+                            setState(() {
+                              error = e.toString();
+                              isSaving = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Enregistrer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveParentDetails(
+    String parentKey,
+    Map<String, String> info,
+    Map<String, String> address, {
+    String? previousEmail,
+  }) async {
+    final childRef = FirebaseFirestore.instance
+        .collection('structures')
+        .doc(widget.structureId)
+        .collection('children')
+        .doc(widget.childId);
+
+    final parentField = parentKey == 'parent2' ? 'parent2' : 'parent1';
+    final addressField =
+        parentKey == 'parent2' ? 'parent2Address' : 'parentAddress';
+
+    await childRef.set(
+      {
+        parentField: info,
+        addressField: address,
+      },
+      SetOptions(merge: true),
+    );
+
+    setState(() {
+      parentInfo[parentKey] = info;
+      parentAddress[parentKey] = address;
+    });
+
+    final email = (info['email'] ?? '').toLowerCase();
+    final currentEmail =
+        FirebaseAuth.instance.currentUser?.email?.toLowerCase() ?? '';
+
+    final shouldSendInvitation = email.isNotEmpty &&
+        (previousEmail == null ||
+            email != previousEmail.toLowerCase() || previousEmail.isEmpty) &&
+        !(parentKey == 'parent1' && email == currentEmail);
+
+    if (shouldSendInvitation) {
+      await _queueParentInvitationEmail(parentKey, email);
     }
   }
 
@@ -1079,6 +1423,21 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
               color: textSecondary,
             ),
             textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showEditParentDetailsDialog('parent1'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryBlue,
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: const Icon(Icons.edit_rounded),
+            label: const Text('Renseigner mes coordonnées'),
           ),
         ],
       ),

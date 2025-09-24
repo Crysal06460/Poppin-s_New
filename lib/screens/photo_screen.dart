@@ -15,6 +15,7 @@ import 'dart:typed_data';
 import '../services/photo_cleanup_service.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
+import '../utils/structure_context.dart';
 
 class PhotosScreen extends StatefulWidget {
   const PhotosScreen({Key? key}) : super(key: key);
@@ -77,7 +78,40 @@ class _PhotosScreenState extends State<PhotosScreen>
 
   Future<void> _performPhotoCleanup() async {
     try {
-      await PhotoCleanupService.checkAndCleanupPhotos();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print("🧹 Nettoyage des médias ignoré: aucun utilisateur connecté");
+        return;
+      }
+
+      String? structureId;
+      final email = user.email?.toLowerCase() ?? '';
+
+      if (email.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(email)
+            .get();
+
+        if (userDoc.exists) {
+          final data = userDoc.data();
+          final storedStructureId = data?['structureId']?.toString().trim();
+
+          if (storedStructureId != null && storedStructureId.isNotEmpty) {
+            structureId = storedStructureId;
+          }
+        }
+      }
+
+      structureId ??= user.uid;
+
+      if (structureId.isEmpty) {
+        print(
+            "🧹 Nettoyage des médias ignoré: structure introuvable pour l'utilisateur courant");
+        return;
+      }
+
+      await PhotoCleanupService.checkAndCleanupPhotos(structureIds: [structureId]);
     } catch (e) {
       print("Erreur lors du nettoyage automatique des photos: $e");
       // Ne pas montrer d'erreur à l'utilisateur car c'est un processus en arrière-plan
@@ -162,57 +196,19 @@ class _PhotosScreenState extends State<PhotosScreen>
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoading = false);
-        return;
-      }
-
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Photos: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final structureContext = await StructureResolver().resolve();
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      // Récupérer la structure pour déterminer le type
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureSnapshot.exists) {
-        setState(() {
-          structureName =
-              structureSnapshot['structureName'] ?? 'Structure inconnue';
-        });
-      }
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      setState(() {
+        structureName = structureContext.structureName;
+      });
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -230,7 +226,7 @@ class _PhotosScreenState extends State<PhotosScreen>
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
@@ -2553,23 +2549,10 @@ class _PhotosScreenState extends State<PhotosScreen>
     setState(() => _loadingPastPhotos = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      String structureId = user.uid;
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      final structureContext = await StructureResolver().resolve();
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
+      final String structureType = structureContext.normalizedStructureType;
 
       // Définir la plage de dates pour le jour sélectionné
       final startOfDay = DateTime(date.year, date.month, date.day);
@@ -2582,16 +2565,6 @@ class _PhotosScreenState extends State<PhotosScreen>
           .collection('children')
           .get();
 
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      final String structureType = structureSnapshot.exists
-          ? (structureSnapshot.data()?['structureType'] ??
-              "AssistanteMaternelle")
-          : "AssistanteMaternelle";
-
       // Liste complète de tous les enfants
       List<Map<String, dynamic>> allChildren =
           snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
@@ -2599,7 +2572,7 @@ class _PhotosScreenState extends State<PhotosScreen>
       // Appliquer le même filtrage que dans _loadEnfantsDuJour
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == "MAM") {
+      if (structureType == 'mam') {
         // Pour une MAM: filtrer par assignedMemberEmail
         filteredChildren = allChildren.where((child) {
           String assignedEmail =
