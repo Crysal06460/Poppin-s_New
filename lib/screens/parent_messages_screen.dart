@@ -599,7 +599,8 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
         print("✅ Compteur mis à jour pour le membre MAM: $assignedMemberEmail");
       } else {
         // 3. Sinon, notifier l'assistante rattachée à la structure
-        print("👩‍⚕️ Notification de l'assistante maternelle liée à la structure");
+        print(
+            "👩‍⚕️ Notification de l'assistante maternelle liée à la structure");
 
         // Récupérer la structure pour trouver l'assistante
         final structureDoc =
@@ -923,7 +924,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                     width: 60,
                     height: 60,
                   ),
-                  label: "Journal",
+                  label: "Accueil",
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
@@ -1098,10 +1099,10 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
             final messages = List<QueryDocumentSnapshot>.from(
                 (snapshot.data?.docs ?? const []));
             messages.sort((a, b) {
-              final aTs = (a.data() as Map<String, dynamic>)['timestamp']
-                  as Timestamp?;
-              final bTs = (b.data() as Map<String, dynamic>)['timestamp']
-                  as Timestamp?;
+              final aTs =
+                  (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+              final bTs =
+                  (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
               final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
               final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
               return bMillis.compareTo(aMillis); // desc
@@ -1151,12 +1152,16 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                    Icon(Icons.chat_bubble_outline,
+                        size: 64, color: Colors.grey[400]),
                     SizedBox(height: 16),
-                    Text("Aucun message", style: TextStyle(fontSize: 18, color: Colors.grey[700])),
+                    Text("Aucun message",
+                        style:
+                            TextStyle(fontSize: 18, color: Colors.grey[700])),
                     SizedBox(height: 8),
                     Text("Envoyez un premier message à la structure",
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                        style:
+                            TextStyle(fontSize: 14, color: Colors.grey[600])),
                   ],
                 ),
               );

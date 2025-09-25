@@ -26,6 +26,61 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
   bool _sending = false;
   bool _uploading = false;
 
+  Widget? _buildSenderLabel({
+    required bool isMe,
+    required String senderName,
+    required String senderEmail,
+  }) {
+    final name = senderName.trim();
+    final email = senderEmail.trim();
+    final lowerEmail = email.toLowerCase();
+    final textAlign = isMe ? TextAlign.right : TextAlign.left;
+    final textStyle = TextStyle(
+      fontWeight: FontWeight.w600,
+      fontSize: 12,
+      color: isMe ? Colors.blueGrey.shade700 : Colors.grey.shade800,
+    );
+
+    final hasReadableName =
+        name.isNotEmpty && (lowerEmail.isEmpty || name.toLowerCase() != lowerEmail);
+
+    if (hasReadableName) {
+      return Text(name, style: textStyle, textAlign: textAlign);
+    }
+
+    if (email.isEmpty) {
+      if (name.isNotEmpty) {
+        return Text(name, style: textStyle, textAlign: textAlign);
+      }
+      if (isMe) {
+        final user = _auth.currentUser;
+        if (user != null) {
+          final fallback = <String>[
+            (user.displayName ?? '').trim(),
+            (user.email ?? '').trim(),
+            user.uid,
+          ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+          if (fallback.isNotEmpty) {
+            return Text(fallback, style: textStyle, textAlign: textAlign);
+          }
+        }
+      }
+      return null;
+    }
+
+    return FutureBuilder<String>(
+      future: _resolveDisplayNameForEmail(email),
+      builder: (context, snapshot) {
+        final resolved = (snapshot.data ?? '').trim();
+        final label = resolved.isNotEmpty
+            ? resolved
+            : (name.isNotEmpty ? name : email);
+        if (label.isEmpty) return const SizedBox.shrink();
+        return Text(label, style: textStyle, textAlign: textAlign);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,6 +124,11 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                         (data['senderName'] ?? '').toString().trim();
                     final senderEmail =
                         (data['senderEmail'] ?? '').toString().trim();
+                    final senderLabelWidget = _buildSenderLabel(
+                      isMe: isMe,
+                      senderName: senderName,
+                      senderEmail: senderEmail,
+                    );
                     return Align(
                       alignment:
                           isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -84,42 +144,11 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: isMe
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
                           children: [
-                            if (!isMe)
-                              Builder(
-                                builder: (context) {
-                                  final shouldResolve = senderName.isEmpty ||
-                                      senderName.trim().toLowerCase() ==
-                                          senderEmail.toLowerCase();
-                                  if (!shouldResolve && senderName.isNotEmpty) {
-                                    return Text(
-                                      senderName,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 12),
-                                    );
-                                  }
-                                  final future =
-                                      _resolveDisplayNameForEmail(senderEmail);
-                                  return FutureBuilder<String>(
-                                    future: future,
-                                    builder: (context, snapshot) {
-                                      final resolved =
-                                          (snapshot.data ?? '').trim();
-                                      final label = resolved.isNotEmpty
-                                          ? resolved
-                                          : senderEmail;
-                                      return Text(
-                                        label,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
+                            if (senderLabelWidget != null) senderLabelWidget,
                             if (type == 'file')
                               _FileBubble(
                                 fileName: (data['fileName'] ?? '').toString(),
@@ -453,4 +482,3 @@ class _FileBubble extends StatelessWidget {
     );
   }
 }
-

@@ -804,8 +804,10 @@ class _AgendaScreenState extends State<AgendaScreen> {
           backgroundColor: Colors.white,
           selectedItemColor: _primaryBlue,
           unselectedItemColor: Colors.grey,
-          showSelectedLabels: false,
-          showUnselectedLabels: false,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
           items: [
@@ -823,7 +825,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 width: isTabletDevice ? 60 : 40,
                 height: isTabletDevice ? 60 : 40,
               ),
-              label: 'Home',
+              label: 'Accueil',
             ),
             BottomNavigationBarItem(
               icon: Image.asset(
@@ -831,7 +833,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 width: isTabletDevice ? 60 : 40,
                 height: isTabletDevice ? 60 : 40,
               ),
-              label: 'Echanges',
+              label: 'Messages',
             ),
           ],
         ),

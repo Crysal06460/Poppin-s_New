@@ -33,47 +33,61 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
     final bool isLoggedIn = prefs.getBool('is_logged_in') ?? false;
     final bool rememberEmail = prefs.getBool('remember_email') ?? false;
     final String? savedEmail = prefs.getString('saved_email');
+    final User? firebaseUser = FirebaseAuth.instance.currentUser;
+    final bool hasFirebaseSession = firebaseUser != null;
 
     // 🔒 SÉCURITÉ : Vérifier si c'est le premier lancement du jour
     final String today =
         DateTime.now().toIso8601String().split('T')[0]; // "2025-07-22"
     final String? lastLoginDate = prefs.getString('last_login_date');
     final bool isFirstLaunchToday = (lastLoginDate != today);
+    final bool needsAuthentication =
+        isFirstLaunchToday || !isLoggedIn || !hasFirebaseSession;
 
     print(
-        "🔍 AuthCheck - wasAppKilled: $wasAppKilled, isLoggedIn: $isLoggedIn, isFirstLaunchToday: $isFirstLaunchToday");
+        "🔍 AuthCheck - wasAppKilled: $wasAppKilled, isLoggedIn: $isLoggedIn, hasFirebaseSession: $hasFirebaseSession");
     print(
         "🔍 AuthCheck - rememberEmail: $rememberEmail, savedEmail: $savedEmail");
-    print("🔍 AuthCheck - today: $today, lastLoginDate: $lastLoginDate");
+    print(
+        "🔍 AuthCheck - today: $today, lastLoginDate: $lastLoginDate, needsAuth: $needsAuthentication");
 
     // Petite pause pour éviter le flash
     await Future.delayed(Duration(milliseconds: 500));
 
-    if (isFirstLaunchToday) {
-      // 🌅 Premier lancement du jour = TOUJOURS redemander mot de passe
-      print("🔒 Premier lancement du jour - Sécurité quotidienne activée");
+    if (needsAuthentication) {
+      final bool dailySecurity = isFirstLaunchToday;
+      final String reason = dailySecurity ? 'daily_security' : 'app_closed';
 
-      if (rememberEmail && savedEmail != null && savedEmail.isNotEmpty) {
+      // Préférer l'email sauvegardé, sinon tenter celui de Firebase si encore disponible
+      final String? quickLoginEmail = (rememberEmail &&
+              savedEmail != null &&
+              savedEmail.isNotEmpty)
+          ? savedEmail
+          : firebaseUser?.email;
+
+      if (dailySecurity) {
+        print("🔒 Premier lancement du jour - Sécurité quotidienne activée");
+      } else {
+        print(
+            "❌ Session invalide (dailySecurity: $dailySecurity, hasFirebaseSession: $hasFirebaseSession) - authentification requise");
+      }
+
+      if (quickLoginEmail != null && quickLoginEmail.isNotEmpty) {
         context.go('/quick-login',
-            extra: {'email': savedEmail, 'reason': 'daily_security'});
+            extra: {'email': quickLoginEmail.trim(), 'reason': reason});
       } else {
         context.go('/welcome');
       }
-    } else if (!wasAppKilled && isLoggedIn) {
-      // 📱 App en arrière-plan + déjà connecté aujourd'hui = Direct home selon le rôle
-      print("📱 App en arrière-plan - Accès direct selon le rôle");
-      await _navigateToCorrectHome();
-    } else {
-      // ❌ App fermée = Redemander mot de passe
-      print("❌ App fermée - Redemander authentification");
 
-      if (rememberEmail && savedEmail != null && savedEmail.isNotEmpty) {
-        context.go('/quick-login',
-            extra: {'email': savedEmail, 'reason': 'app_closed'});
-      } else {
-        context.go('/welcome');
-      }
+      // Marquer que l'app est active même si on redirige vers l'authentification
+      await prefs.setBool('app_killed', false);
+      return;
     }
+
+    // 📱 Session déjà validée aujourd'hui = accès direct au bon écran
+    print(
+        "📱 AuthCheck - Session quotidienne valide, redirection directe (wasAppKilled: $wasAppKilled)");
+    await _navigateToCorrectHome();
 
     // Marquer que l'app est active
     await prefs.setBool('app_killed', false);

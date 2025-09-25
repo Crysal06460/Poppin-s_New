@@ -85,10 +85,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
   // Ajouter ces déclarations pour la gestion des streams
   List<StreamSubscription> _subscriptions = [];
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _assistantStructureSubscription;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _assistantUserSubscription;
   Map<String, List<Map<String, dynamic>>> _eventsMap = {
     'activity': [],
     'meal': [],
@@ -151,164 +147,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       print("Erreur lors du nettoyage automatique des photos: $e");
       // Ne pas montrer d'erreur à l'utilisateur car c'est un processus en arrière-plan
     }
-  }
-
-  String? _formatAssistantStatus(String? rawStatus) {
-    if (rawStatus == null || rawStatus.isEmpty) {
-      return null;
-    }
-
-    switch (rawStatus.toLowerCase()) {
-      case 'pending':
-        return 'Invitation envoyée';
-      case 'completed':
-        return 'Inscription finalisée';
-      case 'resent':
-        return 'Invitation renvoyée';
-      default:
-        return null;
-    }
-  }
-
-  Color _assistantStatusColor(String? rawStatus) {
-    switch (rawStatus?.toLowerCase()) {
-      case 'pending':
-        return Colors.orange.shade600;
-      case 'resent':
-        return Colors.blue.shade600;
-      case 'completed':
-        return Colors.green.shade600;
-      default:
-        return Colors.grey.shade600;
-    }
-  }
-
-  void _attachAssistantStructureListener(String structureId) {
-    _assistantStructureSubscription?.cancel();
-
-    if (structureId.isEmpty) {
-      return;
-    }
-
-    _assistantStructureSubscription = _firestore
-        .collection('structures')
-        .doc(structureId)
-        .snapshots()
-        .listen((snapshot) {
-      if (!snapshot.exists) {
-        if (!mounted) return;
-        setState(() {
-          _hasAssistant = false;
-          _assistantInfo = null;
-        });
-        _assistantUserSubscription?.cancel();
-        return;
-      }
-
-      final data = snapshot.data() ?? {};
-      final assistantEmail =
-          (data['assistantEmail'] ?? '').toString().trim().toLowerCase();
-      final assistantStatus =
-          (data['assistantInvitationStatus'] ?? '').toString().trim();
-      final hasAssistant =
-          assistantEmail.isNotEmpty || assistantStatus.isNotEmpty;
-
-      if (!mounted) return;
-
-      setState(() {
-        _hasAssistant = hasAssistant;
-        if (!hasAssistant) {
-          _assistantInfo = null;
-        } else {
-          final updatedInfo =
-              Map<String, dynamic>.from(_assistantInfo ?? <String, dynamic>{});
-          if (assistantEmail.isNotEmpty) {
-            updatedInfo['email'] = assistantEmail;
-          }
-          final firstName = (data['assistantFirstName'] ?? '').toString();
-          if (firstName.isNotEmpty) {
-            updatedInfo['firstName'] = firstName;
-          }
-          final lastName = (data['assistantLastName'] ?? '').toString();
-          if (lastName.isNotEmpty) {
-            updatedInfo['lastName'] = lastName;
-          }
-          final phone = (data['assistantPhone'] ?? '').toString();
-          if (phone.isNotEmpty) {
-            updatedInfo['phone'] = phone;
-          }
-          if (assistantStatus.isNotEmpty) {
-            updatedInfo['status'] = assistantStatus;
-          }
-          final linkedUserId = (data['assistantLinkedUserId'] ?? '').toString();
-          if (linkedUserId.isNotEmpty) {
-            updatedInfo['linkedUserId'] = linkedUserId;
-          }
-          _assistantInfo = updatedInfo;
-        }
-      });
-
-      if (assistantEmail.isNotEmpty) {
-        _attachAssistantUserListener(assistantEmail);
-      } else {
-        _assistantUserSubscription?.cancel();
-      }
-    }, onError: (error) {
-      print('⚠️ Impossible de suivre la structure parent employeur: $error');
-    });
-  }
-
-  void _attachAssistantUserListener(String? email) {
-    final normalizedEmail = (email ?? '').trim().toLowerCase();
-    _assistantUserSubscription?.cancel();
-
-    if (normalizedEmail.isEmpty) {
-      return;
-    }
-
-    _assistantUserSubscription = _firestore
-        .collection('users')
-        .doc(normalizedEmail)
-        .snapshots()
-        .listen((snapshot) {
-      if (!snapshot.exists) {
-        return;
-      }
-
-      final data = snapshot.data() ?? {};
-      if (!mounted) return;
-
-      setState(() {
-        final updatedInfo =
-            Map<String, dynamic>.from(_assistantInfo ?? <String, dynamic>{});
-        updatedInfo['email'] = normalizedEmail;
-
-        final firstName = (data['firstName'] ?? '').toString();
-        if (firstName.isNotEmpty) {
-          updatedInfo['firstName'] = firstName;
-        }
-
-        final lastName = (data['lastName'] ?? '').toString();
-        if (lastName.isNotEmpty) {
-          updatedInfo['lastName'] = lastName;
-        }
-
-        final phone = (data['phone'] ?? '').toString();
-        if (phone.isNotEmpty) {
-          updatedInfo['phone'] = phone;
-        }
-
-        final linkedUserId =
-            (data['firebaseUid'] ?? data['uid'] ?? '').toString();
-        if (linkedUserId.isNotEmpty) {
-          updatedInfo['linkedUserId'] = linkedUserId;
-        }
-
-        _assistantInfo = updatedInfo;
-      });
-    }, onError: (error) {
-      print('⚠️ Impossible de suivre les coordonnées de l\'assistante: $error');
-    });
   }
 
   void _scheduleParentEmployeurOnboarding() {
@@ -1176,7 +1014,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                             ),
                             _buildModernTile(
                               icon: Icons.schedule_rounded,
-                              title: "Horaires de garde",
+                              title: "Horaires de l'enfant",
                               subtitle: "Définir les créneaux d'accueil",
                               color: Colors.amber,
                               onTap: () async {
@@ -1549,11 +1387,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           expand: false,
           builder: (context, scrollController) {
             final assistant = _assistantInfo;
-            final String? assistantStatusText = assistant != null
-                ? _formatAssistantStatus(assistant['status']?.toString())
-                : null;
-            final Color assistantStatusColor =
-                _assistantStatusColor(assistant?['status']?.toString());
             return SafeArea(
               child: Column(
                 children: [
@@ -1625,14 +1458,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                           .isNotEmpty)
                                         Text(
                                             'Téléphone : ${assistant['phone']}'),
-                                      if (assistantStatusText != null)
-                                        Text(
-                                          assistantStatusText,
-                                          style: TextStyle(
-                                            color: assistantStatusColor,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
+                                      if ((assistant['status'] ?? '')
+                                          .toString()
+                                          .isNotEmpty)
+                                        Text('Statut : ${assistant['status']}'),
                                     ],
                                   ),
                                 ),
@@ -2351,8 +2180,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     // Supprimer l'observateur lorsque le widget est disposé
     WidgetsBinding.instance.removeObserver(this);
     _disposeCurrentSubscriptions();
-    _assistantStructureSubscription?.cancel();
-    _assistantUserSubscription?.cancel();
     super.dispose();
   }
 
@@ -2630,51 +2457,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
         if (assistantEmail.isNotEmpty || assistantStatus.isNotEmpty) {
           hasAssistant = true;
-
-          // Informations initiales (structure)
-          String assistantFirstName =
-              (structureData['assistantFirstName'] ?? '').toString();
-          String assistantLastName =
-              (structureData['assistantLastName'] ?? '').toString();
-          String assistantPhone =
-              (structureData['assistantPhone'] ?? '').toString();
-          String linkedUserId =
-              (structureData['assistantLinkedUserId'] ?? '').toString();
-
-          // Synchroniser avec le document utilisateur si disponible
-          if (assistantEmail.isNotEmpty) {
-            try {
-              final assistantUserDoc = await _firestore
-                  .collection('users')
-                  .doc(assistantEmail.toLowerCase())
-                  .get();
-              if (assistantUserDoc.exists) {
-                final userData = assistantUserDoc.data() ?? {};
-                if ((userData['firstName'] ?? '').toString().isNotEmpty) {
-                  assistantFirstName = userData['firstName'];
-                }
-                if ((userData['lastName'] ?? '').toString().isNotEmpty) {
-                  assistantLastName = userData['lastName'];
-                }
-                if ((userData['phone'] ?? '').toString().isNotEmpty) {
-                  assistantPhone = userData['phone'];
-                }
-                if ((userData['firebaseUid'] ?? '').toString().isNotEmpty) {
-                  linkedUserId = userData['firebaseUid'];
-                }
-              }
-            } catch (e) {
-              print('⚠️ Impossible de synchroniser les infos assistante: $e');
-            }
-          }
-
           assistantInfo = {
             'email': assistantEmail,
-            'firstName': assistantFirstName,
-            'lastName': assistantLastName,
-            'phone': assistantPhone,
+            'firstName': structureData['assistantFirstName'] ?? '',
+            'lastName': structureData['assistantLastName'] ?? '',
+            'phone': structureData['assistantPhone'] ?? '',
             'status': assistantStatus,
-            'linkedUserId': linkedUserId,
+            'linkedUserId':
+                (structureData['assistantLinkedUserId'] ?? '').toString(),
           };
         }
       }
@@ -2789,13 +2579,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           _structureId = structureId;
           _structureName = structureName;
         });
-      }
-
-      _attachAssistantStructureListener(structureId);
-      if (hasAssistant) {
-        _attachAssistantUserListener(assistantInfo?['email']?.toString());
-      } else {
-        _assistantUserSubscription?.cancel();
       }
 
       if (childrenData.isNotEmpty && newSelectedChild != null) {

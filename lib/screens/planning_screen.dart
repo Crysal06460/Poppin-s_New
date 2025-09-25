@@ -1107,6 +1107,8 @@ class _PlanningScreenState extends State<PlanningScreen> {
               gardes: _gardes,
               onGardeEdit: _handleGardeEdit,
               primaryColor: primaryColor,
+              delegatedChildIds:
+                  _acceptedDelegationsForDay.map((d) => d.childId).toSet(),
             ),
           ),
         ],

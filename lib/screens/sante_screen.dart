@@ -2560,8 +2560,10 @@ class _SanteScreenState extends State<SanteScreen> {
       backgroundColor: Colors.white,
       selectedItemColor: primaryColor,
       unselectedItemColor: Colors.grey,
-      showSelectedLabels: false,
-      showUnselectedLabels: false,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,
       items: [
@@ -2579,7 +2581,7 @@ class _SanteScreenState extends State<SanteScreen> {
             width: 60,
             height: 60,
           ),
-          label: "Home",
+          label: "Accueil",
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
@@ -2587,7 +2589,7 @@ class _SanteScreenState extends State<SanteScreen> {
             width: 60,
             height: 60,
           ),
-          label: "Echanges",
+          label: "Messages",
         ),
       ],
     );

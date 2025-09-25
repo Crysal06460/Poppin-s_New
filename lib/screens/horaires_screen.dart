@@ -288,7 +288,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
           .doc(userEmail)
           .get();
 
-      String structureId = user.uid; // Par défaut, structure propre à l'assistante
+      String structureId =
+          user.uid; // Par défaut, structure propre à l'assistante
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
@@ -389,11 +390,11 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
       final Map<String, dynamic> structureData =
           (structureSnapshot.data() as Map<String, dynamic>?) ?? const {};
-      final String structureType = (structureData['structureType'] ??
-              "AssistanteMaternelle")
-          .toString()
-          .trim()
-          .toLowerCase();
+      final String structureType =
+          (structureData['structureType'] ?? "AssistanteMaternelle")
+              .toString()
+              .trim()
+              .toLowerCase();
 
       // Récupérer tous les enfants de la structure avec le bon ID de structure
       final snapshot = await FirebaseFirestore.instance
@@ -805,7 +806,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
-                    hintText: 'Ne pas remplir si aucun trajet effectué',
+                    hintText: 'Laisser vide si pas de trajet',
                     filled: true,
                     fillColor: secondaryColor,
                     border: OutlineInputBorder(
@@ -821,24 +822,6 @@ class _HorairesScreenState extends State<HorairesScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    TextButton(
-                      child: Text(
-                        'Aucun trajet',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: primaryColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _updateHoraires(enfant['id'], horairesData);
-                      },
-                    ),
                     ElevatedButton(
                       child: Text(
                         'Enregistrer',
@@ -1502,8 +1485,11 @@ class _HorairesScreenState extends State<HorairesScreen> {
       backgroundColor: Colors.white,
       selectedItemColor: primaryColor,
       unselectedItemColor: Colors.grey,
-      showSelectedLabels: false,
-      showUnselectedLabels: false,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,
       items: [
@@ -1521,7 +1507,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             width: 60,
             height: 60,
           ),
-          label: "Home",
+          label: "Accueil",
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
@@ -1529,7 +1515,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             width: 60,
             height: 60,
           ),
-          label: "Echanges",
+          label: "Messages",
         ),
       ],
     );

@@ -5199,8 +5199,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             backgroundColor: Colors.white,
             selectedItemColor: primaryColor,
             unselectedItemColor: Colors.grey,
-            showSelectedLabels: false,
-            showUnselectedLabels: false,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 12),
             type: BottomNavigationBarType.fixed,
             currentIndex: 0, // Dashboard est sélectionné
             items: [
@@ -5218,7 +5220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: screenSize.width * (isTablet ? 0.07 : 0.14),
                   height: screenSize.width * (isTablet ? 0.07 : 0.14),
                 ),
-                label: "Home",
+                label: "Accueil",
               ),
               BottomNavigationBarItem(
                 icon: Image.asset(
@@ -5226,7 +5228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: screenSize.width * (isTablet ? 0.07 : 0.14),
                   height: screenSize.width * (isTablet ? 0.07 : 0.14),
                 ),
-                label: "Echanges",
+                label: "Messages",
               ),
             ],
           ),

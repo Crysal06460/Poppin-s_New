@@ -11,6 +11,7 @@ class PlanningTableView extends StatefulWidget {
   final List<Garde> gardes;
   final Function(Garde) onGardeEdit;
   final Color primaryColor;
+  final Set<String> delegatedChildIds;
 
   const PlanningTableView({
     Key? key,
@@ -20,6 +21,7 @@ class PlanningTableView extends StatefulWidget {
     required this.gardes,
     required this.onGardeEdit,
     required this.primaryColor,
+    this.delegatedChildIds = const <String>{},
   }) : super(key: key);
 
   @override
@@ -345,17 +347,51 @@ class _PlanningTableViewState extends State<PlanningTableView> {
                             .toList(),
                       ],
                       rows: enfantsDuJour.map((enfant) {
+                        final isDelegatedChild = _isChildDelegated(
+                          enfant.id,
+                          gardesDuJour,
+                        );
                         return DataRow(
                           cells: [
                             DataCell(
                               Container(
                                 width: 80,
-                                child: Text(
-                                  enfant.prenom,
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        enfant.prenom,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isDelegatedChild)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Tooltip(
+                                          message: 'En délégation',
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'D',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -612,6 +648,14 @@ class _PlanningTableViewState extends State<PlanningTableView> {
     final h = int.parse(parts[0]);
     final m = int.parse(parts[1]);
     return h * 60 + m;
+  }
+
+  bool _isChildDelegated(String enfantId, List<Garde> gardesDuJour) {
+    if (widget.delegatedChildIds.contains(enfantId)) {
+      return true;
+    }
+    return gardesDuJour.any(
+        (g) => g.enfantId == enfantId && g.isDelegated);
   }
 
   // Déterminer si un enfant est présent à une heure donnée, et retourne l'ID du membre responsable

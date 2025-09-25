@@ -2422,8 +2422,10 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.white,
             selectedItemColor: primaryColor,
             unselectedItemColor: Colors.grey,
-            showSelectedLabels: false,
-            showUnselectedLabels: false,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 12),
             type: BottomNavigationBarType.fixed,
             currentIndex: 1, // Home est sélectionné
             items: [
@@ -2445,7 +2447,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: screenSize.width * (isTablet ? 0.07 : 0.14),
                   height: screenSize.width * (isTablet ? 0.07 : 0.14),
                 ),
-                label: "Home",
+                label: "Accueil",
               ),
 
               // Troisième item - Ajouter enfant
@@ -2454,7 +2456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     screenSize.width * (isTablet ? 0.07 : 0.14)),
                 activeIcon: _buildMessagesNavIcon(
                     screenSize.width * (isTablet ? 0.07 : 0.14)),
-                label: "Echanges",
+                label: "Messages",
               ),
             ],
           ),

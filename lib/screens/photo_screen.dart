@@ -45,10 +45,12 @@ class _PhotosScreenState extends State<PhotosScreen>
   List<XFile> _pickedPhotos = [];
   XFile? _pickedVideo;
   String _mediaTime = '';
+  String _draftMediaTime = '';
   bool _isVideoSelected = false;
   String? _videoDurationText;
   Future<Uint8List?>? _videoThumbFuture;
   VideoPlayerController? _previewController;
+  bool _preserveAddMediaDialogState = false;
   // Limites pour les vidéos
   static const int _maxVideoSeconds = 15; // Durée maximale d'une vidéo capturée
   static const int _maxVideoBytes = 200 * 1024 * 1024; // 200 Mo pour la taille max
@@ -193,6 +195,53 @@ class _PhotosScreenState extends State<PhotosScreen>
     }
   }
 
+  bool _normalizePermissionValue(dynamic rawValue,
+      {bool defaultValue = true}) {
+    if (rawValue is bool) {
+      return rawValue;
+    }
+
+    if (rawValue is num) {
+      return rawValue != 0;
+    }
+
+    if (rawValue is String) {
+      final normalized = rawValue.trim().toLowerCase();
+      if (normalized.isEmpty) {
+        return defaultValue;
+      }
+
+      const trueValues = {
+        'true',
+        '1',
+        'oui',
+        'yes',
+        'autorise',
+        'autorisé',
+      };
+
+      const falseValues = {
+        'false',
+        '0',
+        'non',
+        'no',
+        'pas autorise',
+        'pas autorisé',
+        'interdit',
+      };
+
+      if (trueValues.contains(normalized)) {
+        return true;
+      }
+
+      if (falseValues.contains(normalized)) {
+        return false;
+      }
+    }
+
+    return defaultValue;
+  }
+
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
@@ -291,8 +340,11 @@ class _PhotosScreenState extends State<PhotosScreen>
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
-          // Récupérer l'autorisation photos
-          bool? photosAllowed = child['authorizations']?['photos'] ?? true;
+          // Récupérer l'autorisation photos en supportant plusieurs formats (booléen, texte, numérique)
+          final bool photosAllowed = _normalizePermissionValue(
+            child['authorizations']?['photos'],
+            defaultValue: true,
+          );
           enfants.add({
             'id': child['id'],
             'prenom': child['firstName'],
@@ -370,8 +422,8 @@ class _PhotosScreenState extends State<PhotosScreen>
     }
   }
 
-  Future<void> _pickCameraImage(
-      String childId, StateSetter setStateDialog) async {
+  Future<void> _pickCameraImage(String childId,
+      [StateSetter? setStateDialog]) async {
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(
@@ -388,7 +440,8 @@ class _PhotosScreenState extends State<PhotosScreen>
           print("Image web chargée: ${webBytes.length} bytes");
         }
 
-        setStateDialog(() {
+        if (!mounted) return;
+        setState(() {
           _pickedPhotos.add(image);
           _isVideoSelected = false;
           _pickedVideo = null;
@@ -398,6 +451,9 @@ class _PhotosScreenState extends State<PhotosScreen>
             _webImages.add(webBytes);
           }
         });
+        if (setStateDialog != null) {
+          setStateDialog(() {});
+        }
       }
     } catch (e) {
       print("Erreur lors de la prise de photo: $e");
@@ -455,7 +511,8 @@ class _PhotosScreenState extends State<PhotosScreen>
     }
   }
 
-  Future<void> _pickCameraVideo(String childId, StateSetter setStateDialog) async {
+  Future<void> _pickCameraVideo(String childId,
+      [StateSetter? setStateDialog]) async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('La caméra vidéo n\'est pas prise en charge sur le web.')),
@@ -474,7 +531,8 @@ class _PhotosScreenState extends State<PhotosScreen>
               content: Text('Vidéo trop lourde (> ${(_maxVideoBytes / (1024*1024)).round()} Mo). Réessayez en filmant plus court.')));
           return;
         }
-        setStateDialog(() {
+        if (!mounted) return;
+        setState(() {
           _pickedVideo = video;
           _isVideoSelected = true;
           _pickedPhotos.clear();
@@ -486,14 +544,21 @@ class _PhotosScreenState extends State<PhotosScreen>
             quality: 75,
           );
         });
+        if (setStateDialog != null) {
+          setStateDialog(() {});
+        }
         try {
           final tmp = VideoPlayerController.file(file);
           await tmp.initialize();
           final dur = tmp.value.duration;
           await tmp.dispose();
-          setStateDialog(() {
+          if (!mounted) return;
+          setState(() {
             _videoDurationText = _formatDuration(dur);
           });
+          if (setStateDialog != null) {
+            setStateDialog(() {});
+          }
         } catch (_) {}
       }
     } catch (e) {
@@ -774,7 +839,8 @@ class _PhotosScreenState extends State<PhotosScreen>
   void _showAddMediaPopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String? errorMessage;
-    String localMediaTime = _mediaTime;
+    String localMediaTime =
+        _draftMediaTime.isNotEmpty ? _draftMediaTime : _mediaTime;
     bool showPhotoWarning = enfant['photosAllowed'] == false;
 
     // Déterminer si nous sommes sur iPad
@@ -1196,6 +1262,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                     onTap: () =>
                                         _selectMediaTime(setState, (time) {
                                       localMediaTime = time;
+                                      _draftMediaTime = time;
                                       errorMessage = null;
                                     }),
                                     child: Container(
@@ -1263,7 +1330,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                     children: [
                                       Expanded(
                                         child: ElevatedButton.icon(
-                                          onPressed: () {
+                                          onPressed: () async {
                                             if (localMediaTime.isEmpty) {
                                               setState(() {
                                                 errorMessage =
@@ -1271,8 +1338,20 @@ class _PhotosScreenState extends State<PhotosScreen>
                                               });
                                               return;
                                             }
-                                            _pickCameraImage(
-                                                enfant['id'], setState);
+
+                                            _draftMediaTime = localMediaTime;
+                                            _preserveAddMediaDialogState = true;
+                                            Navigator.of(context).pop();
+
+                                            await Future.delayed(
+                                                const Duration(milliseconds: 120));
+
+                                            try {
+                                              await _pickCameraImage(enfant['id']);
+                                            } finally {
+                                              if (!mounted) return;
+                                              _showAddMediaPopup(enfant['id']);
+                                            }
                                           },
                                           icon: Icon(Icons.camera_alt),
                                           label: Text('Photo (caméra)'),
@@ -1331,7 +1410,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                                       children: [
                                         Expanded(
                                           child: ElevatedButton.icon(
-                                            onPressed: () {
+                                            onPressed: () async {
                                               if (localMediaTime.isEmpty) {
                                                 setState(() {
                                                   errorMessage =
@@ -1339,8 +1418,20 @@ class _PhotosScreenState extends State<PhotosScreen>
                                                 });
                                                 return;
                                               }
-                                              _pickCameraVideo(
-                                                  enfant['id'], setState);
+
+                                              _draftMediaTime = localMediaTime;
+                                              _preserveAddMediaDialogState = true;
+                                              Navigator.of(context).pop();
+
+                                              await Future.delayed(
+                                                  const Duration(milliseconds: 120));
+
+                                              try {
+                                                await _pickCameraVideo(enfant['id']);
+                                              } finally {
+                                                if (!mounted) return;
+                                                _showAddMediaPopup(enfant['id']);
+                                              }
                                             },
                                             icon: Icon(Icons.videocam),
                                             label: Text('Vidéo (caméra)'),
@@ -1561,7 +1652,16 @@ class _PhotosScreenState extends State<PhotosScreen>
           },
         );
       },
-    );
+    ).then((_) {
+      if (!mounted) return;
+      setState(() {
+        if (_preserveAddMediaDialogState) {
+          _preserveAddMediaDialogState = false;
+        } else {
+          _draftMediaTime = '';
+        }
+      });
+    });
   }
   
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
@@ -3150,8 +3250,10 @@ class _PhotosScreenState extends State<PhotosScreen>
       backgroundColor: Colors.white,
       selectedItemColor: primaryBlue,
       unselectedItemColor: Colors.grey,
-      showSelectedLabels: false,
-      showUnselectedLabels: false,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,
       items: [
@@ -3169,7 +3271,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             width: 60,
             height: 60,
           ),
-          label: "Home",
+          label: "Accueil",
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
@@ -3177,7 +3279,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             width: 60,
             height: 60,
           ),
-          label: "Echanges",
+          label: "Messages",
         ),
       ],
     );

@@ -2519,8 +2519,10 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       backgroundColor: Colors.white,
       selectedItemColor: primaryBlue,
       unselectedItemColor: Colors.grey,
-      showSelectedLabels: false,
-      showUnselectedLabels: false,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: 1,
       elevation: 8,
@@ -2539,7 +2541,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
             width: 60,
             height: 60,
           ),
-          label: "Home",
+          label: "Accueil",
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
@@ -2547,7 +2549,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
             width: 60,
             height: 60,
           ),
-          label: "Echanges",
+          label: "Messages",
         ),
       ],
     );

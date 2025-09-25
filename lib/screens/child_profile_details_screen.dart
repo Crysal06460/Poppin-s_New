@@ -28,6 +28,18 @@ class ChildProfileDetailsScreen extends StatefulWidget {
       _ChildProfileDetailsScreenState();
 }
 
+class _PrescriptionFormResult {
+  final String description;
+  final int durationDays;
+  final DateTime startDate;
+
+  const _PrescriptionFormResult({
+    required this.description,
+    required this.durationDays,
+    required this.startDate,
+  });
+}
+
 class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   bool isLoading = true;
   Map<String, dynamic> childData = {};
@@ -41,6 +53,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isPhotoUploading = false;
   bool _isDocumentUploading = false;
+  bool _isPrescriptionUploading = false;
+  List<Map<String, dynamic>> _activePrescriptions = [];
+  List<Map<String, dynamic>> _prescriptionHistory = [];
 
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
@@ -253,6 +268,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
       // Extraction des documents
       documents = data['documents'] ?? {};
+      await _initializePrescriptions();
 
       // Extraction des infos alimentaires
       mealInfo = data['mealInfo'] ?? {};
@@ -838,6 +854,1050 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     } finally {
       setState(() => _isDocumentUploading = false);
     }
+  }
+
+  Future<void> _initializePrescriptions() async {
+    final dynamic prescriptionsRaw = documents['prescriptions'];
+    final Map<String, dynamic> prescriptionsData =
+        prescriptionsRaw is Map<String, dynamic>
+            ? Map<String, dynamic>.from(prescriptionsRaw)
+            : {};
+
+    final List<Map<String, dynamic>> activeList =
+        _convertToMapList(prescriptionsData['active']);
+    final List<Map<String, dynamic>> historyList =
+        _convertToMapList(prescriptionsData['history']);
+
+    final DateTime now = DateTime.now();
+    final List<Map<String, dynamic>> stillActive = [];
+    final List<Map<String, dynamic>> updatedHistory =
+        historyList.map((item) => Map<String, dynamic>.from(item)).toList();
+
+    bool hasExpiredChanges = false;
+
+    for (final Map<String, dynamic> entry in activeList) {
+      final Map<String, dynamic> item = Map<String, dynamic>.from(entry);
+      final DateTime? expiresAt = _asDateTime(item['expiresAt']);
+
+      if (expiresAt != null && !expiresAt.isAfter(now)) {
+        item['archivedAt'] =
+            item['archivedAt'] ?? Timestamp.fromDate(now);
+        updatedHistory.add(item);
+        hasExpiredChanges = true;
+      } else {
+        stillActive.add(item);
+      }
+    }
+
+    _sortPrescriptionCollections(
+      active: stillActive,
+      history: updatedHistory,
+    );
+
+    if (hasExpiredChanges) {
+      await _savePrescriptionsData(
+        stillActive,
+        updatedHistory,
+        successMessage: null,
+      );
+    } else {
+      if (!mounted) return;
+      setState(() {
+        _activePrescriptions = stillActive;
+        _prescriptionHistory = updatedHistory;
+        documents['prescriptions'] = {
+          'active': stillActive,
+          'history': updatedHistory,
+        };
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _convertToMapList(dynamic source) {
+    if (source is Iterable) {
+      return source
+          .whereType<Map>()
+          .map((item) => item.map(
+              (key, value) => MapEntry(key.toString(), value)))
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    return [];
+  }
+
+  DateTime? _asDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    if (value is int) {
+      // Supposer que la valeur est en millisecondes
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    return null;
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Non défini';
+    return DateFormat('dd/MM/yyyy').format(date);
+  }
+
+  String _formatDurationText(int? days) {
+    if (days == null || days <= 0) return 'Durée non précisée';
+    return days == 1 ? '1 jour' : '$days jours';
+  }
+
+  void _sortPrescriptionCollections({
+    required List<Map<String, dynamic>> active,
+    required List<Map<String, dynamic>> history,
+  }) {
+    int activeComparator(
+        Map<String, dynamic> a, Map<String, dynamic> b) {
+      final DateTime aDate =
+          _asDateTime(a['expiresAt']) ?? DateTime(9999, 12, 31);
+      final DateTime bDate =
+          _asDateTime(b['expiresAt']) ?? DateTime(9999, 12, 31);
+      return aDate.compareTo(bDate);
+    }
+
+    int historyComparator(
+        Map<String, dynamic> a, Map<String, dynamic> b) {
+      final DateTime aDate =
+          _asDateTime(a['archivedAt']) ??
+              _asDateTime(a['expiresAt']) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime bDate =
+          _asDateTime(b['archivedAt']) ??
+              _asDateTime(b['expiresAt']) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+      return bDate.compareTo(aDate);
+    }
+
+    active.sort(activeComparator);
+    history.sort(historyComparator);
+  }
+
+  Future<void> _savePrescriptionsData(
+    List<Map<String, dynamic>> active,
+    List<Map<String, dynamic>> history, {
+    String? successMessage,
+  }) async {
+    final List<Map<String, dynamic>> activeToSave =
+        active.map((item) => Map<String, dynamic>.from(item)).toList();
+    final List<Map<String, dynamic>> historyToSave =
+        history.map((item) => Map<String, dynamic>.from(item)).toList();
+
+    _sortPrescriptionCollections(
+      active: activeToSave,
+      history: historyToSave,
+    );
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .update({
+        'documents.prescriptions': {
+          'active': activeToSave,
+          'history': historyToSave,
+        },
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        _activePrescriptions = activeToSave;
+        _prescriptionHistory = historyToSave;
+        documents['prescriptions'] = {
+          'active': activeToSave,
+          'history': historyToSave,
+        };
+      });
+
+      if (successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Erreur lors de la sauvegarde des ordonnances: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'enregistrement des ordonnances'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _archivePrescription(String id) async {
+    final List<Map<String, dynamic>> activeCopy = _activePrescriptions
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final int index =
+        activeCopy.indexWhere((element) => element['id'] == id);
+
+    if (index == -1) return;
+
+    final Map<String, dynamic> prescription =
+        Map<String, dynamic>.from(activeCopy.removeAt(index));
+    prescription['archivedAt'] = Timestamp.fromDate(DateTime.now());
+
+    final List<Map<String, dynamic>> historyCopy = _prescriptionHistory
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    historyCopy.add(prescription);
+
+    await _savePrescriptionsData(
+      activeCopy,
+      historyCopy,
+      successMessage: 'Ordonnance archivée',
+    );
+  }
+
+  Future<_PrescriptionFormResult?> _promptPrescriptionDetails() async {
+    final TextEditingController descriptionController =
+        TextEditingController();
+    final TextEditingController durationController = TextEditingController();
+    DateTime startDate = DateTime.now();
+
+    String? descriptionError;
+    String? durationError;
+
+    return showDialog<_PrescriptionFormResult>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(
+                'Nouvelle ordonnance',
+                style: TextStyle(
+                  color: primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: descriptionController,
+                      decoration: InputDecoration(
+                        labelText: 'Médicament / consignes',
+                        hintText:
+                            'Ex: Doliprane 500 mg - 1/2 comprimé si fièvre',
+                        errorText: descriptionError,
+                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                      maxLines: 2,
+                    ),
+                    SizedBox(height: 12),
+                    TextField(
+                      controller: durationController,
+                      decoration: InputDecoration(
+                        labelText: 'Durée (en jours)',
+                        hintText: 'Ex: 8',
+                        errorText: durationError,
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Date de début',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: startDate,
+                          firstDate:
+                              DateTime.now().subtract(Duration(days: 365)),
+                          lastDate:
+                              DateTime.now().add(Duration(days: 365 * 2)),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: ColorScheme.light(
+                                  primary: primaryColor,
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+
+                        if (pickedDate != null) {
+                          setDialogState(() {
+                            startDate = pickedDate;
+                          });
+                        }
+                      },
+                      icon: Icon(Icons.calendar_today, size: 18),
+                      label: Text(_formatDate(startDate)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryColor,
+                        side: BorderSide(color: primaryColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Annuler',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final String description =
+                        descriptionController.text.trim();
+                    final int? duration =
+                        int.tryParse(durationController.text.trim());
+
+                    bool hasError = false;
+
+                    if (description.isEmpty) {
+                      hasError = true;
+                      setDialogState(() {
+                        descriptionError = 'Merci de préciser la consigne';
+                      });
+                    } else if (descriptionError != null) {
+                      setDialogState(() {
+                        descriptionError = null;
+                      });
+                    }
+
+                    if (duration == null || duration <= 0) {
+                      hasError = true;
+                      setDialogState(() {
+                        durationError =
+                            'Indiquez une durée en jours (minimum 1)';
+                      });
+                    } else if (durationError != null) {
+                      setDialogState(() {
+                        durationError = null;
+                      });
+                    }
+
+                    if (hasError) return;
+
+                    Navigator.pop(
+                      context,
+                      _PrescriptionFormResult(
+                        description: description,
+                        durationDays: duration!,
+                        startDate: startDate,
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text('Continuer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Map<String, String>?> _pickAndUploadPrescriptionFile(
+      String fileId) async {
+    try {
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            'Joindre l\'ordonnance',
+            style: TextStyle(
+              color: primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library, color: primaryColor),
+                title: Text('Choisir depuis la galerie'),
+                onTap: () => Navigator.pop(context, 'gallery'),
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt, color: primaryColor),
+                title: Text('Prendre une photo'),
+                onTap: () => Navigator.pop(context, 'camera'),
+              ),
+              ListTile(
+                leading: Icon(Icons.file_present, color: primaryColor),
+                title: Text('Sélectionner un fichier'),
+                onTap: () => Navigator.pop(context, 'file'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: Text(
+                'Annuler',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (action == null || action == 'cancel') {
+        return null;
+      }
+
+      String? fileUrl;
+      String? fileName;
+
+      final Reference storageBase = FirebaseStorage.instance
+          .ref()
+          .child('children_documents')
+          .child(widget.childId)
+          .child('prescriptions');
+
+      if (action == 'gallery' || action == 'camera') {
+        final XFile? image = await _picker.pickImage(
+          source:
+              action == 'gallery' ? ImageSource.gallery : ImageSource.camera,
+          imageQuality: 75,
+          maxWidth: 1600,
+        );
+
+        if (image == null) {
+          return null;
+        }
+
+        final bytes = await File(image.path).readAsBytes();
+        fileName = image.name;
+
+        final Reference storageRef = storageBase.child(
+            '${fileId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        await storageRef.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+
+        fileUrl = await storageRef.getDownloadURL();
+      } else if (action == 'file') {
+        final FilePickerResult? result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'heic'],
+        );
+
+        if (result == null || result.files.isEmpty) {
+          return null;
+        }
+
+        final PlatformFile pickedFile = result.files.first;
+        fileName = pickedFile.name;
+
+        final String extension = pickedFile.extension ?? 'pdf';
+        final Reference storageRef = storageBase.child(
+            '${fileId}_${DateTime.now().millisecondsSinceEpoch}.$extension');
+
+        if (kIsWeb && pickedFile.bytes != null) {
+          await storageRef.putData(pickedFile.bytes!);
+        } else if (pickedFile.path != null) {
+          await storageRef.putFile(File(pickedFile.path!));
+        } else {
+          throw Exception('Fichier invalide ou non supporté');
+        }
+
+        fileUrl = await storageRef.getDownloadURL();
+      }
+
+      if (fileUrl == null) {
+        throw Exception('Impossible de récupérer l\'URL du fichier');
+      }
+
+      return {
+        'url': fileUrl,
+        'name': fileName ?? 'Ordonnance',
+      };
+    } catch (e) {
+      print('Erreur lors de l\'upload de l\'ordonnance: $e');
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors du téléchargement de l\'ordonnance'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<void> _addPrescription({VoidCallback? onStateChanged}) async {
+    final _PrescriptionFormResult? details =
+        await _promptPrescriptionDetails();
+    if (details == null) return;
+
+    if (mounted) {
+      setState(() => _isPrescriptionUploading = true);
+    } else {
+      _isPrescriptionUploading = true;
+    }
+    onStateChanged?.call();
+
+    try {
+      final String id = DateTime.now().millisecondsSinceEpoch.toString();
+      final Map<String, String>? uploadResult =
+          await _pickAndUploadPrescriptionFile(id);
+
+      if (uploadResult == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import d\'ordonnance annulé'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      final DateTime startDate = details.startDate;
+      final DateTime expiresAt =
+          startDate.add(Duration(days: details.durationDays));
+
+      final Map<String, dynamic> newPrescription = {
+        'id': id,
+        'description': details.description,
+        'durationDays': details.durationDays,
+        'startDate': Timestamp.fromDate(startDate),
+        'expiresAt': Timestamp.fromDate(expiresAt),
+        'fileUrl': uploadResult['url'],
+        'fileName': uploadResult['name'],
+        'uploadedAt': Timestamp.now(),
+        'uploadedBy': user?.email?.toLowerCase() ?? '',
+      };
+
+      final List<Map<String, dynamic>> activeCopy = _activePrescriptions
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final List<Map<String, dynamic>> historyCopy = _prescriptionHistory
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+
+      activeCopy.add(newPrescription);
+
+      await _savePrescriptionsData(
+        activeCopy,
+        historyCopy,
+        successMessage: 'Ordonnance ajoutée avec succès',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isPrescriptionUploading = false);
+      } else {
+        _isPrescriptionUploading = false;
+      }
+      onStateChanged?.call();
+    }
+  }
+
+  Future<void> _openPrescriptionManager() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (modalContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final List<Map<String, dynamic>> active = _activePrescriptions;
+            final bool hasHistory = _prescriptionHistory.isNotEmpty;
+            final double sheetHeight =
+                MediaQuery.of(context).size.height * 0.65;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 16,
+                  bottom:
+                      MediaQuery.of(context).viewInsets.bottom + 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Ordonnances en cours',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    if (active.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: secondaryColor.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: secondaryColor),
+                        ),
+                        child: Text(
+                          _isParentMode
+                              ? 'Aucune ordonnance en cours.'
+                              : 'Aucune ordonnance en cours. Utilisez le bouton ci-dessous pour en ajouter une.',
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: sheetHeight * 0.55,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: active.length,
+                          separatorBuilder: (_, __) => SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final Map<String, dynamic> prescription =
+                                active[index];
+                            final String? documentUrl =
+                                prescription['fileUrl'] as String?;
+                            final String? documentName =
+                                prescription['fileName'] as String?;
+
+                            return _buildActivePrescriptionCard(
+                              prescription,
+                              documentUrl: documentUrl,
+                              documentName: documentName,
+                              onArchive: _isParentMode
+                                  ? null
+                                  : () async {
+                                      await _archivePrescription(
+                                        prescription['id'] ?? '',
+                                      );
+                                      setModalState(() {});
+                                    },
+                            );
+                          },
+                        ),
+                      ),
+                    SizedBox(height: 20),
+                    if (!_isParentMode)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isPrescriptionUploading
+                              ? null
+                              : () async {
+                                  await _addPrescription(
+                                    onStateChanged: () =>
+                                        setModalState(() {}),
+                                  );
+                                  setModalState(() {});
+                                },
+                          icon: _isPrescriptionUploading
+                              ? SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Icon(Icons.add_task_outlined),
+                          label: Text(_isPrescriptionUploading
+                              ? 'Import en cours…'
+                              : 'Ajouter une ordonnance'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showPrescriptionHistory();
+                      },
+                      child: Text(
+                        hasHistory
+                            ? 'Voir l\'historique (${_prescriptionHistory.length})'
+                            : 'Historique (vide)',
+                        style: TextStyle(color: primaryColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildActivePrescriptionCard(
+    Map<String, dynamic> prescription, {
+    String? documentUrl,
+    String? documentName,
+    VoidCallback? onArchive,
+  }) {
+    final String description =
+        (prescription['description'] ?? 'Ordonnance') as String;
+    final int? durationDays =
+        (prescription['durationDays'] is num)
+            ? (prescription['durationDays'] as num).toInt()
+            : null;
+    final DateTime? startDate = _asDateTime(prescription['startDate']);
+    final DateTime? expiresAt = _asDateTime(prescription['expiresAt']);
+    final DateTime? uploadedAt = _asDateTime(prescription['uploadedAt']);
+    final String uploadedBy =
+        (prescription['uploadedBy'] ?? '') as String;
+
+    final DateTime now = DateTime.now();
+    final bool isExpiringSoon = expiresAt != null &&
+        expiresAt.isBefore(now.add(Duration(days: 2)));
+    final Color badgeColor =
+        isExpiringSoon ? Colors.orange : Colors.green;
+
+    final VoidCallback? onView =
+        (documentUrl != null && documentUrl.isNotEmpty)
+            ? () =>
+                _viewDocument(documentUrl, documentName ?? 'Ordonnance')
+            : null;
+
+    final List<String> metaParts = [];
+    if (uploadedAt != null) {
+      metaParts.add('le ${_formatDate(uploadedAt)}');
+    }
+    if (uploadedBy.isNotEmpty) {
+      metaParts.add('par $uploadedBy');
+    }
+    final String metaText =
+        metaParts.isEmpty ? '' : 'Ajoutée ${metaParts.join(' ')}';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: secondaryColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  expiresAt != null
+                      ? 'Expire le ${_formatDate(expiresAt)}'
+                      : 'Date inconnue',
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.today, size: 18, color: primaryColor),
+              SizedBox(width: 6),
+              Text(
+                'Début: ${_formatDate(startDate)}',
+                style: TextStyle(color: Colors.black87),
+              ),
+            ],
+          ),
+          SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, size: 18, color: primaryColor),
+              SizedBox(width: 6),
+              Text(
+                'Durée: ${_formatDurationText(durationDays)}',
+                style: TextStyle(color: Colors.black87),
+              ),
+            ],
+          ),
+          if (metaText.isNotEmpty) ...[
+            SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.person_pin, size: 18, color: Colors.grey.shade600),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    metaText,
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onView,
+                icon: Icon(Icons.visibility),
+                label: Text('Voir'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primaryColor,
+                  side: BorderSide(color: primaryColor.withOpacity(0.6)),
+                ),
+              ),
+              if (onArchive != null)
+                OutlinedButton.icon(
+                  onPressed: onArchive,
+                  icon: Icon(Icons.archive_outlined),
+                  label: Text('Archiver'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepOrange,
+                    side: BorderSide(color: Colors.deepOrangeAccent),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPrescriptionHistory() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final List<Map<String, dynamic>> history = _prescriptionHistory;
+        final double dialogHeight =
+            MediaQuery.of(dialogContext).size.height * 0.6;
+
+        return AlertDialog(
+          title: Text(
+            'Historique des ordonnances',
+            style: TextStyle(
+              color: primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: history.isEmpty
+              ? Text('Aucune ordonnance archivée pour le moment.')
+              : SizedBox(
+                  width: double.maxFinite,
+                  height: dialogHeight,
+                  child: ListView.separated(
+                    itemCount: history.length,
+                    separatorBuilder: (_, __) => SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final prescription = history[index];
+                      return _buildPrescriptionHistoryTile(prescription);
+                    },
+                  ),
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                'Fermer',
+                style: TextStyle(color: primaryColor),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPrescriptionHistoryTile(
+      Map<String, dynamic> prescription) {
+    final String description =
+        (prescription['description'] ?? 'Ordonnance') as String;
+    final int? durationDays =
+        (prescription['durationDays'] is num)
+            ? (prescription['durationDays'] as num).toInt()
+            : null;
+    final DateTime? startDate = _asDateTime(prescription['startDate']);
+    final DateTime? expiresAt = _asDateTime(prescription['expiresAt']);
+    final DateTime? archivedAt = _asDateTime(prescription['archivedAt']);
+    final String uploadedBy =
+        (prescription['uploadedBy'] ?? '') as String;
+    final String? documentUrl = prescription['fileUrl'] as String?;
+    final String documentName =
+        (prescription['fileName'] ?? 'Ordonnance') as String;
+
+    return Container(
+      padding: EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: secondaryColor.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: secondaryColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            description,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Début: ${_formatDate(startDate)}',
+            style: TextStyle(color: Colors.black87),
+          ),
+          Text(
+            'Fin: ${_formatDate(expiresAt)}',
+            style: TextStyle(color: Colors.black87),
+          ),
+          Text(
+            'Durée: ${_formatDurationText(durationDays)}',
+            style: TextStyle(color: Colors.black87),
+          ),
+          SizedBox(height: 6),
+          Text(
+            archivedAt != null
+                ? 'Archivée le ${_formatDate(archivedAt)}'
+                : 'Expirée le ${_formatDate(expiresAt)}',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          if (uploadedBy.isNotEmpty) ...[
+            SizedBox(height: 6),
+            Text(
+              'Ajoutée par $uploadedBy',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: (documentUrl != null && documentUrl.isNotEmpty)
+                  ? () =>
+                      _viewDocument(documentUrl, documentName)
+                  : null,
+              icon: Icon(Icons.visibility_outlined),
+              label: Text('Voir le document'),
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatBirthdate(String? birthdateString) {
@@ -1515,6 +2575,19 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                       'Description des allergies');
                                 },
                               ),
+                            _buildInfoRow(
+                              'Ordonnances',
+                              _activePrescriptions.isEmpty
+                                  ? 'Aucune ordonnance en cours'
+                                  : (_activePrescriptions.length == 1
+                                      ? '1 ordonnance en cours'
+                                      : '${_activePrescriptions.length} ordonnances en cours'),
+                              icon: Icons.receipt_long,
+                              valueColor: _activePrescriptions.isEmpty
+                                  ? Colors.red
+                                  : Colors.green,
+                              onEdit: _openPrescriptionManager,
+                            ),
                           ],
                         ),
 

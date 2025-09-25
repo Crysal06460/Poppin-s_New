@@ -1028,8 +1028,10 @@ class _CleaningScheduleScreenState extends State<CleaningScheduleScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: primaryColor,
         unselectedItemColor: Colors.grey,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
         type: BottomNavigationBarType.fixed,
         currentIndex: 0, // Dashboard est sélectionné
         items: [
@@ -1050,7 +1052,7 @@ class _CleaningScheduleScreenState extends State<CleaningScheduleScreen> {
               width: 60,
               height: 60,
             ),
-            label: "Home",
+            label: "Accueil",
           ),
 
           // Troisième item - Ajouter enfant
@@ -1060,7 +1062,7 @@ class _CleaningScheduleScreenState extends State<CleaningScheduleScreen> {
               width: 60,
               height: 60,
             ),
-            label: "Echanges",
+            label: "Messages",
           ),
         ],
       ),
