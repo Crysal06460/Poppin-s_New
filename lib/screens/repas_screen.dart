@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -197,6 +198,7 @@ class _RepasScreenState extends State<RepasScreen> {
       final String structureId = contextInfo.structureId;
       final String currentUserEmail = contextInfo.currentUserEmail;
       final String structureType = contextInfo.normalizedStructureType;
+      final bool allowAllChildren = contextInfo.showAllChildren;
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -215,15 +217,20 @@ class _RepasScreenState extends State<RepasScreen> {
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Repas: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Repas: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Repas: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
         // ➕ Ajouter les enfants délégués aujourd'hui pour ce membre
         try {
           final memSnap = await FirebaseFirestore.instance
@@ -947,6 +954,9 @@ class _RepasScreenState extends State<RepasScreen> {
                                       borderRadius: BorderRadius.circular(12)),
                                 ),
                                 keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
                               ),
                             ],
 
@@ -1433,6 +1443,10 @@ class _RepasScreenState extends State<RepasScreen> {
                                               ),
                                               keyboardType:
                                                   TextInputType.number,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                              ],
                                               style: TextStyle(
                                                 fontSize:
                                                     isTabletDevice ? 18 : 16,

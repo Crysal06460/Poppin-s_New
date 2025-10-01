@@ -63,6 +63,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
       final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
@@ -90,15 +91,20 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       String? myMemberId;
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Transmissions: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Transmissions: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Transmissions: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
         // ➕ Ajouter enfants délégués aujourd'hui
         try {
           final memSnap = await FirebaseFirestore.instance

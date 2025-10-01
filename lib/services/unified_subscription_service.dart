@@ -12,7 +12,6 @@ enum SubscriptionPlan {
   assistantMaternel,
   mamUpTo3Members,
   mam4PlusMembers,
-  parentEmployeur,
 }
 
 enum SubscriptionStatus {
@@ -313,7 +312,6 @@ class UnifiedSubscriptionService {
   /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois
   String _getPriceFromProductId(String productId) {
     if (productId.contains('assistante_maternelle')) return '6,99 € / mois';
-    if (productId.contains('parent_employeur')) return '4,99 € / mois';
     if (productId.contains('mam_2')) return '19,99 € / mois';
     if (productId.contains('mam_3')) return '24,99 € / mois';
     if (productId.contains('mam_4')) return '24,99 € / mois';
@@ -459,9 +457,8 @@ class UnifiedSubscriptionService {
       case SubscriptionPlan.mamUpTo3Members:
       case SubscriptionPlan.mam4PlusMembers:
         return 'mam';
-      case SubscriptionPlan.parentEmployeur:
-        return 'parent_employeur';
     }
+    throw StateError('Unsupported subscription plan: $plan');
   }
 
   /// Convertit le plan en nombre de membres
@@ -473,9 +470,8 @@ class UnifiedSubscriptionService {
         return 3;
       case SubscriptionPlan.mam4PlusMembers:
         return 4;
-      case SubscriptionPlan.parentEmployeur:
-        return 1;
     }
+    throw StateError('Unsupported subscription plan: $plan');
   }
 
   /// S'assure que le service est initialisé

@@ -15,12 +15,14 @@ class ChildProfileDetailsScreen extends StatefulWidget {
   final String childId;
   final String structureId; // Ajout du paramètre structureId
   final bool parentMode;
+  final bool allowEditing;
 
   const ChildProfileDetailsScreen({
     Key? key,
     required this.childId,
     required this.structureId, // Le rendre obligatoire
     this.parentMode = false,
+    this.allowEditing = true,
   }) : super(key: key);
 
   @override
@@ -61,15 +63,48 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
   static const Color secondaryColor = Color(0xFFDFE9F2); // Bleu clair #DFE9F2
 
+  bool _canEditChild = true;
+
   bool get _isParentMode => widget.parentMode;
+  bool get _isReadOnly => _isParentMode || !_canEditChild;
 
   @override
   void initState() {
     super.initState();
+    _canEditChild = widget.allowEditing && !widget.parentMode;
     _loadChildProfile();
   }
 
+  bool _ensureEditingAllowed({String? customMessage}) {
+    if (!_isReadOnly) {
+      return true;
+    }
+
+    if (!mounted) {
+      return false;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          customMessage ??
+              "Vous n'avez pas les droits pour modifier ce profil.",
+        ),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return false;
+  }
+
   Future<void> _updateChildPhoto() async {
+    if (!_ensureEditingAllowed(
+      customMessage: "Vous n'avez pas les droits pour modifier la photo.",
+    )) {
+      return;
+    }
+
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -298,6 +333,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
   // Méthode pour sauvegarder les modifications
   Future<void> _saveChanges(String section, String field, dynamic value) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
@@ -399,6 +438,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
   // Edition du mémo mensuel
   Future<void> _editMonthlyTableFields() async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     final TextEditingController salaryCtl = TextEditingController(
         text: (financialInfo['monthlySalary']?.toString() ?? ''));
 
@@ -514,6 +557,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
 // Toggle "Utiliser le mémo mensuel" avec ouverture auto de la configuration
   Future<void> _editUseMonthlyTableToggle() async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     final bool current = (financialInfo['useMonthlyTable'] == true);
     bool switchValue = current;
 
@@ -589,6 +636,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   // Méthode pour gérer l'édition des données textuelles
   Future<void> _editTextData(
       String section, String field, String currentValue, String label) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     TextEditingController controller =
         TextEditingController(text: currentValue);
 
@@ -649,6 +700,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   // Méthode pour gérer l'édition des booléens
   Future<void> _editBooleanData(
       String section, String field, bool currentValue, String label) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     // Utiliser une variable pour suivre l'état actuel du switch
     bool switchValue = currentValue;
 
@@ -710,6 +765,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
   // Méthode pour uploader un document
   Future<void> _uploadDocument(String section, String field) async {
+    if (!_ensureEditingAllowed(
+      customMessage: "Vous n'avez pas les droits pour ajouter un document.",
+    )) {
+      return;
+    }
+
     try {
       // Afficher un dialogue avec des options
       final action = await showDialog<String>(
@@ -983,6 +1044,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     List<Map<String, dynamic>> history, {
     String? successMessage,
   }) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     final List<Map<String, dynamic>> activeToSave =
         active.map((item) => Map<String, dynamic>.from(item)).toList();
     final List<Map<String, dynamic>> historyToSave =
@@ -1046,6 +1111,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   }
 
   Future<void> _archivePrescription(String id) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     final List<Map<String, dynamic>> activeCopy = _activePrescriptions
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -1376,6 +1445,10 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   }
 
   Future<void> _addPrescription({VoidCallback? onStateChanged}) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
     final _PrescriptionFormResult? details =
         await _promptPrescriptionDetails();
     if (details == null) return;
@@ -1504,7 +1577,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                           border: Border.all(color: secondaryColor),
                         ),
                         child: Text(
-                          _isParentMode
+                          _isReadOnly
                               ? 'Aucune ordonnance en cours.'
                               : 'Aucune ordonnance en cours. Utilisez le bouton ci-dessous pour en ajouter une.',
                           style: TextStyle(
@@ -1532,7 +1605,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                               prescription,
                               documentUrl: documentUrl,
                               documentName: documentName,
-                              onArchive: _isParentMode
+                              onArchive: _isReadOnly
                                   ? null
                                   : () async {
                                       await _archivePrescription(
@@ -1545,7 +1618,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                         ),
                       ),
                     SizedBox(height: 20),
-                    if (!_isParentMode)
+                    if (!_isReadOnly)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -2244,6 +2317,33 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (_isReadOnly)
+                          Container(
+                            width: double.infinity,
+                            margin: EdgeInsets.only(bottom: 16),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.lock_outline,
+                                    color: Colors.orange.shade700),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    "Lecture seule : ce profil est lié à une autre assistante.",
+                                    style: TextStyle(
+                                      color: Colors.orange.shade800,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         // En-tête avec photo et nom
                         Container(
                           width: double.infinity,
@@ -2347,7 +2447,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                               icon: Icon(Icons.camera_alt,
                                                   color: Colors.white,
                                                   size: 16),
-                                              onPressed: _updateChildPhoto,
+                                              onPressed: _isReadOnly
+                                                  ? () => _ensureEditingAllowed(
+                                                        customMessage:
+                                                            "Vous n'avez pas les droits pour modifier la photo.",
+                                                      )
+                                                  : () => _updateChildPhoto(),
                                               constraints: BoxConstraints(),
                                               padding: EdgeInsets.all(6),
                                             ),
@@ -2382,14 +2487,16 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                           child: IconButton(
                                             icon: Icon(Icons.edit,
                                                 color: primaryColor, size: 18),
-                                            onPressed: () async {
-                                              // Éditer le nom
-                                              await _editTextData(
-                                                  'profile',
-                                                  'firstName',
-                                                  childData['firstName'],
-                                                  'Prénom');
-                                            },
+                                            onPressed: _isReadOnly
+                                                ? () => _ensureEditingAllowed()
+                                                : () async {
+                                                    // Éditer le nom
+                                                    await _editTextData(
+                                                        'profile',
+                                                        'firstName',
+                                                        childData['firstName'],
+                                                        'Prénom');
+                                                  },
                                             constraints: BoxConstraints(),
                                             padding: EdgeInsets.all(8),
                                             visualDensity:
@@ -2418,10 +2525,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                           child: IconButton(
                                             icon: Icon(Icons.edit,
                                                 color: primaryColor, size: 18),
-                                            onPressed: () async {
-                                              // Implémenter l'édition de la date de naissance
-                                              // Nécessite un DatePicker
-                                            },
+                                            onPressed: _isReadOnly
+                                                ? () => _ensureEditingAllowed()
+                                                : () async {
+                                                    // Implémenter l'édition de la date de naissance
+                                                    // Nécessite un DatePicker
+                                                  },
                                             constraints: BoxConstraints(),
                                             padding: EdgeInsets.all(8),
                                             visualDensity:

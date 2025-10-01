@@ -91,6 +91,8 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
+  bool _hasPrefilledParentOne = false;
+
   @override
   void initState() {
     super.initState();
@@ -143,11 +145,20 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
           structureName = data['structureName'] ?? 'Structure inconnue';
           isLoadingStructure = false;
         });
+
+        await _prefillParentOne(
+          structureId: structureId,
+          structureData: data,
+        );
       } else {
         setState(() {
           structureName = 'Structure inconnue';
           isLoadingStructure = false;
         });
+        await _prefillParentOne(
+          structureId: structureId,
+          structureData: const {},
+        );
       }
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
@@ -155,6 +166,127 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
         structureName = 'Erreur de chargement';
         isLoadingStructure = false;
       });
+      await _prefillParentOne(
+        structureId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        structureData: const {},
+      );
+    }
+  }
+
+  Future<void> _prefillParentOne({
+    required String structureId,
+    required Map<String, dynamic> structureData,
+  }) async {
+    if (_hasPrefilledParentOne || widget.childId.isEmpty) {
+      return;
+    }
+
+    try {
+      String targetStructureId = structureId;
+      if (targetStructureId.isEmpty) return;
+
+      final User? user = FirebaseAuth.instance.currentUser;
+      final String currentUserEmail =
+          user?.email?.toLowerCase().trim() ?? '';
+
+      // S'assurer d'utiliser l'ID de structure approprié pour les membres MAM
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .get();
+
+        if (userDoc.exists) {
+          final data = userDoc.data() ?? {};
+          if (data['role'] == 'mamMember' &&
+              data['structureId'] != null &&
+              (data['structureId'] as String).isNotEmpty) {
+            targetStructureId = data['structureId'];
+          }
+        }
+      }
+
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(targetStructureId)
+          .collection('children')
+          .doc(widget.childId)
+          .get();
+
+      Map<String, dynamic> parentOneData = const {};
+      bool shouldUseStructureFallback = false;
+
+      if (childDoc.exists) {
+        final data = childDoc.data() as Map<String, dynamic>? ?? {};
+        final dynamic parentCandidate = data['parent1'];
+        if (parentCandidate is Map<String, dynamic>) {
+          parentOneData = parentCandidate;
+        }
+
+        final dynamic createdByParentEmployer =
+            data['createdByParentEmployer'];
+        if (createdByParentEmployer == true && parentOneData.isEmpty) {
+          shouldUseStructureFallback = true;
+        }
+      } else {
+        shouldUseStructureFallback = true;
+      }
+
+      final String structureType =
+          (structureData['structureType'] ?? '').toString().toLowerCase();
+      final bool isParentEmployeur = structureType == 'parent_employeur' ||
+          structureType == 'parentemployeur';
+
+      if (parentOneData.isEmpty && isParentEmployeur) {
+        shouldUseStructureFallback = true;
+      }
+
+      if (shouldUseStructureFallback) {
+        parentOneData = {
+          'firstName': structureData['ownerFirstName'] ??
+              structureData['firstName'] ??
+              '',
+          'lastName': structureData['ownerLastName'] ??
+              structureData['lastName'] ??
+              '',
+          'email': structureData['email'] ?? '',
+          'phone': structureData['phone'] ?? '',
+        };
+      }
+
+      if (parentOneData.isEmpty) return;
+
+      if (!mounted) return;
+
+      void updateController(TextEditingController controller, String value) {
+        if (value.isEmpty) return;
+        if (controller.text.trim().isEmpty) {
+          controller.text = value;
+        }
+      }
+
+      updateController(
+        firstNameController,
+        (parentOneData['firstName'] ?? '').toString().trim(),
+      );
+      updateController(
+        lastNameController,
+        (parentOneData['lastName'] ?? '').toString().trim(),
+      );
+      updateController(
+        emailController,
+        (parentOneData['email'] ?? '').toString().trim(),
+      );
+      updateController(
+        phoneController,
+        (parentOneData['phone'] ?? '')
+            .toString()
+            .replaceAll(' ', ''),
+      );
+
+      _hasPrefilledParentOne = true;
+    } catch (e) {
+      print("⚠️ Impossible de préremplir Parent 1: $e");
     }
   }
 

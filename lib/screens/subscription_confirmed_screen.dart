@@ -44,16 +44,13 @@ class _SubscriptionConfirmedScreenState
 
     // Sinon, calculer le prix comme avant (fallback) - ✅ PRIX CORRIGÉS
     final String normalized = structureType.toLowerCase();
-    final bool isMam = normalized == 'mam';
+    final bool isMam =
+        normalized == 'mam' || normalized.contains('maison');
     if (isMam) {
       if (memberCount <= 3) {
         return '19,99 € / mois';
       }
       return '24,99 € / mois';
-    }
-
-    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
-      return '4,99 € / mois';
     }
 
     return '6,99 € / mois';
@@ -67,7 +64,8 @@ class _SubscriptionConfirmedScreenState
     final String structureId = widget.structureInfo['structureId'] ?? '';
     final int memberCount = widget.structureInfo['memberCount'] ?? 1;
     final String normalizedType = structureType.toLowerCase();
-    final bool isMam = normalizedType == 'mam';
+    final bool isMam =
+        normalizedType == 'mam' || normalizedType.contains('maison');
     print("🔍 DEBUG structureType reçu: '$structureType'");
     print("🔍 DEBUG widget.structureInfo: ${widget.structureInfo}");
     // Récupérer les dimensions de l'écran
@@ -85,8 +83,6 @@ class _SubscriptionConfirmedScreenState
       'MAM': 'Maison d\'Assistant(e)s Maternel(le)s',
       'MaisonAssistantesMaternelles': 'Maison d\'Assistant(e)s Maternel(le)s',
       'mam': 'Maison d\'Assistant(e)s Maternel(le)s',
-      'parent_employeur': 'Parent employeur',
-      'ParentEmployeur': 'Parent employeur',
     };
 
     // Version courte pour les détails (section Type)
@@ -96,8 +92,6 @@ class _SubscriptionConfirmedScreenState
       'MAM': 'MAM', // ✅ VERSION COURTE
       'MaisonAssistantesMaternelles': 'MAM',
       'mam': 'MAM',
-      'parent_employeur': 'Parent employeur',
-      'ParentEmployeur': 'Parent employeur',
     };
 
     // MODIFICATION : Utiliser la nouvelle méthode pour obtenir le prix

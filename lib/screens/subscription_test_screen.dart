@@ -170,14 +170,6 @@ class _SubscriptionTestScreenState extends State<SubscriptionTestScreen> {
               ),
               SizedBox(height: 12),
               _buildTestButton(
-                '👪 Parent employeur',
-                '4,99€/mois',
-                () => _testPurchase(SubscriptionPlan.parentEmployeur,
-                    'Parent employeur', '4,99€'),
-                Colors.teal,
-              ),
-              SizedBox(height: 12),
-              _buildTestButton(
                 '👥 MAM 2 à 3 membres',
                 '19,99€/mois',
                 () => _testPurchase(SubscriptionPlan.mamUpTo3Members,

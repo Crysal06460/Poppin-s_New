@@ -24,10 +24,9 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
 
     String _formatPrice(String type, int count) {
       final normalized = type.toLowerCase();
-      if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
-        return '4,99 € / mois';
-      }
-      if (normalized == 'mam') {
+      final bool isMam = normalized == 'mam' || normalized.contains('maison');
+
+      if (isMam) {
         return count <= 3 ? '19,99 € / mois' : '24,99 € / mois';
       }
       return '6,99 € / mois';
@@ -35,9 +34,6 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
 
     String _formatMembersLabel(int count) {
       final normalized = structureType.toLowerCase();
-      if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
-        return 'Parent employeur';
-      }
       if (normalized == 'assistante_maternelle') {
         return 'Assistant(e) Maternel(le)';
       }

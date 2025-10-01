@@ -40,13 +40,11 @@ class AndroidSubscriptionService {
     'abonnement_mam2',
     'abonnement_mam3',
     'abonnement_mam4',
-    'parent_employeur_google',
     // Offres d'essai 7 jours
     'essaigratuit-assmat',
     'essaigratuit-mam2',
     'essaigratuit-mam3',
     'essaigratuit-mam4',
-    'essai-gratuit-parent-employeur',
   };
 
   // Mapping des IDs pour compatibilité
@@ -55,7 +53,6 @@ class AndroidSubscriptionService {
     'abo-mam-2': 'abonnement_mam2',
     'abo-mam-3': 'abonnement_mam3',
     'abo-mam-4': 'abonnement_mam4',
-    'parent-employeur-google': 'parent_employeur_google',
   };
 
   /// Initialise le service Android
@@ -228,15 +225,6 @@ class AndroidSubscriptionService {
         'productKey': 'mam-4-legacy',
         'isTrialPurchase': false,
       };
-    } else if (productId == 'parent_employeur_google') {
-      return {
-        'structureType': 'parent_employeur',
-        'memberCount': 1,
-        'priceAmount': 4.99,
-        'priceDisplay': '4,99 € / mois',
-        'productKey': 'parent-employeur',
-        'isTrialPurchase': false,
-      };
     }
     // Offres d'essai
     else if (productId == 'essaigratuit-assmat') {
@@ -273,15 +261,6 @@ class AndroidSubscriptionService {
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
         'productKey': 'trial-mam-4-legacy',
-        'isTrialPurchase': true,
-      };
-    } else if (productId == 'essai-gratuit-parent-employeur') {
-      return {
-        'structureType': 'parent_employeur',
-        'memberCount': 1,
-        'priceAmount': 0.0,
-        'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-parent-employeur',
         'isTrialPurchase': true,
       };
     }
@@ -423,9 +402,6 @@ class AndroidSubscriptionService {
         targetTrialId = 'essaigratuit-mam3';
         targetPaidId = 'abonnement_mam3';
       }
-    } else if (normalizedType == 'parent_employeur') {
-      targetTrialId = 'essai-gratuit-parent-employeur';
-      targetPaidId = 'parent_employeur_google';
     }
 
     print(
@@ -533,9 +509,6 @@ class AndroidSubscriptionService {
       return await purchaseSubscriptionByType('MAM', 4);
     } else if (productId == 'abo-mam-4' || productId == 'abonnement_mam4') {
       return await purchaseSubscriptionByType('MAM', 4);
-    } else if (productId == 'parent-employeur-google' ||
-        productId == 'parent_employeur_google') {
-      return await purchaseSubscriptionByType('parent_employeur', 0);
     } else {
       return await purchaseSubscriptionByType('assistante_maternelle', 1);
     }
@@ -547,11 +520,6 @@ class AndroidSubscriptionService {
 
     if (normalizedType == 'assistante_maternelle') {
       return 'abonnement_assmat';
-    }
-
-    if (normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur') {
-      return 'parent_employeur_google';
     }
 
     if (normalizedType == 'mam') {

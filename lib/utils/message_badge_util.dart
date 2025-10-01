@@ -86,24 +86,45 @@ class MessageBadgeUtil {
             print(
                 "👥 Vérification des messages pour le membre MAM: $currentUserEmail");
 
-            // Récupérer les enfants assignés à ce membre
-            final childrenSnapshot = await FirebaseFirestore.instance
+            bool allowAllChildren = true;
+            try {
+              final structureDoc = await FirebaseFirestore.instance
+                  .collection('structures')
+                  .doc(structureId)
+                  .get();
+              final data = structureDoc.data();
+              if (data != null && data['showAllChildrenOnHome'] is bool) {
+                allowAllChildren = data['showAllChildrenOnHome'] as bool;
+              }
+            } catch (e) {
+              print("⚠️ Impossible de récupérer la préférence showAllChildren: $e");
+            }
+
+            final childrenCollection = FirebaseFirestore.instance
                 .collection('structures')
                 .doc(structureId)
-                .collection('children')
-                .where('assignedMemberEmail', isEqualTo: currentUserEmail)
-                .get();
+                .collection('children');
+
+            final QuerySnapshot childrenSnapshot = allowAllChildren
+                ? await childrenCollection.get()
+                : await childrenCollection
+                    .where('assignedMemberEmail',
+                        isEqualTo: currentUserEmail)
+                    .get();
 
             if (childrenSnapshot.docs.isEmpty) {
-              print("🚫 Aucun enfant assigné au membre MAM");
+              print(allowAllChildren
+                  ? "🚫 Aucun enfant trouvé dans la structure"
+                  : "🚫 Aucun enfant assigné au membre MAM");
               await prefs.setBool(_unreadMessagesKey, false);
               return false;
             }
 
             final childIds =
                 childrenSnapshot.docs.map((doc) => doc.id).toList();
-            print(
-                "👶 Enfants assignés à $currentUserEmail: ${childIds.length}");
+            print(allowAllChildren
+                ? "👶 Enfants accessibles pour $currentUserEmail: ${childIds.length} (tous les enfants)"
+                : "👶 Enfants assignés à $currentUserEmail: ${childIds.length}");
 
             // Vérifier s'il y a des messages non lus ENVOYÉS PAR LES PARENTS
             final messagesQuery = await FirebaseFirestore.instance
@@ -118,12 +139,12 @@ class MessageBadgeUtil {
 
             if (hasUnreadMessages) {
               print(
-                  "📬 Messages non lus trouvés pour des enfants assignés à $currentUserEmail");
+                  "📬 Messages non lus trouvés pour ${allowAllChildren ? 'les enfants de la structure' : 'les enfants assignés'} à $currentUserEmail");
               await prefs.setBool(_unreadMessagesKey, true);
               return true;
             } else {
               print(
-                  "📭 Aucun message non lu pour les enfants assignés à $currentUserEmail");
+                  "📭 Aucun message non lu pour ${allowAllChildren ? 'les enfants de la structure' : 'les enfants assignés'} à $currentUserEmail");
               await prefs.setBool(_unreadMessagesKey, false);
               return false;
             }
@@ -231,32 +252,45 @@ class MessageBadgeUtil {
       final childData = childDoc.data()!;
 
       if (isMamMember) {
-        // Vérifier si l'enfant est assigné à un membre spécifique
+        bool allowAllChildren = true;
+        try {
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .get();
+          final data = structureDoc.data();
+          if (data != null && data['showAllChildrenOnHome'] is bool) {
+            allowAllChildren = data['showAllChildrenOnHome'] as bool;
+          }
+        } catch (e) {
+          print("⚠️ Impossible de récupérer showAllChildren pour forceShowBadge: $e");
+        }
+
         final String? assignedMemberEmail =
             childData['assignedMemberEmail']?.toString().toLowerCase();
+        final bool isAssignedToUser = assignedMemberEmail != null &&
+            assignedMemberEmail.isNotEmpty &&
+            assignedMemberEmail == currentUserEmail;
 
-        if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
-          print("👶 Enfant $childId assigné à $assignedMemberEmail");
+        if (allowAllChildren || isAssignedToUser) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(_unreadMessagesKey, true);
 
-          // Ne mettre à jour que si l'utilisateur actuel est celui assigné
-          if (assignedMemberEmail == currentUserEmail) {
-            // Mettre à jour les préférences locales
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool(_unreadMessagesKey, true);
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserEmail)
+              .update({'unreadMessages': FieldValue.increment(1)});
 
-            // Mettre à jour le compteur dans Firestore
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUserEmail)
-                .update({'unreadMessages': FieldValue.increment(1)});
-
-            print("✅ Badge forcé pour le membre assigné: $currentUserEmail");
-          } else {
+          print(allowAllChildren
+              ? "✅ Badge forcé (accès tous les enfants) pour $currentUserEmail"
+              : "✅ Badge forcé pour le membre assigné: $currentUserEmail");
+        } else {
+          if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
             print(
                 "⚠️ Badge non forcé: message destiné à $assignedMemberEmail, utilisateur actuel: $currentUserEmail");
+          } else {
+            print("⚠️ L'enfant $childId n'a pas de membre assigné");
           }
-        } else {
-          print("⚠️ L'enfant $childId n'a pas de membre assigné");
         }
       } else {
         // Pour une assistante maternelle individuelle

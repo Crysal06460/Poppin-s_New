@@ -109,6 +109,7 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
       final String currentUserEmail = contextInfo.currentUserEmail;
       final String structureType = contextInfo.normalizedStructureType;
       final String userRole = (contextInfo.userRole ?? '').toLowerCase();
+      final bool allowAllChildren = contextInfo.showAllChildren;
 
       List<String> allowedChildIds = [];
       if ((userRole == 'parent' || userRole == 'assistantfromparent') &&
@@ -142,13 +143,18 @@ class _PhotoManagementScreenState extends State<PhotoManagementScreen> {
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          return child['assignedMemberEmail'] == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 PhotoManagement: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            return child['assignedMemberEmail'] == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 PhotoManagement: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 PhotoManagement: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
       } else if (userRole == 'parent' || userRole == 'assistantfromparent') {
         filteredChildren = allChildren
             .where((child) => allowedChildIds.contains(child['id']))

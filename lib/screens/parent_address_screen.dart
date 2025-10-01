@@ -32,6 +32,7 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
   List<String> citySuggestions = [];
   bool _isLoading = false;
   int _selectedIndex = 2; // Pour la barre de navigation du bas
+  bool _hasPrefilledParentAddress = false;
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -91,11 +92,20 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
           structureName = data['structureName'] ?? 'Structure inconnue';
           isLoadingStructure = false;
         });
+
+        await _prefillParentAddress(
+          structureId: structureId,
+          structureData: data,
+        );
       } else {
         setState(() {
           structureName = 'Structure inconnue';
           isLoadingStructure = false;
         });
+        await _prefillParentAddress(
+          structureId: structureId,
+          structureData: const {},
+        );
       }
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
@@ -103,6 +113,117 @@ class _ParentAddressScreenState extends State<ParentAddressScreen> {
         structureName = 'Erreur de chargement';
         isLoadingStructure = false;
       });
+      await _prefillParentAddress(
+        structureId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        structureData: const {},
+      );
+    }
+  }
+
+  Future<void> _prefillParentAddress({
+    required String structureId,
+    required Map<String, dynamic> structureData,
+  }) async {
+    if (_hasPrefilledParentAddress || widget.childId.isEmpty) {
+      return;
+    }
+
+    try {
+      String targetStructureId = structureId;
+      if (targetStructureId.isEmpty) return;
+
+      final User? user = FirebaseAuth.instance.currentUser;
+      final String currentUserEmail =
+          user?.email?.toLowerCase().trim() ?? '';
+
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUserEmail)
+            .get();
+
+        if (userDoc.exists) {
+          final data = userDoc.data() ?? {};
+          if (data['role'] == 'mamMember' &&
+              data['structureId'] != null &&
+              (data['structureId'] as String).isNotEmpty) {
+            targetStructureId = data['structureId'];
+          }
+        }
+      }
+
+      final childDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(targetStructureId)
+          .collection('children')
+          .doc(widget.childId)
+          .get();
+
+      Map<String, dynamic> parentAddressData = const {};
+      bool shouldUseStructureFallback = false;
+
+      if (childDoc.exists) {
+        final data = childDoc.data() as Map<String, dynamic>? ?? {};
+        final dynamic addressCandidate = data['parentAddress'];
+        if (addressCandidate is Map<String, dynamic>) {
+          parentAddressData = addressCandidate;
+        }
+
+        final dynamic createdByParentEmployer =
+            data['createdByParentEmployer'];
+        if (createdByParentEmployer == true && parentAddressData.isEmpty) {
+          shouldUseStructureFallback = true;
+        }
+      } else {
+        shouldUseStructureFallback = true;
+      }
+
+      final String structureType =
+          (structureData['structureType'] ?? '').toString().toLowerCase();
+      final bool isParentEmployeur = structureType == 'parent_employeur' ||
+          structureType == 'parentemployeur';
+
+      if (parentAddressData.isEmpty && isParentEmployeur) {
+        shouldUseStructureFallback = true;
+      }
+
+      if (shouldUseStructureFallback) {
+        parentAddressData = {
+          'address': structureData['address'] ?? '',
+          'postalCode': structureData['postalCode'] ?? '',
+          'city': structureData['city'] ?? '',
+        };
+      }
+
+      if (parentAddressData.isEmpty) return;
+
+      if (!mounted) return;
+
+      void updateController(TextEditingController controller, String value) {
+        if (value.isEmpty) return;
+        if (controller.text.trim().isEmpty) {
+          controller.text = value;
+        }
+      }
+
+      updateController(
+        addressController,
+        (parentAddressData['address'] ?? '').toString().trim(),
+      );
+      updateController(
+        postalCodeController,
+        (parentAddressData['postalCode'] ?? '')
+            .toString()
+            .replaceAll(' ', ''),
+      );
+      updateController(
+        cityController,
+        (parentAddressData['city'] ?? '').toString().trim(),
+      );
+
+      _hasPrefilledParentAddress = true;
+    } catch (e) {
+      print("⚠️ Impossible de préremplir l'adresse du parent : $e");
     }
   }
 

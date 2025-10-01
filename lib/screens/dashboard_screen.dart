@@ -58,6 +58,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool needAssmatFridgeTemperatureCheck = false;
   bool needAssmatFreezerTemperatureCheck = false;
   int _pendingDelegationsCount = 0;
+  String _currentUserEmail = '';
+  String? _structureOwnerEmail;
+  bool _currentMemberIsAdmin = false;
+  Set<String> _delegatedChildIds = {};
 
   // Couleurs dédiées aux tuiles de la grille (style 2025)
   final Color _tileBlue = const Color(0xFF3D9DF2);
@@ -1465,7 +1469,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bulletColor: _tileBlue,
         ),
         _sheetAction(
-          label: 'Affichage des enfants',
+          label: 'Gestion des enfants',
           onTap: _showChildDisplaySettings,
           bulletColor: _tileBlue,
         ),
@@ -1480,7 +1484,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           disabledMessage: lockedMessage,
         ),
         _sheetAction(
-          label: 'Affichage des enfants',
+          label: 'Gestion des enfants',
           onTap: () {},
           bulletColor: _tileBlue,
           enabled: false,
@@ -2148,14 +2152,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   onTap: () async {
                     Navigator.pop(context);
-                    // Obtenir l'ID de structure avant de naviguer
-                    String structId = await _getStructureId();
+
+                    final bool canEdit = _canCurrentUserEditChild(child);
+                    if (!canEdit) {
+                      final String childName =
+                          child['firstName']?.toString() ?? '';
+                      _showChildReadOnlyMessage(childName);
+                    }
+
+                    final String childId = (child['id'] ?? '').toString();
+                    if (childId.isEmpty) {
+                      return;
+                    }
+
+                    final String structId = await _getStructureId();
+                    if (!mounted || structId.isEmpty) {
+                      return;
+                    }
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => ChildProfileDetailsScreen(
-                          childId: child['id'],
+                          childId: childId,
                           structureId: structId,
+                          allowEditing: canEdit,
                         ),
                       ),
                     );
@@ -2459,9 +2480,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .doc(structureId)
           .get();
 
-      final String structureType = structureDoc.exists
-          ? (structureDoc.data()?['structureType'] ?? "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      final Map<String, dynamic> structureData =
+          structureDoc.data() ?? <String, dynamic>{};
+      final String structureType =
+          (structureData['structureType'] ?? "AssistanteMaternelle").toString();
+
+      String? structureOwnerEmail;
+      final ownerCandidates = [
+        structureData['ownerEmail'],
+        structureData['ownerMail'],
+        structureData['email'],
+      ];
+      for (final candidate in ownerCandidates) {
+        if (candidate is String && candidate.trim().isNotEmpty) {
+          structureOwnerEmail = candidate.toLowerCase().trim();
+          break;
+        }
+      }
+
+      bool memberIsAdmin = false;
+      Set<String> delegatedChildIds = {};
+      final bool isMamStructure = structureType.toUpperCase() == "MAM";
+      if (isMamStructure) {
+        final membersSnap = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('members')
+            .where('email', isEqualTo: currentUserEmail)
+            .limit(1)
+            .get();
+
+        if (membersSnap.docs.isNotEmpty) {
+          final Map<String, dynamic> memberData =
+              membersSnap.docs.first.data() as Map<String, dynamic>;
+          final String roleValue =
+              (memberData['role'] ?? '').toString().toLowerCase().trim();
+          if (roleValue == 'admin' || roleValue == 'owner') {
+            memberIsAdmin = true;
+          }
+
+          final String memberId = membersSnap.docs.first.id;
+          final DateTime now = DateTime.now();
+          final DateTime start = DateTime(now.year, now.month, now.day);
+          final DateTime end = start.add(const Duration(days: 1));
+          final delegationsSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('delegations')
+              .where('status', isEqualTo: 'accepted')
+              .where('amDelegateId', isEqualTo: memberId)
+              .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+              .where('date', isLessThan: Timestamp.fromDate(end))
+              .get();
+
+          delegatedChildIds = delegationsSnap.docs
+              .map((doc) => (doc.data()['childId'] ?? '').toString())
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        }
+      }
+
+      final dynamic showAllField = structureData['showAllChildrenOnHome'];
+      bool allowAllChildren = true;
+      if (showAllField is bool) {
+        allowAllChildren = showAllField;
+      } else {
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
+      }
 
       // Récupérer tous les enfants de la structure
       final childrenSnapshot = await FirebaseFirestore.instance
@@ -2562,9 +2650,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .doc(structureId)
           .get();
 
-      final String structureType = structureDoc.exists
-          ? (structureDoc.data()?['structureType'] ?? "AssistanteMaternelle")
-          : "AssistanteMaternelle";
+      final Map<String, dynamic> structureData =
+          structureDoc.data() ?? <String, dynamic>{};
+      final String structureType =
+          (structureData['structureType'] ?? "AssistanteMaternelle").toString();
+
+      final bool isMam = structureType.toUpperCase() == "MAM";
+
+      String? structureOwnerEmail;
+      final ownerCandidates = [
+        structureData['ownerEmail'],
+        structureData['ownerMail'],
+        structureData['email'],
+      ];
+      for (final candidate in ownerCandidates) {
+        if (candidate is String && candidate.trim().isNotEmpty) {
+          structureOwnerEmail = candidate.toLowerCase().trim();
+          break;
+        }
+      }
+
+      bool memberIsAdmin = false;
+      Set<String> delegatedChildIds = {};
+      if (isMam) {
+        final membersSnap = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('members')
+            .where('email', isEqualTo: currentUserEmail)
+            .limit(1)
+            .get();
+
+        if (membersSnap.docs.isNotEmpty) {
+          final Map<String, dynamic> memberData =
+              membersSnap.docs.first.data() as Map<String, dynamic>;
+          final String roleValue =
+              (memberData['role'] ?? '').toString().toLowerCase().trim();
+          if (roleValue == 'admin' || roleValue == 'owner') {
+            memberIsAdmin = true;
+          }
+
+          final String memberId = membersSnap.docs.first.id;
+          final DateTime now = DateTime.now();
+          final DateTime start = DateTime(now.year, now.month, now.day);
+          final DateTime end = start.add(const Duration(days: 1));
+          final delegationsSnap = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('delegations')
+              .where('status', isEqualTo: 'accepted')
+              .where('amDelegateId', isEqualTo: memberId)
+              .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+              .where('date', isLessThan: Timestamp.fromDate(end))
+              .get();
+
+          delegatedChildIds = delegationsSnap.docs
+              .map((doc) => (doc.data()['childId'] ?? '').toString())
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        }
+      }
+
+      final dynamic showAllField = structureData['showAllChildrenOnHome'];
+      bool allowAllChildren = true;
+      if (showAllField is bool) {
+        allowAllChildren = showAllField;
+      } else {
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
+      }
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -2589,14 +2745,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Appliquer le filtrage selon le type de structure
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == "MAM") {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          return child['assignedMemberEmail'] == currentUserEmail;
-        }).toList();
+      if (isMam) {
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Dashboard: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            return child['assignedMemberEmail'] == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Dashboard: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Dashboard: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -2604,11 +2765,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "👩‍👧‍👦 Dashboard: Assistante Maternelle - affichage de tous les enfants");
       }
 
+      if (mounted) {
+        setState(() {
+          _currentUserEmail = currentUserEmail;
+          _structureOwnerEmail = structureOwnerEmail;
+          _currentMemberIsAdmin = memberIsAdmin;
+          _delegatedChildIds = delegatedChildIds;
+          isMAMStructure = isMam;
+        });
+      }
+
       return filteredChildren;
     } catch (e) {
       print("Erreur lors du chargement des enfants: $e");
       return [];
     }
+  }
+
+  bool _canCurrentUserEditChild(Map<String, dynamic> child) {
+    if (!isMAMStructure) {
+      return true;
+    }
+
+    final String assignedEmail =
+        child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+    if (assignedEmail.isEmpty || assignedEmail == _currentUserEmail) {
+      return true;
+    }
+
+    if (_structureOwnerEmail != null &&
+        _structureOwnerEmail == _currentUserEmail) {
+      return true;
+    }
+
+    if (_currentMemberIsAdmin) {
+      return true;
+    }
+
+    final String childId = (child['id'] ?? '').toString();
+    if (childId.isNotEmpty && _delegatedChildIds.contains(childId)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void _showChildReadOnlyMessage(String childName) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          "Accès en lecture seule pour ${childName.isNotEmpty ? childName : 'cet enfant'}.",
+        ),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   Future<void> _loadData() async {
@@ -3500,7 +3713,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    bool showAllChildren = false;
+    bool showAllChildren = true;
+    bool hasExplicitPreference = false;
     try {
       final structureDoc = await FirebaseFirestore.instance
           .collection('structures')
@@ -3510,6 +3724,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final data = structureDoc.data();
       if (data != null && data['showAllChildrenOnHome'] is bool) {
         showAllChildren = data['showAllChildrenOnHome'] as bool;
+        hasExplicitPreference = true;
+      }
+
+      if (!hasExplicitPreference) {
+        await structureDoc.reference.set(
+          {'showAllChildrenOnHome': true},
+          SetOptions(merge: true),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -3606,7 +3828,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             SizedBox(height: 16),
                             Text(
-                              'Affichage des enfants',
+                            'Gestion des enfants',
                               style: TextStyle(
                                 fontSize: titleFontSize,
                                 fontWeight: FontWeight.bold,

@@ -19,6 +19,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/safe_query.dart';
 import '../utils/structure_context.dart';
+import '../utils/structure_context.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -88,6 +89,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
       final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       setState(() {
         structureName = structureContext.structureName;
@@ -114,15 +116,20 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Échanges: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Échanges: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Échanges: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -470,6 +477,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
 
       final String structureId = enfant['structureId'] ?? user.uid;
 
+      final structureContext = await StructureResolver().resolve();
+      final bool allowAllChildren = structureContext.showAllChildren;
+
       // Récupérer le document de l'enfant pour vérifier assignedMemberEmail
       final childDoc = await FirebaseFirestore.instance
           .collection('structures')
@@ -496,23 +506,28 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       final bool isMamMember = userData['role'] == 'mamMember';
 
       if (isMamMember) {
-        // Si c'est un membre MAM, vérifier si l'enfant lui est assigné
-        if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
-          if (assignedMemberEmail == currentUserEmail) {
-            // Mise à jour pour le membre assigné
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('has_unread_messages', true);
+        final bool isAssignedToUser = assignedMemberEmail != null &&
+            assignedMemberEmail.isNotEmpty &&
+            assignedMemberEmail == currentUserEmail;
 
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUserEmail)
-                .update({'unreadMessages': FieldValue.increment(1)});
+        if (allowAllChildren || isAssignedToUser) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('has_unread_messages', true);
 
-            print(
-                "✅ Badge forcé pour le membre MAM assigné: $currentUserEmail");
-          } else {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserEmail)
+              .update({'unreadMessages': FieldValue.increment(1)});
+
+          print(
+              "✅ Badge forcé pour le membre MAM ($currentUserEmail)${isAssignedToUser ? '' : ' - accès tous les enfants'}");
+        } else {
+          if (assignedMemberEmail != null && assignedMemberEmail.isNotEmpty) {
             print(
                 "⚠️ Badge non forcé: enfant assigné à $assignedMemberEmail, utilisateur actuel: $currentUserEmail");
+          } else {
+            print(
+                "⚠️ Badge non forcé: aucun membre assigné à cet enfant, utilisateur actuel: $currentUserEmail");
           }
         }
       } else {

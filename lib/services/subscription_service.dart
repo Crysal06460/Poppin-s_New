@@ -30,8 +30,6 @@ class SubscriptionService {
   static bool get isDebugMode => _forceDevMode;
   static bool get isInitialized => _isInitialized;
 
-  static const int _parentGracePeriodDays = 30;
-
   // 🔧 BUNDLE ID CONFIGURÉ : com.beylet.poppinsApp
   static const String _bundleId = 'com.beylet.poppinsApp';
 
@@ -47,7 +45,6 @@ class SubscriptionService {
         'mam_2_members': '$_bundleId.subscription.mam_2_members',
         'mam_3_members': '$_bundleId.subscription.mam_3_members',
         'mam_4_members': '$_bundleId.subscription.mam_4_members',
-        'parent_employeur': 'parent_employeur',
       };
     } else {
       // 🔧 IDs Android (alignés avec Google Play + services Android)
@@ -56,7 +53,6 @@ class SubscriptionService {
         'mam_2_members': 'abonnement_mam2',
         'mam_3_members': 'abonnement_mam3',
         'mam_4_members': 'abonnement_mam4',
-        'parent_employeur': 'parent_employeur_google',
       };
     }
   }
@@ -69,12 +65,6 @@ class SubscriptionService {
         return productIds['mam_2_members'] ?? productIds['mam_3_members']!;
       }
       return productIds['mam_3_members'] ?? productIds['mam_2_members']!;
-    }
-
-    if (normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur') {
-      return productIds['parent_employeur'] ??
-          productIds['assistante_maternelle']!;
     }
     return productIds['assistante_maternelle']!;
   }
@@ -225,22 +215,6 @@ class SubscriptionService {
             print(
                 '✅ Abonnement actif via structure (stripeStatus=$rawStripeStatus)');
             return true;
-          }
-
-          final String structureType =
-              (structureData['structureType'] ?? '').toString().toLowerCase();
-          if (structureType == 'parent_employeur' ||
-              structureType == 'parentemployeur') {
-            final DateTime? createdAt = _extractTimestamp(structureData['createdAt']);
-            if (createdAt != null) {
-              final int daysSinceCreation =
-                  DateTime.now().difference(createdAt).inDays;
-              if (daysSinceCreation <= _parentGracePeriodDays) {
-                print(
-                    '✅ Abonnement parent-employeur en période de grâce (${daysSinceCreation}j ≤ ${_parentGracePeriodDays}j)');
-                return true;
-              }
-            }
           }
 
           print(
@@ -690,12 +664,7 @@ class SubscriptionService {
     double priceAmount = 6.99;
     String priceDisplay = '6,99 € / mois';
 
-    if (productId.contains('parent')) {
-      structureType = 'parent_employeur';
-      memberCount = 1;
-      priceAmount = 4.99;
-      priceDisplay = '4,99 € / mois';
-    } else if (productId.contains('mam')) {
+    if (productId.contains('mam')) {
       structureType = 'MAM';
       if (productId.contains('2_members') || productId == 'abonement_mam2') {
         memberCount = 3;

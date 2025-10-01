@@ -251,9 +251,6 @@ class SubscriptionSummaryWidget extends StatelessWidget {
       return 'Assistant(e) Maternel(le)';
     } else if (structureType == 'MAM' || structureType.toLowerCase() == 'mam') {
       return 'MAM $memberCount membre${memberCount > 1 ? 's' : ''}';
-    } else if (structureType.toLowerCase() == 'parent_employeur' ||
-        structureType.toLowerCase() == 'parentemployeur') {
-      return 'Parent employeur';
     } else {
       return 'Type inconnu';
     }

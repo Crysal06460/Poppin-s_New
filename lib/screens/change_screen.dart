@@ -36,7 +36,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
   // Utiliser les couleurs officielles
   Color primaryColor = primaryBlue;
 
-  String _changeType = "Couche";
+  String _changeType = "";
   TextEditingController _observationsController = TextEditingController();
   bool _pipi = false;
   bool _selles = false;
@@ -139,6 +139,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
       final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
@@ -166,15 +167,20 @@ class _ChangeScreenState extends State<ChangeScreen> {
       String? myMemberId;
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Change: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Change: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Change: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
         // ➕ Ajouter enfants délégués aujourd'hui
         try {
           final memSnap = await FirebaseFirestore.instance
@@ -702,6 +708,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
   void _showAddChangePopup(String childId) {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     String? errorMessage;
+    _changeType = '';
     String localChangeType = _changeType;
     String localCareTime = _careTime;
 
@@ -911,8 +918,10 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                         width: 1,
                                       ),
                                     ),
-                                    child: DropdownButton<String>(
-                                      value: localChangeType,
+                                    child: DropdownButton<String?>(
+                                      value: localChangeType.isNotEmpty
+                                          ? localChangeType
+                                          : null,
                                       isExpanded: true,
                                       underline: Container(),
                                       iconSize: isTabletDevice ? 28 : 24,
@@ -920,26 +929,52 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                         Icons.arrow_drop_down,
                                         color: primaryColor,
                                       ),
-                                      items: changeTypes.map((String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
+                                      hint: Text(
+                                        'Sélectionner (optionnel)',
+                                        style: TextStyle(
+                                          fontSize:
+                                              isTabletDevice ? 16 : 14,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                      items: [
+                                        DropdownMenuItem<String?>(
+                                          value: '',
                                           child: Padding(
                                             padding: EdgeInsets.symmetric(
                                                 vertical: 8),
                                             child: Text(
-                                              value,
+                                              'Aucun',
                                               style: TextStyle(
                                                 fontSize:
                                                     isTabletDevice ? 16 : 14,
-                                                color: Colors.grey.shade800,
+                                                color: Colors.grey.shade600,
                                               ),
                                             ),
                                           ),
-                                        );
-                                      }).toList(),
+                                        ),
+                                        ...changeTypes.map((String value) {
+                                          return DropdownMenuItem<String?>(
+                                            value: value,
+                                            child: Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical: 8),
+                                              child: Text(
+                                                value,
+                                                style: TextStyle(
+                                                  fontSize: isTabletDevice
+                                                      ? 16
+                                                      : 14,
+                                                  color: Colors.grey.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                      ],
                                       onChanged: (newValue) {
                                         setState(() {
-                                          localChangeType = newValue!;
+                                          localChangeType = newValue ?? '';
                                         });
                                       },
                                       dropdownColor: Colors.white,
@@ -1293,6 +1328,13 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                       });
                                       return;
                                     }
+                                    if (!_pipi && !_selles && soins.isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Sélectionnez au moins Pipi/Selles ou un soin complémentaire';
+                                      });
+                                      return;
+                                    }
                                     setState(() => errorMessage = null);
 
                                     // Mise à jour des variables
@@ -1396,6 +1438,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
     bool localPipi = changeData['pipi'] == true;
     bool localSelles = changeData['selles'] == true;
     List<String> localSoins = List<String>.from(changeData['soins'] ?? []);
+    String? localErrorMessage;
     TextEditingController obsCtrl = TextEditingController(
         text: (changeData['observations'] ?? '').toString());
 
@@ -1552,36 +1595,61 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                   width: 1,
                                 ),
                               ),
-                              child: DropdownButton<String>(
-                                value: changeTypes.contains(localChangeType)
+                              child: DropdownButton<String?>(
+                                value: localChangeType.isNotEmpty
                                     ? localChangeType
-                                    : 'Couche',
+                                    : null,
                                 isExpanded: true,
                                 underline: Container(),
                                 icon: Icon(
                                   Icons.arrow_drop_down,
                                   color: primaryColor,
                                 ),
-                                items: changeTypes.map((String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
+                                hint: Text(
+                                  'Sélectionner (optionnel)',
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 16 : 14,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                                items: [
+                                  DropdownMenuItem<String?>(
+                                    value: '',
                                     child: Padding(
                                       padding:
                                           EdgeInsets.symmetric(vertical: 8),
                                       child: Text(
-                                        value,
+                                        'Aucun',
                                         style: TextStyle(
                                           fontSize:
                                               isTabletDevice ? 16 : 14,
-                                          color: Colors.grey.shade800,
+                                          color: Colors.grey.shade600,
                                         ),
                                       ),
                                     ),
-                                  );
-                                }).toList(),
+                                  ),
+                                  ...changeTypes.map((String value) {
+                                    return DropdownMenuItem<String?>(
+                                      value: value,
+                                      child: Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          value,
+                                          style: TextStyle(
+                                            fontSize: isTabletDevice
+                                                ? 16
+                                                : 14,
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
                                 onChanged: (newValue) {
                                   setState(() {
-                                    localChangeType = newValue!;
+                                    localChangeType = newValue ?? '';
                                   });
                                 },
                               ),
@@ -1695,7 +1763,29 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               ),
                             ),
 
-                            SizedBox(height: 24),
+                            SizedBox(height: 16),
+                            if (localErrorMessage != null)
+                              Container(
+                                width: double.infinity,
+                                margin: EdgeInsets.only(bottom: 8),
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Text(
+                                  localErrorMessage!,
+                                  style: TextStyle(
+                                    color: Colors.red.shade700,
+                                    fontSize: isTabletDevice ? 15 : 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+
+                            SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
@@ -1708,6 +1798,18 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 Expanded(
                                   child: ElevatedButton(
                                     onPressed: () async {
+                                      if (!localPipi &&
+                                          !localSelles &&
+                                          localSoins.isEmpty) {
+                                        setState(() {
+                                          localErrorMessage =
+                                              'Sélectionnez au moins Pipi/Selles ou un soin complémentaire';
+                                        });
+                                        return;
+                                      }
+                                      setState(() {
+                                        localErrorMessage = null;
+                                      });
                                       try {
                                         final docRef = FirebaseFirestore.instance
                                             .collection('structures')

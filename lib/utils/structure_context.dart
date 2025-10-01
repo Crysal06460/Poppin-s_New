@@ -9,6 +9,7 @@ class StructureContext {
     required this.normalizedStructureType,
     required this.structureData,
     required this.currentUserEmail,
+    required this.showAllChildren,
     this.userRole,
     Map<String, dynamic>? userData,
   }) : userData = Map.unmodifiable(userData ?? const {});
@@ -19,6 +20,7 @@ class StructureContext {
   final String normalizedStructureType;
   final Map<String, dynamic> structureData;
   final String currentUserEmail;
+  final bool showAllChildren;
   final String? userRole;
   final Map<String, dynamic> userData;
 
@@ -29,6 +31,9 @@ class StructureContext {
 
   bool get isAssistantStructure =>
       !isMam && !isParentEmployer; // default assistante maternelle
+
+  bool get canManageAllStructureChildren =>
+      isMam && showAllChildren;
 }
 
 class StructureResolver {
@@ -114,6 +119,17 @@ class StructureResolver {
           .update({'structureType': structureTypeRaw});
     }
 
+    final dynamic showAllField = structureData['showAllChildrenOnHome'];
+    bool showAllChildrenPreference = true;
+    if (showAllField is bool) {
+      showAllChildrenPreference = showAllField;
+    } else {
+      await _firestore
+          .collection('structures')
+          .doc(structureId)
+          .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
+    }
+
     return StructureContext(
       structureId: structureId,
       structureName: structureName,
@@ -121,6 +137,7 @@ class StructureResolver {
       normalizedStructureType: normalizedType,
       structureData: structureData,
       currentUserEmail: currentUserEmail,
+      showAllChildren: showAllChildrenPreference,
       userRole: role,
       userData: userData,
     );

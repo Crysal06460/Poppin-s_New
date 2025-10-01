@@ -395,6 +395,16 @@ class _HorairesScreenState extends State<HorairesScreen> {
               .toString()
               .trim()
               .toLowerCase();
+      final dynamic showAllField = structureData['showAllChildrenOnHome'];
+      bool allowAllChildren = true;
+      if (showAllField is bool) {
+        allowAllChildren = showAllField;
+      } else {
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
+      }
 
       // Récupérer tous les enfants de la structure avec le bon ID de structure
       final snapshot = await FirebaseFirestore.instance
@@ -414,15 +424,20 @@ class _HorairesScreenState extends State<HorairesScreen> {
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Membre MAM: affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
         // ➕ Ajouter enfants délégués aujourd'hui
         try {
           final memSnap = await FirebaseFirestore.instance

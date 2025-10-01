@@ -336,17 +336,37 @@ class _MonthlyReportSelectionScreenState
       // Liste filtrée selon le type de structure
       List<Map<String, dynamic>> filteredChildren = [];
 
+      bool allowAllChildren = true;
+      try {
+        final structureDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structId)
+            .get();
+        final data = structureDoc.data();
+        if (data != null && data['showAllChildrenOnHome'] is bool) {
+          allowAllChildren = data['showAllChildrenOnHome'] as bool;
+        }
+      } catch (e) {
+        print("⚠️ Impossible de récupérer showAllChildren pour les rapports: $e");
+      }
+
       if (isMAMStructureTemp) {
         print(
             "👨‍👧‍👦 Filtrage des enfants pour le membre MAM: $currentUserEmail");
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail = child['assignedMemberEmail'];
-          bool isAssigned = assignedEmail == currentUserEmail;
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
           print(
-              "  🔍 Enfant: ${child['firstName']}, assigné à: '$assignedEmail', est assigné à l'utilisateur: $isAssigned");
-          return isAssigned;
-        }).toList();
+              "  🔍 Accès autorisé à tous les enfants de la structure pour ce membre");
+        } else {
+          // Pour une MAM: filtrer par assignedMemberEmail
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail = child['assignedMemberEmail'];
+            bool isAssigned = assignedEmail == currentUserEmail;
+            print(
+                "  🔍 Enfant: ${child['firstName']}, assigné à: '$assignedEmail', est assigné à l'utilisateur: $isAssigned");
+            return isAssigned;
+          }).toList();
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants
         filteredChildren = allChildren;

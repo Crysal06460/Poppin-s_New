@@ -340,13 +340,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }
     }
 
-    if (_children.isEmpty) {
-      final bool childPromptShown = prefs.getBool(childKey) ?? false;
-      if (!childPromptShown) {
-        await prefs.setBool(childKey, true);
-        _showAddParentChildPopup();
-      }
-    }
+    // Les parents employeurs ne sont plus invités à ajouter un enfant.
+    // L'assistante maternelle gère désormais l'ajout depuis son compte.
   }
 
   void _showParentAssistantPrompt() {
@@ -3237,17 +3232,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
         // Calculs plus conservateurs pour éviter l'overflow
         final maxWidth = constraints.maxWidth > 0
-            ? constraints.maxWidth.clamp(45.0, screenWidth * 0.16)
-            : screenWidth * 0.16;
+            ? constraints.maxWidth.clamp(52.0, screenWidth * 0.2)
+            : screenWidth * 0.2;
         final maxHeight = constraints.maxHeight > 0
-            ? constraints.maxHeight.clamp(40.0, 60.0)
-            : 50.0;
+            ? constraints.maxHeight.clamp(48.0, 68.0)
+            : 60.0;
 
         // Ajuster les tailles selon l'espace disponible
-        final iconSize = (maxWidth * 0.4).clamp(16.0, 22.0);
-        final containerPadding = (maxWidth * 0.08).clamp(4.0, 8.0);
-        final fontSize = (maxWidth * 0.16).clamp(8.0, 11.0);
-        final badgeSize = (maxWidth * 0.15).clamp(8.0, 12.0);
+        final iconSize = (maxWidth * 0.48).clamp(20.0, 26.0);
+        final containerPadding = (maxWidth * 0.08).clamp(5.0, 10.0);
+        final fontSize = (maxWidth * 0.18).clamp(10.0, 13.0);
+        final badgeSize = (maxWidth * 0.16).clamp(9.0, 14.0);
 
         return GestureDetector(
           onTap: onTap,
@@ -3322,6 +3317,45 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         );
       },
     );
+  }
+
+  List<Widget> _buildPrimaryHeaderIcons() {
+    final iconConfigs = [
+      _buildHeaderIcon(
+        "Menu",
+        Icons.restaurant_menu,
+        () => _showActualiteDetails("menu"),
+      ),
+      _buildHeaderIcon(
+        "Événements",
+        Icons.event,
+        () => _showActualiteDetails("evenement"),
+        showBadge: _showEventsBadge,
+      ),
+      _buildHeaderIcon(
+        "Sorties",
+        Icons.directions_bus,
+        () => _showActualiteDetails("sortie"),
+        showBadge: _showSortiesBadge,
+      ),
+      _buildHeaderIcon(
+        "Photos",
+        Icons.photo_library,
+        () => _showPhotoHistory(),
+        showBadge: _showPhotosBadge,
+      ),
+    ];
+
+    return iconConfigs
+        .map(
+          (widget) => Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: widget,
+            ),
+          ),
+        )
+        .toList();
   }
 
   Widget _buildActualiteCard(String title, String subtitle, IconData icon,
@@ -3798,54 +3832,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                                         maxHeight:
                                             availableHeight > 150 ? 50.0 : 40.0,
                                       ),
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceEvenly,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          children: [
-                                            if (_isParentEmployeur) ...[
-                                              _buildHeaderIcon(
-                                                "Tableau",
-                                                Icons
-                                                    .dashboard_customize_rounded,
-                                                _openParentEmployeurDashboard,
-                                              ),
-                                              SizedBox(width: 6),
-                                            ],
-                                            _buildHeaderIcon(
-                                              "Menu",
-                                              Icons.restaurant_menu,
-                                              () =>
-                                                  _showActualiteDetails("menu"),
-                                            ),
-                                            SizedBox(width: 6),
-                                            _buildHeaderIcon(
-                                              "Événements",
-                                              Icons.event,
-                                              () => _showActualiteDetails(
-                                                  "evenement"),
-                                              showBadge: _showEventsBadge,
-                                            ),
-                                            SizedBox(width: 6),
-                                            _buildHeaderIcon(
-                                              "Sorties",
-                                              Icons.directions_bus,
-                                              () => _showActualiteDetails(
-                                                  "sortie"),
-                                              showBadge: _showSortiesBadge,
-                                            ),
-                                            SizedBox(width: 6),
-                                            _buildHeaderIcon(
-                                              "Photos",
-                                              Icons.photo_library,
-                                              () => _showPhotoHistory(),
-                                              showBadge: _showPhotosBadge,
-                                            ),
-                                          ],
-                                        ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: _buildPrimaryHeaderIcons(),
                                       ),
                                     ),
                                   ),

@@ -40,7 +40,6 @@ class iOSSubscriptionService {
     'mam_2_members': 'com.beylet.poppinsApp.subscription.mam_2_membres',
     'mam_3_members': 'com.beylet.poppinsApp.subscription.mam_3_membres',
     'mam_4_members': 'com.beylet.poppinsApp.subscription.mam_4_membres',
-    'parent_employeur': 'parent_employeur',
   };
 
   static const Set<String> _allProductIds = {
@@ -48,7 +47,6 @@ class iOSSubscriptionService {
     'com.beylet.poppinsApp.subscription.mam_2_membres',
     'com.beylet.poppinsApp.subscription.mam_3_membres',
     'com.beylet.poppinsApp.subscription.mam_4_membres',
-    'parent_employeur',
   };
 
   /// Initialise le service iOS
@@ -263,11 +261,6 @@ class iOSSubscriptionService {
         memberCount = 6;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
-      } else if (productId == _iOSProductIds['parent_employeur']) {
-        structureType = 'parent_employeur';
-        memberCount = 1;
-        priceAmount = 4.99;
-        priceDisplay = '4,99 € / mois';
       } else if (productId == _iOSProductIds['assistante_maternelle']) {
         // valeurs par défaut déjà correctes
       } else {
@@ -360,11 +353,6 @@ class iOSSubscriptionService {
 
     if (normalizedType == 'assistante_maternelle') {
       return _iOSProductIds['assistante_maternelle']!;
-    }
-
-    if (normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur') {
-      return _iOSProductIds['parent_employeur']!;
     }
 
     if (normalizedType == 'mam') {
@@ -628,10 +616,6 @@ class iOSSubscriptionService {
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
       }
-    } else if (normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur') {
-      priceAmount = 4.99;
-      priceDisplay = '4,99 € / mois';
     } else {
       priceAmount = 6.99;
       priceDisplay = '6,99 € / mois';

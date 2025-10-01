@@ -87,6 +87,7 @@ class _RecapScreenState extends State<RecapScreen> {
       });
 
       final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -103,15 +104,20 @@ class _RecapScreenState extends State<RecapScreen> {
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-          return assignedEmail == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Recap: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            String assignedEmail =
+                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+            return assignedEmail == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Recap: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Recap: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -126,8 +132,8 @@ class _RecapScreenState extends State<RecapScreen> {
         String assignedEmail =
             child['assignedMemberEmail']?.toString().toLowerCase() ??
                 'NON ASSIGNÉ';
-        bool isVisible =
-            structureType != 'mam' || assignedEmail == currentUserEmail;
+        bool isVisible = structureType != 'mam' || allowAllChildren ||
+            assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
@@ -141,6 +147,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 'NON ASSIGNÉ';
         bool isVisible = isStructureAdmin ||
             structureType != 'mam' ||
+            allowAllChildren ||
             assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");

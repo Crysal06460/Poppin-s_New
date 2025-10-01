@@ -167,21 +167,16 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Détermine le plan selon la configuration
   SubscriptionPlan _getCurrentPlan() {
     final String normalizedType = widget.structureType.toLowerCase();
+    final bool isMamType =
+        normalizedType == 'mam' || normalizedType.contains('maison');
 
-    if (normalizedType == 'assistante_maternelle') {
+    if (!isMamType) {
       return SubscriptionPlan.assistantMaternel;
     }
 
-    if (normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur') {
-      return SubscriptionPlan.parentEmployeur;
-    }
-
-    // MAM plans
-    if (_selectedMamMembers >= 4) {
-      return SubscriptionPlan.mam4PlusMembers;
-    }
-    return SubscriptionPlan.mamUpTo3Members;
+    return _selectedMamMembers >= 4
+        ? SubscriptionPlan.mam4PlusMembers
+        : SubscriptionPlan.mamUpTo3Members;
   }
 
   /// Achète un abonnement
@@ -309,17 +304,11 @@ class _PricingScreenState extends State<PricingScreen> {
   void _redirectToConfirmationScreen() {
     final String normalizedType = widget.structureType.toLowerCase();
     final bool isAssMat = normalizedType == 'assistante_maternelle';
-    final bool isParent = normalizedType == 'parent_employeur' ||
-        normalizedType == 'parentemployeur';
 
-    final String structureType = isParent
-        ? 'parent_employeur'
-        : (isAssMat ? 'assistante_maternelle' : 'MAM');
+    final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
 
     int memberCount;
     if (isAssMat) {
-      memberCount = 1;
-    } else if (isParent) {
       memberCount = 1;
     } else {
       memberCount = _selectedMamMembers < 2 ? 2 : _selectedMamMembers;
@@ -331,9 +320,6 @@ class _PricingScreenState extends State<PricingScreen> {
     if (isAssMat) {
       priceAmount = 6.99;
       priceDisplay = '6,99 € / mois';
-    } else if (isParent) {
-      priceAmount = 4.99;
-      priceDisplay = '4,99 € / mois';
     } else {
       final bool isHighTier = memberCount >= 4;
       priceAmount = isHighTier ? 24.99 : 19.99;
@@ -377,12 +363,12 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Retourne le titre selon le type de structure
   String _getTitle() {
     final String normalized = widget.structureType.toLowerCase();
-    if (normalized == 'assistante_maternelle') {
+    final bool isMamType = normalized == 'mam' || normalized.contains('maison');
+
+    if (!isMamType) {
       return 'Abonnement Assistant Maternel';
     }
-    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
-      return 'Abonnement Parent employeur';
-    }
+
     if (_selectedMamMembers >= 4) {
       return 'Abonnement MAM 4 et + membres';
     }
@@ -392,11 +378,10 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Retourne le prix selon le type
   String _getPrice() {
     final String normalized = widget.structureType.toLowerCase();
-    if (normalized == 'assistante_maternelle') {
+    final bool isMamType = normalized == 'mam' || normalized.contains('maison');
+
+    if (!isMamType) {
       return '6,99€';
-    }
-    if (normalized == 'parent_employeur' || normalized == 'parentemployeur') {
-      return '4,99€';
     }
     return _selectedMamMembers >= 4 ? '24,99€' : '19,99€';
   }
@@ -426,7 +411,8 @@ class _PricingScreenState extends State<PricingScreen> {
   @override
   Widget build(BuildContext context) {
     final String normalizedType = widget.structureType.toLowerCase();
-    final bool isMam = normalizedType == 'mam';
+    final bool isMam =
+        normalizedType == 'mam' || normalizedType.contains('maison');
 
     return Scaffold(
       appBar: AppBar(

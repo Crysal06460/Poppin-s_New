@@ -286,6 +286,7 @@ class _StockScreenState extends State<StockScreen> {
       structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
       final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       setState(() {
         structureName = structureContext.structureName;
@@ -352,13 +353,18 @@ class _StockScreenState extends State<StockScreen> {
       List<Map<String, dynamic>> filteredChildren = [];
 
       if (structureType == 'mam') {
-        // Pour une MAM: filtrer par assignedMemberEmail
-        filteredChildren = allChildren.where((child) {
-          return child['assignedMemberEmail'] == currentUserEmail;
-        }).toList();
+        if (allowAllChildren) {
+          filteredChildren = List<Map<String, dynamic>>.from(allChildren);
+          print(
+              "👨‍👧‍👦 Stock: Membre MAM - affichage de tous les enfants de la structure");
+        } else {
+          filteredChildren = allChildren.where((child) {
+            return child['assignedMemberEmail'] == currentUserEmail;
+          }).toList();
 
-        print(
-            "👨‍👧‍👦 Stock: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+          print(
+              "👨‍👧‍👦 Stock: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;

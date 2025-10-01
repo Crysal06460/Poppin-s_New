@@ -27,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Variables pour identifier le membre actuel
   String currentUserEmail = "";
+  Set<String> _delegatedChildIds = <String>{};
+  Set<String> _myAssignedChildIds = <String>{};
 
   // Définition des thèmes de couleurs (défaut appliqué immédiatement pour éviter les accès tardifs)
   Color primaryColor = const Color(0xFF3D9DF2);
@@ -51,6 +53,71 @@ class _HomeScreenState extends State<HomeScreen> {
     // Utilisation des couleurs de la palette (identique pour tous les types)
     primaryColor = const Color(0xFF3D9DF2); // Bleu #3D9DF2
     secondaryColor = const Color(0xFFDFE9F2); // Bleu clair #DFE9F2
+  }
+
+  bool _canCurrentUserEditChild(Map<String, dynamic> child) {
+    if (structureType != 'mam') {
+      return true;
+    }
+
+    final String childId = (child['id'] ?? '').toString();
+    if (childId.isEmpty) {
+      return false;
+    }
+
+    if (_myAssignedChildIds.contains(childId)) {
+      return true;
+    }
+
+    if (_delegatedChildIds.contains(childId)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void _showChildReadOnlyMessage() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          "Cet enfant n'est pas rattaché à votre profil.",
+        ),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _handleChildTap(Map<String, dynamic> child) async {
+    final String childId = (child['id'] ?? '').toString();
+    if (childId.isEmpty) {
+      return;
+    }
+
+    final bool canEdit = _canCurrentUserEditChild(child);
+    print('🔐 TAP enfant $childId (structureType=$structureType) canEdit=$canEdit');
+    if (!canEdit) {
+      _showChildReadOnlyMessage();
+      return;
+    }
+
+    final String structId = await _getStructureId();
+    if (!mounted || structId.isEmpty) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChildProfileDetailsScreen(
+          childId: childId,
+          structureId: structId,
+          allowEditing: canEdit,
+        ),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -196,8 +263,16 @@ class _HomeScreenState extends State<HomeScreen> {
       // Récupération du type de structure existant
       String fetchedStructureType =
           (structureData['structureType'] ?? 'AssistanteMaternelle').toString();
-      bool showAllChildrenOnHome =
-          structureData['showAllChildrenOnHome'] == true;
+      final dynamic showAllField = structureData['showAllChildrenOnHome'];
+      bool showAllChildrenOnHome = true;
+      if (showAllField is bool) {
+        showAllChildrenOnHome = showAllField;
+      } else {
+        await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureDocId)
+            .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
+      }
 
       if (!structureData.containsKey('structureType')) {
         // Ajouter le champ s'il n'existe pas encore pour éviter les accès directs nullables
@@ -224,8 +299,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // NOUVEAU: Filtrer les enfants selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
+      final Set<String> myAssignedChildIds = <String>{};
 
-      Set<String> delegatedTodayChildIds = {};
+      Set<String> delegatedTodayChildIds = <String>{};
       String? myMemberId;
       if (isMamStructure) {
         if (showAllChildrenOnHome) {
@@ -237,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
           filteredChildren = allChildren.where((child) {
             // Vérifier si l'enfant est assigné à ce membre
             String assignedEmail =
-                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
+                child['assignedMemberEmail']?.toString().trim().toLowerCase() ?? '';
             bool isAssigned = assignedEmail == currentUserEmail;
 
             print(
@@ -249,6 +325,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
           print(
               "👨‍👧‍👦 Membre MAM: affichage de ${filteredChildren.length} enfant(s) assigné(s)");
+        }
+
+        for (final child in allChildren) {
+          final String childId = (child['id'] ?? '').toString();
+          if (childId.isEmpty) continue;
+          final String assignedEmail =
+              child['assignedMemberEmail']?.toString().trim().toLowerCase() ?? '';
+          if (assignedEmail == currentUserEmail) {
+            myAssignedChildIds.add(childId);
+          }
         }
 
         // ⛱️ Overlay délégation du jour: ajouter les enfants que j'accueille par délégation aujourd'hui
@@ -294,11 +380,18 @@ class _HomeScreenState extends State<HomeScreen> {
         } catch (e) {
           print('⚠️ Erreur overlay délégations Home: $e');
         }
+
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
         print(
             "👩‍👧‍👦 Assistante Maternelle individuelle: affichage de tous les enfants");
+        for (final child in allChildren) {
+          final String childId = (child['id'] ?? '').toString();
+          if (childId.isNotEmpty) {
+            myAssignedChildIds.add(childId);
+          }
+        }
       }
 
       // Remplacer les logs de diagnostic pour ne plus mentionner le fondateur
@@ -315,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
         print("🔍 LISTE DÉTAILLÉE DES ENFANTS:");
         for (var child in allChildren) {
           String assignedEmail =
-              child['assignedMemberEmail']?.toString().toLowerCase() ??
+              child['assignedMemberEmail']?.toString().trim().toLowerCase() ??
                   'NON ASSIGNÉ';
           bool isVisible = assignedEmail == currentUserEmail;
           print(
@@ -361,6 +454,8 @@ class _HomeScreenState extends State<HomeScreen> {
         // Vérifier si le membre a des enfants qui lui sont assignés
         hasChildren = filteredChildren.isNotEmpty;
         isLoading = false;
+        _delegatedChildIds = delegatedTodayChildIds;
+        _myAssignedChildIds = myAssignedChildIds;
       });
 
       // Définir les couleurs après avoir récupéré le type de structure
@@ -1523,19 +1618,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final double fontSize = maxWidth * 0.018; // Augmenté de 0.014 à 0.018
 
     return GestureDetector(
-      onTap: () async {
-        // Navigation vers l'écran de profil détaillé de l'enfant
-        String structId = await _getStructureId();
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChildProfileDetailsScreen(
-              childId: child['id'],
-              structureId: structId,
-            ),
-          ),
-        );
-      },
+      onTap: () => _handleChildTap(child),
       child: Padding(
         padding: EdgeInsets.symmetric(
             vertical:
@@ -2021,15 +2104,42 @@ class _HomeScreenState extends State<HomeScreen> {
       // Récupérer les enfants (pour assistantes maternelles et membres MAM)
       QuerySnapshot childrenSnapshot;
 
+      bool allowAllChildrenForBadge = true;
       if (isMamMember) {
-        print("🔍 DEBUG: Recherche enfants assignés à $currentUserEmail");
+        try {
+          final structureDoc = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .get();
+          final data = structureDoc.data();
+          if (data != null && data['showAllChildrenOnHome'] is bool) {
+            allowAllChildrenForBadge = data['showAllChildrenOnHome'] as bool;
+          }
+        } catch (e) {
+          print(
+              "⚠️ DEBUG: Impossible de récupérer showAllChildren pour le badge: $e");
+        }
+      }
 
-        childrenSnapshot = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(structureId)
-            .collection('children')
-            .where('assignedMemberEmail', isEqualTo: currentUserEmail)
-            .get();
+      if (isMamMember) {
+        if (allowAllChildrenForBadge) {
+          print(
+              "🔍 DEBUG: Préférence tous les enfants active - récupération de tous les enfants de la structure");
+          childrenSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('children')
+              .get();
+        } else {
+          print("🔍 DEBUG: Recherche enfants assignés à $currentUserEmail");
+
+          childrenSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('children')
+              .where('assignedMemberEmail', isEqualTo: currentUserEmail)
+              .get();
+        }
       } else {
         print("🔍 DEBUG: Recherche TOUS les enfants (assistante individuelle)");
 
@@ -2577,19 +2687,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Stack(
           children: [
             GestureDetector(
-              onTap: () async {
-                // Navigation vers l'écran de profil détaillé de l'enfant
-                String structId = await _getStructureId();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChildProfileDetailsScreen(
-                      childId: child['id'],
-                      structureId: structId,
-                    ),
-                  ),
-                );
-              },
+              onTap: () => _handleChildTap(child),
               child: Container(
                 width: avatarSize,
                 height: avatarSize,
