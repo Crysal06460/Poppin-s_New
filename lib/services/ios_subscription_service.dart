@@ -356,10 +356,16 @@ class iOSSubscriptionService {
     }
 
     if (normalizedType == 'mam') {
-      if (mamMembersCount <= 3) {
+      if (mamMembersCount <= 2) {
         return _iOSProductIds['mam_2_members']!;
       }
-      return _iOSProductIds['mam_3_members']!;
+      if (mamMembersCount == 3) {
+        return _iOSProductIds['mam_3_members'] ??
+            _iOSProductIds['mam_2_members']!;
+      }
+      return _iOSProductIds['mam_4_members'] ??
+          _iOSProductIds['mam_3_members'] ??
+          _iOSProductIds['mam_2_members']!;
     }
 
     return _iOSProductIds['assistante_maternelle']!;

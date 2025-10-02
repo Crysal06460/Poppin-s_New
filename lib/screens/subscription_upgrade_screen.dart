@@ -344,12 +344,12 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       if (actualMemberCount <= 3) {
         return 'com.beylet.poppinsApp.subscription.mam_2_membres';
       }
-      return 'com.beylet.poppinsApp.subscription.mam_3_membres';
+      return 'com.beylet.poppinsApp.subscription.mam_4_membres';
     } else {
       if (actualMemberCount <= 3) {
         return 'abonnement_mam2';
       }
-      return 'abonnement_mam3';
+      return 'abonnement_mam4';
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // AJOUT : Import pour SystemChrome
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Firebase Functions
@@ -80,9 +81,11 @@ void main() async {
   try {
     print('🚨 FIX ANDROID : Initialisation SubscriptionService...');
 
-    // Activer le mode debug AVANT l'initialisation
-    SubscriptionService.setDebugMode(true);
-    print('🧪 Mode debug activé pour SubscriptionService');
+    // Activer le mode debug uniquement en développement
+    SubscriptionService.setDebugMode(kDebugMode);
+    if (kDebugMode) {
+      print('🧪 Mode debug activé pour SubscriptionService');
+    }
 
     // 🔧 LOGIQUE DIFFÉRENCIÉE iOS vs ANDROID
     if (Platform.isAndroid) {

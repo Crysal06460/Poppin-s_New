@@ -3127,28 +3127,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     children: [
                       _buildTabletTile(
-                        lines: ['Administration'],
                         color: _tileBlue,
                         onTap: _openMamAdministration,
                         size: tileSize,
+                        assetPath: 'assets/images/Administration.png',
                       ),
                       _buildTabletTile(
-                        lines: ['Fonctionnement', 'quotidien'],
                         color: _tileRed,
                         onTap: _openDailyOps,
                         size: tileSize,
+                        assetPath: 'assets/images/Fonctionnement.png',
                       ),
                       _buildTabletTile(
-                        lines: ['Enfants', '& parents'],
                         color: _tileCyan,
                         onTap: _openChildrenParents,
                         size: tileSize,
+                        assetPath: 'assets/images/Enfant.png',
                       ),
                       _buildTabletTile(
-                        lines: ['Mémo', '& Historique'],
                         color: _tileYellow,
                         onTap: _openReportsHistory,
                         size: tileSize,
+                        assetPath: 'assets/images/Memo.png',
                       ),
                     ],
                   ),
@@ -3165,23 +3165,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildTabletTile({
-    required List<String> lines,
+    List<String>? lines,
     required Color color,
     required VoidCallback onTap,
     required double size,
+    String? assetPath,
   }) {
+    final borderRadius = BorderRadius.circular(32);
+    final List<BoxShadow> shadows = [
+      BoxShadow(
+        color: color.withOpacity(0.18),
+        blurRadius: 30,
+        spreadRadius: 0,
+        offset: const Offset(0, 12),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.08),
+        blurRadius: 20,
+        spreadRadius: 0,
+        offset: const Offset(0, 6),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(0.04),
+        blurRadius: 8,
+        spreadRadius: 0,
+        offset: const Offset(0, 2),
+      ),
+    ];
+
+    final bool showImage = assetPath != null && assetPath.isNotEmpty;
+    final List<String> tileLines = lines ?? const <String>[];
     final List<Widget> titleLines = List<Widget>.generate(
-      lines.length,
+      tileLines.length,
       (i) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Text(
-          lines[i],
+          tileLines[i],
           textAlign: TextAlign.center,
           softWrap: false,
           overflow: TextOverflow.fade,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 22, // Taille optimisée pour iPad
+            fontSize: 22,
             fontWeight: FontWeight.w600,
             height: 1.1,
             letterSpacing: 0.5,
@@ -3190,30 +3215,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
+    if (showImage) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          boxShadow: shadows,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: borderRadius,
+            highlightColor: Colors.white.withOpacity(0.1),
+            splashColor: Colors.white.withOpacity(0.2),
+            child: SizedBox(
+              height: size,
+              child: ClipRRect(
+                borderRadius: borderRadius,
+                child: Image.asset(
+                  assetPath!,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(32), // Coins plus arrondis pour iPad
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.18),
-            blurRadius: 30,
-            spreadRadius: 0,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            spreadRadius: 0,
-            offset: const Offset(0, 6),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            spreadRadius: 0,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: borderRadius,
+        boxShadow: shadows,
       ),
       child: Material(
         color: Colors.transparent,
@@ -3227,7 +3261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: borderRadius,
             border: Border.all(
               color: Colors.white.withOpacity(0.25),
               width: 2,
@@ -3235,28 +3269,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: borderRadius,
             highlightColor: Colors.white.withOpacity(0.1),
             splashColor: Colors.white.withOpacity(0.2),
             child: Container(
               height: size,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: borderRadius,
                 gradient: LinearGradient(
                   colors: [
                     Colors.white.withOpacity(0.2),
                     Colors.transparent,
                     Colors.black.withOpacity(0.05),
                   ],
-                  stops: [0.0, 0.4, 1.0],
+                  stops: const [0.0, 0.4, 1.0],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20), // Plus d'espace pour iPad
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,

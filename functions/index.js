@@ -2,9 +2,12 @@ const {onDocumentCreated, onDocumentWritten} = require('firebase-functions/v2/fi
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {onCall} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
 const {initializeApp} = require('firebase-admin/app');
-const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {getFirestore, FieldValue, Timestamp} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 const {getAuth} = require('firebase-admin/auth'); // AJOUT pour l'authentification
+
+const PDFDocument = require('pdfkit');
+const {DateTime} = require('luxon');
 
 // ===== IMPORTS POUR LES EMAILS AVEC MAILJET =====
 const Mailjet = require('node-mailjet');
@@ -1322,3 +1325,650 @@ exports.onStockNeedsUpdated = onDocumentWritten({
         return null;
     }
 });
+
+// ===== RAPPORTS MENSUELS POUR ASSISTANTES =====
+const CHILD_EVENT_COLLECTIONS = ['repas', 'activites', 'siestes', 'changes', 'sante', 'transmissions'];
+const DAY_CATEGORY_KEYS = ['horaires', ...CHILD_EVENT_COLLECTIONS];
+const CATEGORY_LABELS = {
+    horaires: 'Horaires',
+    repas: 'Repas',
+    activites: 'Activités',
+    siestes: 'Siestes',
+    changes: 'Changes',
+    sante: 'Santé',
+    transmissions: 'Transmissions',
+};
+
+exports.sendMonthlyAssistantRecaps = onSchedule({
+    schedule: '0 6 1 * *',
+    timeZone: 'Europe/Paris',
+    region: 'europe-west1',
+}, async () => {
+    const nowParis = DateTime.now().setZone('Europe/Paris');
+    const periodEnd = nowParis.startOf('month');
+    const periodStart = periodEnd.minus({ months: 1 });
+    const startDate = periodStart.toJSDate();
+    const endDate = periodEnd.toJSDate();
+    const periodLabel = periodStart.setLocale('fr').toFormat('LLLL yyyy');
+
+    console.log('📅 Lancement envoi récap mensuel assistantes');
+    console.log(`🗓️ Période: ${periodStart.toISODate()} → ${periodEnd.toISODate()} (${periodLabel})`);
+
+    const structuresSnapshot = await db.collection('structures').get();
+    console.log(`🏢 Structures trouvées: ${structuresSnapshot.size}`);
+
+    for (const structureDoc of structuresSnapshot.docs) {
+        const structureId = structureDoc.id;
+        const structureData = structureDoc.data() || {};
+        const structureName = getStructureDisplayName(structureData);
+        const normalizedType = (structureData.structureType || '').toString().toLowerCase();
+
+        try {
+            const childrenSnapshot = await structureDoc.ref.collection('children').get();
+            if (childrenSnapshot.empty) {
+                console.log(`ℹ️ ${structureId}: aucun enfant, récap ignoré.`);
+                continue;
+            }
+
+            if (normalizedType === 'mam') {
+                await processMamStructure({
+                    structureDoc,
+                    structureName,
+                    periodStart,
+                    periodEnd,
+                    periodLabel,
+                    startDate,
+                    endDate,
+                    childrenSnapshot,
+                });
+            } else {
+                await processSingleAssistantStructure({
+                    structureDoc,
+                    structureData,
+                    structureName,
+                    periodStart,
+                    periodEnd,
+                    periodLabel,
+                    startDate,
+                    endDate,
+                    childrenSnapshot,
+                });
+            }
+        } catch (error) {
+            console.error(`❌ Erreur lors du traitement de la structure ${structureId}:`, error);
+        }
+    }
+
+    console.log('✅ Fin traitement récap mensuel assistantes');
+});
+
+async function processSingleAssistantStructure({
+    structureDoc,
+    structureData,
+    structureName,
+    periodStart,
+    periodEnd,
+    periodLabel,
+    startDate,
+    endDate,
+    childrenSnapshot,
+}) {
+    const assistantInfo = resolveStructureAssistant(structureDoc, structureData);
+    if (!assistantInfo) {
+        console.log(`⚠️ ${structureDoc.id}: aucune assistante identifiable, envoi annulé.`);
+        return;
+    }
+
+    const childrenReports = [];
+    for (const childDoc of childrenSnapshot.docs) {
+        const report = await collectChildMonthlyData({
+            structureId: structureDoc.id,
+            childDoc,
+            startDate,
+            endDate,
+        });
+        childrenReports.push(report);
+    }
+
+    const pdfBuffer = await generateMonthlyPdf({
+        assistant: assistantInfo,
+        structureName,
+        period: { start: periodStart, end: periodEnd, label: periodLabel },
+        childrenReports,
+    });
+
+    if (!pdfBuffer) {
+        console.log(`⚠️ ${structureDoc.id}: génération PDF impossible, pas d'envoi.`);
+        return;
+    }
+
+    await enqueueMonthlyEmail({
+        assistant: assistantInfo,
+        structureName,
+        period: { start: periodStart, end: periodEnd, label: periodLabel },
+        pdfBuffer,
+        childCount: childrenReports.length,
+    });
+}
+
+async function processMamStructure({
+    structureDoc,
+    structureName,
+    periodStart,
+    periodEnd,
+    periodLabel,
+    startDate,
+    endDate,
+    childrenSnapshot,
+}) {
+    const membersSnapshot = await structureDoc.ref.collection('members').get();
+    if (membersSnapshot.empty) {
+        console.log(`⚠️ ${structureDoc.id}: structure MAM sans membres, envoi impossible.`);
+        return;
+    }
+
+    const membersByEmail = new Map();
+    membersSnapshot.forEach((memberDoc) => {
+        const data = memberDoc.data() || {};
+        const email = normalizeEmail(data.email);
+        if (!email) return;
+        const firstName = (data.firstName || '').toString().trim();
+        const lastName = (data.lastName || '').toString().trim();
+        const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || data.fullName || 'Assistante';
+        membersByEmail.set(email, {
+            email,
+            name: displayName,
+        });
+    });
+
+    if (membersByEmail.size === 0) {
+        console.log(`⚠️ ${structureDoc.id}: aucun membre avec email valide.`);
+        return;
+    }
+
+    const childrenByMember = new Map();
+    childrenSnapshot.forEach((childDoc) => {
+        const childData = childDoc.data() || {};
+        const assignedEmail = normalizeEmail(childData.assignedMemberEmail);
+        if (!assignedEmail || !membersByEmail.has(assignedEmail)) {
+            return;
+        }
+        if (!childrenByMember.has(assignedEmail)) {
+            childrenByMember.set(assignedEmail, []);
+        }
+        childrenByMember.get(assignedEmail).push(childDoc);
+    });
+
+    for (const [email, childDocs] of childrenByMember.entries()) {
+        const assistantInfo = membersByEmail.get(email);
+        if (!assistantInfo) continue;
+
+        const childrenReports = [];
+        for (const childDoc of childDocs) {
+            const report = await collectChildMonthlyData({
+                structureId: structureDoc.id,
+                childDoc,
+                startDate,
+                endDate,
+            });
+            childrenReports.push(report);
+        }
+
+        const pdfBuffer = await generateMonthlyPdf({
+            assistant: assistantInfo,
+            structureName,
+            period: { start: periodStart, end: periodEnd, label: periodLabel },
+            childrenReports,
+        });
+
+        if (!pdfBuffer) {
+            console.log(`⚠️ ${structureDoc.id}/${email}: PDF vide, envoi ignoré.`);
+            continue;
+        }
+
+        await enqueueMonthlyEmail({
+            assistant: assistantInfo,
+            structureName,
+            period: { start: periodStart, end: periodEnd, label: periodLabel },
+            pdfBuffer,
+            childCount: childrenReports.length,
+        });
+    }
+}
+
+async function collectChildMonthlyData({structureId, childDoc, startDate, endDate}) {
+    const childData = childDoc.data() || {};
+    const childId = childDoc.id;
+    const childRef = db.collection('structures').doc(structureId).collection('children').doc(childId);
+    const startTs = Timestamp.fromDate(startDate);
+    const endTs = Timestamp.fromDate(endDate);
+
+    const days = {};
+
+    for (const collectionName of CHILD_EVENT_COLLECTIONS) {
+        try {
+            const snapshot = await childRef.collection(collectionName)
+                .where('date', '>=', startTs)
+                .where('date', '<', endTs)
+                .get();
+
+            snapshot.forEach((doc) => {
+                const data = doc.data() || {};
+                const eventDate = extractEventDate(data);
+                if (!eventDate) return;
+                const dateKey = DateTime.fromJSDate(eventDate, { zone: 'Europe/Paris' }).toISODate();
+                const day = ensureDay(days, dateKey);
+                day[collectionName].push({...data});
+            });
+        } catch (error) {
+            console.error(`⚠️ Erreur collecte ${collectionName} pour ${childId}:`, error);
+        }
+    }
+
+    const structureRef = db.collection('structures').doc(structureId);
+    let horairesDocs = [];
+    try {
+        const horairesSnapshot = await structureRef.collection('horaires_history')
+            .where('childId', '==', childId)
+            .where('timestamp', '>=', startTs)
+            .where('timestamp', '<', endTs)
+            .get();
+        horairesDocs = horairesSnapshot.docs;
+    } catch (error) {
+        console.warn(`ℹ️ Fallback horaires_history pour ${childId}: ${error.message}`);
+        try {
+            const fallbackSnapshot = await structureRef.collection('horaires_history')
+                .where('childId', '==', childId)
+                .get();
+            horairesDocs = fallbackSnapshot.docs.filter((doc) => {
+                const data = doc.data() || {};
+                const eventDate = extractEventDate(data);
+                if (!eventDate) return false;
+                return eventDate >= startDate && eventDate < endDate;
+            });
+        } catch (fallbackError) {
+            console.error(`❌ Impossible de récupérer horaires_history pour ${childId}:`, fallbackError);
+        }
+    }
+
+    horairesDocs.forEach((doc) => {
+        const data = doc.data() || {};
+        const eventDate = extractEventDate(data) || parseDateString(data.date);
+        if (!eventDate) return;
+        const dateKey = DateTime.fromJSDate(eventDate, { zone: 'Europe/Paris' }).toISODate();
+        const day = ensureDay(days, dateKey);
+        day.horaires.push({...data});
+    });
+
+    return {
+        childId,
+        firstName: (childData.firstName || childData.prenom || '').toString(),
+        lastName: (childData.lastName || childData.nom || '').toString(),
+        days,
+    };
+}
+
+function ensureDay(days, dateKey) {
+    if (!days[dateKey]) {
+        days[dateKey] = {
+            horaires: [],
+            repas: [],
+            activites: [],
+            siestes: [],
+            changes: [],
+            sante: [],
+            transmissions: [],
+        };
+    }
+    return days[dateKey];
+}
+
+function extractEventDate(data) {
+    if (!data) return null;
+    const dateField = data.date;
+    if (dateField) {
+        if (typeof dateField.toDate === 'function') {
+            return dateField.toDate();
+        }
+        const parsed = parseDateString(dateField);
+        if (parsed) return parsed;
+    }
+    const timestampField = data.timestamp || data.exactTime;
+    if (timestampField && typeof timestampField.toDate === 'function') {
+        return timestampField.toDate();
+    }
+    return null;
+}
+
+function parseDateString(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    const dt = DateTime.fromISO(raw, { zone: 'Europe/Paris' });
+    if (dt.isValid) return dt.toJSDate();
+    return null;
+}
+
+async function generateMonthlyPdf({assistant, structureName, period, childrenReports}) {
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    const buffers = [];
+    return new Promise((resolve, reject) => {
+        doc.on('data', (chunk) => buffers.push(chunk));
+        doc.on('end', () => {
+            const pdfBuffer = Buffer.concat(buffers);
+            resolve(pdfBuffer);
+        });
+        doc.on('error', (error) => {
+            console.error('❌ Erreur génération PDF:', error);
+            reject(error);
+        });
+
+        const startLabel = period.start.setLocale('fr').toFormat('dd/LL/yyyy');
+        const endLabel = period.end.minus({ days: 1 }).setLocale('fr').toFormat('dd/LL/yyyy');
+
+        doc.font('Helvetica-Bold').fontSize(20).text('Récapitulatif mensuel', { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fontSize(14).text(`Période : ${startLabel} au ${endLabel}`, { align: 'center' });
+        doc.moveDown(0.5);
+        doc.fontSize(12).font('Helvetica').text(`Structure : ${structureName}`);
+        doc.text(`Assistante : ${assistant.name || assistant.email}`);
+        doc.text(`Mois : ${period.label}`);
+        doc.moveDown(1);
+
+        if (!childrenReports.length) {
+            doc.font('Helvetica-Italic').text('Aucun enfant associé durant cette période.');
+            doc.end();
+            return;
+        }
+
+        let firstChild = true;
+        for (const report of childrenReports) {
+            if (!firstChild) {
+                doc.addPage();
+            }
+            firstChild = false;
+
+            const childName = [report.firstName, report.lastName].filter(Boolean).join(' ').trim() || `Enfant ${report.childId}`;
+            doc.font('Helvetica-Bold').fontSize(16).text(childName);
+            doc.moveDown(0.3);
+
+            const dayKeys = Object.keys(report.days).sort();
+            if (dayKeys.length === 0) {
+                doc.font('Helvetica-Italic').fontSize(12).text('Aucune donnée enregistrée pour cette période.');
+                continue;
+            }
+
+            for (const dayKey of dayKeys) {
+                const dayData = report.days[dayKey];
+                const displayDate = DateTime.fromISO(dayKey, { zone: 'Europe/Paris' })
+                    .setLocale('fr')
+                    .toFormat('cccc dd LLLL yyyy');
+
+                doc.moveDown(0.4);
+                doc.font('Helvetica-Bold').fontSize(13).fillColor('#3D9DF2').text(displayDate);
+                doc.fillColor('black');
+                doc.moveDown(0.2);
+
+                for (const category of DAY_CATEGORY_KEYS) {
+                    const events = dayData[category];
+                    if (!events || events.length === 0) continue;
+
+                    doc.font('Helvetica-Bold').fontSize(12).text(CATEGORY_LABELS[category]);
+                    doc.moveDown(0.1);
+                    for (const entry of events) {
+                        const lines = formatEventLines(category, entry);
+                        if (!lines.length) continue;
+                        doc.font('Helvetica').fontSize(11).text(`• ${lines[0]}`);
+                        for (let i = 1; i < lines.length; i++) {
+                            doc.text(`  ${lines[i]}`);
+                        }
+                        doc.moveDown(0.05);
+                    }
+                    doc.moveDown(0.2);
+                }
+            }
+        }
+
+        doc.end();
+    }).catch((error) => {
+        console.error('❌ Génération PDF échouée:', error);
+        return null;
+    });
+}
+
+function formatEventLines(category, entry) {
+    const lines = [];
+    const baseTime = formatTimeValue(entry.heure || entry.time || entry.date || entry.timestamp || entry.exactTime);
+
+    switch (category) {
+        case 'horaires': {
+            if (entry.absent) {
+                lines.push('Enfant absent.');
+                break;
+            }
+            if (Array.isArray(entry.segments) && entry.segments.length > 0) {
+                entry.segments.forEach((segment) => {
+                    const arrivee = formatTimeValue(segment.arrivee);
+                    const depart = formatTimeValue(segment.depart);
+                    if (arrivee) {
+                        lines.push(`Arrivée : ${arrivee}`);
+                    }
+                    if (depart) {
+                        let departLine = `Départ : ${depart}`;
+                        if (segment.km !== undefined && segment.km !== null && segment.km !== '') {
+                            departLine += ` (km : ${segment.km})`;
+                        }
+                        lines.push(departLine);
+                    }
+                });
+            } else {
+                if (entry.arrivee) {
+                    lines.push(`Arrivée : ${entry.arrivee}`);
+                }
+                if (entry.depart) {
+                    lines.push(`Départ : ${entry.depart}`);
+                }
+                if (entry.km) {
+                    lines.push(`Kilomètres déclarés : ${entry.km}`);
+                }
+            }
+            break;
+        }
+        case 'repas': {
+            let description = baseTime ? `${baseTime} - ` : '';
+            if (entry.biberon) {
+                description += `Biberon ${entry.ml ? `${entry.ml} ml` : ''}`;
+            } else if (entry.allaitement) {
+                description += 'Allaitement';
+            } else if (entry.qualite) {
+                description += entry.qualite;
+            } else {
+                description += 'Repas';
+            }
+            lines.push(description.trim());
+            if (entry.observations) {
+                lines.push(`Observations : ${entry.observations}`);
+            }
+            break;
+        }
+        case 'activites': {
+            const type = entry.type || 'Activité';
+            const participation = entry.participation || entry.attitude;
+            let description = baseTime ? `${baseTime} - ${type}` : type;
+            if (participation) {
+                description += ` (${participation})`;
+            }
+            lines.push(description);
+            if (entry.observations) {
+                lines.push(`Observations : ${entry.observations}`);
+            }
+            break;
+        }
+        case 'siestes': {
+            let description = baseTime ? `${baseTime} - Sieste` : 'Sieste';
+            if (entry.duration) {
+                description += `, durée : ${entry.duration}`;
+            }
+            if (entry.qualite) {
+                description += `, qualité : ${entry.qualite}`;
+            }
+            lines.push(description);
+            if (entry.observations) {
+                lines.push(`Observations : ${entry.observations}`);
+            }
+            break;
+        }
+        case 'changes': {
+            let description = baseTime ? `${baseTime} - Change ${entry.type || ''}`.trim() : `Change ${entry.type || ''}`.trim();
+            const details = [];
+            if (entry.pipi) details.push('pipi');
+            if (entry.selles) details.push('selles');
+            if (details.length) {
+                description += ` (${details.join(', ')})`;
+            }
+            lines.push(description);
+            if (Array.isArray(entry.soins) && entry.soins.length) {
+                lines.push(`Soins : ${entry.soins.join(', ')}`);
+            }
+            if (entry.observations) {
+                lines.push(`Observations : ${entry.observations}`);
+            }
+            break;
+        }
+        case 'sante': {
+            let description = baseTime ? `${baseTime} - ${entry.type || 'Suivi santé'}` : (entry.type || 'Suivi santé');
+            if (entry.type === 'Température' && entry.temperature) {
+                description += ` : ${entry.temperature}°`;
+                if (entry.route) description += ` (${entry.route})`;
+            } else if (entry.type === 'Poids' && entry.weight) {
+                description += ` : ${entry.weight} kg`;
+            } else if (entry.type === 'Médicaments' && entry.medicationType) {
+                description += ` : ${entry.medicationType}`;
+            }
+            lines.push(description);
+            if (entry.observations) {
+                lines.push(`Observations : ${entry.observations}`);
+            }
+            break;
+        }
+        case 'transmissions': {
+            let description = baseTime ? `${baseTime} - ${entry.category || 'Transmission'}` : (entry.category || 'Transmission');
+            if (entry.content) {
+                description += ` : ${entry.content}`;
+            }
+            lines.push(description);
+            break;
+        }
+        default:
+            break;
+    }
+
+    return lines.filter((line) => line && line.toString().trim().length > 0);
+}
+
+function formatTimeValue(value) {
+    if (!value) return '';
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (typeof value.toDate === 'function') {
+        const dt = DateTime.fromJSDate(value.toDate(), { zone: 'Europe/Paris' });
+        if (dt.isValid) {
+            return dt.toFormat('HH:mm');
+        }
+    }
+    if (value instanceof Date) {
+        const dt = DateTime.fromJSDate(value, { zone: 'Europe/Paris' });
+        if (dt.isValid) {
+            return dt.toFormat('HH:mm');
+        }
+    }
+    return '';
+}
+
+async function enqueueMonthlyEmail({assistant, structureName, period, pdfBuffer, childCount}) {
+    const pdfBase64 = pdfBuffer.toString('base64');
+    const startLabel = period.start.setLocale('fr').toFormat('dd/MM/yyyy');
+    const endLabel = period.end.minus({ days: 1 }).setLocale('fr').toFormat('dd/MM/yyyy');
+    const pdfFilename = buildPdfFilename(structureName, assistant.name || assistant.email, period.label);
+
+    const templateData = {
+        assistantName: assistant.name || assistant.email,
+        structureName,
+        monthLabel: period.label,
+        childCount,
+        periodStart: startLabel,
+        periodEnd: endLabel,
+    };
+
+    await db.collection('emailQueue').add({
+        to: assistant.email,
+        subject: `Récapitulatif ${period.label} - ${structureName}`,
+        template: 'monthly-assistant-recap',
+        templateData,
+        pdfAttachment: pdfBase64,
+        pdfFilename,
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`📧 Email mensuel en file pour ${assistant.email} (${structureName})`);
+}
+
+function buildPdfFilename(structureName, assistantName, periodLabel) {
+    const structureSlug = toSlug(structureName);
+    const assistantSlug = toSlug(assistantName);
+    const periodSlug = toSlug(periodLabel);
+    return `Recap_${structureSlug}_${assistantSlug}_${periodSlug}.pdf`;
+}
+
+function toSlug(value) {
+    if (!value) return 'recap';
+    return value
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase()
+        || 'recap';
+}
+
+function normalizeEmail(email) {
+    if (!email || typeof email !== 'string') return '';
+    return email.trim().toLowerCase();
+}
+
+function getStructureDisplayName(structureData) {
+    if (!structureData) return 'Ma structure';
+    const primary = (structureData.structureName || structureData.name || '').toString().trim();
+    if (primary) return primary;
+    const ownerFirst = (structureData.ownerFirstName || structureData.firstName || '').toString().trim();
+    const ownerLast = (structureData.ownerLastName || structureData.lastName || '').toString().trim();
+    const combined = [ownerFirst, ownerLast].filter(Boolean).join(' ').trim();
+    return combined || 'Ma structure';
+}
+
+function resolveStructureAssistant(structureDoc, structureData = {}) {
+    const candidates = [
+        structureData.assistantEmail,
+        structureData.ownerEmail,
+        structureData.email,
+    ];
+    let email = '';
+    for (const candidate of candidates) {
+        const normalized = normalizeEmail(candidate);
+        if (normalized) {
+            email = normalized;
+            break;
+        }
+    }
+    if (!email) return null;
+
+    const firstName = (structureData.ownerFirstName || structureData.firstName || '').toString().trim();
+    const lastName = (structureData.ownerLastName || structureData.lastName || '').toString().trim();
+    const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || structureData.assistantName || '';
+
+    return {
+        email,
+        name: displayName || email,
+    };
+}

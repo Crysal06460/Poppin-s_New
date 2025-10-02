@@ -32,6 +32,7 @@ class AndroidSubscriptionService {
   bool _isInitialized = false;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
+  int? _lastRequestedMemberCount;
 
   // 🔧 NOUVEAUX IDS : Abonnements séparés avec offres d'essai
   static const Set<String> _allProductIds = {
@@ -51,7 +52,7 @@ class AndroidSubscriptionService {
   static const Map<String, String> _legacyToNewProductIds = {
     'ass-mat': 'abonnement_assmat',
     'abo-mam-2': 'abonnement_mam2',
-    'abo-mam-3': 'abonnement_mam3',
+    'abo-mam-3': 'abonnement_mam4',
     'abo-mam-4': 'abonnement_mam4',
   };
 
@@ -199,9 +200,11 @@ class AndroidSubscriptionService {
         'isTrialPurchase': false,
       };
     } else if (productId == 'abonnement_mam2') {
+      final int resolvedMembers =
+          ((_lastRequestedMemberCount ?? 3).clamp(2, 3) as num).toInt();
       return {
         'structureType': 'MAM',
-        'memberCount': 3,
+        'memberCount': resolvedMembers,
         'priceAmount': 19.99,
         'priceDisplay': '19,99 € / mois',
         'productKey': 'mam-2-3',
@@ -210,19 +213,19 @@ class AndroidSubscriptionService {
     } else if (productId == 'abonnement_mam3') {
       return {
         'structureType': 'MAM',
-        'memberCount': 6,
+        'memberCount': 4,
         'priceAmount': 24.99,
         'priceDisplay': '24,99 € / mois',
-        'productKey': 'mam-4-plus',
+        'productKey': 'mam-4-legacy',
         'isTrialPurchase': false,
       };
     } else if (productId == 'abonnement_mam4') {
       return {
         'structureType': 'MAM',
-        'memberCount': 6,
+        'memberCount': 4,
         'priceAmount': 24.99,
         'priceDisplay': '24,99 € / mois',
-        'productKey': 'mam-4-legacy',
+        'productKey': 'mam-4-plus',
         'isTrialPurchase': false,
       };
     }
@@ -237,9 +240,11 @@ class AndroidSubscriptionService {
         'isTrialPurchase': true,
       };
     } else if (productId == 'essaigratuit-mam2') {
+      final int resolvedMembers =
+          ((_lastRequestedMemberCount ?? 3).clamp(2, 3) as num).toInt();
       return {
         'structureType': 'MAM',
-        'memberCount': 3,
+        'memberCount': resolvedMembers,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
         'productKey': 'trial-mam-2-3',
@@ -248,19 +253,19 @@ class AndroidSubscriptionService {
     } else if (productId == 'essaigratuit-mam3') {
       return {
         'structureType': 'MAM',
-        'memberCount': 6,
+        'memberCount': 4,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-4-plus',
+        'productKey': 'trial-mam-4-legacy',
         'isTrialPurchase': true,
       };
     } else if (productId == 'essaigratuit-mam4') {
       return {
         'structureType': 'MAM',
-        'memberCount': 6,
+        'memberCount': 4,
         'priceAmount': 0.0,
         'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-4-legacy',
+        'productKey': 'trial-mam-4-plus',
         'isTrialPurchase': true,
       };
     }
@@ -366,6 +371,9 @@ class AndroidSubscriptionService {
 
       print('✅ Abonnement Android sauvegardé: ${docRef.id}');
 
+      // Réinitialiser la sélection après traitement
+      _lastRequestedMemberCount = null;
+
       // Mettre à jour structure
       await FirebaseFirestore.instance
           .collection('structures')
@@ -399,8 +407,8 @@ class AndroidSubscriptionService {
         targetTrialId = 'essaigratuit-mam2';
         targetPaidId = 'abonnement_mam2';
       } else {
-        targetTrialId = 'essaigratuit-mam3';
-        targetPaidId = 'abonnement_mam3';
+        targetTrialId = 'essaigratuit-mam4';
+        targetPaidId = 'abonnement_mam4';
       }
     }
 
@@ -431,14 +439,16 @@ class AndroidSubscriptionService {
     if (normalizedType == 'mam' && memberCount > 3) {
       if (preferTrial) {
         for (final product in _availableProducts) {
-          if (product.id == 'essaigratuit-mam4') {
+          if (product.id == 'essaigratuit-mam4' ||
+              product.id == 'essaigratuit-mam3') {
             print('✅ Essai legacy trouvé: ${product.id}');
             return product;
           }
         }
       }
       for (final product in _availableProducts) {
-        if (product.id == 'abonnement_mam4') {
+        if (product.id == 'abonnement_mam4' ||
+            product.id == 'abonnement_mam3') {
           print('✅ Forfait legacy trouvé: ${product.id}');
           return product;
         }
@@ -481,6 +491,9 @@ class AndroidSubscriptionService {
     try {
       print('🛒 Achat: $structureType avec $memberCount membres');
 
+      // Mémoriser la sélection pour ajuster la sauvegarde Firestore
+      _lastRequestedMemberCount = memberCount;
+
       // Chercher d'abord l'essai gratuit
       ProductDetails? product =
           _findProduct(structureType, memberCount, preferTrial: true);
@@ -494,6 +507,7 @@ class AndroidSubscriptionService {
     } catch (e) {
       print('❌ Erreur d\'achat Android: $e');
       _errorController.add('Erreur d\'achat: $e');
+      _lastRequestedMemberCount = null;
       return false;
     }
   }
@@ -526,7 +540,7 @@ class AndroidSubscriptionService {
       if (mamMembersCount <= 3) {
         return 'abonnement_mam2';
       }
-      return 'abonnement_mam3';
+      return 'abonnement_mam4';
     }
 
     return 'abonnement_assmat';

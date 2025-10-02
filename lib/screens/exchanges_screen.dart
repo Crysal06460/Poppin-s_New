@@ -786,6 +786,47 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     }
   }
 
+  Future<void> debugSendMessage(String exchangeId, String content) async {
+    final user = FirebaseAuth.instance.currentUser;
+    print('🔐 User UID: ${user?.uid}');
+    print('📧 User Email: ${user?.email}');
+
+    // Vérifier le document exchange
+    final exchangeDoc = await FirebaseFirestore.instance
+        .collection('exchanges')
+        .doc(exchangeId)
+        .get();
+
+    if (!exchangeDoc.exists) {
+      print('❌ Exchange n\'existe pas!');
+      return;
+    }
+
+    print('📄 Exchange data: ${exchangeDoc.data()}');
+    print('👥 Participants: ${exchangeDoc.data()?['participants']}');
+    print('👤 SenderUid: ${exchangeDoc.data()?['senderUid']}');
+    print('👤 RecipientUid: ${exchangeDoc.data()?['recipientUid']}');
+
+    // Essayer d'envoyer
+    try {
+      await FirebaseFirestore.instance
+          .collection('exchanges')
+          .doc(exchangeId)
+          .collection('messages')
+          .add({
+        'senderUid': user!.uid,
+        'senderEmail': user.email?.toLowerCase(),
+        'content': content,
+        'messageType': 'text',
+        'createdAt': FieldValue.serverTimestamp(),
+        'exchangeId': exchangeId,
+      });
+      print('✅ Message envoyé avec succès!');
+    } catch (e) {
+      print('❌ Erreur: $e');
+    }
+  }
+
   Future<String> _getParentsNames(String childId, String structureId) async {
     try {
       print(
@@ -1484,7 +1525,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             FutureBuilder<Stream<QuerySnapshot>>(
                       future: SafeQuery.exchangesStream(enfant['id']),
                       builder: (context, streamSnap) {
-                        if (streamSnap.connectionState == ConnectionState.waiting) {
+                        if (streamSnap.connectionState ==
+                            ConnectionState.waiting) {
                           return Center(
                               child: CircularProgressIndicator(
                             valueColor:
@@ -1505,139 +1547,146 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         return StreamBuilder<QuerySnapshot>(
                           stream: streamSnap.data!,
                           builder: (context, snapshot) {
-                        if (snapshot.hasError) {
-                          print('Erreur de chargement: ${snapshot.error}');
-                          return Center(
-                            child: Text(
-                              'Erreur de chargement des messages',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: isTabletDevice ? 16 : 14,
-                              ),
-                            ),
-                          );
-                        }
-
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return Center(
-                              child: CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(primaryBlue),
-                          ));
-                        }
-
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(isTabletDevice ? 24 : 16),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.chat_bubble_outline,
-                                      size: isTabletDevice ? 60 : 48,
-                                      color: Colors.grey),
-                                  SizedBox(height: isTabletDevice ? 20 : 16),
-                                  Text(
-                                    "Aucun message\nCommencez la conversation !",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: isTabletDevice ? 20 : 16,
-                                    ),
+                            if (snapshot.hasError) {
+                              print('Erreur de chargement: ${snapshot.error}');
+                              return Center(
+                                child: Text(
+                                  'Erreur de chargement des messages',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: isTabletDevice ? 16 : 14,
                                   ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
+                                ),
+                              );
+                            }
 
-                        // Sort messages client-side by timestamp desc
-                        final messages = List<QueryDocumentSnapshot>.from(
-                            snapshot.data!.docs);
-                        messages.sort((a, b) {
-                          final aTs =
-                              (a.data() as Map<String, dynamic>)['timestamp']
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return Center(
+                                  child: CircularProgressIndicator(
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(primaryBlue),
+                              ));
+                            }
+
+                            if (!snapshot.hasData ||
+                                snapshot.data!.docs.isEmpty) {
+                              return Center(
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.all(isTabletDevice ? 24 : 16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.chat_bubble_outline,
+                                          size: isTabletDevice ? 60 : 48,
+                                          color: Colors.grey),
+                                      SizedBox(
+                                          height: isTabletDevice ? 20 : 16),
+                                      Text(
+                                        "Aucun message\nCommencez la conversation !",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: isTabletDevice ? 20 : 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Sort messages client-side by timestamp desc
+                            final messages = List<QueryDocumentSnapshot>.from(
+                                snapshot.data!.docs);
+                            messages.sort((a, b) {
+                              final aTs = (a.data()
+                                      as Map<String, dynamic>)['timestamp']
                                   as Timestamp?;
-                          final bTs =
-                              (b.data() as Map<String, dynamic>)['timestamp']
+                              final bTs = (b.data()
+                                      as Map<String, dynamic>)['timestamp']
                                   as Timestamp?;
-                          final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
-                          final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
-                          return bMillis.compareTo(aMillis); // desc
-                        });
+                              final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+                              final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+                              return bMillis.compareTo(aMillis); // desc
+                            });
 
-                        // 🔥 CORRECTION CRITIQUE : Marquer les messages DES PARENTS comme lus
-                        List<Future<void>> messageUpdates = [];
-                        for (final doc in messages) {
-                          final message = doc.data() as Map<String, dynamic>;
+                            // 🔥 CORRECTION CRITIQUE : Marquer les messages DES PARENTS comme lus
+                            List<Future<void>> messageUpdates = [];
+                            for (final doc in messages) {
+                              final message =
+                                  doc.data() as Map<String, dynamic>;
 
-                          // ✅ CORRIGÉ: Marquer comme lus les messages des PARENTS (pas de l'assistante)
-                          if (message['senderType'] == 'parent' &&
-                              message['nonLu'] == true) {
-                            messageUpdates.add(FirebaseFirestore.instance
-                                .collection('exchanges')
-                                .doc(doc.id)
-                                .update({'nonLu': false}).then((_) {
-                              print(
-                                  "✅ Message parent ${doc.id} marqué comme lu par l'assistante");
-                            }).catchError((error) {
-                              print("❌ Erreur marquage message parent: $error");
-                            }));
-                          }
-                        }
-
-                        // Si des messages de parents ont été marqués comme lus
-                        if (messageUpdates.isNotEmpty) {
-                          Future.wait(messageUpdates).then((_) {
-                            print(
-                                "🔄 Tous les messages parents marqués comme lus, mise à jour du badge");
-
-                            // 🔥 NOUVEAU : Réinitialiser le compteur de l'assistante maternelle
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user != null) {
-                              final currentUserEmail =
-                                  user.email?.toLowerCase();
-                              if (currentUserEmail != null) {
-                                FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(currentUserEmail)
-                                    .update({'unreadMessages': 0}).then((_) {
+                              // ✅ CORRIGÉ: Marquer comme lus les messages des PARENTS (pas de l'assistante)
+                              if (message['senderType'] == 'parent' &&
+                                  message['nonLu'] == true) {
+                                messageUpdates.add(FirebaseFirestore.instance
+                                    .collection('exchanges')
+                                    .doc(doc.id)
+                                    .update({'nonLu': false}).then((_) {
                                   print(
-                                      "✅ Compteur assistante réinitialisé pour: $currentUserEmail");
+                                      "✅ Message parent ${doc.id} marqué comme lu par l'assistante");
                                 }).catchError((error) {
                                   print(
-                                      "❌ Erreur réinitialisation compteur assistante: $error");
-                                });
+                                      "❌ Erreur marquage message parent: $error");
+                                }));
                               }
                             }
-                          });
-                        }
 
-                        return ListView.builder(
-                          controller: _scrollController,
-                          reverse: true,
-                          padding: EdgeInsets.only(
-                            bottom: isTabletDevice ? 12 : 8,
-                            left: isTabletDevice ? 12 : 0,
-                            right: isTabletDevice ? 12 : 0,
-                          ),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final messageData = {
-                              ...messages[index].data() as Map<String, dynamic>,
-                              'id': messages[index].id,
-                            };
-                            final isMe = messageData['senderId'] ==
-                                FirebaseAuth.instance.currentUser?.uid;
+                            // Si des messages de parents ont été marqués comme lus
+                            if (messageUpdates.isNotEmpty) {
+                              Future.wait(messageUpdates).then((_) {
+                                print(
+                                    "🔄 Tous les messages parents marqués comme lus, mise à jour du badge");
 
-                            return _buildMessage(
-                              messageData,
-                              isMe,
-                              isTabletDevice,
+                                // 🔥 NOUVEAU : Réinitialiser le compteur de l'assistante maternelle
+                                final user = FirebaseAuth.instance.currentUser;
+                                if (user != null) {
+                                  final currentUserEmail =
+                                      user.email?.toLowerCase();
+                                  if (currentUserEmail != null) {
+                                    FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(currentUserEmail)
+                                        .update({'unreadMessages': 0}).then(
+                                            (_) {
+                                      print(
+                                          "✅ Compteur assistante réinitialisé pour: $currentUserEmail");
+                                    }).catchError((error) {
+                                      print(
+                                          "❌ Erreur réinitialisation compteur assistante: $error");
+                                    });
+                                  }
+                                }
+                              });
+                            }
+
+                            return ListView.builder(
+                              controller: _scrollController,
+                              reverse: true,
+                              padding: EdgeInsets.only(
+                                bottom: isTabletDevice ? 12 : 8,
+                                left: isTabletDevice ? 12 : 0,
+                                right: isTabletDevice ? 12 : 0,
+                              ),
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                final messageData = {
+                                  ...messages[index].data()
+                                      as Map<String, dynamic>,
+                                  'id': messages[index].id,
+                                };
+                                final isMe = messageData['senderId'] ==
+                                    FirebaseAuth.instance.currentUser?.uid;
+
+                                return _buildMessage(
+                                  messageData,
+                                  isMe,
+                                  isTabletDevice,
+                                );
+                              },
                             );
-                          },
-                        );
                           },
                         );
                       },
@@ -2108,9 +2157,11 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                     ),
                   ),
                   FutureBuilder<Stream<QuerySnapshot>>(
-                    future: SafeQuery.exchangesStream(enfant['id'], lastOnly: true),
+                    future:
+                        SafeQuery.exchangesStream(enfant['id'], lastOnly: true),
                     builder: (context, streamSnap) {
-                      if (streamSnap.connectionState == ConnectionState.waiting) {
+                      if (streamSnap.connectionState ==
+                          ConnectionState.waiting) {
                         return Padding(
                           padding: EdgeInsets.only(top: 4),
                           child: Text(
@@ -2139,7 +2190,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                       return StreamBuilder<QuerySnapshot>(
                         stream: streamSnap.data!,
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          if (!snapshot.hasData ||
+                              snapshot.data!.docs.isEmpty) {
                             return Padding(
                               padding: EdgeInsets.only(top: 4),
                               child: Text(
@@ -2153,15 +2205,21 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             );
                           }
                           // Pick latest by timestamp
-                          final docs = List<QueryDocumentSnapshot>.from(snapshot.data!.docs);
+                          final docs = List<QueryDocumentSnapshot>.from(
+                              snapshot.data!.docs);
                           docs.sort((a, b) {
-                            final aTs = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-                            final bTs = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                            final aTs =
+                                (a.data() as Map<String, dynamic>)['timestamp']
+                                    as Timestamp?;
+                            final bTs =
+                                (b.data() as Map<String, dynamic>)['timestamp']
+                                    as Timestamp?;
                             final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
                             final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
                             return bMillis.compareTo(aMillis);
                           });
-                          final lastMessage = docs.first.data() as Map<String, dynamic>;
+                          final lastMessage =
+                              docs.first.data() as Map<String, dynamic>;
                           final isFile = lastMessage['type'] == 'file';
 
                           return Padding(
@@ -2170,7 +2228,10 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                               isFile
                                   ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
                                   : lastMessage['content'] != null
-                                      ? (lastMessage['content'].toString().length > 30
+                                      ? (lastMessage['content']
+                                                  .toString()
+                                                  .length >
+                                              30
                                           ? "${lastMessage['content'].toString().substring(0, 30)}..."
                                           : lastMessage['content'].toString())
                                       : "",
@@ -2424,9 +2485,11 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: FutureBuilder<Stream<QuerySnapshot>>(
-                      future: SafeQuery.exchangesStream(enfant['id'], lastOnly: true),
+                      future: SafeQuery.exchangesStream(enfant['id'],
+                          lastOnly: true),
                       builder: (context, streamSnap) {
-                        if (streamSnap.connectionState == ConnectionState.waiting) {
+                        if (streamSnap.connectionState ==
+                            ConnectionState.waiting) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -2475,7 +2538,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         return StreamBuilder<QuerySnapshot>(
                           stream: streamSnap.data!,
                           builder: (context, snapshot) {
-                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                            if (!snapshot.hasData ||
+                                snapshot.data!.docs.isEmpty) {
                               return Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2499,17 +2563,24 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                               );
                             }
                             // Pick latest by timestamp
-                            final docs = List<QueryDocumentSnapshot>.from(snapshot.data!.docs);
+                            final docs = List<QueryDocumentSnapshot>.from(
+                                snapshot.data!.docs);
                             docs.sort((a, b) {
-                              final aTs = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-                              final bTs = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                              final aTs = (a.data()
+                                      as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
+                              final bTs = (b.data()
+                                      as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
                               final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
                               final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
                               return bMillis.compareTo(aMillis);
                             });
-                            final lastMessage = docs.first.data() as Map<String, dynamic>;
+                            final lastMessage =
+                                docs.first.data() as Map<String, dynamic>;
                             final isFile = lastMessage['type'] == 'file';
-                            final timestamp = lastMessage['timestamp'] as Timestamp?;
+                            final timestamp =
+                                lastMessage['timestamp'] as Timestamp?;
                             final formattedTime = timestamp != null
                                 ? DateFormat('HH:mm').format(timestamp.toDate())
                                 : '';
@@ -2529,18 +2600,23 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                         isFile
                                             ? "📎 ${lastMessage['fileName'] ?? 'Fichier'}"
                                             : lastMessage['content'] != null
-                                                ? (lastMessage['content'].toString().length > 40
+                                                ? (lastMessage['content']
+                                                            .toString()
+                                                            .length >
+                                                        40
                                                     ? "${lastMessage['content'].toString().substring(0, 40)}..."
-                                                    : lastMessage['content'].toString())
+                                                    : lastMessage['content']
+                                                        .toString())
                                                 : "",
                                         style: TextStyle(
                                           fontSize: 13,
                                           color: lastMessage['nonLu'] == true
                                               ? Colors.black87
                                               : Colors.grey.shade600,
-                                          fontWeight: lastMessage['nonLu'] == true
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
+                                          fontWeight:
+                                              lastMessage['nonLu'] == true
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
                                         ),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -2668,7 +2744,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

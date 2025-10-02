@@ -51,7 +51,7 @@ class SubscriptionService {
       return {
         'assistante_maternelle': 'abonnement_assmat',
         'mam_2_members': 'abonnement_mam2',
-        'mam_3_members': 'abonnement_mam3',
+        'mam_3_members': 'abonnement_mam2',
         'mam_4_members': 'abonnement_mam4',
       };
     }
@@ -61,10 +61,21 @@ class SubscriptionService {
     final String normalizedType = structureType.toLowerCase();
 
     if (normalizedType == 'mam') {
-      if (memberCount <= 3) {
-        return productIds['mam_2_members'] ?? productIds['mam_3_members']!;
+      if (memberCount <= 2) {
+        return productIds['mam_2_members'] ??
+            productIds['mam_3_members'] ??
+            productIds['mam_4_members']!;
       }
-      return productIds['mam_3_members'] ?? productIds['mam_2_members']!;
+
+      if (memberCount == 3) {
+        return productIds['mam_3_members'] ??
+            productIds['mam_2_members'] ??
+            productIds['mam_4_members']!;
+      }
+
+      return productIds['mam_4_members'] ??
+          productIds['mam_3_members'] ??
+          productIds['mam_2_members']!;
     }
     return productIds['assistante_maternelle']!;
   }
@@ -302,8 +313,14 @@ class SubscriptionService {
         // Accepter les nouveaux et anciens IDs Android
         final Set<String> acceptedProductIds = {
           ...productIds.values,
-          'abonnement_assmat', 'abonnement_mam2', 'abonnement_mam3', 'abonnement_mam4',
-          'abonement_assmat', 'abonement_mam2', 'abonement_mam3', 'abonement_mam4',
+          'abonnement_assmat',
+          'abonnement_mam2',
+          'abonnement_mam3',
+          'abonnement_mam4',
+          'abonement_assmat',
+          'abonement_mam2',
+          'abonement_mam3',
+          'abonement_mam4',
         };
         if (acceptedProductIds.contains(purchase.productID) &&
             (purchase.status == PurchaseStatus.purchased ||
@@ -477,6 +494,12 @@ class SubscriptionService {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // Sur Android, la sauvegarde Firestore est gérée par AndroidSubscriptionService
+      if (!Platform.isIOS) {
+        print('ℹ️ Android: mise à jour Firestore déjà gérée côté natif.');
+        return;
+      }
+
       // Déterminer le type de structure et nombre de membres selon le produit
       String structureType = 'assistante_maternelle';
       int memberCount = 1;
@@ -484,30 +507,15 @@ class SubscriptionService {
       // 🔧 CORRIGÉ : Gérer les deux formats d'IDs (iOS et Android)
       final String productId = purchase.productID;
 
-      if (Platform.isIOS) {
-        // Format iOS : com.beylet.poppinsApp.subscription.mam_2_members
-        if (productId.contains('mam')) {
-          structureType = 'MAM';
-          if (productId.contains('2_members'))
-            memberCount = 2;
-          else if (productId.contains('3_members'))
-            memberCount = 3;
-          else if (productId.contains('4_members')) memberCount = 4;
+      if (productId.contains('mam')) {
+        structureType = 'MAM';
+        if (productId.contains('2_members')) {
+          memberCount = 2;
+        } else if (productId.contains('3_members')) {
+          memberCount = 3;
+        } else if (productId.contains('4_members')) {
+          memberCount = 4;
         }
-      } else {
-        // 🔧 FIX ANDROID : Gérer les deux formats (abonnement_* et abonement_*)
-        if (productId.startsWith('abonnement_mam') ||
-            productId.startsWith('abonement_mam')) {
-          structureType = 'MAM';
-          if (productId.endsWith('mam2')) {
-            memberCount = 2;
-          } else if (productId.endsWith('mam3')) {
-            memberCount = 3;
-          } else if (productId.endsWith('mam4')) {
-            memberCount = 4;
-          }
-        }
-        // assistante_maternelle: valeurs par défaut déjà correctes
       }
 
       print(
@@ -658,25 +666,38 @@ class SubscriptionService {
     // Simuler un délai réaliste
     await Future.delayed(Duration(seconds: 1));
 
+    // Normaliser l'ID (certaines simulations préfixent avec dev_)
+    final String normalizedId =
+        productId.startsWith('dev_') ? productId.substring(4) : productId;
+
     // Déterminer le type de structure et nombre de membres selon le produit
     String structureType = 'assistante_maternelle';
     int memberCount = 1;
     double priceAmount = 6.99;
     String priceDisplay = '6,99 € / mois';
 
-    if (productId.contains('mam')) {
+    if (normalizedId.contains('mam')) {
       structureType = 'MAM';
-      if (productId.contains('2_members') || productId == 'abonement_mam2') {
+      if (normalizedId.contains('2_members') ||
+          normalizedId == 'abonnement_mam2' ||
+          normalizedId == 'abonement_mam2') {
         memberCount = 3;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
-      } else if (productId.contains('3_members') ||
-          productId == 'abonement_mam3') {
-        memberCount = 4;
-        priceAmount = 24.99;
-        priceDisplay = '24,99 € / mois';
-      } else if (productId.contains('4_members') ||
-          productId == 'abonement_mam4') {
+      } else if (normalizedId.contains('3_members') ||
+          normalizedId == 'abonnement_mam3' ||
+          normalizedId == 'abonement_mam3') {
+        memberCount = normalizedId.contains('3_members') ? 3 : 4;
+        if (memberCount == 3) {
+          priceAmount = 19.99;
+          priceDisplay = '19,99 € / mois';
+        } else {
+          priceAmount = 24.99;
+          priceDisplay = '24,99 € / mois';
+        }
+      } else if (normalizedId.contains('4_members') ||
+          normalizedId == 'abonnement_mam4' ||
+          normalizedId == 'abonement_mam4') {
         memberCount = 4;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';

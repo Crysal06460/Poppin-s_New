@@ -305,7 +305,8 @@ class _PricingScreenState extends State<PricingScreen> {
     final String normalizedType = widget.structureType.toLowerCase();
     final bool isAssMat = normalizedType == 'assistante_maternelle';
 
-    final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
+    final String structureType =
+        isAssMat ? 'assistante_maternelle' : 'MAM';
 
     int memberCount;
     if (isAssMat) {
