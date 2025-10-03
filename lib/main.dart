@@ -1,52 +1,45 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // AJOUT : Import pour SystemChrome
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // 🔥 AJOUT : Import Firebase Functions
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:in_app_purchase/in_app_purchase.dart'; // NOUVEAU : Import pour achats intégrés
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ AJOUT CRUCIAL
-import 'dart:io'; // 🚨 AJOUT CRUCIAL pour Platform.isAndroid
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import 'firebase_options.dart';
 import 'routes.dart';
 
-// 🔥 NOUVEL IMPORT POUR LES NOTIFICATIONS
 import 'services/notification_service.dart';
-
-// 🛒 NOUVEAU : Import pour les achats intégrés
 import 'services/subscription_service.dart';
 
-// Clé globale pour le ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-// Palette de couleurs officielles de l'application
-const Color primaryRed = Color(0xFFD94350); // #D94350
-const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
-const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
-const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
-const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+const Color primaryRed = Color(0xFFD94350);
+const Color primaryBlue = Color(0xFF3D9DF2);
+const Color lightBlue = Color(0xFFDFE9F2);
+const Color brightCyan = Color(0xFF05C7F2);
+const Color primaryYellow = Color(0xFFF2B705);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // NOUVEAU : Forcer l'orientation portrait pour toute l'application
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
-    // Suppression de portraitDown pour éviter la rotation 180°
   ]);
 
-  // Initialisation Firebase (utilise les fichiers natifs: GoogleService-Info.plist / google-services.json)
-  // Évite les incohérences de bundleId iOS vs firebase_options.dart
+  // ✅ CORRECTION : Firebase.initializeApp() AVANT d'utiliser FirebaseMessaging
   await Firebase.initializeApp();
 
-  // 🔥 NOUVEAU : Configuration Firebase Functions pour la région europe-west1
-  // Vos Cloud Functions sont déployées dans cette région
+  // ❌ RETIRE CES LIGNES - NE FONCTIONNE PAS SUR iOS ICI
+  // String? token = await FirebaseMessaging.instance.getToken();
+  // print('🔑 MON TOKEN FCM : $token');
+
   try {
-    // Configuration pour la production (région europe-west1)
     FirebaseFunctions.instanceFor(region: 'europe-west1');
     print('✅ Firebase Functions configuré pour europe-west1');
   } catch (e) {
@@ -55,7 +48,6 @@ void main() async {
 
   // 🔥 INITIALISER LES NOTIFICATIONS (NON BLOQUANT)
   try {
-    // Handler background Android/iOS enregistré au plus tôt (top-level)
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     await NotificationService.initialize().timeout(
@@ -66,8 +58,34 @@ void main() async {
     );
     print('✅ Notifications initialisées');
 
-    // 🔔 Important iOS/Android: remettre le badge à 0 au démarrage
-    // Évite le "1" persistant sur l'icône après lecture des messages
+    // ✅ OBTENIR LE TOKEN ICI (après l'initialisation des notifications)
+    try {
+      // Attendre un peu pour iOS
+      await Future.delayed(Duration(milliseconds: 500));
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        print('╔═══════════════════════════════════════╗');
+        print('🔑 MON TOKEN FCM : $token');
+        print('╚═══════════════════════════════════════╝');
+
+        // 💾 Sauvegarder le token pour l'afficher plus tard
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', token);
+
+        try {
+          await FirebaseMessaging.instance.subscribeToTopic('all_users');
+          print('✅ Abonné au topic all_users');
+        } catch (e) {
+          print('⚠️ Impossible de s\'abonner au topic all_users: $e');
+        }
+      } else {
+        print('⚠️ Token null - sera disponible après autorisation');
+      }
+    } catch (e) {
+      print('⚠️ Token FCM pas encore disponible: $e');
+      print('💡 Le token sera disponible après autorisation des notifications');
+    }
+
     try {
       await NotificationService.clearBadge();
     } catch (e) {
@@ -77,19 +95,11 @@ void main() async {
     print('⚠️ Erreur notifications: $e - continuer sans');
   }
 
-  // 🚨 FIX URGENCE ANDROID : Gestion différenciée iOS/Android
   try {
     print('🚨 FIX ANDROID : Initialisation SubscriptionService...');
-
-    // Activer le mode debug uniquement en développement
     SubscriptionService.setDebugMode(kDebugMode);
-    if (kDebugMode) {
-      print('🧪 Mode debug activé pour SubscriptionService');
-    }
 
-    // 🔧 LOGIQUE DIFFÉRENCIÉE iOS vs ANDROID
     if (Platform.isAndroid) {
-      // ANDROID : Force l'initialisation complète pour éviter race condition
       print('🤖 ANDROID détecté : initialisation forcée...');
       await SubscriptionService.initialize().timeout(
         Duration(seconds: 5),
@@ -100,24 +110,18 @@ void main() async {
       );
       print('✅ SubscriptionService initialisé pour Android');
     } else {
-      // iOS : Garde l'ancienne logique (initialisation dans SplashScreen)
       print(
           '📱 iOS détecté : SubscriptionService sera initialisé dans SplashScreen');
-      // Ne pas initialiser maintenant pour iOS - garde le comportement existant
     }
   } catch (e) {
     print('⚠️ Erreur SubscriptionService: $e - continuer avec mode debug');
-    // En cas d'erreur, forcer le mode debug pour éviter blocage
     SubscriptionService.setDebugMode(true);
   }
 
   print('🚀 Démarrage Poppins - Fix Android appliqué, iOS préservé');
-
-  // Lance l'application après que Firebase soit initialisé
   runApp(const PoppinsApp());
 }
 
-// MODIFICATION : Changement de StatelessWidget vers StatefulWidget
 class PoppinsApp extends StatefulWidget {
   const PoppinsApp({Key? key}) : super(key: key);
 
@@ -125,33 +129,27 @@ class PoppinsApp extends StatefulWidget {
   State<PoppinsApp> createState() => _PoppinsAppState();
 }
 
-// NOUVEAU : State class avec WidgetsBindingObserver
 class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Forcer l'orientation au démarrage
     _setPortraitOrientation();
   }
 
   @override
   void dispose() {
-    // 🛒 AJOUT : Nettoyer les ressources SubscriptionService
     SubscriptionService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // 🔒 GESTION CRITIQUE DU CYCLE DE VIE - MODIFIÉE POUR LE SYSTÈME DE SÉCURITÉ
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
 
-    // Remettre en portrait si nécessaire
     if (state == AppLifecycleState.resumed) {
       _setPortraitOrientation();
-      // 🔔 Remettre le badge de l'icône à 0 quand l'app revient au premier plan
       try {
         NotificationService.clearBadge();
       } catch (e) {
@@ -159,36 +157,26 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
       }
     }
 
-    // 🔒 GESTION DU CYCLE DE VIE POUR LA SÉCURITÉ
     try {
       final prefs = await SharedPreferences.getInstance();
-
       print("🔄 Cycle de vie changé: $state");
 
       switch (state) {
         case AppLifecycleState.paused:
-          // App mise en arrière-plan (pas fermée)
           await prefs.setBool('app_killed', false);
           print("📱 App mise en arrière-plan");
           break;
-
         case AppLifecycleState.inactive:
-          // App temporairement inactive (ex: bouton Home)
           await prefs.setBool('app_killed', false);
           print("⏸️ App temporairement inactive");
           break;
-
         case AppLifecycleState.detached:
-          // App fermée complètement
           await prefs.setBool('app_killed', true);
           print("❌ App fermée complètement");
           break;
-
         case AppLifecycleState.resumed:
-          // App revenue au premier plan
           print("✅ App revenue au premier plan");
           break;
-
         case AppLifecycleState.hidden:
           break;
       }
@@ -197,7 +185,6 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     }
   }
 
-  // NOUVEAU : Méthode pour forcer l'orientation portrait
   void _setPortraitOrientation() {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -208,23 +195,18 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: "Poppin's", // Nom mis à jour de l'application
-      scaffoldMessengerKey: scaffoldMessengerKey, // Ajout de la clé globale
-
-      // Ajout des délégués de localisation
+      title: "Poppin's",
+      scaffoldMessengerKey: scaffoldMessengerKey,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // Prise en charge des locales
       supportedLocales: const [
-        Locale('fr', 'FR'), // Français (primaire)
-        Locale('en', 'US'), // Anglais (secondaire)
+        Locale('fr', 'FR'),
+        Locale('en', 'US'),
       ],
-      // Définir le français comme locale par défaut
       locale: const Locale('fr', 'FR'),
-
       theme: ThemeData(
         primaryColor: primaryBlue,
         colorScheme: ColorScheme.light(

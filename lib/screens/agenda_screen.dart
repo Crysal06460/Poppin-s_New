@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../utils/structure_context.dart';
+import '../services/notification_service.dart';
 
 class AgendaScreen extends StatefulWidget {
   const AgendaScreen({Key? key}) : super(key: key);
@@ -104,10 +104,27 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
     _subscription = collection.snapshots().listen((snapshot) {
       final email = (_userEmail ?? '').toLowerCase();
+      final previousIds = _entries.map((entry) => entry.id).toSet();
       final entries = snapshot.docs
           .map((doc) => _AgendaEntry.fromDocument(doc.id, doc.data()))
           .where((entry) => entry.isVisibleFor(email))
           .toList();
+
+      final Set<String> newIds = entries.map((entry) => entry.id).toSet();
+      final Iterable<String> removedIds = previousIds.difference(newIds);
+
+      for (final id in removedIds) {
+        unawaited(NotificationService.cancelAgendaReminder(id));
+      }
+
+      for (final entry in entries) {
+        unawaited(NotificationService.scheduleAgendaReminder(
+          entryId: entry.id,
+          scheduledAt: entry.dueDate,
+          title: entry.title,
+          body: entry.notes,
+        ));
+      }
 
       if (!mounted) return;
       setState(() {
@@ -146,7 +163,12 @@ class _AgendaScreenState extends State<AgendaScreen> {
   void _showAgendaForm({_AgendaEntry? entry}) {
     final titleController = TextEditingController(text: entry?.title ?? '');
     final notesController = TextEditingController(text: entry?.notes ?? '');
-    DateTime selectedDate = entry?.dueDate ?? DateTime.now();
+    final DateTime now = DateTime.now();
+    final DateTime initialDueDate = entry?.dueDate ?? now.add(const Duration(hours: 1));
+    DateTime selectedDate =
+        DateTime(initialDueDate.year, initialDueDate.month, initialDueDate.day);
+    TimeOfDay selectedTime =
+        TimeOfDay(hour: initialDueDate.hour, minute: initialDueDate.minute);
     bool shareWithStructure =
         entry?.isShared ?? (_isMamStructure ? true : false);
 
@@ -182,6 +204,26 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 }
               }
 
+              Future<void> pickTime() async {
+                final TimeOfDay? picked = await showTimePicker(
+                  context: context,
+                  initialTime: selectedTime,
+                  builder: (context, child) {
+                    return MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        alwaysUse24HourFormat: true,
+                      ),
+                      child: child ?? const SizedBox.shrink(),
+                    );
+                  },
+                );
+                if (picked != null) {
+                  setModalState(() {
+                    selectedTime = picked;
+                  });
+                }
+              }
+
               Future<void> submit() async {
                 final String trimmedTitle = titleController.text.trim();
                 if (trimmedTitle.isEmpty) {
@@ -192,11 +234,19 @@ class _AgendaScreenState extends State<AgendaScreen> {
                   return;
                 }
 
+                final DateTime combinedDueDate = DateTime(
+                  selectedDate.year,
+                  selectedDate.month,
+                  selectedDate.day,
+                  selectedTime.hour,
+                  selectedTime.minute,
+                );
+
                 final bool success = await _saveAgendaEntry(
                   entryId: entry?.id,
                   title: trimmedTitle,
                   notes: notesController.text.trim(),
-                  dueDate: selectedDate,
+                  dueDate: combinedDueDate,
                   shareWithStructure: shareWithStructure,
                   originalCreator: entry?.createdBy,
                 );
@@ -211,10 +261,19 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 _confirmDeletion(entry!);
               }
 
+              final DateTime previewDateTime = DateTime(
+                selectedDate.year,
+                selectedDate.month,
+                selectedDate.day,
+                selectedTime.hour,
+                selectedTime.minute,
+              );
               final String formattedDate =
-                  DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(selectedDate);
+                  DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(previewDateTime);
               final String capitalizedDate =
                   formattedDate[0].toUpperCase() + formattedDate.substring(1);
+              final String formattedTime =
+                  DateFormat('HH:mm', 'fr_FR').format(previewDateTime);
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -264,6 +323,16 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     subtitle: const Text('Touchez pour sélectionner une date'),
                     onTap: pickDate,
                     trailing: const Icon(Icons.edit_calendar_outlined),
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.access_time),
+                    title: Text('À $formattedTime'),
+                    subtitle:
+                        const Text('Touchez pour sélectionner une heure'),
+                    onTap: pickTime,
+                    trailing: const Icon(Icons.schedule_outlined),
                   ),
                   if (_isMamStructure) ...[
                     const SizedBox(height: 8),
@@ -337,9 +406,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
       final Map<String, dynamic> payload = {
         'title': title,
-        'dueDate': Timestamp.fromDate(
-          DateTime(dueDate.year, dueDate.month, dueDate.day),
-        ),
+        'dueDate': Timestamp.fromDate(dueDate),
         'visibleTo': visibility,
         'createdBy': originalCreator ?? email,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -421,6 +488,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
           .collection('agendaEntries')
           .doc(entry.id)
           .delete();
+
+      await NotificationService.cancelAgendaReminder(entry.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -518,6 +587,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
         DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(entry.dueDate);
     final String capitalizedDate =
         formattedDate[0].toUpperCase() + formattedDate.substring(1);
+    final String? formattedTime = entry.hasSpecificTime
+        ? DateFormat('HH:mm', 'fr_FR').format(entry.dueDate)
+        : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -674,7 +746,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              capitalizedDate,
+                              formattedTime != null
+                                  ? '$capitalizedDate à $formattedTime'
+                                  : capitalizedDate,
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: _textSecondary,
@@ -866,6 +940,8 @@ class _AgendaEntry {
   bool get isShared =>
       visibleTo.map((value) => value.toLowerCase()).contains('all');
 
+  bool get hasSpecificTime => dueDate.hour != 0 || dueDate.minute != 0;
+
   bool isVisibleFor(String email) {
     final List<String> loweredVisibility =
         visibleTo.map((value) => value.toLowerCase()).toList();
@@ -902,7 +978,6 @@ class _AgendaEntry {
       final parsed = DateTime.tryParse(due);
       if (parsed != null) dueDate = parsed;
     }
-    dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
 
     final List<String> visibility = [];
     if (data['visibleTo'] is Iterable) {

@@ -942,7 +942,6 @@ class _HomeScreenState extends State<HomeScreen> {
         } else {
           continue;
         }
-        dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
 
         final List<String> visibilityRaw = [];
         if (data['visibleTo'] is Iterable) {
@@ -1068,6 +1067,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       final String title = entry['title'] as String? ?? 'Rappel';
                       final String notes = entry['notes'] as String? ?? '';
                       final bool isShared = entry['isShared'] as bool? ?? false;
+                      final DateTime? dueDate = entry['dueDate'] as DateTime?;
+                      final String? formattedTime = dueDate != null
+                          ? DateFormat('HH:mm', 'fr_FR').format(dueDate)
+                          : null;
 
                       return Container(
                         decoration: BoxDecoration(
@@ -1108,6 +1111,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
+                            if (formattedTime != null) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule,
+                                    size: 18,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'À $formattedTime',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                             if (notes.isNotEmpty) ...[
                               const SizedBox(height: 10),
                               Text(

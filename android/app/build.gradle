@@ -58,17 +58,17 @@ android {
     // 🚨 FIX KOTLIN : Force la résolution des versions conflictuelles
     configurations.all {
         resolutionStrategy {
-            force "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22"
-            force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.22"
-            force "org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22"
+            force "org.jetbrains.kotlin:kotlin-stdlib:2.1.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-common:2.1.0"
+            force "org.jetbrains.kotlin:kotlin-android-extensions-runtime:2.1.0"
         }
     }
 
     defaultConfig {
         applicationId "com.beylet.poppinsapp"
-        minSdkVersion 23  // ← CHANGER de flutter.minSdkVersion vers 23
+        minSdkVersion flutter.minSdkVersion  // ← CHANGER de flutter.minSdkVersion vers 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

@@ -3,11 +3,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
-import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import 'package:poppins_app/routes.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 // Top-level background handler (recommandé par firebase_messaging)
 @pragma('vm:entry-point')
@@ -26,6 +28,7 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   static bool _isInitialized = false;
+  static bool _timezoneInitialized = false;
 
   /// Initialise le service de notifications
   static Future<void> initialize() async {
@@ -44,7 +47,8 @@ class NotificationService {
       print('✅ Service de notifications initialisé avec succès');
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation des notifications: $e');
-      _isInitialized = true;
+      _isInitialized = false;
+      rethrow;
     }
   }
 
@@ -86,11 +90,22 @@ class NotificationService {
         showBadge: true,
       );
 
+      const AndroidNotificationChannel agendaChannel = AndroidNotificationChannel(
+        'agenda_reminders_channel',
+        'Agenda',
+        description: 'Notifications pour les rappels agenda',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
+
       final androidPlugin =
           _localNotifications.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
       await androidPlugin?.createNotificationChannel(channel);
+      await androidPlugin?.createNotificationChannel(agendaChannel);
       print('✅ Canal Android créé');
 
       // Android 13+ : demander explicitement la permission via permission_handler
@@ -111,6 +126,32 @@ class NotificationService {
     }
 
     print('✅ Flutter Local Notifications initialisé');
+    await _ensureTimezoneInitialized();
+  }
+
+  static Future<void> _ensureTimezoneInitialized() async {
+    if (_timezoneInitialized) return;
+    try {
+      tz.initializeTimeZones();
+      final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+      _timezoneInitialized = true;
+      print('🕑 Fuseau horaire initialisé: $timeZoneName');
+    } catch (e) {
+      print('⚠️ Impossible de récupérer le fuseau horaire local: $e');
+      try {
+        const fallbackZone = 'Europe/Paris';
+        tz.initializeTimeZones();
+        tz.setLocalLocation(tz.getLocation(fallbackZone));
+        _timezoneInitialized = true;
+        print('🕑 Fuseau horaire fallback utilisé: $fallbackZone');
+      } catch (fallbackError) {
+        print('⚠️ Échec fallback fuseau horaire: $fallbackError');
+        tz.initializeTimeZones();
+        _timezoneInitialized = true;
+        print('🕑 Fuseau horaire UTC appliqué par défaut');
+      }
+    }
   }
 
   /// 🔥 NOUVELLES MÉTHODES : Force la sauvegarde des tokens
@@ -315,6 +356,88 @@ class NotificationService {
     }
   }
 
+  /// Planifie une notification locale pour un rappel agenda
+  static Future<void> scheduleAgendaReminder({
+    required String entryId,
+    required DateTime scheduledAt,
+    required String title,
+    String? body,
+  }) async {
+    try {
+      if (!_isInitialized) {
+        await initialize();
+      }
+      await _ensureTimezoneInitialized();
+
+      final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+      final tz.TZDateTime scheduledDate =
+          tz.TZDateTime.from(scheduledAt, tz.local);
+
+      if (!scheduledDate.isAfter(now)) {
+        await cancelAgendaReminder(entryId);
+        print('⏳ Rappel agenda ignoré (date passée) : $scheduledDate');
+        return;
+      }
+
+      await cancelAgendaReminder(entryId);
+
+      final int notificationId = _agendaNotificationId(entryId);
+
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'agenda_reminders_channel',
+        'Agenda',
+        channelDescription: 'Notifications pour les rappels agenda',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.zonedSchedule(
+        notificationId,
+        title.isEmpty ? 'Rappel agenda' : title,
+        (body != null && body.trim().isNotEmpty)
+            ? body
+            : 'N\'oublie pas ton rappel',
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.wallClockTime,
+        payload: jsonEncode({
+          'type': 'agenda',
+          'entryId': entryId,
+        }),
+      );
+
+      print('✅ Rappel agenda planifié pour $scheduledDate (id=$entryId)');
+    } catch (e) {
+      print('⚠️ Impossible de planifier le rappel agenda ($entryId): $e');
+    }
+  }
+
+  /// Annule une notification locale pour un rappel agenda
+  static Future<void> cancelAgendaReminder(String entryId) async {
+    try {
+      final int notificationId = _agendaNotificationId(entryId);
+      await _localNotifications.cancel(notificationId);
+      print('🧹 Rappel agenda annulé (id=$entryId)');
+    } catch (e) {
+      print('⚠️ Impossible d\'annuler le rappel agenda ($entryId): $e');
+    }
+  }
+
   /// Sauvegarder le token FCM dans Firestore
   static Future<void> _saveTokenToFirestore(String token) async {
     try {
@@ -500,4 +623,7 @@ class NotificationService {
     print(
         '📱 Message Firebase en arrière-plan: ${message.notification?.title}');
   }
+
+  static int _agendaNotificationId(String entryId) =>
+      entryId.hashCode & 0x7fffffff;
 }

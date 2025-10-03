@@ -51,7 +51,7 @@ class SubscriptionService {
       return {
         'assistante_maternelle': 'abonnement_assmat',
         'mam_2_members': 'abonnement_mam2',
-        'mam_3_members': 'abonnement_mam2',
+        'mam_3_members': 'abonnement_mam3',
         'mam_4_members': 'abonnement_mam4',
       };
     }

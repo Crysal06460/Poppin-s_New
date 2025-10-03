@@ -1366,6 +1366,8 @@ PODS:
     - Flutter
   - flutter_pdfview (1.0.2):
     - Flutter
+  - flutter_timezone (0.0.1):
+    - Flutter
   - gal (1.0.0):
     - Flutter
     - FlutterMacOS
@@ -1601,6 +1603,7 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - flutter_pdfview (from `.symlinks/plugins/flutter_pdfview/ios`)
+  - flutter_timezone (from `.symlinks/plugins/flutter_timezone/ios`)
   - gal (from `.symlinks/plugins/gal/darwin`)
   - GoogleUtilities
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
@@ -1675,6 +1678,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
   flutter_pdfview:
     :path: ".symlinks/plugins/flutter_pdfview/ios"
+  flutter_timezone:
+    :path: ".symlinks/plugins/flutter_timezone/ios"
   gal:
     :path: ".symlinks/plugins/gal/darwin"
   image_picker_ios:
@@ -1732,6 +1737,7 @@ SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_local_notifications: 4cde75091f6327eb8517fa068a0a5950212d2086
   flutter_pdfview: 2e4d13ffb774858562ffbdfdb61b40744b191adc
+  flutter_timezone: ffb07bdad3c6276af8dada0f11978d8a1f8a20bb
   gal: 6a522c75909f1244732d4596d11d6a2f86ff37a5
   GoogleAdsOnDeviceConversion: 2be6297a4f048459e0ae17fad9bfd2844e10cf64
   GoogleAppMeasurement: 700dce7541804bec33db590a5c496b663fbe2539

@@ -26,6 +26,8 @@ import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import '../services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'package:xml/xml.dart' as xml;
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -35,6 +37,18 @@ class DashboardScreen extends StatefulWidget {
 
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
+}
+
+class _RssHeadline {
+  const _RssHeadline({
+    required this.title,
+    required this.link,
+    this.published,
+  });
+
+  final String title;
+  final String link;
+  final DateTime? published;
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
@@ -62,6 +76,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _structureOwnerEmail;
   bool _currentMemberIsAdmin = false;
   Set<String> _delegatedChildIds = {};
+
+  static const int _rssMaxItems = 1;
+  static const Duration _rssRefreshCooldown = Duration(minutes: 15);
+  static const Duration _rssRequestTimeout = Duration(seconds: 8);
+  static const String _defaultRssFeedUrl = 'https://www.lassmat.fr/rss.xml';
+
+  String? _rssFeedUrl;
+  List<_RssHeadline> _rssItems = const [];
+  bool _isRssLoading = false;
+  String? _rssError;
+  DateTime? _lastRssFetch;
+  bool _showDashboardNews = true;
 
   // Couleurs dédiées aux tuiles de la grille (style 2025)
   final Color _tileBlue = const Color(0xFF3D9DF2);
@@ -98,7 +124,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     needAssmatFridgeTemperatureCheck = false;
     needAssmatFreezerTemperatureCheck = false;
 
-    initializeDateFormatting('fr_FR', null).then((_) {
+    Future.wait([
+      initializeDateFormatting('fr_FR', null),
+      initializeDateFormatting('en_US', null),
+    ]).then((_) {
       _loadData();
       _checkMonthlyTableEnabled();
       _checkIfMAMStructure();
@@ -179,6 +208,212 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _pendingDelegationsCount = count;
     });
+  }
+
+  bool get _shouldDisplayRssSection =>
+      _showDashboardNews &&
+      _rssFeedUrl != null &&
+      _rssFeedUrl!.trim().isNotEmpty;
+
+  String? _resolveRssFeedUrl(Map<String, dynamic> structureData) {
+    const candidateKeys = ['dashboardRssUrl', 'rssFeedUrl', 'rssUrl'];
+    for (final key in candidateKeys) {
+      final value = structureData[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return _defaultRssFeedUrl;
+  }
+
+  DateTime? _parseRssDate(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    DateTime? parsed = DateTime.tryParse(trimmed);
+    if (parsed != null) {
+      return parsed.toLocal();
+    }
+
+    const patterns = [
+      "EEE, dd MMM yyyy HH:mm:ss Z",
+      "EEE, dd MMM yyyy HH:mm:ss zzz",
+      "yyyy-MM-dd'T'HH:mm:ss'Z'",
+      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+    ];
+
+    for (final pattern in patterns) {
+      try {
+        final format = DateFormat(pattern, 'en_US');
+        return format.parseUtc(trimmed).toLocal();
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  _RssHeadline? _parseRssElement(xml.XmlElement element) {
+    xml.XmlElement? titleElement = element.getElement('title');
+    if (titleElement == null) {
+      for (final child in element.children.whereType<xml.XmlElement>()) {
+        if (child.name.local.toLowerCase() == 'title') {
+          titleElement = child;
+          break;
+        }
+      }
+    }
+
+    final String title = titleElement?.innerText.trim() ?? '';
+    if (title.isEmpty) {
+      return null;
+    }
+
+    String? link;
+    final directLink = element.getElement('link');
+    if (directLink != null) {
+      link = (directLink.getAttribute('href') ?? directLink.innerText).trim();
+    }
+
+    if (link == null || link.isEmpty) {
+      for (final candidate in element.findElements('link')) {
+        final rel = candidate.getAttribute('rel');
+        final candidateLink =
+            (candidate.getAttribute('href') ?? candidate.innerText).trim();
+        if (candidateLink.isEmpty) {
+          continue;
+        }
+        if (rel == null || rel == 'alternate') {
+          link = candidateLink;
+          break;
+        }
+      }
+    }
+
+    if (link == null || link.isEmpty) {
+      final enclosure = element.getElement('enclosure');
+      if (enclosure != null) {
+        link = (enclosure.getAttribute('url') ?? '').trim();
+      }
+    }
+
+    if (link == null || link.isEmpty) {
+      return null;
+    }
+
+    final rawDate = element.getElement('pubDate')?.innerText ??
+        element.getElement('published')?.innerText ??
+        element.getElement('updated')?.innerText;
+
+    return _RssHeadline(
+      title: title,
+      link: link,
+      published: _parseRssDate(rawDate),
+    );
+  }
+
+  Future<void> _fetchRssFeed({bool force = false}) async {
+    if (!_shouldDisplayRssSection) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (!force &&
+        _lastRssFetch != null &&
+        now.difference(_lastRssFetch!) < _rssRefreshCooldown) {
+      return;
+    }
+
+    if (_isRssLoading) {
+      return;
+    }
+
+    setState(() {
+      _isRssLoading = true;
+      if (force) {
+        _rssError = null;
+      }
+    });
+
+    try {
+      final response =
+          await http.get(Uri.parse(_rssFeedUrl!)).timeout(_rssRequestTimeout);
+
+      if (response.statusCode != 200) {
+        throw Exception('Statut HTTP ${response.statusCode}');
+      }
+
+      final document = xml.XmlDocument.parse(response.body);
+      Iterable<xml.XmlElement> itemElements = document.findAllElements('item');
+      if (itemElements.isEmpty) {
+        itemElements = document.findAllElements('entry');
+      }
+
+      final parsedItems = itemElements
+          .map(_parseRssElement)
+          .whereType<_RssHeadline>()
+          .take(_rssMaxItems)
+          .toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _rssItems = parsedItems;
+        _rssError = parsedItems.isEmpty ? 'Aucune actualité trouvée.' : null;
+        _lastRssFetch = now;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _rssError = "Impossible de charger le fil.";
+        if (_rssItems.isEmpty) {
+          _rssItems = const [];
+        }
+        _lastRssFetch = now;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isRssLoading = false;
+      });
+    }
+  }
+
+  String? _formatRssDate(DateTime? date) {
+    if (date == null) {
+      return null;
+    }
+    return DateFormat('dd MMM', 'fr_FR').format(date);
+  }
+
+  Future<void> _openRssItem(String link) async {
+    final uri = Uri.tryParse(link);
+    if (uri == null) {
+      return;
+    }
+
+    try {
+      final success = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Impossible d'ouvrir l'article"),
+            backgroundColor: primaryRed,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Impossible d'ouvrir l'article"),
+          backgroundColor: primaryRed,
+        ),
+      );
+    }
   }
 
   Widget _buildDelegationsBadgeFuture() {
@@ -1473,6 +1708,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: _showChildDisplaySettings,
           bulletColor: _tileBlue,
         ),
+        _sheetAction(
+          label: 'Actualités',
+          onTap: _showDashboardNewsSettings,
+          bulletColor: _tileBlue,
+        ),
       ]);
     } else if (isParentEmployeurStructure) {
       actions.addAll([
@@ -1485,6 +1725,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         _sheetAction(
           label: 'Gestion des enfants',
+          onTap: () {},
+          bulletColor: _tileBlue,
+          enabled: false,
+          disabledMessage: lockedMessage,
+        ),
+        _sheetAction(
+          label: 'Actualités',
           onTap: () {},
           bulletColor: _tileBlue,
           enabled: false,
@@ -1963,6 +2210,187 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _getDailyOpsTileBadge() {
     final int total = _getTemperatureAlertCount() + _pendingDelegationsCount;
     return _formatBadgeCount(total);
+  }
+
+  Widget _buildRssSection() {
+    if (!_shouldDisplayRssSection) {
+      return const SizedBox.shrink();
+    }
+
+    final bool showLoading = _isRssLoading && _rssItems.isEmpty;
+    final bool hasItems = _rssItems.isNotEmpty;
+    final String? error = _rssError;
+
+    // Détecter si on est sur mobile ou tablette
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bool isMobile = screenWidth < 600;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16), // Réduit de 20 à 16
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06), // Ombre plus légère
+            offset: const Offset(0, 2), // Réduit de 3 à 2
+            blurRadius: 8, // Réduit de 12 à 8
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(isMobile ? 12 : 16), // Padding réduit sur mobile
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: isMobile ? 14 : 18, // Plus petit sur mobile
+                backgroundColor: primaryColor.withOpacity(0.12),
+                child: Icon(
+                  Icons.rss_feed,
+                  color: primaryColor,
+                  size: isMobile ? 16 : 20, // Icône plus petite sur mobile
+                ),
+              ),
+              SizedBox(width: isMobile ? 8 : 12),
+              Expanded(
+                child: Text(
+                  'Fil d\'actualité',
+                  style: TextStyle(
+                    fontSize: isMobile ? 15 : 18, // Texte plus petit sur mobile
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed:
+                    _isRssLoading ? null : () => _fetchRssFeed(force: true),
+                tooltip: 'Actualiser le fil',
+                padding: EdgeInsets.all(isMobile ? 4 : 8),
+                constraints: BoxConstraints(
+                  minWidth: isMobile ? 32 : 40,
+                  minHeight: isMobile ? 32 : 40,
+                ),
+                icon: _isRssLoading
+                    ? SizedBox(
+                        width: isMobile ? 16 : 20,
+                        height: isMobile ? 16 : 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(primaryColor),
+                        ),
+                      )
+                    : Icon(Icons.refresh, size: isMobile ? 18 : 20),
+              ),
+            ],
+          ),
+          if (error != null)
+            Padding(
+              padding: EdgeInsets.only(top: isMobile ? 6 : 12),
+              child: Text(
+                error,
+                style: TextStyle(
+                  color: Colors.red.shade600,
+                  fontSize: isMobile ? 12 : 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          if (showLoading)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 24),
+              child: Center(
+                child: SizedBox(
+                  width: isMobile ? 20 : 24,
+                  height: isMobile ? 20 : 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                  ),
+                ),
+              ),
+            )
+          else if (hasItems) ...[
+            SizedBox(height: isMobile ? 6 : 12),
+            for (int i = 0; i < _rssItems.length; i++) ...[
+              if (i > 0) const Divider(height: 8),
+              _buildRssItemRow(_rssItems[i], isMobile: isMobile),
+            ],
+          ] else if (error == null)
+            Padding(
+              padding: EdgeInsets.only(top: isMobile ? 6 : 12),
+              child: Text(
+                'Aucune actualité disponible pour le moment.',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: isMobile ? 12 : 14,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRssItemRow(_RssHeadline item, {bool isMobile = false}) {
+    final String? dateLabel = _formatRssDate(item.published);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openRssItem(item.link),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: isMobile ? 4 : 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.article_outlined,
+              color: primaryColor,
+              size: isMobile ? 16 : 18, // Icône plus petite sur mobile
+            ),
+            SizedBox(width: isMobile ? 8 : 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontSize:
+                          isMobile ? 13 : 14, // Texte plus petit sur mobile
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (dateLabel != null)
+                    Padding(
+                      padding: EdgeInsets.only(top: isMobile ? 2 : 4),
+                      child: Text(
+                        dateLabel,
+                        style: TextStyle(
+                          fontSize:
+                              isMobile ? 11 : 12, // Date plus petite sur mobile
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(width: isMobile ? 6 : 12),
+            Icon(
+              Icons.open_in_new,
+              color: Colors.grey.shade500,
+              size: isMobile ? 14 : 18, // Icône plus petite sur mobile
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildQuickGrid() {
@@ -2870,6 +3298,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
+      final Map<String, dynamic> structureData =
+          structureSnapshot.data() ?? <String, dynamic>{};
+
+      final dynamic showNewsRaw = structureData['showDashboardNews'];
+      final bool hasNewsPreference = showNewsRaw is bool;
+      final bool showNewsPreference = hasNewsPreference ? showNewsRaw : true;
+
+      if (!hasNewsPreference) {
+        try {
+          await structureSnapshot.reference
+              .set({'showDashboardNews': true}, SetOptions(merge: true));
+        } catch (e) {
+          print(
+              '⚠️ Impossible de définir la préférence Actualités par défaut: $e');
+        }
+      }
+
       final childrenSnapshot = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -2888,18 +3333,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final String structureType =
-          (structureSnapshot.data()?['structureType'] ?? '')
-              .toString()
-              .toLowerCase();
+          (structureData['structureType'] ?? '').toString().toLowerCase();
+      final String? resolvedRssUrl = _resolveRssFeedUrl(structureData);
+      final String currentRss = _rssFeedUrl?.trim() ?? '';
+      final String newRss = resolvedRssUrl?.trim() ?? '';
+      final bool rssUrlChanged = currentRss != newRss;
 
       setState(() {
-        structureName =
-            structureSnapshot.data()?['structureName'] ?? 'Ma Structure';
+        structureName = structureData['structureName'] ?? 'Ma Structure';
         enfants = tempEnfants;
         isParentEmployeurStructure = structureType == 'parent_employeur' ||
             structureType == 'parentemployeur';
+        _rssFeedUrl = resolvedRssUrl;
+        _showDashboardNews = showNewsPreference;
+        if (rssUrlChanged) {
+          _rssItems = const [];
+          _rssError = null;
+          _lastRssFetch = null;
+        }
         isLoading = false;
       });
+
+      if (newRss.isNotEmpty && showNewsPreference) {
+        final bool mustForce = rssUrlChanged || _rssItems.isEmpty;
+        _fetchRssFeed(force: mustForce);
+      }
     } catch (e) {
       print("Erreur lors du chargement: $e");
       setState(() => isLoading = false);
@@ -3107,8 +3565,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Espacement adaptatif en haut
-                SizedBox(
-                    height: screenHeight * 0.12), // Augmenté pour centrer mieux
+                SizedBox(height: screenHeight * 0.02), // rapproché du bandeau
+
+                if (_shouldDisplayRssSection) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: gridWidth,
+                      ),
+                      child: _buildRssSection(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
                 // Grille des tuiles centrée
                 Container(
@@ -3732,6 +4202,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _showDashboardNewsSettings() async {
+    final structureId = await _getStructureId();
+
+    if (structureId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Structure introuvable'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    bool currentValue = _showDashboardNews;
+    try {
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      final data = structureDoc.data();
+      if (data != null && data['showDashboardNews'] is bool) {
+        currentValue = data['showDashboardNews'] as bool;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de récupérer la préférence Actualités.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    bool tempValue = currentValue;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text(
+                'Actualités sur le tableau de bord',
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Afficher les actualités'),
+                    value: tempValue,
+                    onChanged: (value) {
+                      setLocalState(() {
+                        tempValue = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('ANNULER'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('structures')
+                          .doc(structureId)
+                          .set({'showDashboardNews': tempValue},
+                              SetOptions(merge: true));
+
+                      if (!mounted) return;
+                      setState(() {
+                        _showDashboardNews = tempValue;
+                      });
+
+                      if (tempValue &&
+                          (_rssFeedUrl?.trim().isNotEmpty ?? false)) {
+                        Future.microtask(
+                          () => _fetchRssFeed(force: _rssItems.isEmpty),
+                        );
+                      }
+
+                      Navigator.of(dialogContext).pop();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(tempValue
+                              ? 'Les actualités sont désormais affichées.'
+                              : 'Les actualités sont masquées sur le tableau de bord.'),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Impossible d\'enregistrer la préférence.'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('ENREGISTRER'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _showChildDisplaySettings() async {
     final structureId = await _getStructureId();
 
@@ -3861,7 +4455,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             SizedBox(height: 16),
                             Text(
-                            'Gestion des enfants',
+                              'Gestion des enfants',
                               style: TextStyle(
                                 fontSize: titleFontSize,
                                 fontWeight: FontWeight.bold,
@@ -4672,7 +5266,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Espace pour décoller la grille du header
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
+            if (_shouldDisplayRssSection) ...[
+              _buildRssSection(),
+              const SizedBox(height: 18),
+            ],
             // Grille d'accès rapide (nouvelle UI inspirée des maquettes)
             _buildQuickGrid(),
             const SizedBox(height: 16),
@@ -5134,23 +5732,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildPhoneContentCentered() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final gridOuterWidth = constraints.maxWidth - 32; // padding latéral 16
-        final tileWidth = (gridOuterWidth - 14) / 2; // 2 colonnes, écart 14
+        final gridOuterWidth = constraints.maxWidth - 32;
+        final tileWidth = (gridOuterWidth - 14) / 2;
         final tileSize = tileWidth;
-        final gridHeight =
-            12 + tileSize + 14 + tileSize + 8; // padding + espaces
+        final gridHeight = 12 + tileSize + 14 + tileSize + 8;
         final available = constraints.maxHeight;
-        final topGap = (available > gridHeight)
-            ? ((available - gridHeight) / 2).clamp(16.0, 160.0)
-            : 16.0;
+
+        // Nouvelles estimations de hauteur plus réduites pour mobile
+        final double rssHeightEstimate = !_shouldDisplayRssSection
+            ? 0
+            : (_rssItems.isNotEmpty
+                ? 120 // Réduit de 190 à 120
+                : (_rssError != null
+                    ? 90
+                    : (_isRssLoading ? 100 : 90))); // Toutes réduites
+
+        final double combinedHeight = gridHeight +
+            rssHeightEstimate +
+            (_shouldDisplayRssSection ? 16 : 0); // Réduit de 24 à 16
+
+        final topGap = (available > combinedHeight)
+            ? ((available - combinedHeight) / 2).clamp(12.0, 140.0)
+            : 12.0;
 
         return SingleChildScrollView(
-          physics: available > gridHeight
+          physics: available > combinedHeight
               ? const NeverScrollableScrollPhysics()
               : const BouncingScrollPhysics(),
           child: Padding(
             padding: EdgeInsets.fromLTRB(16, topGap, 16, 16),
-            child: _buildQuickGrid(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_shouldDisplayRssSection) ...[
+                  _buildRssSection(),
+                  const SizedBox(height: 12), // Réduit de 16 à 12
+                ],
+                _buildQuickGrid(),
+              ],
+            ),
           ),
         );
       },
@@ -5456,7 +6076,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             unselectedItemColor: Colors.grey,
             showSelectedLabels: true,
             showUnselectedLabels: true,
-            selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            selectedLabelStyle:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             unselectedLabelStyle: const TextStyle(fontSize: 12),
             type: BottomNavigationBarType.fixed,
             currentIndex: 0, // Dashboard est sélectionné

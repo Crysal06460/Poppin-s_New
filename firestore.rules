@@ -74,7 +74,16 @@ service cloud.firestore {
     /* SUBSCRIPTIONS */
     match /subscriptions/{docId} {
       allow read: if isSignedIn();
-      allow write: if false;
+
+      allow create: if isSignedIn() &&
+        request.resource.data.structureId is string &&
+        request.resource.data.structureId == currentUserStructureId();
+
+      allow update: if isSignedIn() &&
+        resource.data.structureId is string &&
+        resource.data.structureId == currentUserStructureId();
+
+      allow delete: if false;
     }
 
     /* STRUCTURES et tout ce qui est en dessous */
