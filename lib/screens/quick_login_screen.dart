@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:poppins_app/services/notification_service.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:poppins_app/services/biometric_auth_service.dart';
 import '../utils/user_role_cache.dart';
 
 class QuickLoginScreen extends StatefulWidget {
@@ -20,6 +22,10 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   bool _showPassword = false;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+  String _biometricLabel = 'Biométrie';
+  List<BiometricType> _availableBiometricTypes = const [];
 
   // Couleurs de l'app
   static const Color primaryBlue = Color(0xFF3D9DF2);
@@ -27,6 +33,12 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
 
   String get email => widget.data['email']!;
   String get reason => widget.data['reason'] ?? 'app_closed';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeBiometrics();
+  }
 
   String _getWelcomeMessage() {
     switch (reason) {
@@ -50,8 +62,111 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
     }
   }
 
-  Future<void> _login() async {
-    if (_passwordController.text.isEmpty) {
+  Future<void> _initializeBiometrics() async {
+    final available =
+        await BiometricAuthService.instance.isBiometricAvailable();
+    if (!mounted) return;
+
+    if (!available) {
+      setState(() {
+        _biometricAvailable = false;
+        _biometricEnabled = false;
+        _biometricLabel = 'Biométrie';
+        _availableBiometricTypes = const [];
+      });
+      return;
+    }
+
+    final biometrics =
+        await BiometricAuthService.instance.getAvailableBiometrics();
+    final enabled =
+        await BiometricAuthService.instance.isBiometricEnabled(email);
+    if (!mounted) return;
+
+    setState(() {
+      _biometricAvailable = true;
+      _availableBiometricTypes = biometrics;
+      _biometricLabel = _labelForBiometrics(biometrics);
+      _biometricEnabled = enabled;
+    });
+  }
+
+  String _labelForBiometrics(List<BiometricType> biometrics) {
+    if (biometrics.contains(BiometricType.face)) {
+      return 'Face ID';
+    }
+    if (biometrics.contains(BiometricType.fingerprint)) {
+      return 'Empreinte digitale';
+    }
+    if (biometrics.contains(BiometricType.iris) ||
+        biometrics.contains(BiometricType.strong)) {
+      return 'Biométrie sécurisée';
+    }
+    return 'Biométrie';
+  }
+
+  IconData _biometricIcon() {
+    if (_availableBiometricTypes.contains(BiometricType.face)) {
+      return Icons.face;
+    }
+    if (_availableBiometricTypes.contains(BiometricType.fingerprint)) {
+      return Icons.fingerprint;
+    }
+    return Icons.lock;
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final authenticated = await BiometricAuthService.instance.authenticate(
+      reason: 'Déverrouillez Poppins avec $_biometricLabel',
+    );
+
+    if (!authenticated) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    final savedPassword =
+        await BiometricAuthService.instance.getSavedPassword(email);
+    if (savedPassword == null || savedPassword.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              "Aucun mot de passe biométrique enregistré. Veuillez saisir votre mot de passe.";
+          _biometricEnabled = false;
+        });
+      }
+      await BiometricAuthService.instance.disableBiometrics(email);
+      return;
+    }
+
+    _passwordController.text = savedPassword;
+    await _login(passwordOverride: savedPassword, fromBiometric: true);
+  }
+
+  Future<void> _disableBiometrics() async {
+    await BiometricAuthService.instance.disableBiometrics(email);
+    if (!mounted) return;
+    setState(() {
+      _biometricEnabled = false;
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _login(
+      {String? passwordOverride, bool fromBiometric = false}) async {
+    final password = (passwordOverride ?? _passwordController.text).trim();
+
+    if (password.isEmpty) {
       setState(() {
         _errorMessage = "Veuillez saisir votre mot de passe";
       });
@@ -67,7 +182,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
       // Tentative de connexion
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
-        password: _passwordController.text.trim(),
+        password: password,
       );
 
       // Renouveler le token FCM au login rapide
@@ -85,6 +200,10 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
       // Enregistrer l'heure de session pour la gestion arrière-plan
       await prefs.setInt(
           'lastSessionTime', DateTime.now().millisecondsSinceEpoch);
+
+      if (_biometricAvailable && _biometricEnabled && !fromBiometric) {
+        await BiometricAuthService.instance.enableBiometrics(email, password);
+      }
 
       // Navigation selon le rôle de l'utilisateur
       await _navigateAfterLogin();
@@ -321,6 +440,51 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                     onSubmitted: (_) => _login(),
                   ),
 
+                  if (_biometricAvailable && _biometricEnabled) ...[
+                    SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _isLoading ? null : () => _loginWithBiometrics(),
+                        icon: Icon(_biometricIcon(), color: primaryBlue),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                              vertical: isTablet ? 12 : 14),
+                          side: BorderSide(color: primaryBlue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        label: Text(
+                          "Déverrouiller avec $_biometricLabel",
+                          style: TextStyle(
+                            color: primaryBlue,
+                            fontSize: isTablet ? 15 : 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _isLoading ? null : () => _disableBiometrics(),
+                      child: Text(
+                        "Désactiver la connexion $_biometricLabel",
+                        style: TextStyle(color: primaryBlue),
+                      ),
+                    ),
+                  ] else if (_biometricAvailable) ...[
+                    SizedBox(height: 12),
+                    Text(
+                      "Activez $_biometricLabel depuis la connexion classique pour éviter de retaper votre mot de passe.",
+                      style: TextStyle(
+                        fontSize: isTablet ? 12 : 13,
+                        color: Colors.grey.shade600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+
                   // Message d'erreur
                   if (_errorMessage != null) ...[
                     SizedBox(height: 16),
@@ -354,7 +518,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                     width: double.infinity,
                     height: isTablet ? 50 : 56,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
+                      onPressed: _isLoading ? null : () => _login(),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: reason == 'daily_security'
                             ? Colors.orange[700]

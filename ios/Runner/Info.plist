@@ -32,6 +32,8 @@
 	<string>Cette application utilise les services Apple pour les abonnements.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre caméra pour prendre des photos</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID permet de déverrouiller rapidement l'application.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre microphone pour certaines fonctionnalités</string>
 	<key>NSPhotoLibraryUsageDescription</key>

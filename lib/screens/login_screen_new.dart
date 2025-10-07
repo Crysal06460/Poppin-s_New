@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:poppins_app/services/notification_service.dart';
+import 'package:poppins_app/services/biometric_auth_service.dart';
 import '../utils/user_role_cache.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,6 +23,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showPassword = false;
   bool _isForgotPassword = false;
   bool _rememberMe = false; // Pour l'option "Se souvenir de moi"
+  bool _biometricAvailable = false;
+  bool _biometricEnabledForEmail = false;
+  bool _enableBiometrics = false;
+  String _biometricLabel = 'Biométrie';
+  String? _lastBiometricEmailChecked;
+  List<BiometricType> _availableBiometricTypes = const [];
+  bool _prefilledFromBiometric = false;
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -32,9 +41,11 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    emailController.addListener(_onEmailChanged);
 
     // Charger l'email sauvegardé si disponible
     _loadSavedEmail();
+    _initializeBiometrics();
 
     // Pour récupérer les paramètres de l'URL - GARDEZ CE CODE
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,6 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _rememberMe = true;
         });
       }
+      await _refreshBiometricState();
     } catch (e) {
       print("Erreur lors du chargement de l'email: $e");
     }
@@ -102,9 +114,171 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _onEmailChanged() {
+    if (!_biometricAvailable) return;
+    _refreshBiometricState();
+  }
+
+  Future<void> _initializeBiometrics() async {
+    final isAvailable =
+        await BiometricAuthService.instance.isBiometricAvailable();
+    if (!mounted) return;
+
+    if (!isAvailable) {
+      setState(() {
+        _biometricAvailable = false;
+        _biometricEnabledForEmail = false;
+        _enableBiometrics = false;
+        _biometricLabel = 'Biométrie';
+        _availableBiometricTypes = const [];
+        _prefilledFromBiometric = false;
+      });
+      return;
+    }
+
+    final biometrics =
+        await BiometricAuthService.instance.getAvailableBiometrics();
+    if (!mounted) return;
+
+    setState(() {
+      _biometricAvailable = true;
+      _availableBiometricTypes = biometrics;
+      _biometricLabel = _labelForBiometrics(biometrics);
+    });
+
+    await _prefillEmailFromBiometrics();
+    await _refreshBiometricState();
+  }
+
+  Future<void> _refreshBiometricState() async {
+    if (!_biometricAvailable) return;
+    final email = emailController.text.trim();
+    final normalized = email.toLowerCase();
+    _lastBiometricEmailChecked = normalized;
+
+    if (normalized.isEmpty) {
+      if (_biometricEnabledForEmail || _enableBiometrics) {
+        setState(() {
+          _biometricEnabledForEmail = false;
+          _enableBiometrics = false;
+        });
+      }
+      return;
+    }
+
+    final enabled =
+        await BiometricAuthService.instance.isBiometricEnabled(normalized);
+
+    if (!mounted || _lastBiometricEmailChecked != normalized) {
+      return;
+    }
+
+    setState(() {
+      _biometricEnabledForEmail = enabled;
+      if (enabled) {
+        _enableBiometrics = true;
+        _prefilledFromBiometric = true;
+      } else if (!_enableBiometrics) {
+        _enableBiometrics = false;
+      }
+    });
+  }
+
+  Future<void> _prefillEmailFromBiometrics() async {
+    if (!_biometricAvailable) return;
+    if (emailController.text.trim().isNotEmpty) return;
+
+    final savedEmail =
+        await BiometricAuthService.instance.getLastEnabledEmail();
+    if (!mounted) return;
+
+    if (savedEmail != null && savedEmail.isNotEmpty) {
+      emailController.text = savedEmail;
+      emailController.selection = TextSelection.fromPosition(
+        TextPosition(offset: emailController.text.length),
+      );
+      _prefilledFromBiometric = true;
+    }
+  }
+
+  String _labelForBiometrics(List<BiometricType> biometrics) {
+    if (biometrics.contains(BiometricType.face)) {
+      return 'Face ID';
+    }
+    if (biometrics.contains(BiometricType.fingerprint)) {
+      return 'Empreinte digitale';
+    }
+    if (biometrics.contains(BiometricType.iris) ||
+        biometrics.contains(BiometricType.strong)) {
+      return 'Biométrie sécurisée';
+    }
+    return 'Biométrie';
+  }
+
+  IconData _biometricIcon() {
+    if (_availableBiometricTypes.contains(BiometricType.face)) {
+      return Icons.face;
+    }
+    if (_availableBiometricTypes.contains(BiometricType.fingerprint)) {
+      return Icons.fingerprint;
+    }
+    return Icons.lock;
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        errorMessage = "Veuillez saisir votre email pour utiliser la biométrie";
+      });
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    final authenticated = await BiometricAuthService.instance.authenticate(
+      reason: 'Déverrouillez Poppins avec $_biometricLabel',
+    );
+
+    if (!authenticated) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+      return;
+    }
+
+    final savedPassword =
+        await BiometricAuthService.instance.getSavedPassword(email);
+    if (savedPassword == null || savedPassword.isEmpty) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              "Aucun mot de passe biométrique enregistré. Connectez-vous manuellement.";
+          _biometricEnabledForEmail = false;
+          _enableBiometrics = false;
+        });
+      }
+      await BiometricAuthService.instance.disableBiometrics(email);
+      return;
+    }
+
+    passwordController.text = savedPassword;
+    await _login(passwordOverride: savedPassword, fromBiometric: true);
+  }
+
   /// ✅ Connexion avec email & mot de passe
-  Future<void> _login() async {
-    if (emailController.text.isEmpty || passwordController.text.isEmpty) {
+  Future<void> _login(
+      {String? passwordOverride, bool fromBiometric = false}) async {
+    final email = emailController.text.trim();
+    final password = (passwordOverride ?? passwordController.text).trim();
+
+    if (email.isEmpty || password.isEmpty) {
       setState(() {
         errorMessage = "Veuillez remplir tous les champs";
       });
@@ -118,8 +292,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       // Renouveler le token FCM pour éviter d\'hériter d\'un ancien compte
@@ -143,6 +317,24 @@ class _LoginScreenState extends State<LoginScreen> {
       // Enregistrer l'heure de session pour gestion arrière-plan
       await prefs.setInt(
           'lastSessionTime', DateTime.now().millisecondsSinceEpoch);
+
+      if (!fromBiometric && _biometricAvailable) {
+        if (_enableBiometrics) {
+          await BiometricAuthService.instance.enableBiometrics(email, password);
+          if (mounted) {
+            setState(() {
+              _biometricEnabledForEmail = true;
+            });
+          }
+        } else if (_biometricEnabledForEmail) {
+          await BiometricAuthService.instance.disableBiometrics(email);
+          if (mounted) {
+            setState(() {
+              _biometricEnabledForEmail = false;
+            });
+          }
+        }
+      }
 
       // Déterminer le rôle de l'utilisateur et naviguer
       final userRole = await _determineUserRole();
@@ -529,6 +721,67 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 10),
 
+                      if (_biometricAvailable) ...[
+                        SwitchListTile.adaptive(
+                          value: _enableBiometrics,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: primaryBlue,
+                          onChanged: emailController.text.trim().isEmpty
+                              ? null
+                              : (value) async {
+                                  setState(() {
+                                    _enableBiometrics = value;
+                                  });
+
+                                  if (!value && _biometricEnabledForEmail) {
+                                    final email = emailController.text.trim();
+                                    await BiometricAuthService.instance
+                                        .disableBiometrics(email);
+                                    if (mounted) {
+                                      setState(() {
+                                        _biometricEnabledForEmail = false;
+                                        _prefilledFromBiometric = false;
+                                      });
+                                    }
+                                  }
+                                },
+                          title: Text('Activer $_biometricLabel'),
+                          subtitle: Text(
+                            "Utiliser $_biometricLabel pour les prochaines connexions",
+                            style: TextStyle(fontSize: isTablet ? 12 : 13),
+                          ),
+                        ),
+                      ],
+
+                      if (_biometricEnabledForEmail) ...[
+                        SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                isLoading ? null : () => _loginWithBiometrics(),
+                            icon: Icon(_biometricIcon(), color: primaryBlue),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(
+                                vertical: isTablet ? 12 : 14,
+                              ),
+                              side: BorderSide(color: primaryBlue),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            label: Text(
+                              "Déverrouiller avec $_biometricLabel",
+                              style: TextStyle(
+                                color: primaryBlue,
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+
                       // ✅ Lien "Mot de passe oublié"
                       Align(
                         alignment: Alignment.centerRight,
@@ -594,7 +847,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: ElevatedButton(
                         onPressed: isLoading
                             ? null
-                            : (_isForgotPassword ? _resetPassword : _login),
+                            : () {
+                                if (_isForgotPassword) {
+                                  _resetPassword();
+                                } else {
+                                  _login();
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryBlue,
                           foregroundColor: Colors.white,
@@ -684,6 +943,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    emailController.removeListener(_onEmailChanged);
     emailController.dispose();
     passwordController.dispose();
     super.dispose();

@@ -680,12 +680,14 @@ class SubscriptionService {
       structureType = 'MAM';
       if (normalizedId.contains('2_members') ||
           normalizedId == 'abonnement_mam2' ||
+          normalizedId == 'mam2' ||
           normalizedId == 'abonement_mam2') {
         memberCount = 3;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
       } else if (normalizedId.contains('3_members') ||
           normalizedId == 'abonnement_mam3' ||
+          normalizedId == 'mam3' ||
           normalizedId == 'abonement_mam3') {
         memberCount = normalizedId.contains('3_members') ? 3 : 4;
         if (memberCount == 3) {
@@ -697,6 +699,7 @@ class SubscriptionService {
         }
       } else if (normalizedId.contains('4_members') ||
           normalizedId == 'abonnement_mam4' ||
+          normalizedId == 'mam4' ||
           normalizedId == 'abonement_mam4') {
         memberCount = 4;
         priceAmount = 24.99;

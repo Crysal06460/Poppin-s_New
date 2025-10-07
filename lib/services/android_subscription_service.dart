@@ -3,10 +3,33 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart'
+    show SubscriptionOfferDetailsWrapper, PricingPhaseWrapper;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// Service d'abonnement spécifique à Android utilisant in_app_purchase
+class _PendingPurchaseContext {
+  const _PendingPurchaseContext({
+    required this.productId,
+    required this.structureType,
+    required this.memberCount,
+    required this.priceAmount,
+    required this.priceDisplay,
+    required this.isTrialPurchase,
+    required this.productKey,
+  });
+
+  final String productId;
+  final String structureType;
+  final int memberCount;
+  final double priceAmount;
+  final String priceDisplay;
+  final bool isTrialPurchase;
+  final String productKey;
+}
+
 class AndroidSubscriptionService {
   static AndroidSubscriptionService? _instance;
   static AndroidSubscriptionService get instance =>
@@ -33,27 +56,20 @@ class AndroidSubscriptionService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   List<ProductDetails> _availableProducts = [];
   int? _lastRequestedMemberCount;
+  _PendingPurchaseContext? _pendingPurchaseContext;
 
-  // 🔧 NOUVEAUX IDS : Abonnements séparés avec offres d'essai
+  // 🔧 IDS ACTIFS DANS GOOGLE PLAY CONSOLE
   static const Set<String> _allProductIds = {
-    // Forfaits de base
+    // IDs produits officiels (Play Console)
     'abonnement_assmat',
     'abonnement_mam2',
     'abonnement_mam3',
     'abonnement_mam4',
-    // Offres d'essai 7 jours
-    'essaigratuit-assmat',
-    'essaigratuit-mam2',
-    'essaigratuit-mam3',
-    'essaigratuit-mam4',
-  };
-
-  // Mapping des IDs pour compatibilité
-  static const Map<String, String> _legacyToNewProductIds = {
-    'ass-mat': 'abonnement_assmat',
-    'abo-mam-2': 'abonnement_mam2',
-    'abo-mam-3': 'abonnement_mam4',
-    'abo-mam-4': 'abonnement_mam4',
+    // ⏪ Compatibilité : anciens alias éventuels
+    'assmat',
+    'mam2',
+    'mam3',
+    'mam4',
   };
 
   /// Initialise le service Android
@@ -189,8 +205,10 @@ class AndroidSubscriptionService {
   Map<String, dynamic> _getSubscriptionInfoByProductId(String productId) {
     print('🔍 Analyse de l\'ID produit: $productId');
 
-    // Forfaits de base
-    if (productId == 'abonnement_assmat') {
+    final String normalized = productId.trim();
+
+    // Forfaits de base (IDs officiels)
+    if (normalized == 'abonnement_assmat') {
       return {
         'structureType': 'assistante_maternelle',
         'memberCount': 1,
@@ -199,7 +217,7 @@ class AndroidSubscriptionService {
         'productKey': 'ass-mat',
         'isTrialPurchase': false,
       };
-    } else if (productId == 'abonnement_mam2') {
+    } else if (normalized == 'abonnement_mam2') {
       final int resolvedMembers =
           ((_lastRequestedMemberCount ?? 3).clamp(2, 3) as num).toInt();
       return {
@@ -210,7 +228,7 @@ class AndroidSubscriptionService {
         'productKey': 'mam-2-3',
         'isTrialPurchase': false,
       };
-    } else if (productId == 'abonnement_mam3') {
+    } else if (normalized == 'abonnement_mam3') {
       return {
         'structureType': 'MAM',
         'memberCount': 4,
@@ -219,7 +237,7 @@ class AndroidSubscriptionService {
         'productKey': 'mam-4-legacy',
         'isTrialPurchase': false,
       };
-    } else if (productId == 'abonnement_mam4') {
+    } else if (normalized == 'abonnement_mam4') {
       return {
         'structureType': 'MAM',
         'memberCount': 4,
@@ -229,45 +247,16 @@ class AndroidSubscriptionService {
         'isTrialPurchase': false,
       };
     }
-    // Offres d'essai
-    else if (productId == 'essaigratuit-assmat') {
-      return {
-        'structureType': 'assistante_maternelle',
-        'memberCount': 1,
-        'priceAmount': 0.0,
-        'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-ass-mat',
-        'isTrialPurchase': true,
-      };
-    } else if (productId == 'essaigratuit-mam2') {
-      final int resolvedMembers =
-          ((_lastRequestedMemberCount ?? 3).clamp(2, 3) as num).toInt();
-      return {
-        'structureType': 'MAM',
-        'memberCount': resolvedMembers,
-        'priceAmount': 0.0,
-        'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-2-3',
-        'isTrialPurchase': true,
-      };
-    } else if (productId == 'essaigratuit-mam3') {
-      return {
-        'structureType': 'MAM',
-        'memberCount': 4,
-        'priceAmount': 0.0,
-        'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-4-legacy',
-        'isTrialPurchase': true,
-      };
-    } else if (productId == 'essaigratuit-mam4') {
-      return {
-        'structureType': 'MAM',
-        'memberCount': 4,
-        'priceAmount': 0.0,
-        'priceDisplay': 'Essai gratuit 7 jours',
-        'productKey': 'trial-mam-4-plus',
-        'isTrialPurchase': true,
-      };
+
+    // Compatibilité : alias éventuels (si builds anciens en production)
+    if (normalized == 'assmat') {
+      return _getSubscriptionInfoByProductId('abonnement_assmat');
+    } else if (normalized == 'mam2') {
+      return _getSubscriptionInfoByProductId('abonnement_mam2');
+    } else if (normalized == 'mam3') {
+      return _getSubscriptionInfoByProductId('abonnement_mam3');
+    } else if (normalized == 'mam4') {
+      return _getSubscriptionInfoByProductId('abonnement_mam4');
     }
 
     // Par défaut
@@ -312,14 +301,27 @@ class AndroidSubscriptionService {
       }
 
       // Identifier le type d'abonnement par l'ID
-      final subscriptionInfo = _getSubscriptionInfoByProductId(productId);
+      Map<String, dynamic> subscriptionInfo =
+          _getSubscriptionInfoByProductId(productId);
+
+      if (_pendingPurchaseContext != null &&
+          _pendingPurchaseContext!.productId == productId) {
+        subscriptionInfo = {
+          'structureType': _pendingPurchaseContext!.structureType,
+          'memberCount': _pendingPurchaseContext!.memberCount,
+          'priceAmount': _pendingPurchaseContext!.priceAmount,
+          'priceDisplay': _pendingPurchaseContext!.priceDisplay,
+          'productKey': _pendingPurchaseContext!.productKey,
+          'isTrialPurchase': _pendingPurchaseContext!.isTrialPurchase,
+        };
+      }
 
       final String structureType = subscriptionInfo['structureType'];
       final int memberCount = subscriptionInfo['memberCount'];
       final double priceAmount = subscriptionInfo['priceAmount'];
       final String priceDisplay = subscriptionInfo['priceDisplay'];
+      final bool isTrialPurchase = subscriptionInfo['isTrialPurchase'] == true;
       final String productKey = subscriptionInfo['productKey'];
-      final bool isTrialPurchase = subscriptionInfo['isTrialPurchase'];
 
       print(
           '🎯 Type identifié: $structureType ($memberCount membres) - $priceDisplay');
@@ -373,6 +375,10 @@ class AndroidSubscriptionService {
 
       // Réinitialiser la sélection après traitement
       _lastRequestedMemberCount = null;
+      if (_pendingPurchaseContext != null &&
+          _pendingPurchaseContext!.productId == productId) {
+        _pendingPurchaseContext = null;
+      }
 
       // Mettre à jour structure
       await FirebaseFirestore.instance
@@ -391,67 +397,29 @@ class AndroidSubscriptionService {
   }
 
   /// Trouve un produit par type et nombre de membres
-  ProductDetails? _findProduct(String structureType, int memberCount,
-      {bool preferTrial = true}) {
-    // IDs cibles
-    String targetTrialId = '';
-    String targetPaidId = '';
-
+  ProductDetails? _findProduct(String structureType, int memberCount) {
     final String normalizedType = structureType.toLowerCase();
+    final List<String> candidateIds = [];
 
     if (normalizedType == 'assistante_maternelle') {
-      targetTrialId = 'essaigratuit-assmat';
-      targetPaidId = 'abonnement_assmat';
+      candidateIds.addAll(['abonnement_assmat', 'assmat']);
     } else if (normalizedType == 'mam') {
       if (memberCount <= 3) {
-        targetTrialId = 'essaigratuit-mam2';
-        targetPaidId = 'abonnement_mam2';
+        candidateIds.addAll(['abonnement_mam2', 'mam2']);
       } else {
-        targetTrialId = 'essaigratuit-mam4';
-        targetPaidId = 'abonnement_mam4';
+        candidateIds.addAll(
+            ['abonnement_mam4', 'abonnement_mam3', 'mam4', 'mam3']);
       }
     }
 
-    print(
-        '🎯 Recherche: type=$structureType, members=$memberCount, trial=$targetTrialId, paid=$targetPaidId, preferTrial=$preferTrial');
-
-    // Chercher d'abord l'essai si préféré
-    if (preferTrial && targetTrialId.isNotEmpty) {
-      for (final product in _availableProducts) {
-        if (product.id == targetTrialId) {
-          print('✅ Essai trouvé: ${product.id}');
-          return product;
-        }
-      }
-    }
-
-    // Chercher le forfait payant
-    if (targetPaidId.isNotEmpty) {
-      for (final product in _availableProducts) {
-        if (product.id == targetPaidId) {
-          print('✅ Forfait payant trouvé: ${product.id}');
-          return product;
-        }
-      }
-    }
-
-    // Fallback pour anciens IDs MAM 4 membres
-    if (normalizedType == 'mam' && memberCount > 3) {
-      if (preferTrial) {
-        for (final product in _availableProducts) {
-          if (product.id == 'essaigratuit-mam4' ||
-              product.id == 'essaigratuit-mam3') {
-            print('✅ Essai legacy trouvé: ${product.id}');
-            return product;
-          }
-        }
-      }
-      for (final product in _availableProducts) {
-        if (product.id == 'abonnement_mam4' ||
-            product.id == 'abonnement_mam3') {
-          print('✅ Forfait legacy trouvé: ${product.id}');
-          return product;
-        }
+    for (final candidate in candidateIds) {
+      try {
+        final match =
+            _availableProducts.firstWhere((product) => product.id == candidate);
+        print('✅ Produit trouvé: ${match.id}');
+        return match;
+      } catch (_) {
+        // Continuer la recherche
       }
     }
 
@@ -459,20 +427,74 @@ class AndroidSubscriptionService {
     return null;
   }
 
-  /// Lance l'achat d'un produit
-  Future<bool> _attemptPurchase(ProductDetails product) async {
-    try {
-      final PurchaseParam purchaseParam =
-          PurchaseParam(productDetails: product);
+  SubscriptionOfferDetailsWrapper? _chooseBestOffer(ProductDetails product) {
+    if (product is! GooglePlayProductDetails) {
+      return null;
+    }
 
-      final bool success = await _inAppPurchase.buyNonConsumable(
-        purchaseParam: purchaseParam,
+    final offers = product.productDetails.subscriptionOfferDetails;
+    if (offers == null || offers.isEmpty) {
+      return null;
+    }
+
+    SubscriptionOfferDetailsWrapper? trialOffer;
+    SubscriptionOfferDetailsWrapper? recurringOffer;
+
+    for (final offer in offers) {
+      final bool hasFreeTrial = offer.pricingPhases.any(
+        (PricingPhaseWrapper phase) => phase.priceAmountMicros == 0,
+      );
+      if (hasFreeTrial && trialOffer == null) {
+        trialOffer = offer;
+      }
+      if (recurringOffer == null) {
+        recurringOffer = offer;
+      }
+    }
+
+    return trialOffer ?? recurringOffer;
+  }
+
+  bool _offerHasTrial(SubscriptionOfferDetailsWrapper? offer) {
+    if (offer == null) return false;
+    return offer.pricingPhases
+        .any((PricingPhaseWrapper phase) => phase.priceAmountMicros == 0);
+  }
+
+  /// Lance l'achat d'un produit
+  Future<bool> _attemptPurchase(
+    ProductDetails product,
+    SubscriptionOfferDetailsWrapper? offer,
+    Map<String, dynamic> subscriptionInfo,
+  ) async {
+    try {
+      final purchaseParam = GooglePlayPurchaseParam(
+        productDetails: product,
+        offerToken: offer?.offerIdToken ??
+            (product is GooglePlayProductDetails ? product.offerToken : null),
       );
 
+      _pendingPurchaseContext = _PendingPurchaseContext(
+        productId: product.id,
+        structureType: subscriptionInfo['structureType'] as String,
+        memberCount: subscriptionInfo['memberCount'] as int,
+        priceAmount: subscriptionInfo['priceAmount'] as double,
+        priceDisplay: subscriptionInfo['priceDisplay'] as String,
+        isTrialPurchase: _offerHasTrial(offer),
+        productKey: subscriptionInfo['productKey'] as String,
+      );
+
+      final bool success = await _inAppPurchase
+          .buyNonConsumable(purchaseParam: purchaseParam);
+
       print('🤖 Achat initié: ${product.id} - Success: $success');
+      if (!success) {
+        _pendingPurchaseContext = null;
+      }
       return success;
     } catch (e) {
       print('❌ Erreur d\'achat pour ${product.id}: $e');
+      _pendingPurchaseContext = null;
       throw e;
     }
   }
@@ -494,12 +516,12 @@ class AndroidSubscriptionService {
       // Mémoriser la sélection pour ajuster la sauvegarde Firestore
       _lastRequestedMemberCount = memberCount;
 
-      // Chercher d'abord l'essai gratuit
-      ProductDetails? product =
-          _findProduct(structureType, memberCount, preferTrial: true);
+      final ProductDetails? product = _findProduct(structureType, memberCount);
 
       if (product != null) {
-        return await _attemptPurchase(product);
+        final offer = _chooseBestOffer(product);
+        final info = _getSubscriptionInfoByProductId(product.id);
+        return await _attemptPurchase(product, offer, info);
       }
 
       throw Exception(
@@ -508,6 +530,7 @@ class AndroidSubscriptionService {
       print('❌ Erreur d\'achat Android: $e');
       _errorController.add('Erreur d\'achat: $e');
       _lastRequestedMemberCount = null;
+      _pendingPurchaseContext = null;
       return false;
     }
   }
@@ -515,13 +538,21 @@ class AndroidSubscriptionService {
   /// Méthode de compatibilité (ancienne signature)
   Future<bool> purchaseSubscription(String productId) async {
     // Convertir ancien productId vers nouveau système
-    if (productId == 'ass-mat' || productId == 'abonnement_assmat') {
+    if (productId == 'ass-mat' ||
+        productId == 'abonnement_assmat' ||
+        productId == 'assmat') {
       return await purchaseSubscriptionByType('assistante_maternelle', 1);
-    } else if (productId == 'abo-mam-2' || productId == 'abonnement_mam2') {
+    } else if (productId == 'abo-mam-2' ||
+        productId == 'abonnement_mam2' ||
+        productId == 'mam2') {
       return await purchaseSubscriptionByType('MAM', 3);
-    } else if (productId == 'abo-mam-3' || productId == 'abonnement_mam3') {
+    } else if (productId == 'abo-mam-3' ||
+        productId == 'abonnement_mam3' ||
+        productId == 'mam3') {
       return await purchaseSubscriptionByType('MAM', 4);
-    } else if (productId == 'abo-mam-4' || productId == 'abonnement_mam4') {
+    } else if (productId == 'abo-mam-4' ||
+        productId == 'abonnement_mam4' ||
+        productId == 'mam4') {
       return await purchaseSubscriptionByType('MAM', 4);
     } else {
       return await purchaseSubscriptionByType('assistante_maternelle', 1);
