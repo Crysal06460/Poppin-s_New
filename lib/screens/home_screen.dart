@@ -97,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final bool canEdit = _canCurrentUserEditChild(child);
-    print('🔐 TAP enfant $childId (structureType=$structureType) canEdit=$canEdit');
+    print(
+        '🔐 TAP enfant $childId (structureType=$structureType) canEdit=$canEdit');
     if (!canEdit) {
       _showChildReadOnlyMessage();
       return;
@@ -209,10 +210,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (userDoc.exists) {
         final userData = userDoc.data() ?? {};
-        final String role = (userData['role'] ?? '')
-            .toString()
-            .toLowerCase()
-            .trim();
+        final String role =
+            (userData['role'] ?? '').toString().toLowerCase().trim();
         final String linkedStructureId =
             (userData['structureId'] ?? '').toString().trim();
 
@@ -250,12 +249,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final Map<String, dynamic> structureData =
           (structureDoc.data() as Map<String, dynamic>?) ?? const {};
 
-      String fetchedStructureName =
-          (structureData['structureName'] ??
-                  structureData['ownerFirstName'] ??
-                  'Ma Structure')
-              .toString()
-              .trim();
+      String fetchedStructureName = (structureData['structureName'] ??
+              structureData['ownerFirstName'] ??
+              'Ma Structure')
+          .toString()
+          .trim();
       if (fetchedStructureName.isEmpty) {
         fetchedStructureName = 'Ma Structure';
       }
@@ -313,7 +311,8 @@ class _HomeScreenState extends State<HomeScreen> {
           filteredChildren = allChildren.where((child) {
             // Vérifier si l'enfant est assigné à ce membre
             String assignedEmail =
-                child['assignedMemberEmail']?.toString().trim().toLowerCase() ?? '';
+                child['assignedMemberEmail']?.toString().trim().toLowerCase() ??
+                    '';
             bool isAssigned = assignedEmail == currentUserEmail;
 
             print(
@@ -331,7 +330,8 @@ class _HomeScreenState extends State<HomeScreen> {
           final String childId = (child['id'] ?? '').toString();
           if (childId.isEmpty) continue;
           final String assignedEmail =
-              child['assignedMemberEmail']?.toString().trim().toLowerCase() ?? '';
+              child['assignedMemberEmail']?.toString().trim().toLowerCase() ??
+                  '';
           if (assignedEmail == currentUserEmail) {
             myAssignedChildIds.add(childId);
           }
@@ -350,7 +350,8 @@ class _HomeScreenState extends State<HomeScreen> {
           if (membersSnap.docs.isNotEmpty) {
             myMemberId = membersSnap.docs.first.id;
             final todayStart = DateTime.now();
-            final start = DateTime(todayStart.year, todayStart.month, todayStart.day);
+            final start =
+                DateTime(todayStart.year, todayStart.month, todayStart.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
                 .collection('structures')
@@ -358,7 +359,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -371,16 +373,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                final add = allChildren.where((c) => toAddIds.contains(c['id'] as String));
+                final add = allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String));
                 filteredChildren.addAll(add);
-                print('➕ Délégations du jour ajoutées au Home: ${toAddIds.length} enfant(s)');
+                print(
+                    '➕ Délégations du jour ajoutées au Home: ${toAddIds.length} enfant(s)');
               }
             }
           }
         } catch (e) {
           print('⚠️ Erreur overlay délégations Home: $e');
         }
-
       } else {
         // Pour une assistante maternelle individuelle: tous les enfants sont affichés
         filteredChildren = allChildren;
@@ -426,7 +429,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final List<Map<String, dynamic>> todayChildren = [];
       final Set<String> todayChildIds = {};
       final filteredBySchedule = filteredChildren.where((child) =>
-          child['schedule'] != null && child['schedule'].containsKey(capitalizedWeekday));
+          child['schedule'] != null &&
+          child['schedule'].containsKey(capitalizedWeekday));
       for (final child in filteredBySchedule) {
         final id = (child['id'] ?? '').toString();
         if (id.isEmpty) continue;
@@ -470,6 +474,13 @@ class _HomeScreenState extends State<HomeScreen> {
       // NOUVELLE LOGIQUE HIÉRARCHIQUE POUR LES POPUPS
       bool shouldShowPopup = false;
       String popupType = "";
+      bool forceWelcome = false;
+
+      final prefs = await SharedPreferences.getInstance();
+      final String welcomePopupKey =
+          'welcome_steps_popup_shown_${structureDocId}';
+      final bool welcomePopupAlreadyShown =
+          prefs.getBool(welcomePopupKey) ?? false;
 
       if (isMamStructure) {
         // Pour les MAM: vérifier d'abord s'il y a assez de membres
@@ -481,12 +492,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Compter le nombre de membres
         final int memberCount = membersSnapshot.docs.length;
+        forceWelcome = forceWelcome || ((memberCount <= 1) && !hasChildren);
 
         print(
             "🔍 DEBUG: Nombre de membres trouvés dans la collection: $memberCount");
 
-        // ✅ CORRECTION: Vérifier si le popup membres a déjà été affiché
-        final prefs = await SharedPreferences.getInstance();
         final String mamMembersPopupKey =
             'mam_members_popup_shown_${structureDocId}';
         final bool mamMembersPopupAlreadyShown =
@@ -521,16 +531,17 @@ class _HomeScreenState extends State<HomeScreen> {
           popupType = "addChild";
           print("⚠️ Assistante maternelle sans enfant, affichage du popup...");
         }
+        forceWelcome = forceWelcome || !hasChildren;
       }
 
-      // Afficher le popup approprié après le rendu
-      if (shouldShowPopup) {
+      if (shouldShowPopup || !welcomePopupAlreadyShown || forceWelcome) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (popupType == "addMAMMembers") {
-            _showAddMAMMembersPopup();
-          } else if (popupType == "addChild") {
-            _showAddChildPopup();
-          }
+          _showFirstLaunchGuidance(
+            isMamStructure: isMamStructure,
+            structureId: structureDocId,
+            popupType: shouldShowPopup ? popupType : "",
+            forceWelcome: forceWelcome,
+          );
         });
       }
     } catch (e) {
@@ -542,6 +553,324 @@ class _HomeScreenState extends State<HomeScreen> {
       // Définir les couleurs par défaut en cas d'erreur
       _setThemeColors();
     }
+  }
+
+  Future<void> _showFirstLaunchGuidance({
+    required bool isMamStructure,
+    required String structureId,
+    required String popupType,
+    required bool forceWelcome,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String welcomePopupKey = 'welcome_steps_popup_shown_${structureId}';
+    final bool welcomeAlreadyShown = prefs.getBool(welcomePopupKey) ?? false;
+
+    if (forceWelcome || !welcomeAlreadyShown) {
+      await _showWelcomeStepsPopup(isMamStructure: isMamStructure);
+      await prefs.setBool(welcomePopupKey, true);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (popupType == "addMAMMembers") {
+      _showAddMAMMembersPopup();
+    } else if (popupType == "addChild") {
+      _showAddChildPopup();
+    }
+  }
+
+  Future<void> _showWelcomeStepsPopup({required bool isMamStructure}) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 40,
+                  offset: Offset(0, 20),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: Stack(
+                children: [
+                  // Gradient décoratif
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            primaryColor.withOpacity(0.3),
+                            primaryColor.withOpacity(0.1),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(32, 40, 32, 24),
+                        child: Column(
+                          children: [
+                            TweenAnimationBuilder(
+                              tween: Tween<double>(begin: 0, end: 1),
+                              duration: Duration(milliseconds: 800),
+                              curve: Curves.elasticOut,
+                              builder: (context, double value, child) {
+                                return Transform.scale(
+                                  scale: value,
+                                  child: Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          primaryColor,
+                                          primaryColor.withOpacity(0.7)
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: primaryColor.withOpacity(0.4),
+                                          blurRadius: 20,
+                                          offset: Offset(0, 10),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(Icons.home_rounded,
+                                        size: 36, color: Colors.white),
+                                  ),
+                                );
+                              },
+                            ),
+                            SizedBox(height: 24),
+                            Text('Bienvenue sur',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[600],
+                                    letterSpacing: 0.5)),
+                            SizedBox(height: 4),
+                            Text('Poppin\'s',
+                                style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF2C3E50),
+                                    letterSpacing: -0.5)),
+                          ],
+                        ),
+                      ),
+
+                      // Contenu scrollable
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Les prochaines étapes',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF2C3E50))),
+                              SizedBox(height: 24),
+                              if (isMamStructure)
+                                _buildModernStepItem(
+                                  icon: Icons.person_add_rounded,
+                                  iconColor: primaryColor,
+                                  title: 'Ajoutez un membre de votre MAM',
+                                  description:
+                                      "Saisissez son email, son prénom et son nom. Il recevra un email d'invitation : il téléchargera l'application sur App Store ou Google Play, choisira \"J'ai un code d'invitation\", saisira son email et rejoindra la MAM. Vous pourrez ajouter ou retirer des membres depuis Dashboard -> Administration.",
+                                ),
+                              if (isMamStructure) SizedBox(height: 20),
+                              _buildModernStepItem(
+                                icon: Icons.child_care_rounded,
+                                iconColor: primaryColor.withOpacity(0.8),
+                                title: 'Ajoutez un enfant',
+                                description:
+                                    "Préparez sa date de naissance, l'email des parents, ses horaires de présence, etc. À la fin, les parents reçoivent un email d'invitation : ils téléchargent l'application, choisissent \"J'ai un code d'invitation\", saisissent leur email et accèdent au fil de leur enfant. Vous pouvez gérer ces invitations depuis Dashboard -> Enfants & parents.",
+                              ),
+                              SizedBox(height: 32),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Bouton
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(32, 16, 32, 32),
+                        child: _buildModernContinueButton(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModernStepItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String description,
+  }) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: 600),
+      curve: Curves.easeOut,
+      builder: (context, double value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.grey[200]!,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icône
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 24,
+              ),
+            ),
+
+            SizedBox(width: 16),
+
+            // Texte
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2C3E50),
+                      height: 1.3,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.grey[600],
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernContinueButton() {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).pop();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              primaryColor,
+              primaryColor.withOpacity(0.8),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withOpacity(0.4),
+              blurRadius: 20,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Continuer',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+            SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
 // Nouvelle méthode pour afficher le popup d'ajout de membres MAM
@@ -920,7 +1249,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .collection('structures')
           .doc(structureDocId)
           .collection('agendaEntries')
-          .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('dueDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('dueDate', isLessThan: Timestamp.fromDate(endOfDay))
           .get();
 
@@ -1064,7 +1394,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, index) {
                       final entry = entries[index];
-                      final String title = entry['title'] as String? ?? 'Rappel';
+                      final String title =
+                          entry['title'] as String? ?? 'Rappel';
                       final String notes = entry['notes'] as String? ?? '';
                       final bool isShared = entry['isShared'] as bool? ?? false;
                       final DateTime? dueDate = entry['dueDate'] as DateTime?;
@@ -2558,7 +2889,8 @@ class _HomeScreenState extends State<HomeScreen> {
             unselectedItemColor: Colors.grey,
             showSelectedLabels: true,
             showUnselectedLabels: true,
-            selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            selectedLabelStyle:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             unselectedLabelStyle: const TextStyle(fontSize: 12),
             type: BottomNavigationBarType.fixed,
             currentIndex: 1, // Home est sélectionné
@@ -2614,10 +2946,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(email)
-          .snapshots(),
+      stream:
+          FirebaseFirestore.instance.collection('users').doc(email).snapshots(),
       builder: (context, snapshot) {
         int unread = 0;
         if (snapshot.hasData && snapshot.data!.exists) {
@@ -2860,7 +3190,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
 
                             final data = snapshot.data!.data()
-                                as Map<String, dynamic>? ??
+                                    as Map<String, dynamic>? ??
                                 const {};
                             final int unreadMessages =
                                 (data['unreadMessages'] ?? 0) as int;
