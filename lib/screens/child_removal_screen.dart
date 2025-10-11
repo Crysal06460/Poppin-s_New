@@ -149,8 +149,7 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen>
         'firstName': 'Assistante maternelle',
         'lastName': '',
         'currentDate': DateFormat('dd/MM/yyyy à HH:mm').format(DateTime.now()),
-        'message':
-            'Cet enfant a été retiré de votre structure. Voici son historique complet pour vos dossiers.',
+        'message': 'Voici son historique complet',
       },
       'pdfAttachment': pdfBase64,
       'pdfFilename':

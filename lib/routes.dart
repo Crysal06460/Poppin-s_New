@@ -78,6 +78,9 @@ import 'package:poppins_app/screens/mam_group_chat_screen.dart';
 import 'package:poppins_app/screens/auth_check_screen.dart';
 import 'package:poppins_app/screens/quick_login_screen.dart';
 
+final GlobalKey<NavigatorState> rootNavigatorKey =
+    GlobalKey<NavigatorState>();
+
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
   final user = FirebaseAuth.instance.currentUser;
@@ -101,6 +104,7 @@ Future<String> _getStructureId() async {
 }
 
 final GoRouter router = GoRouter(
+  navigatorKey: rootNavigatorKey,
   // 🔒 CHANGEMENT CRITIQUE : Démarrer par AuthCheckScreen
   initialLocation: '/', // AuthCheckScreen gère tout maintenant
 

@@ -239,26 +239,30 @@ class iOSSubscriptionService {
         return;
       }
 
-      // Déterminer le type de structure et nombre de membres
-      String structureType = 'assistante_maternelle';
-      int memberCount = 1;
-      double priceAmount = 6.99;
-      String priceDisplay = '6,99 € / mois';
+    // Déterminer le type de structure et nombre de membres
+    String structureType = 'assistante_maternelle';
+    int memberCount = 1;
+    int maxMemberCount = 1;
+    double priceAmount = 6.99;
+    String priceDisplay = '6,99 € / mois';
 
       // ✅ MAPPING robuste basé sur les IDs produits iOS
       if (productId == _iOSProductIds['mam_2_members']) {
         structureType = 'MAM';
-        memberCount = 3;
+        memberCount = 2;
+        maxMemberCount = 2;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
       } else if (productId == _iOSProductIds['mam_3_members']) {
         structureType = 'MAM';
-        memberCount = 6;
-        priceAmount = 24.99;
-        priceDisplay = '24,99 € / mois';
+        memberCount = 3;
+        maxMemberCount = 3;
+        priceAmount = 19.99;
+        priceDisplay = '19,99 € / mois';
       } else if (productId == _iOSProductIds['mam_4_members']) {
         structureType = 'MAM';
-        memberCount = 6;
+        memberCount = 4;
+        maxMemberCount = 99;
         priceAmount = 24.99;
         priceDisplay = '24,99 € / mois';
       } else if (productId == _iOSProductIds['assistante_maternelle']) {
@@ -294,6 +298,7 @@ class iOSSubscriptionService {
         'structureId': user.uid,
         'structureType': structureType,
         'memberCount': memberCount,
+        'maxMemberCount': maxMemberCount,
         'status': 'active',
         'productId': productId,
         'transactionId': transactionId,
@@ -326,7 +331,7 @@ class iOSSubscriptionService {
           .collection('structures')
           .doc(user.uid)
           .update({
-        'maxMemberCount': memberCount,
+        'maxMemberCount': maxMemberCount,
         'subscriptionActive': true,
         'subscriptionDocId': docRef.id,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
@@ -334,7 +339,7 @@ class iOSSubscriptionService {
         'currentPriceDisplay': priceDisplay,
       });
 
-      print('✅ Structure mise à jour avec maxMemberCount=$memberCount');
+      print('✅ Structure mise à jour avec maxMemberCount=$maxMemberCount');
     } catch (e) {
       print(
           '❌ Erreur lors de la sauvegarde de l\'abonnement dans Firestore: $e');

@@ -10,7 +10,8 @@ import 'android_subscription_service.dart';
 
 enum SubscriptionPlan {
   assistantMaternel,
-  mamUpTo3Members,
+  mam2Members,
+  mam3Members,
   mam4PlusMembers,
 }
 
@@ -460,7 +461,8 @@ class UnifiedSubscriptionService {
     switch (plan) {
       case SubscriptionPlan.assistantMaternel:
         return 'assistante_maternelle';
-      case SubscriptionPlan.mamUpTo3Members:
+      case SubscriptionPlan.mam2Members:
+      case SubscriptionPlan.mam3Members:
       case SubscriptionPlan.mam4PlusMembers:
         return 'mam';
     }
@@ -472,7 +474,9 @@ class UnifiedSubscriptionService {
     switch (plan) {
       case SubscriptionPlan.assistantMaternel:
         return 1;
-      case SubscriptionPlan.mamUpTo3Members:
+      case SubscriptionPlan.mam2Members:
+        return 2;
+      case SubscriptionPlan.mam3Members:
         return 3;
       case SubscriptionPlan.mam4PlusMembers:
         return 4;

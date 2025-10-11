@@ -590,10 +590,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 leading: Icon(
                   // Icône adaptée selon la situation
                   currentMemberCount >= maxMemberCount
-                      ? (maxMemberCount >= 4 ? Icons.block : Icons.upgrade)
+                      ? (maxMemberCount >= 4 && maxMemberCount < 50
+                          ? Icons.block
+                          : Icons.upgrade)
                       : Icons.person_add,
                   color: currentMemberCount >= maxMemberCount &&
-                          maxMemberCount >= 4
+                          maxMemberCount >= 4 &&
+                          maxMemberCount < 50
                       ? Colors.grey
                       : primaryColor, // BLEU au lieu de rouge
                 ),
@@ -602,13 +605,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
                     color: currentMemberCount >= maxMemberCount &&
-                            maxMemberCount >= 4
+                            maxMemberCount >= 4 &&
+                            maxMemberCount < 50
                         ? Colors.grey
                         : Colors.black87,
                   ),
                 ),
                 onTap: currentMemberCount >= maxMemberCount &&
-                        maxMemberCount >= 4
+                        maxMemberCount >= 4 &&
+                        maxMemberCount < 50
                     ? null // Désactiver seulement si on est déjà à 4 membres (limite absolue)
                     : () {
                         Navigator.pop(context);
@@ -652,8 +657,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isMAMStructure) {
       // Pour une MAM, minimum 2 membres
       if (currentMemberCount >= maxMemberCount) {
-        if (maxMemberCount >= 4) {
-          return "Limite atteinte (4 membres max)";
+        if (maxMemberCount >= 50) {
+          return "Limite atteinte (plan illimité)";
+        } else if (maxMemberCount >= 4) {
+          return "Limite atteinte (${maxMemberCount} membres max)";
         } else {
           return "Membres $currentMemberCount/$maxMemberCount - Passer à l'abonnement supérieur";
         }

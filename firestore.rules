@@ -6,107 +6,66 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function authEmailLower() {
-      return (isSignedIn() && request.auth.token.email is string)
-        ? lower(request.auth.token.email)
-        : "";
-    }
-
-    function isSelfUserDoc(userId) {
-      let lowerEmail = authEmailLower();
-      return isSignedIn() && (
-        userId == request.auth.uid ||
-        (lowerEmail != "" && (
-          userId == lowerEmail ||
-          (request.auth.token.email is string && userId == request.auth.token.email)
-        ))
-      );
-    }
-
-    function currentUserDoc() {
-      let lowerEmail = authEmailLower();
-      return lowerEmail == ""
-        ? null
-        : get(/databases/$(database)/documents/users/$(lowerEmail));
-    }
-
-    function currentUserStructureId() {
-      let doc = currentUserDoc();
-      return doc != null && doc.exists() && doc.data.structureId is string
-        ? doc.data.structureId
-        : (isSignedIn() ? request.auth.uid : "");
-    }
-
-    function canManageUnreadMessages() {
-      if (!isSignedIn()) {
-        return false;
-      }
-
-      let managedStructureId = currentUserStructureId();
-      if (managedStructureId == "") {
-        return false;
-      }
-
-      let targetStructureId = (
-        request.resource.data.structureId is string
-          ? request.resource.data.structureId
-          : (resource != null && resource.data.structureId is string
-              ? resource.data.structureId
-              : "")
-      );
-
-      return targetStructureId != "" &&
-        targetStructureId == managedStructureId &&
-        request.writeFields.hasOnly(["unreadMessages"]) &&
-        (
-          request.resource.data.unreadMessages is int ||
-          request.resource.data.unreadMessages == null
-        );
-    }
-
+    /* USERS */
     match /users/{userId} {
-      allow read: if isSelfUserDoc(userId) || canManageUnreadMessages();
-      allow create: if isSelfUserDoc(userId);
-      allow update: if isSelfUserDoc(userId) || canManageUnreadMessages();
-      allow delete: if false;
+      allow read: if isSignedIn();
+
+      allow write: if isSignedIn() &&
+        (
+          userId == request.auth.uid ||
+          (
+            request.auth.token.email is string &&
+            (
+              userId == request.auth.token.email ||
+              userId == lower(request.auth.token.email)
+            )
+          )
+        );
+
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
     }
 
     /* SUBSCRIPTIONS */
     match /subscriptions/{docId} {
       allow read: if isSignedIn();
-
-      allow create: if isSignedIn() &&
-        request.resource.data.structureId is string &&
-        request.resource.data.structureId == currentUserStructureId();
-
-      allow update: if isSignedIn() &&
-        resource.data.structureId is string &&
-        resource.data.structureId == currentUserStructureId();
-
+      allow create, update: if isSignedIn();
       allow delete: if false;
     }
 
-    /* STRUCTURES et tout ce qui est en dessous */
+    /* STRUCTURES */
     match /structures/{structureId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && structureId == request.auth.uid;
-      allow update, delete: if isSignedIn() && structureId == request.auth.uid;
+      allow write: if isSignedIn();
 
       match /{documentPath=**} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isSignedIn() && structureId == request.auth.uid;
+        allow write: if isSignedIn();
       }
     }
 
-    match /exchanges/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if request.auth != null &&
-        (request.auth.uid == resource.data.senderUid ||
-         request.auth.uid == request.resource.data.senderUid);
+    /* EXCHANGES - PERMISSIF */
+    match /exchanges/{messageId} {
+      allow read, write: if isSignedIn();
     }
 
-    /* Catch-all */
+    /* EMAIL QUEUE */
+    match /emailQueue/{emailId} {
+      allow read: if false;
+      allow update, delete: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.to is string &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.templateData is map;
+    }
+
+    /* HORAIRES HISTORY (racine) */
+    match /horaires_history/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    /* RESTE - Bloqué par défaut */
     match /{document=**} {
       allow read, write: if false;
     }

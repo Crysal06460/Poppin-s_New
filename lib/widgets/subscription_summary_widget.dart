@@ -246,10 +246,15 @@ class SubscriptionSummaryWidget extends StatelessWidget {
   String _getSubscriptionTypeText() {
     final String structureType = subscriptionInfo['structureType'] ?? 'unknown';
     final int memberCount = subscriptionInfo['memberCount'] ?? 1;
+    final int maxMemberCount =
+        subscriptionInfo['maxMemberCount'] ?? subscriptionInfo['memberCount'] ?? 1;
 
     if (structureType == 'assistante_maternelle') {
       return 'Assistant(e) Maternel(le)';
     } else if (structureType == 'MAM' || structureType.toLowerCase() == 'mam') {
+      if (maxMemberCount >= 50) {
+        return 'MAM 4+ membres (illimité)';
+      }
       return 'MAM $memberCount membre${memberCount > 1 ? 's' : ''}';
     } else {
       return 'Type inconnu';

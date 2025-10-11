@@ -115,7 +115,9 @@ void main() async {
     }
   } catch (e) {
     print('⚠️ Erreur SubscriptionService: $e - continuer avec mode debug');
-    SubscriptionService.setDebugMode(true);
+    if (kDebugMode) {
+      SubscriptionService.setDebugMode(true);
+    }
   }
 
   print('🚀 Démarrage Poppins - Fix Android appliqué, iOS préservé');

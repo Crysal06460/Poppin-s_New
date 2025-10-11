@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 // Import du nouveau service unifié
 import '../services/unified_subscription_service.dart';
 import 'dart:async';
@@ -174,9 +175,13 @@ class _PricingScreenState extends State<PricingScreen> {
       return SubscriptionPlan.assistantMaternel;
     }
 
-    return _selectedMamMembers >= 4
-        ? SubscriptionPlan.mam4PlusMembers
-        : SubscriptionPlan.mamUpTo3Members;
+    if (_selectedMamMembers <= 2) {
+      return SubscriptionPlan.mam2Members;
+    }
+    if (_selectedMamMembers == 3) {
+      return SubscriptionPlan.mam3Members;
+    }
+    return SubscriptionPlan.mam4PlusMembers;
   }
 
   /// Achète un abonnement
@@ -227,6 +232,25 @@ class _PricingScreenState extends State<PricingScreen> {
         _errorMessage = 'Erreur: $e';
       });
       _showErrorDialog('Erreur lors de l\'achat: $e');
+    }
+  }
+
+  Future<void> _openDiscoverSite() async {
+    final uri = Uri.parse('https://www.poppin-s.fr');
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        _showErrorDialog(
+          'Impossible d\'ouvrir le site pour le moment. Veuillez réessayer plus tard.',
+        );
+      }
+    } catch (e) {
+      _showErrorDialog(
+        'Impossible d\'ouvrir le site pour le moment. Veuillez réessayer plus tard.',
+      );
     }
   }
 
@@ -305,8 +329,7 @@ class _PricingScreenState extends State<PricingScreen> {
     final String normalizedType = widget.structureType.toLowerCase();
     final bool isAssMat = normalizedType == 'assistante_maternelle';
 
-    final String structureType =
-        isAssMat ? 'assistante_maternelle' : 'MAM';
+    final String structureType = isAssMat ? 'assistante_maternelle' : 'MAM';
 
     int memberCount;
     if (isAssMat) {
@@ -370,10 +393,13 @@ class _PricingScreenState extends State<PricingScreen> {
       return 'Abonnement Assistant Maternel';
     }
 
-    if (_selectedMamMembers >= 4) {
-      return 'Abonnement MAM 4 et + membres';
+    if (_selectedMamMembers <= 2) {
+      return 'Abonnement MAM 2 membres';
     }
-    return 'Abonnement MAM 2 à 3 membres';
+    if (_selectedMamMembers == 3) {
+      return 'Abonnement MAM 3 membres';
+    }
+    return 'Abonnement MAM 4 membres et + (illimité)';
   }
 
   /// Retourne le prix selon le type
@@ -497,15 +523,87 @@ class _PricingScreenState extends State<PricingScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         const Text(
-                          'Puis résiliation possible à tout moment',
+                          'Sans engagement : l\'abonnement ne débute qu\'après l\'essai et peut être résilié à tout moment.',
                           style: TextStyle(
                             color: Colors.white70,
-                            fontSize: 14,
+                            fontSize: 13,
                           ),
                           textAlign: TextAlign.center,
                         ),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blueGrey.withValues(alpha: 0.1),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.verified, color: primaryBlue),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Essai 100% gratuit et sans engagement',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _ReassurancePoint(
+                          icon: Icons.lock_open,
+                          text:
+                              'Aucun prélèvement : si vous annulez avant la fin des 7 jours.',
+                        ),
+                        const SizedBox(height: 8),
+                        _ReassurancePoint(
+                          icon: Icons.calendar_today,
+                          text:
+                              'Au 8ème jour seulement, l\'abonnement débute (résiliable à tout moment).',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _openDiscoverSite,
+                      style: TextButton.styleFrom(
+                        foregroundColor: primaryBlue,
+                        textStyle: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      label:
+                          const Text('Découvrir l\'appli avant de se lancer'),
                     ),
                   ),
 
@@ -546,69 +644,73 @@ class _PricingScreenState extends State<PricingScreen> {
                                           _selectedMamMembers = members;
                                         });
                                       },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _selectedMamMembers == members
-                                              ? Colors.blue[600]
-                                              : Colors.grey[100],
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color:
-                                                _selectedMamMembers == members
-                                                    ? Colors.blue[600]!
-                                                    : Colors.grey[300]!,
-                                            width: 2,
+                                      child: Builder(builder: (context) {
+                                        final bool isUnlimited = members >= 4;
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                            horizontal: 8,
                                           ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              members >= 4 ? '4+' : '$members',
-                                              style: TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                color: _selectedMamMembers ==
-                                                        members
-                                                    ? Colors.white
-                                                    : Colors.grey[700],
-                                              ),
+                                          decoration: BoxDecoration(
+                                            color: _selectedMamMembers ==
+                                                    members
+                                                ? Colors.blue[600]
+                                                : Colors.grey[100],
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: _selectedMamMembers ==
+                                                      members
+                                                  ? Colors.blue[600]!
+                                                  : Colors.grey[300]!,
+                                              width: 2,
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              members >= 4
-                                                  ? 'membres'
-                                                  : 'membres',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: _selectedMamMembers ==
-                                                        members
-                                                    ? Colors.white
-                                                    : Colors.grey[600],
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Text(
+                                                isUnlimited ? '4+' : '$members',
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: _selectedMamMembers ==
+                                                          members
+                                                      ? Colors.white
+                                                      : Colors.grey[700],
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _getPriceForMembers(members),
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: _selectedMamMembers ==
-                                                        members
-                                                    ? Colors.white
-                                                    : Colors.blue[600],
-                                              ),
-                                            ),
-                                            if (members >= 4) ...[
                                               const SizedBox(height: 4),
+                                              Text(
+                                                isUnlimited
+                                                    ? 'membres (illimité)'
+                                                    : 'membres',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: _selectedMamMembers ==
+                                                          members
+                                                      ? Colors.white
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                _getPriceForMembers(members),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: _selectedMamMembers ==
+                                                          members
+                                                      ? Colors.white
+                                                      : Colors.blue[600],
+                                                ),
+                                              ),
+                                              if (isUnlimited) ...[
+                                                const SizedBox(height: 4),
+                                              ],
                                             ],
-                                          ],
-                                        ),
-                                      ),
+                                          ),
+                                        );
+                                      }),
                                     ),
                                   ),
                                 ),
@@ -821,5 +923,39 @@ class _PricingScreenState extends State<PricingScreen> {
   void dispose() {
     // Le service sera nettoyé automatiquement
     super.dispose();
+  }
+}
+
+class _ReassurancePoint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ReassurancePoint({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          color: _PricingScreenState.primaryBlue,
+          size: 20,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

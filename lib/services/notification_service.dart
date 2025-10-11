@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -498,13 +499,18 @@ class NotificationService {
       iOS: iosDetails,
     );
 
+    final Map<String, dynamic> payloadData = {
+      ...message.data,
+      '_notificationTitle': message.notification?.title ?? '',
+      '_notificationBody': message.notification?.body ?? '',
+    };
+
     await _localNotifications.show(
       message.hashCode,
       message.notification?.title ?? 'Nouveau message',
       message.notification?.body ?? 'Vous avez reçu un nouveau message',
       notificationDetails,
-      // Utiliser JSON pour décodage fiable lors du clic
-      payload: jsonEncode(message.data),
+      payload: jsonEncode(payloadData),
     );
   }
 
@@ -517,6 +523,14 @@ class NotificationService {
         // Ouvrir l'écran stocks parent
         router.go('/parent/stocks');
         return;
+      }
+      if (_shouldDisplayInfoPopup(type, message.data)) {
+        final title = message.notification?.title ??
+            message.data['title']?.toString() ??
+            'Notification';
+        final body =
+            message.notification?.body ?? message.data['body']?.toString() ?? '';
+        _showInformationalDialog(title, body);
       }
       // À défaut, ne rien faire (ou ouvrir messages si vous le souhaitez)
     } catch (e) {
@@ -593,6 +607,65 @@ class NotificationService {
     print('📱 Notification locale reçue: $title - $body');
   }
 
+  static bool _shouldDisplayInfoPopup(
+      String rawType, Map<String, dynamic> data) {
+    final type = rawType.toLowerCase();
+    if (type == 'message' || type == 'stock') {
+      return false;
+    }
+    if (type.isEmpty) {
+      // Si les données ressemblent à un message (childId + messageId), ne pas afficher de popup
+      final hasMessageKeys =
+          data.containsKey('messageId') || data.containsKey('childId');
+      return !hasMessageKeys;
+    }
+    return type == 'info' ||
+        type == 'broadcast' ||
+        type == 'announcement' ||
+        type == 'news';
+  }
+
+  static void _showInformationalDialog(String title, String body) {
+    final navigatorState = rootNavigatorKey.currentState;
+    if (navigatorState == null || !navigatorState.mounted) {
+      print('⚠️ Aucun contexte disponible pour afficher la popup de notification');
+      return;
+    }
+
+    Future.microtask(() {
+      final currentState = rootNavigatorKey.currentState;
+      if (currentState == null || !currentState.mounted) {
+        print('⚠️ Contexte non monté pour afficher la popup');
+        return;
+      }
+
+      showDialog<void>(
+        context: currentState.context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(
+              title.isEmpty ? 'Notification' : title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: SingleChildScrollView(
+              child: Text(
+                body.isEmpty
+                    ? 'Vous avez reçu une nouvelle notification.'
+                    : body,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('FERMER'),
+              ),
+            ],
+          );
+        },
+      );
+    });
+  }
+
   static void _onDidReceiveNotificationResponse(NotificationResponse response) {
     print('🔔 Réponse notification: ${response.payload}');
     // Gestion du clic sur notification locale (Android foreground)
@@ -604,15 +677,28 @@ class NotificationService {
           router.go('/parent/stocks');
           return;
         }
+        if (_shouldDisplayInfoPopup(type, data)) {
+          final title =
+              (data['_notificationTitle'] ?? data['title'] ?? 'Notification')
+                  .toString();
+          final body =
+              (data['_notificationBody'] ?? data['body'] ?? '').toString();
+          _showInformationalDialog(title, body);
+          return;
+        }
       }
     } catch (e) {
       // Fallback si payload n'est pas du JSON
       final payload = response.payload ?? '';
       if (payload.contains('type') && payload.contains('stock')) {
         router.go('/parent/stocks');
-      } else {
-        print('⚠️ Payload non JSON ou navigation non traitée');
+        return;
       }
+      final trimmed = payload.trim();
+      if (trimmed.isNotEmpty && trimmed != '{}') {
+        _showInformationalDialog('Notification', trimmed);
+      }
+      print('⚠️ Payload non JSON ou navigation non traitée');
     }
   }
 

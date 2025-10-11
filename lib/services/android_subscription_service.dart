@@ -15,6 +15,7 @@ class _PendingPurchaseContext {
     required this.productId,
     required this.structureType,
     required this.memberCount,
+    required this.maxMemberCount,
     required this.priceAmount,
     required this.priceDisplay,
     required this.isTrialPurchase,
@@ -24,6 +25,7 @@ class _PendingPurchaseContext {
   final String productId;
   final String structureType;
   final int memberCount;
+  final int maxMemberCount;
   final double priceAmount;
   final String priceDisplay;
   final bool isTrialPurchase;
@@ -212,35 +214,37 @@ class AndroidSubscriptionService {
       return {
         'structureType': 'assistante_maternelle',
         'memberCount': 1,
+        'maxMemberCount': 1,
         'priceAmount': 6.99,
         'priceDisplay': '6,99 € / mois',
         'productKey': 'ass-mat',
         'isTrialPurchase': false,
       };
     } else if (normalized == 'abonnement_mam2') {
-      final int resolvedMembers =
-          ((_lastRequestedMemberCount ?? 3).clamp(2, 3) as num).toInt();
       return {
         'structureType': 'MAM',
-        'memberCount': resolvedMembers,
+        'memberCount': 2,
+        'maxMemberCount': 2,
         'priceAmount': 19.99,
         'priceDisplay': '19,99 € / mois',
-        'productKey': 'mam-2-3',
+        'productKey': 'mam-2',
         'isTrialPurchase': false,
       };
     } else if (normalized == 'abonnement_mam3') {
       return {
         'structureType': 'MAM',
-        'memberCount': 4,
-        'priceAmount': 24.99,
-        'priceDisplay': '24,99 € / mois',
-        'productKey': 'mam-4-legacy',
+        'memberCount': 3,
+        'maxMemberCount': 3,
+        'priceAmount': 19.99,
+        'priceDisplay': '19,99 € / mois',
+        'productKey': 'mam-3',
         'isTrialPurchase': false,
       };
     } else if (normalized == 'abonnement_mam4') {
       return {
         'structureType': 'MAM',
         'memberCount': 4,
+        'maxMemberCount': 99,
         'priceAmount': 24.99,
         'priceDisplay': '24,99 € / mois',
         'productKey': 'mam-4-plus',
@@ -264,6 +268,7 @@ class AndroidSubscriptionService {
     return {
       'structureType': 'assistante_maternelle',
       'memberCount': 1,
+      'maxMemberCount': 1,
       'priceAmount': 6.99,
       'priceDisplay': '6,99 € / mois',
       'productKey': 'ass-mat',
@@ -309,6 +314,7 @@ class AndroidSubscriptionService {
         subscriptionInfo = {
           'structureType': _pendingPurchaseContext!.structureType,
           'memberCount': _pendingPurchaseContext!.memberCount,
+          'maxMemberCount': _pendingPurchaseContext!.maxMemberCount,
           'priceAmount': _pendingPurchaseContext!.priceAmount,
           'priceDisplay': _pendingPurchaseContext!.priceDisplay,
           'productKey': _pendingPurchaseContext!.productKey,
@@ -318,6 +324,10 @@ class AndroidSubscriptionService {
 
       final String structureType = subscriptionInfo['structureType'];
       final int memberCount = subscriptionInfo['memberCount'];
+      final int maxMemberCount =
+          subscriptionInfo['maxMemberCount'] is int
+              ? subscriptionInfo['maxMemberCount'] as int
+              : memberCount;
       final double priceAmount = subscriptionInfo['priceAmount'];
       final String priceDisplay = subscriptionInfo['priceDisplay'];
       final bool isTrialPurchase = subscriptionInfo['isTrialPurchase'] == true;
@@ -363,6 +373,7 @@ class AndroidSubscriptionService {
         'billingPeriod': 'monthly',
         'platform': 'android',
         'isTrialPeriod': isTrialPurchase,
+        'maxMemberCount': maxMemberCount,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -382,10 +393,10 @@ class AndroidSubscriptionService {
 
       // Mettre à jour structure
       await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(user.uid)
-          .update({
-        'maxMemberCount': memberCount,
+        .collection('structures')
+        .doc(user.uid)
+        .update({
+        'maxMemberCount': maxMemberCount,
         'subscriptionActive': true,
         'subscriptionDocId': docRef.id,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
@@ -404,11 +415,12 @@ class AndroidSubscriptionService {
     if (normalizedType == 'assistante_maternelle') {
       candidateIds.addAll(['abonnement_assmat', 'assmat']);
     } else if (normalizedType == 'mam') {
-      if (memberCount <= 3) {
+      if (memberCount <= 2) {
         candidateIds.addAll(['abonnement_mam2', 'mam2']);
+      } else if (memberCount == 3) {
+        candidateIds.addAll(['abonnement_mam3', 'mam3']);
       } else {
-        candidateIds.addAll(
-            ['abonnement_mam4', 'abonnement_mam3', 'mam4', 'mam3']);
+        candidateIds.addAll(['abonnement_mam4', 'mam4']);
       }
     }
 
@@ -474,10 +486,17 @@ class AndroidSubscriptionService {
             (product is GooglePlayProductDetails ? product.offerToken : null),
       );
 
+      final int resolvedMemberCount =
+          subscriptionInfo['memberCount'] is int ? subscriptionInfo['memberCount'] as int : 1;
+      final int resolvedMaxMemberCount = subscriptionInfo['maxMemberCount'] is int
+          ? subscriptionInfo['maxMemberCount'] as int
+          : resolvedMemberCount;
+
       _pendingPurchaseContext = _PendingPurchaseContext(
         productId: product.id,
         structureType: subscriptionInfo['structureType'] as String,
-        memberCount: subscriptionInfo['memberCount'] as int,
+        memberCount: resolvedMemberCount,
+        maxMemberCount: resolvedMaxMemberCount,
         priceAmount: subscriptionInfo['priceAmount'] as double,
         priceDisplay: subscriptionInfo['priceDisplay'] as String,
         isTrialPurchase: _offerHasTrial(offer),
@@ -545,11 +564,11 @@ class AndroidSubscriptionService {
     } else if (productId == 'abo-mam-2' ||
         productId == 'abonnement_mam2' ||
         productId == 'mam2') {
-      return await purchaseSubscriptionByType('MAM', 3);
+      return await purchaseSubscriptionByType('MAM', 2);
     } else if (productId == 'abo-mam-3' ||
         productId == 'abonnement_mam3' ||
         productId == 'mam3') {
-      return await purchaseSubscriptionByType('MAM', 4);
+      return await purchaseSubscriptionByType('MAM', 3);
     } else if (productId == 'abo-mam-4' ||
         productId == 'abonnement_mam4' ||
         productId == 'mam4') {
@@ -568,8 +587,11 @@ class AndroidSubscriptionService {
     }
 
     if (normalizedType == 'mam') {
-      if (mamMembersCount <= 3) {
+      if (mamMembersCount <= 2) {
         return 'abonnement_mam2';
+      }
+      if (mamMembersCount == 3) {
+        return 'abonnement_mam3';
       }
       return 'abonnement_mam4';
     }

@@ -86,6 +86,11 @@ class SubscriptionService {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
 
+      if (isInDevMode) {
+        print('🧪 Mode développement : abonnement automatiquement validé.');
+        return true;
+      }
+
       print('🔍 Vérification abonnement pour: ${user.uid}');
 
       // Résoudre le bon structureId (MAM vs utilisateur solo)
@@ -507,14 +512,24 @@ class SubscriptionService {
       // 🔧 CORRIGÉ : Gérer les deux formats d'IDs (iOS et Android)
       final String productId = purchase.productID;
 
+      int maxMemberCount = memberCount;
       if (productId.contains('mam')) {
         structureType = 'MAM';
-        if (productId.contains('2_members')) {
+        if (productId.contains('mam_2') ||
+            productId.contains('mam2') ||
+            productId.contains('2_members')) {
           memberCount = 2;
-        } else if (productId.contains('3_members')) {
+          maxMemberCount = 2;
+        } else if (productId.contains('mam_3') ||
+            productId.contains('mam3') ||
+            productId.contains('3_members')) {
           memberCount = 3;
-        } else if (productId.contains('4_members')) {
+          maxMemberCount = 3;
+        } else if (productId.contains('mam_4') ||
+            productId.contains('mam4') ||
+            productId.contains('4_members')) {
           memberCount = 4;
+          maxMemberCount = 99;
         }
       }
 
@@ -539,6 +554,7 @@ class SubscriptionService {
         'structureId': structureId,
         'structureType': structureType,
         'memberCount': memberCount,
+        'maxMemberCount': maxMemberCount,
         'status': 'active',
         'productId': purchase.productID,
         'purchaseId': purchase.purchaseID,
@@ -553,7 +569,7 @@ class SubscriptionService {
           .collection('structures')
           .doc(structureId)
           .update({
-        'maxMemberCount': memberCount,
+        'maxMemberCount': maxMemberCount,
         'subscriptionActive': true,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
       });

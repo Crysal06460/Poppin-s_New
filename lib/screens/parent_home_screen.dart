@@ -61,6 +61,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   Map<String, dynamic>? _selectedChild;
   List<Map<String, dynamic>> _timelineEvents =
       []; // Pour stocker les événements du jour
+  static const int _timelineHistoryLimitDays = 10;
+  DateTime _selectedTimelineDate = DateTime.now();
+  List<Map<String, dynamic>> _hourDocEvents = [];
+  List<Map<String, dynamic>> _hourHistoryEvents = [];
   bool _loadingTimeline = false;
   bool _showStockBadge = false;
   bool _showMessageBadge = false;
@@ -100,6 +104,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _selectedTimelineDate = _normalizeDate(DateTime.now());
 
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadUserData();
@@ -2183,6 +2188,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       subscription.cancel();
     }
     _subscriptions.clear();
+    _hourDocEvents = [];
+    _hourHistoryEvents = [];
 
     // Réinitialiser les événements
     _eventsMap = {
@@ -2221,7 +2228,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
       // Actualiser la timeline
       await _loadChildTimeline(
-          _selectedChild!['id'], _selectedChild!['structureId']);
+        _selectedChild!['id'],
+        _selectedChild!['structureId'],
+        selectedDay: _selectedTimelineDate,
+      );
 
       // Actualiser les actualités
       await _loadActualites(_selectedChild!['structureId']);
@@ -2568,6 +2578,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           _parentLastName = parentLastName;
           _children = childrenData;
           _selectedChild = newSelectedChild;
+          _selectedTimelineDate = _normalizeDate(DateTime.now());
           _isParentEmployeur = isParentEmployeur;
           _hasAssistant = hasAssistant;
           _assistantInfo = assistantInfo;
@@ -2578,9 +2589,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
       if (childrenData.isNotEmpty && newSelectedChild != null) {
         await _loadChildTimeline(
-            newSelectedChild['id'], newSelectedChild['structureId']);
+          newSelectedChild['id'],
+          newSelectedChild['structureId'],
+          selectedDay: _selectedTimelineDate,
+        );
       } else {
         _disposeCurrentSubscriptions();
+        if (mounted) {
+          setState(() {
+            _timelineEvents = [];
+          });
+        }
       }
 
       if (structureId.isNotEmpty) {
@@ -2605,36 +2624,40 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     }
   }
 
-  Future<void> _loadChildTimeline(String childId, String structureId) async {
+  Future<void> _loadChildTimeline(String childId, String structureId,
+      {DateTime? selectedDay}) async {
+    final targetDate = _normalizeDate(selectedDay ?? _selectedTimelineDate);
+    final formattedDate = DateFormat('dd/MM/yyyy').format(targetDate);
     print(
-        "🔍 Chargement de la timeline pour enfant ID: $childId, structure: $structureId");
-    setState(() => _loadingTimeline = true);
+        "🔍 Chargement de la timeline pour enfant ID: $childId, structure: $structureId, date: $formattedDate");
+    setState(() {
+      _loadingTimeline = true;
+      _selectedTimelineDate = targetDate;
+    });
 
     try {
-      // Définir la plage de dates pour aujourd'hui
-      final now = DateTime.now();
-      // Convertir les DateTime en Timestamp directement pour Firestore
-      final todayStart =
-          Timestamp.fromDate(DateTime(now.year, now.month, now.day));
-      final todayEnd = Timestamp.fromDate(
-          DateTime(now.year, now.month, now.day, 23, 59, 59));
+      final dayStart =
+          DateTime(targetDate.year, targetDate.month, targetDate.day);
+      final dayEnd =
+          dayStart.add(Duration(days: 1)).subtract(Duration(milliseconds: 1));
+      final dayStartTimestamp = Timestamp.fromDate(dayStart);
+      final dayEndTimestamp = Timestamp.fromDate(dayEnd);
+      final dayKey = DateFormat('yyyy-MM-dd').format(targetDate);
 
       print(
-          "📅 Chargement des événements pour le ${DateFormat('dd/MM/yyyy').format(now)}");
-      print("⏰ Plage horaire: ${todayStart.toDate()} - ${todayEnd.toDate()}");
+          "⏰ Plage horaire: ${dayStartTimestamp.toDate()} - ${dayEndTimestamp.toDate()}");
 
-      // Utiliser des StreamSubscriptions pour écouter les changements
-      _disposeCurrentSubscriptions(); // Méthode pour annuler les abonnements précédents
+      _disposeCurrentSubscriptions();
+      _updateTimelineEvents();
+
+      final structureRef = _firestore.collection('structures').doc(structureId);
+      final childRef = structureRef.collection('children').doc(childId);
 
       // 1. Écouter les activités
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('activites')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("📝 Activités reçues: ${snapshot.docs.length}");
@@ -2645,14 +2668,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 2. Écouter les repas
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('repas')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("🍔 Repas reçus: ${snapshot.docs.length}");
@@ -2663,14 +2682,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 3. Écouter les siestes
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('siestes')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("😴 Siestes reçues: ${snapshot.docs.length}");
@@ -2681,14 +2696,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 4. Écouter les changes
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('changes')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("👶 Changes reçus: ${snapshot.docs.length}");
@@ -2699,14 +2710,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 5. Écouter les soins de santé
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('sante')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("🏥 Soins santé reçus: ${snapshot.docs.length}");
@@ -2717,14 +2724,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 6. Écouter les photos
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      _subscriptions.add(childRef
           .collection('medias')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("📷 Photos reçues: ${snapshot.docs.length}");
@@ -2735,11 +2738,9 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }));
 
       // 7. Écouter les horaires du jour (source d'état courant, évite les doublons)
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
+      _subscriptions.add(structureRef
           .collection('horaires')
-          .doc(DateFormat('yyyy-MM-dd').format(now))
+          .doc(dayKey)
           .snapshots()
           .listen((doc) {
         print("⏱️ Document horaires reçu: ${doc.exists}");
@@ -2749,15 +2750,26 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         print("❌ Erreur dans l'écouteur d'horaires (doc): $error");
       }));
 
-      // 8. Écouter les transmissions
-      _subscriptions.add(_firestore
-          .collection('structures')
-          .doc(structureId)
-          .collection('children')
-          .doc(childId)
+      // 8. Historique des horaires (arrivée/départ)
+      _subscriptions.add(structureRef
+          .collection('horaires_history')
+          .where('childId', isEqualTo: childId)
+          .where('date', isEqualTo: dayKey)
+          .orderBy('timestamp', descending: true)
+          .snapshots()
+          .listen((snapshot) {
+        print("📚 Historique horaires reçu: ${snapshot.docs.length}");
+        _processHoursHistorySnapshot(snapshot);
+        _updateTimelineEvents();
+      }, onError: (error) {
+        print("❌ Erreur dans l'écouteur d'horaires (history): $error");
+      }));
+
+      // 9. Écouter les transmissions
+      _subscriptions.add(childRef
           .collection('transmissions')
-          .where('date', isGreaterThanOrEqualTo: todayStart)
-          .where('date', isLessThanOrEqualTo: todayEnd)
+          .where('date', isGreaterThanOrEqualTo: dayStartTimestamp)
+          .where('date', isLessThanOrEqualTo: dayEndTimestamp)
           .snapshots()
           .listen((snapshot) {
         print("📣 Transmissions reçues: ${snapshot.docs.length}");
@@ -3025,7 +3037,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
         // Si absent: ne rien afficher
         if (childData['absent'] == true) {
-          _eventsMap['hour'] = [];
+          _hourDocEvents = [];
+          _updateHourEvents();
           return;
         }
 
@@ -3089,7 +3102,91 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }
     }
 
-    _eventsMap['hour'] = events;
+    _hourDocEvents = events;
+    _updateHourEvents();
+  }
+
+  void _processHoursHistorySnapshot(QuerySnapshot snapshot) {
+    String? arrival;
+    String? departure;
+
+    String? extractHour(Map<String, dynamic> data) {
+      final rawHour = data['heure'];
+      if (rawHour != null && rawHour.toString().isNotEmpty) {
+        return rawHour.toString();
+      }
+      final ts = data['timestamp'];
+      if (ts is Timestamp) {
+        final dt = ts.toDate();
+        return DateFormat('HH:mm').format(dt);
+      }
+      return null;
+    }
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final action = (data['actionType'] ?? '').toString();
+      final hour = extractHour(data);
+      if (hour == null) continue;
+
+      if ((action == 'arrivee' || action == 'arrivee_modifiee') &&
+          arrival == null) {
+        arrival = hour;
+      } else if ((action == 'depart' || action == 'depart_modifiee') &&
+          departure == null) {
+        departure = hour;
+      }
+    }
+
+    final events = <Map<String, dynamic>>[];
+    if (arrival != null && arrival!.isNotEmpty) {
+      events.add({
+        'id': 'history_arrival',
+        'time': arrival,
+        'type': 'arrival',
+        'title': 'Arrivée',
+        'details': arrival,
+        'iconData': Icons.login,
+        'color': Colors.green.shade700,
+      });
+    }
+    if (departure != null && departure!.isNotEmpty) {
+      events.add({
+        'id': 'history_departure',
+        'time': departure,
+        'type': 'departure',
+        'title': 'Départ',
+        'details': departure,
+        'iconData': Icons.logout,
+        'color': Colors.red.shade700,
+      });
+    }
+
+    _hourHistoryEvents = events;
+    _updateHourEvents();
+  }
+
+  void _updateHourEvents() {
+    final combined = <Map<String, dynamic>>[];
+    if (_hourDocEvents.isNotEmpty) {
+      combined.addAll(_hourDocEvents);
+    }
+
+    if (_hourHistoryEvents.isNotEmpty) {
+      final existing = combined
+          .map((event) =>
+              '${event['type']}_${event['time']}_${event['details'] ?? ''}')
+          .toSet();
+      for (final event in _hourHistoryEvents) {
+        final signature =
+            '${event['type']}_${event['time']}_${event['details'] ?? ''}';
+        if (!existing.contains(signature)) {
+          combined.add(event);
+        }
+      }
+    }
+
+    _eventsMap['hour'] = combined;
   }
 
   void _processTransmissionsSnapshot(QuerySnapshot snapshot) {
@@ -3224,6 +3321,58 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     return true;
   }
 
+  DateTime _normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  DateTime get _earliestTimelineDate => _normalizeDate(
+      DateTime.now().subtract(Duration(days: _timelineHistoryLimitDays)));
+
+  bool get _canGoToPreviousDay =>
+      _normalizeDate(_selectedTimelineDate).isAfter(_earliestTimelineDate);
+
+  bool get _canGoToNextDay =>
+      _selectedTimelineDate.isBefore(_normalizeDate(DateTime.now()));
+
+  Future<void> _changeTimelineDay(int deltaDays) async {
+    if (_selectedChild == null) return;
+
+    final target =
+        _normalizeDate(_selectedTimelineDate.add(Duration(days: deltaDays)));
+    final earliest = _earliestTimelineDate;
+    final today = _normalizeDate(DateTime.now());
+
+    if (target.isBefore(earliest) || target.isAfter(today)) {
+      return;
+    }
+
+    if (_isSameDay(target, _selectedTimelineDate)) {
+      return;
+    }
+
+    final childIdValue = _selectedChild!['id'];
+    final structureIdValue = _selectedChild!['structureId'];
+    final childId = childIdValue != null ? childIdValue.toString() : null;
+    final structureId =
+        structureIdValue != null ? structureIdValue.toString() : null;
+    if (childId == null ||
+        childId.isEmpty ||
+        structureId == null ||
+        structureId.isEmpty) {
+      return;
+    }
+
+    await _loadChildTimeline(
+      childId,
+      structureId,
+      selectedDay: target,
+    );
+  }
+
   Widget _buildHeaderIcon(String label, IconData icon, VoidCallback onTap,
       {bool showBadge = false}) {
     return LayoutBuilder(
@@ -3316,6 +3465,95 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTimelineDateSelector() {
+    final today = _normalizeDate(DateTime.now());
+    final isToday = _isSameDay(_selectedTimelineDate, today);
+
+    final rawMainLabel =
+        DateFormat('EEEE d MMMM', 'fr_FR').format(_selectedTimelineDate);
+    final mainLabel = isToday
+        ? "Aujourd'hui"
+        : toBeginningOfSentenceCase(rawMainLabel) ?? rawMainLabel;
+    final secondaryLabel =
+        DateFormat('d MMMM yyyy', 'fr_FR').format(_selectedTimelineDate);
+
+    Widget navButton({
+      required IconData icon,
+      required bool enabled,
+      required VoidCallback? onTap,
+    }) {
+      final backgroundColor =
+          enabled ? primaryBlue.withOpacity(0.15) : Colors.grey.shade200;
+      final iconColor = enabled ? primaryBlue : Colors.grey.shade500;
+
+      return Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          onPressed: enabled ? onTap : null,
+          icon: Icon(icon, color: iconColor),
+          splashRadius: 24,
+          padding: EdgeInsets.all(8),
+          constraints: BoxConstraints(),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              navButton(
+                icon: Icons.chevron_left,
+                enabled: _canGoToPreviousDay,
+                onTap: () => _changeTimelineDay(-1),
+              ),
+              Column(
+                children: [
+                  Text(
+                    mainLabel,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    secondaryLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              navButton(
+                icon: Icons.chevron_right,
+                enabled: _canGoToNextDay,
+                onTap: () => _changeTimelineDay(1),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Historique visible sur ${_timelineHistoryLimitDays} jours",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -4023,13 +4261,18 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                             ),
                         ],
                       ),
-                    ),
                   ),
-                  _loadingTimeline
-                      ? SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: 200,
-                            child: Center(
+                ),
+                SliverToBoxAdapter(
+                  child: _selectedChild != null
+                      ? _buildTimelineDateSelector()
+                      : SizedBox.shrink(),
+                ),
+                _loadingTimeline
+                    ? SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: 200,
+                          child: Center(
                               child: CircularProgressIndicator(),
                             ),
                           ),
