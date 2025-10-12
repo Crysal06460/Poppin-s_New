@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class ActivityScreen extends StatefulWidget {
   final BuildContext context;
@@ -162,7 +163,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 .delete();
 
                             // Fermer la bottom sheet puis le dialog de détails
-                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(ctx).canPop())
+                              Navigator.of(ctx).pop();
                             if (Navigator.of(dialogContext).canPop()) {
                               Navigator.of(dialogContext).pop();
                             }
@@ -550,7 +552,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -558,12 +561,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
-                print('➕ Activités: ajout enfants délégués: ${toAddIds.length}');
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
+                print(
+                    '➕ Activités: ajout enfants délégués: ${toAddIds.length}');
               }
             }
           }
@@ -586,8 +591,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -919,8 +924,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  _showEditActivityPopup(
-                                      structureId, childId, activityId, activityData);
+                                  _showEditActivityPopup(structureId, childId,
+                                      activityId, activityData);
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
@@ -1986,7 +1991,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      localTime.isEmpty ? 'Choisir l\'heure' : localTime,
+                                      localTime.isEmpty
+                                          ? 'Choisir l\'heure'
+                                          : localTime,
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 18 : 16,
                                         color: localTime.isEmpty
@@ -2023,7 +2030,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 ),
                               ),
                               child: DropdownButton<String>(
-                                value: (organizedActivityTypes.contains(localType) &&
+                                value: (organizedActivityTypes
+                                            .contains(localType) &&
                                         localType != "_separator_")
                                     ? localType
                                     : standardActivityTypes.first,
@@ -2031,7 +2039,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 underline: Container(),
                                 icon: Icon(Icons.arrow_drop_down,
                                     color: primaryColor),
-                                items: organizedActivityTypes.map((String value) {
+                                items:
+                                    organizedActivityTypes.map((String value) {
                                   if (value == "_separator_") {
                                     return DropdownMenuItem<String>(
                                       enabled: false,
@@ -2085,7 +2094,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         ))
                                     .toList(),
                                 onChanged: (val) {
-                                  if (val != null) setState(() => localAttitude = val);
+                                  if (val != null)
+                                    setState(() => localAttitude = val);
                                 },
                               ),
                             ),
@@ -2105,7 +2115,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 _buildParticipationButtonModern(
                                   'Pas participé',
                                   localParticipation,
-                                  (value) => setState(() => localParticipation = value),
+                                  (value) => setState(
+                                      () => localParticipation = value),
                                   isTabletDevice,
                                   Icons.sentiment_very_dissatisfied,
                                   primaryRed,
@@ -2113,7 +2124,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 _buildParticipationButtonModern(
                                   'Peu participé',
                                   localParticipation,
-                                  (value) => setState(() => localParticipation = value),
+                                  (value) => setState(
+                                      () => localParticipation = value),
                                   isTabletDevice,
                                   Icons.sentiment_dissatisfied,
                                   Colors.amber,
@@ -2121,7 +2133,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 _buildParticipationButtonModern(
                                   'Bien participé',
                                   localParticipation,
-                                  (value) => setState(() => localParticipation = value),
+                                  (value) => setState(
+                                      () => localParticipation = value),
                                   isTabletDevice,
                                   Icons.sentiment_satisfied,
                                   Colors.lime,
@@ -2129,7 +2142,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 _buildParticipationButtonModern(
                                   'Très bien participé',
                                   localParticipation,
-                                  (value) => setState(() => localParticipation = value),
+                                  (value) => setState(
+                                      () => localParticipation = value),
                                   isTabletDevice,
                                   Icons.sentiment_very_satisfied,
                                   Colors.green,
@@ -2182,7 +2196,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: Text('ANNULER'),
                                   ),
                                 ),
@@ -2191,7 +2206,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   child: ElevatedButton(
                                     onPressed: () async {
                                       try {
-                                        final docRef = FirebaseFirestore.instance
+                                        final docRef = FirebaseFirestore
+                                            .instance
                                             .collection('structures')
                                             .doc(structureId)
                                             .collection('children')
@@ -2206,8 +2222,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                           'type': localType,
                                           'attitude': localAttitude,
                                           'participation': localParticipation,
-                                          'participationLevel': _getParticipationLevel(
-                                              localParticipation),
+                                          'participationLevel':
+                                              _getParticipationLevel(
+                                                  localParticipation),
                                           'observations': obsCtrl.text,
                                         });
 
@@ -3032,7 +3049,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

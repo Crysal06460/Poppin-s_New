@@ -6,6 +6,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
+import '../planning/planning_models.dart';
+import '../utils/planning_helper.dart';
+
 class HorairesScreen extends StatefulWidget {
   @override
   _HorairesScreenState createState() => _HorairesScreenState();
@@ -523,8 +526,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
         // Vérifier si l'enfant a un programme pour aujourd'hui
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final List<TimeSlot> plannedSlots =
+            PlanningHelper.resolveSlotsForDate(child, today);
+        final isScheduledToday = plannedSlots.isNotEmpty;
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -541,34 +545,19 @@ class _HorairesScreenState extends State<HorairesScreen> {
           };
 
           // Récupérer les horaires planifiés pour aujourd'hui
-          List<dynamic> segmentsDuJour = [];
-          if (child['schedule'][capitalizedWeekday] is List) {
-            segmentsDuJour = child['schedule'][capitalizedWeekday];
-          } else if (child['schedule'][capitalizedWeekday] is Map) {
-            // Prise en charge de l'ancien format avec un seul segment
-            segmentsDuJour = [
-              {
-                'start': child['schedule'][capitalizedWeekday]['start'] ??
-                    child['schedule'][capitalizedWeekday]['arrival'],
-                'end': child['schedule'][capitalizedWeekday]['end'] ??
-                    child['schedule'][capitalizedWeekday]['departure']
-              }
-            ];
-          }
-
           // Créer une entrée pour chaque segment horaire
           List<Map<String, dynamic>> segmentsInfo = [];
-          for (int i = 0; i < segmentsDuJour.length; i++) {
-            var segment = segmentsDuJour[i];
+          for (var i = 0; i < plannedSlots.length; i++) {
+            final slot = plannedSlots[i];
             Map<String, dynamic> segmentInfo = {
               'index': i,
-              'start': segment['start'],
-              'end': segment['end'],
+              'start': slot.start,
+              'end': slot.end,
               'arrivee': null,
               'depart': null,
               // On ajoute les heures planifiées pour l'affichage
-              'heureDebut': segment['start'],
-              'heureFin': segment['end'],
+              'heureDebut': slot.start,
+              'heureFin': slot.end,
             };
             segmentsInfo.add(segmentInfo);
           }

@@ -104,7 +104,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Entrez l'adresse email sur laquelle vous avez reçu l'invitation pour rejoindre une structure existante en tant que parent ou membre d'une MAM.",
+                    "Entrez l'adresse email sur laquelle vous avez reçu l'invitation pour rejoindre l'application en tant que parent ou membre d'une MAM.",
                     style: TextStyle(fontSize: 14, color: Colors.black87),
                   ),
                 ],
@@ -196,7 +196,8 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                   decoration: BoxDecoration(
                     color: primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: primaryRed.withValues(alpha: 0.5)),
+                    border:
+                        Border.all(color: primaryRed.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -581,8 +582,8 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
       }
 
       // Trier par date de création (la plus récente d'abord)
-      final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
-          snapshot.docs);
+      final docs =
+          List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(snapshot.docs);
 
       Timestamp _extractTimestamp(Map<String, dynamic> data) {
         final value = data['createdAt'];

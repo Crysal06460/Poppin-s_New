@@ -342,9 +342,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted) {
         if (userRole == "parent") {
-          context.go('/parent/home');
+          _goAfterLogin('/parent/home');
         } else {
-          context.go('/home');
+          _goAfterLogin('/home');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -361,6 +361,15 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => isLoading = false);
       }
     }
+  }
+
+  void _goAfterLogin(String route) {
+    NotificationService.setAuthenticationRequired(false);
+    context.go(route);
+    Future.delayed(const Duration(milliseconds: 250), () {
+      NotificationService.synchronizeMissedNotifications();
+      NotificationService.showPendingNotificationWhenReady();
+    });
   }
 
   /// Déterminer le rôle de l'utilisateur (parent ou assistante maternelle)

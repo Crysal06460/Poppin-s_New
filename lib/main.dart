@@ -137,6 +137,10 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setPortraitOrientation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.synchronizeMissedNotifications();
+      NotificationService.showPendingNotificationWhenReady();
+    });
   }
 
   @override
@@ -154,6 +158,8 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
       _setPortraitOrientation();
       try {
         NotificationService.clearBadge();
+        NotificationService.synchronizeMissedNotifications();
+        NotificationService.showPendingNotificationWhenReady();
       } catch (e) {
         print('⚠️ Impossible de clear le badge en reprise: $e');
       }

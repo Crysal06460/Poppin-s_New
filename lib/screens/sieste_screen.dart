@@ -9,6 +9,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class SiesteScreen extends StatefulWidget {
   const SiesteScreen({Key? key}) : super(key: key);
@@ -516,7 +517,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -524,11 +526,12 @@ class _SiesteScreenState extends State<SiesteScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
                 print('➕ Sieste: ajout enfants délégués: ${toAddIds.length}');
               }
             }
@@ -546,8 +549,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -556,7 +559,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
-            'structureId': structureId, // Ajouter l'ID de structure pour les requêtes futures
+            'structureId':
+                structureId, // Ajouter l'ID de structure pour les requêtes futures
           });
         }
       }
@@ -594,8 +598,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
     );
   }
 
-  void _showSiesteDetailsPopup(String structureId, String childId, String siesteId,
-      Map<String, dynamic> siesteData) {
+  void _showSiesteDetailsPopup(String structureId, String childId,
+      String siesteId, Map<String, dynamic> siesteData) {
     // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
 
@@ -692,7 +696,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                           tooltip: 'Supprimer',
                           icon: Icon(Icons.delete_outline, color: Colors.white),
                           onPressed: () {
-                            _confirmDeleteSieste(context, structureId, childId, siesteId);
+                            _confirmDeleteSieste(
+                                context, structureId, childId, siesteId);
                           },
                         ),
                       ],
@@ -745,45 +750,46 @@ class _SiesteScreenState extends State<SiesteScreen> {
                         // Participation (qualité) - affichée seulement si disponible
                         if ((siesteData['qualite'] ?? '').toString().isNotEmpty)
                           Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: lightBlue, // Fond bleu à la place du jaune
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              Row(
-                                children: List.generate(
-                                  siesteData['moonCount'] ?? 0,
-                                  (index) => Padding(
-                                    padding: EdgeInsets.only(
-                                      right: index <
-                                              (siesteData['moonCount'] ?? 0) - 1
-                                          ? 4
-                                          : 0,
-                                    ),
-                                    child: Icon(
-                                      Icons.nightlight_round,
-                                      color:
-                                          primaryYellow, // Lunes restent jaunes
-                                      size: isTabletDevice ? 22 : 20,
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: lightBlue, // Fond bleu à la place du jaune
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Row(
+                                  children: List.generate(
+                                    siesteData['moonCount'] ?? 0,
+                                    (index) => Padding(
+                                      padding: EdgeInsets.only(
+                                        right: index <
+                                                (siesteData['moonCount'] ?? 0) -
+                                                    1
+                                            ? 4
+                                            : 0,
+                                      ),
+                                      child: Icon(
+                                        Icons.nightlight_round,
+                                        color:
+                                            primaryYellow, // Lunes restent jaunes
+                                        size: isTabletDevice ? 22 : 20,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                "${siesteData['qualite']}",
-                                style: TextStyle(
-                                  fontSize: isTabletDevice ? 18 : 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: primaryColor,
+                                SizedBox(width: 12),
+                                Text(
+                                  "${siesteData['qualite']}",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: primaryColor,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
 
                         // Observations
                         if (siesteData['observations']?.isNotEmpty ??
@@ -851,13 +857,12 @@ class _SiesteScreenState extends State<SiesteScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  _showEditSiestePopup(
-                                      structureId, childId, siesteId, siesteData);
+                                  _showEditSiestePopup(structureId, childId,
+                                      siesteId, siesteData);
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
-                                  padding:
-                                      EdgeInsets.symmetric(vertical: 12),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
@@ -962,7 +967,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                 .doc(siesteId)
                                 .delete();
 
-                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(ctx).canPop())
+                              Navigator.of(ctx).pop();
                             if (Navigator.of(dialogContext).canPop()) {
                               Navigator.of(dialogContext).pop();
                             }
@@ -1146,7 +1152,10 @@ class _SiesteScreenState extends State<SiesteScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85)
+                            ],
                           ),
                           borderRadius: BorderRadius.vertical(
                             top: Radius.circular(24),
@@ -1206,7 +1215,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                                 localStart = val;
                                               }));
                                     },
-                                    icon: Icon(Icons.play_arrow, color: primaryColor),
+                                    icon: Icon(Icons.play_arrow,
+                                        color: primaryColor),
                                     label: Text(
                                       localStart.isEmpty ? 'Début' : localStart,
                                       style: TextStyle(color: primaryColor),
@@ -1214,7 +1224,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     style: OutlinedButton.styleFrom(
                                       side: BorderSide(color: primaryColor),
                                       shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16)),
+                                          borderRadius:
+                                              BorderRadius.circular(16)),
                                       padding: EdgeInsets.symmetric(
                                           vertical: isTabletDevice ? 16 : 14),
                                     ),
@@ -1238,7 +1249,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                     style: OutlinedButton.styleFrom(
                                       side: BorderSide(color: primaryColor),
                                       shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16)),
+                                          borderRadius:
+                                              BorderRadius.circular(16)),
                                       padding: EdgeInsets.symmetric(
                                           vertical: isTabletDevice ? 16 : 14),
                                     ),
@@ -1321,7 +1333,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: Text('ANNULER'),
                                   ),
                                 ),
@@ -1330,8 +1343,10 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                   child: ElevatedButton(
                                     onPressed: () async {
                                       // Validation
-                                      if (localStart.isEmpty || localEnd.isEmpty) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                      if (localStart.isEmpty ||
+                                          localEnd.isEmpty) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
                                           SnackBar(
                                             content: Text(localStart.isEmpty
                                                 ? 'Veuillez indiquer l\'heure de début'
@@ -1346,6 +1361,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                         return (int.parse(p[0]) * 60) +
                                             int.parse(p[1]);
                                       }
+
                                       if (toMinutes(localEnd) <=
                                           toMinutes(localStart)) {
                                         ScaffoldMessenger.of(context)
@@ -1358,20 +1374,24 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                       }
 
                                       // Calcul durée
-                                      final diff =
-                                          toMinutes(localEnd) - toMinutes(localStart);
+                                      final diff = toMinutes(localEnd) -
+                                          toMinutes(localStart);
                                       final h = diff ~/ 60;
                                       final m = diff % 60;
                                       String durationLabel = '';
                                       if (h > 0) durationLabel += '${h}h';
                                       if (m > 0) {
-                                        if (durationLabel.isNotEmpty) durationLabel += ' ';
-                                        durationLabel += '${m.toString().padLeft(2, '0')}min';
+                                        if (durationLabel.isNotEmpty)
+                                          durationLabel += ' ';
+                                        durationLabel +=
+                                            '${m.toString().padLeft(2, '0')}min';
                                       }
-                                      if (durationLabel.isEmpty) durationLabel = '0min';
+                                      if (durationLabel.isEmpty)
+                                        durationLabel = '0min';
 
                                       try {
-                                        final docRef = FirebaseFirestore.instance
+                                        final docRef = FirebaseFirestore
+                                            .instance
                                             .collection('structures')
                                             .doc(structureId)
                                             .collection('children')
@@ -1379,12 +1399,14 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                             .collection('siestes')
                                             .doc(siesteId);
                                         await docRef.update({
-                                          'heure': '${localStart} - ${localEnd}',
+                                          'heure':
+                                              '${localStart} - ${localEnd}',
                                           'start': localStart,
                                           'end': localEnd,
                                           'duration': durationLabel,
                                           'qualite': localQuality,
-                                          'moonCount': _getMoonCountFromQuality(localQuality),
+                                          'moonCount': _getMoonCountFromQuality(
+                                              localQuality),
                                           'observations': obsCtrl.text,
                                         });
 
@@ -1398,7 +1420,9 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                         ));
                                       }
                                     },
-                                    child: Text(wasInProgress ? 'TERMINER' : 'ENREGISTRER'),
+                                    child: Text(wasInProgress
+                                        ? 'TERMINER'
+                                        : 'ENREGISTRER'),
                                   ),
                                 ),
                               ],
@@ -1967,6 +1991,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
                                       return (int.parse(p[0]) * 60) +
                                           int.parse(p[1]);
                                     }
+
                                     final startMins = _toMinutes(localStart);
                                     final endMins = _toMinutes(localEnd);
                                     if (endMins <= startMins) {
@@ -2841,7 +2866,8 @@ class _SiesteScreenState extends State<SiesteScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

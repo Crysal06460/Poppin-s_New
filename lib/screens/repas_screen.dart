@@ -10,6 +10,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class RepasScreen extends StatefulWidget {
   const RepasScreen({Key? key}) : super(key: key);
@@ -251,7 +252,8 @@ class _RepasScreenState extends State<RepasScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -259,11 +261,12 @@ class _RepasScreenState extends State<RepasScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
                 print('➕ Repas: ajout enfants délégués: ${toAddIds.length}');
               }
             }
@@ -279,17 +282,17 @@ class _RepasScreenState extends State<RepasScreen> {
       }
 
       // Diagnostic des enfants filtrés
-        print(
-            "🔍 DIAGNOSTIC REPAS - Type de structure: $structureType, Utilisateur: $currentUserEmail");
-        print(
-            "🔍 DIAGNOSTIC REPAS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
+      print(
+          "🔍 DIAGNOSTIC REPAS - Type de structure: $structureType, Utilisateur: $currentUserEmail");
+      print(
+          "🔍 DIAGNOSTIC REPAS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
 
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui,
       // et inclure ceux délégués aujourd'hui même si le planning n'est pas présent
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -342,7 +345,8 @@ class _RepasScreenState extends State<RepasScreen> {
             'genre': child['gender'],
             'photoUrl': photoUrl,
             'age': ageText,
-            'structureId': structureId, // Ajouter l'ID de structure pour les requêtes futures
+            'structureId':
+                structureId, // Ajouter l'ID de structure pour les requêtes futures
             'birthdate': child['birthdate'],
           });
         }
@@ -2784,7 +2788,8 @@ class _RepasScreenState extends State<RepasScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

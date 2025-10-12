@@ -941,8 +941,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       final DateTime? expiresAt = _asDateTime(item['expiresAt']);
 
       if (expiresAt != null && !expiresAt.isAfter(now)) {
-        item['archivedAt'] =
-            item['archivedAt'] ?? Timestamp.fromDate(now);
+        item['archivedAt'] = item['archivedAt'] ?? Timestamp.fromDate(now);
         updatedHistory.add(item);
         hasExpiredChanges = true;
       } else {
@@ -978,8 +977,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     if (source is Iterable) {
       return source
           .whereType<Map>()
-          .map((item) => item.map(
-              (key, value) => MapEntry(key.toString(), value)))
+          .map((item) =>
+              item.map((key, value) => MapEntry(key.toString(), value)))
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
     }
@@ -1013,8 +1012,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     required List<Map<String, dynamic>> active,
     required List<Map<String, dynamic>> history,
   }) {
-    int activeComparator(
-        Map<String, dynamic> a, Map<String, dynamic> b) {
+    int activeComparator(Map<String, dynamic> a, Map<String, dynamic> b) {
       final DateTime aDate =
           _asDateTime(a['expiresAt']) ?? DateTime(9999, 12, 31);
       final DateTime bDate =
@@ -1022,16 +1020,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       return aDate.compareTo(bDate);
     }
 
-    int historyComparator(
-        Map<String, dynamic> a, Map<String, dynamic> b) {
-      final DateTime aDate =
-          _asDateTime(a['archivedAt']) ??
-              _asDateTime(a['expiresAt']) ??
-              DateTime.fromMillisecondsSinceEpoch(0);
-      final DateTime bDate =
-          _asDateTime(b['archivedAt']) ??
-              _asDateTime(b['expiresAt']) ??
-              DateTime.fromMillisecondsSinceEpoch(0);
+    int historyComparator(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final DateTime aDate = _asDateTime(a['archivedAt']) ??
+          _asDateTime(a['expiresAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime bDate = _asDateTime(b['archivedAt']) ??
+          _asDateTime(b['expiresAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
       return bDate.compareTo(aDate);
     }
 
@@ -1118,8 +1113,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     final List<Map<String, dynamic>> activeCopy = _activePrescriptions
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
-    final int index =
-        activeCopy.indexWhere((element) => element['id'] == id);
+    final int index = activeCopy.indexWhere((element) => element['id'] == id);
 
     if (index == -1) return;
 
@@ -1140,8 +1134,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   }
 
   Future<_PrescriptionFormResult?> _promptPrescriptionDetails() async {
-    final TextEditingController descriptionController =
-        TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
     final TextEditingController durationController = TextEditingController();
     DateTime startDate = DateTime.now();
 
@@ -1209,8 +1202,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                           initialDate: startDate,
                           firstDate:
                               DateTime.now().subtract(Duration(days: 365)),
-                          lastDate:
-                              DateTime.now().add(Duration(days: 365 * 2)),
+                          lastDate: DateTime.now().add(Duration(days: 365 * 2)),
                           builder: (context, child) {
                             return Theme(
                               data: Theme.of(context).copyWith(
@@ -1382,8 +1374,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
         final bytes = await File(image.path).readAsBytes();
         fileName = image.name;
 
-        final Reference storageRef = storageBase.child(
-            '${fileId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final Reference storageRef = storageBase
+            .child('${fileId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
 
         await storageRef.putData(
           bytes,
@@ -1449,8 +1441,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       return;
     }
 
-    final _PrescriptionFormResult? details =
-        await _promptPrescriptionDetails();
+    final _PrescriptionFormResult? details = await _promptPrescriptionDetails();
     if (details == null) return;
 
     if (mounted) {
@@ -1543,8 +1534,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                   left: 20,
                   right: 20,
                   top: 16,
-                  bottom:
-                      MediaQuery.of(context).viewInsets.bottom + 24,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1626,8 +1616,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                               ? null
                               : () async {
                                   await _addPrescription(
-                                    onStateChanged: () =>
-                                        setModalState(() {}),
+                                    onStateChanged: () => setModalState(() {}),
                                   );
                                   setModalState(() {});
                                 },
@@ -1637,8 +1626,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
                                       Colors.white,
                                     ),
                                   ),
@@ -1686,27 +1674,22 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   }) {
     final String description =
         (prescription['description'] ?? 'Ordonnance') as String;
-    final int? durationDays =
-        (prescription['durationDays'] is num)
-            ? (prescription['durationDays'] as num).toInt()
-            : null;
+    final int? durationDays = (prescription['durationDays'] is num)
+        ? (prescription['durationDays'] as num).toInt()
+        : null;
     final DateTime? startDate = _asDateTime(prescription['startDate']);
     final DateTime? expiresAt = _asDateTime(prescription['expiresAt']);
     final DateTime? uploadedAt = _asDateTime(prescription['uploadedAt']);
-    final String uploadedBy =
-        (prescription['uploadedBy'] ?? '') as String;
+    final String uploadedBy = (prescription['uploadedBy'] ?? '') as String;
 
     final DateTime now = DateTime.now();
-    final bool isExpiringSoon = expiresAt != null &&
-        expiresAt.isBefore(now.add(Duration(days: 2)));
-    final Color badgeColor =
-        isExpiringSoon ? Colors.orange : Colors.green;
+    final bool isExpiringSoon =
+        expiresAt != null && expiresAt.isBefore(now.add(Duration(days: 2)));
+    final Color badgeColor = isExpiringSoon ? Colors.orange : Colors.green;
 
-    final VoidCallback? onView =
-        (documentUrl != null && documentUrl.isNotEmpty)
-            ? () =>
-                _viewDocument(documentUrl, documentName ?? 'Ordonnance')
-            : null;
+    final VoidCallback? onView = (documentUrl != null && documentUrl.isNotEmpty)
+        ? () => _viewDocument(documentUrl, documentName ?? 'Ordonnance')
+        : null;
 
     final List<String> metaParts = [];
     if (uploadedAt != null) {
@@ -1886,19 +1869,16 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     );
   }
 
-  Widget _buildPrescriptionHistoryTile(
-      Map<String, dynamic> prescription) {
+  Widget _buildPrescriptionHistoryTile(Map<String, dynamic> prescription) {
     final String description =
         (prescription['description'] ?? 'Ordonnance') as String;
-    final int? durationDays =
-        (prescription['durationDays'] is num)
-            ? (prescription['durationDays'] as num).toInt()
-            : null;
+    final int? durationDays = (prescription['durationDays'] is num)
+        ? (prescription['durationDays'] as num).toInt()
+        : null;
     final DateTime? startDate = _asDateTime(prescription['startDate']);
     final DateTime? expiresAt = _asDateTime(prescription['expiresAt']);
     final DateTime? archivedAt = _asDateTime(prescription['archivedAt']);
-    final String uploadedBy =
-        (prescription['uploadedBy'] ?? '') as String;
+    final String uploadedBy = (prescription['uploadedBy'] ?? '') as String;
     final String? documentUrl = prescription['fileUrl'] as String?;
     final String documentName =
         (prescription['fileName'] ?? 'Ordonnance') as String;
@@ -1958,8 +1938,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
             alignment: Alignment.centerRight,
             child: TextButton.icon(
               onPressed: (documentUrl != null && documentUrl.isNotEmpty)
-                  ? () =>
-                      _viewDocument(documentUrl, documentName)
+                  ? () => _viewDocument(documentUrl, documentName)
                   : null,
               icon: Icon(Icons.visibility_outlined),
               label: Text('Voir le document'),
@@ -1973,26 +1952,39 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     );
   }
 
-  String _formatBirthdate(String? birthdateString) {
-    if (birthdateString == null || birthdateString.isEmpty) {
-      return 'Non renseignée';
+  DateTime? _resolveBirthdate(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Timestamp) {
+      return raw.toDate();
     }
-
-    try {
-      DateTime birthdate = DateTime.parse(birthdateString);
-      return DateFormat('dd/MM/yyyy').format(birthdate);
-    } catch (e) {
-      return 'Format invalide';
+    if (raw is DateTime) {
+      return raw;
     }
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return DateTime.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 
-  int _calculateAge(String? birthdateString) {
-    if (birthdateString == null || birthdateString.isEmpty) {
+  String _formatBirthdate(dynamic rawBirthdate) {
+    final birthdate = _resolveBirthdate(rawBirthdate);
+    if (birthdate == null) {
+      return 'Non renseignée';
+    }
+    return DateFormat('dd/MM/yyyy').format(birthdate);
+  }
+
+  int _calculateAge(dynamic rawBirthdate) {
+    final birthdate = _resolveBirthdate(rawBirthdate);
+    if (birthdate == null) {
       return 0;
     }
 
     try {
-      DateTime birthdate = DateTime.parse(birthdateString);
       DateTime today = DateTime.now();
       int age = today.year - birthdate.year;
       if (today.month < birthdate.month ||
@@ -2005,13 +1997,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     }
   }
 
-  String _calculateAgeDisplay(String? birthdateString) {
-    if (birthdateString == null || birthdateString.isEmpty) {
+  String _calculateAgeDisplay(dynamic rawBirthdate) {
+    final birthdate = _resolveBirthdate(rawBirthdate);
+    if (birthdate == null) {
       return 'Âge inconnu';
     }
 
     try {
-      DateTime birthdate = DateTime.parse(birthdateString);
       DateTime now = DateTime.now();
 
       // Calcul de la différence en mois et années
@@ -2528,8 +2520,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                             onPressed: _isReadOnly
                                                 ? () => _ensureEditingAllowed()
                                                 : () async {
-                                                    // Implémenter l'édition de la date de naissance
-                                                    // Nécessite un DatePicker
+                                                    await _editBirthdate();
                                                   },
                                             constraints: BoxConstraints(),
                                             padding: EdgeInsets.all(8),
@@ -2952,6 +2943,87 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       bottomNavigationBar:
           _isParentMode ? _buildParentBottomNavigationBar(context) : null,
     );
+  }
+
+  Future<void> _editBirthdate() async {
+    if (_isReadOnly) {
+      _ensureEditingAllowed();
+      return;
+    }
+
+    DateTime initialDate = DateTime.now();
+    final rawBirthdate = childData['birthdate'];
+    if (rawBirthdate is Timestamp) {
+      initialDate = rawBirthdate.toDate();
+    } else if (rawBirthdate is String) {
+      try {
+        initialDate = DateTime.parse(rawBirthdate);
+      } catch (_) {}
+    }
+
+    final DateTime firstDate =
+        DateTime.now().subtract(const Duration(days: 365 * 30));
+    final DateTime lastDate = DateTime.now();
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isAfter(lastDate) ? lastDate : initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      locale: const Locale('fr'),
+      helpText: "Modifier la date de naissance",
+      cancelText: "ANNULER",
+      confirmText: "VALIDER",
+    );
+
+    if (picked == null || !mounted) {
+      return;
+    }
+
+    if (picked.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            "La date de naissance ne peut pas être dans le futur.",
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final timestamp = Timestamp.fromDate(picked);
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .set({
+        'birthdate': timestamp,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': FirebaseAuth.instance.currentUser?.uid ?? 'unknown',
+      }, SetOptions(merge: true));
+
+      setState(() {
+        childData['birthdate'] = timestamp;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Date de naissance mise à jour."),
+          backgroundColor: Colors.green.shade600,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de la mise à jour : $e"),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   BottomNavigationBar _buildParentBottomNavigationBar(BuildContext context) {

@@ -10,6 +10,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class SanteScreen extends StatefulWidget {
   const SanteScreen({Key? key}) : super(key: key);
@@ -217,7 +218,8 @@ class _SanteScreenState extends State<SanteScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -225,11 +227,12 @@ class _SanteScreenState extends State<SanteScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
                 print('➕ Santé: ajout enfants délégués: ${toAddIds.length}');
               }
             }
@@ -247,8 +250,8 @@ class _SanteScreenState extends State<SanteScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -340,7 +343,8 @@ class _SanteScreenState extends State<SanteScreen> {
                         tooltip: 'Supprimer',
                         icon: Icon(Icons.delete_outline, color: Colors.white),
                         onPressed: () {
-                          _confirmDeleteCare(context, structureId, childId, careId);
+                          _confirmDeleteCare(
+                              context, structureId, childId, careId);
                         },
                       ),
                     ],
@@ -489,7 +493,8 @@ class _SanteScreenState extends State<SanteScreen> {
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.of(context).pop();
-                            _showEditCarePopup(structureId, childId, careId, careData);
+                            _showEditCarePopup(
+                                structureId, childId, careId, careData);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryColor,
@@ -582,7 +587,8 @@ class _SanteScreenState extends State<SanteScreen> {
                                 .doc(careId)
                                 .delete();
 
-                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(ctx).canPop())
+                              Navigator.of(ctx).pop();
                             if (Navigator.of(dialogContext).canPop()) {
                               Navigator.of(dialogContext).pop();
                             }
@@ -1427,7 +1433,8 @@ class _SanteScreenState extends State<SanteScreen> {
       Map<String, dynamic> careData) {
     String localTime = (careData['heure'] ?? '').toString();
     String localType = (careData['type'] ?? 'Température').toString();
-    String localMedicationType = (careData['medicationType'] ?? 'Suppositoire').toString();
+    String localMedicationType =
+        (careData['medicationType'] ?? 'Suppositoire').toString();
     String localRoute = (careData['route'] ?? 'Auriculaire').toString();
     TextEditingController tempCtrl = TextEditingController(
         text: careData['temperature'] != null
@@ -1473,7 +1480,10 @@ class _SanteScreenState extends State<SanteScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85)
+                            ],
                           ),
                           borderRadius:
                               BorderRadius.vertical(top: Radius.circular(24)),
@@ -1537,7 +1547,9 @@ class _SanteScreenState extends State<SanteScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      localTime.isEmpty ? 'Choisir l\'heure' : localTime,
+                                      localTime.isEmpty
+                                          ? 'Choisir l\'heure'
+                                          : localTime,
                                       style: TextStyle(
                                         fontSize: isTabletDevice ? 18 : 16,
                                         color: localTime.isEmpty
@@ -1588,7 +1600,8 @@ class _SanteScreenState extends State<SanteScreen> {
                                         ))
                                     .toList(),
                                 onChanged: (val) {
-                                  if (val != null) setState(() => localType = val);
+                                  if (val != null)
+                                    setState(() => localType = val);
                                 },
                               ),
                             ),
@@ -1603,8 +1616,8 @@ class _SanteScreenState extends State<SanteScreen> {
                               SizedBox(height: 8),
                               TextField(
                                 controller: tempCtrl,
-                                keyboardType:
-                                    TextInputType.numberWithOptions(decimal: true),
+                                keyboardType: TextInputType.numberWithOptions(
+                                    decimal: true),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.allow(
                                       RegExp(r'[0-9\.]')),
@@ -1648,7 +1661,8 @@ class _SanteScreenState extends State<SanteScreen> {
                                           ))
                                       .toList(),
                                   onChanged: (val) {
-                                    if (val != null) setState(() => localRoute = val);
+                                    if (val != null)
+                                      setState(() => localRoute = val);
                                   },
                                 ),
                               ),
@@ -1661,8 +1675,8 @@ class _SanteScreenState extends State<SanteScreen> {
                               SizedBox(height: 8),
                               TextField(
                                 controller: weightCtrl,
-                                keyboardType:
-                                    TextInputType.numberWithOptions(decimal: true),
+                                keyboardType: TextInputType.numberWithOptions(
+                                    decimal: true),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.allow(
                                       RegExp(r'[0-9\.]')),
@@ -1692,7 +1706,8 @@ class _SanteScreenState extends State<SanteScreen> {
                                   ),
                                 ),
                                 child: DropdownButton<String>(
-                                  value: medicationTypes.contains(localMedicationType)
+                                  value: medicationTypes
+                                          .contains(localMedicationType)
                                       ? localMedicationType
                                       : medicationTypes.first,
                                   isExpanded: true,
@@ -1735,7 +1750,8 @@ class _SanteScreenState extends State<SanteScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: Text('ANNULER'),
                                   ),
                                 ),
@@ -1744,7 +1760,8 @@ class _SanteScreenState extends State<SanteScreen> {
                                   child: ElevatedButton(
                                     onPressed: () async {
                                       try {
-                                        final docRef = FirebaseFirestore.instance
+                                        final docRef = FirebaseFirestore
+                                            .instance
                                             .collection('structures')
                                             .doc(structureId)
                                             .collection('children')
@@ -1761,13 +1778,15 @@ class _SanteScreenState extends State<SanteScreen> {
                                         // Nettoyage/ajout des champs spécifiques
                                         if (localType == 'Température') {
                                           update['temperature'] =
-                                              double.tryParse(tempCtrl.text) ?? 0;
+                                              double.tryParse(tempCtrl.text) ??
+                                                  0;
                                           update['route'] = localRoute;
                                           update.remove('weight');
                                           update.remove('medicationType');
                                         } else if (localType == 'Poids') {
-                                          update['weight'] =
-                                              double.tryParse(weightCtrl.text) ?? 0;
+                                          update['weight'] = double.tryParse(
+                                                  weightCtrl.text) ??
+                                              0;
                                           update.remove('temperature');
                                           update.remove('route');
                                           update.remove('medicationType');
@@ -2568,7 +2587,8 @@ class _SanteScreenState extends State<SanteScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

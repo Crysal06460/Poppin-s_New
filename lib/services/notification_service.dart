@@ -30,6 +30,10 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   static bool _isInitialized = false;
   static bool _timezoneInitialized = false;
+  static final List<Map<String, dynamic>> _pendingNotificationQueue = [];
+  static bool _isDisplayingNotification = false;
+  static bool _authLockActive = false;
+  static bool _syncInProgress = false;
 
   /// Initialise le service de notifications
   static Future<void> initialize() async {
@@ -91,7 +95,8 @@ class NotificationService {
         showBadge: true,
       );
 
-      const AndroidNotificationChannel agendaChannel = AndroidNotificationChannel(
+      const AndroidNotificationChannel agendaChannel =
+          AndroidNotificationChannel(
         'agenda_reminders_channel',
         'Agenda',
         description: 'Notifications pour les rappels agenda',
@@ -528,9 +533,18 @@ class NotificationService {
         final title = message.notification?.title ??
             message.data['title']?.toString() ??
             'Notification';
-        final body =
-            message.notification?.body ?? message.data['body']?.toString() ?? '';
-        _showInformationalDialog(title, body);
+        final body = message.notification?.body ??
+            message.data['body']?.toString() ??
+            '';
+        _queueInformationalNotification(
+          title: title,
+          body: body,
+          data: {
+            ...message.data,
+            '_notificationTitle': title,
+            '_notificationBody': body,
+          },
+        );
       }
       // À défaut, ne rien faire (ou ouvrir messages si vous le souhaitez)
     } catch (e) {
@@ -610,37 +624,162 @@ class NotificationService {
   static bool _shouldDisplayInfoPopup(
       String rawType, Map<String, dynamic> data) {
     final type = rawType.toLowerCase();
-    if (type == 'message' || type == 'stock') {
+    const suppressedTypes = {
+      'message',
+      'stock',
+      'chat',
+      'conversation',
+    };
+    if (suppressedTypes.contains(type)) {
       return false;
     }
+    const infoTypes = {
+      'info',
+      'broadcast',
+      'announcement',
+      'news',
+      'general',
+      'general_notification',
+      'general-notification',
+      'generalnotif',
+      'alert',
+      'test',
+    };
     if (type.isEmpty) {
       // Si les données ressemblent à un message (childId + messageId), ne pas afficher de popup
       final hasMessageKeys =
           data.containsKey('messageId') || data.containsKey('childId');
       return !hasMessageKeys;
     }
-    return type == 'info' ||
-        type == 'broadcast' ||
-        type == 'announcement' ||
-        type == 'news';
+    if (infoTypes.contains(type)) {
+      return true;
+    }
+    return true;
   }
 
-  static void _showInformationalDialog(String title, String body) {
-    final navigatorState = rootNavigatorKey.currentState;
-    if (navigatorState == null || !navigatorState.mounted) {
-      print('⚠️ Aucun contexte disponible pour afficher la popup de notification');
+  static void _onDidReceiveNotificationResponse(NotificationResponse response) {
+    print('🔔 Réponse notification: ${response.payload}');
+    // Gestion du clic sur notification locale (Android foreground)
+    try {
+      if (response.payload != null && response.payload!.isNotEmpty) {
+        final Map<String, dynamic> data = jsonDecode(response.payload!);
+        final type = (data['type'] ?? '').toString();
+        if (type == 'stock') {
+          router.go('/parent/stocks');
+          return;
+        }
+        if (_shouldDisplayInfoPopup(type, data)) {
+          final title =
+              (data['_notificationTitle'] ?? data['title'] ?? 'Notification')
+                  .toString();
+          final body =
+              (data['_notificationBody'] ?? data['body'] ?? '').toString();
+          _queueInformationalNotification(
+            title: title,
+            body: body,
+            data: data,
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback si payload n'est pas du JSON
+      final payload = response.payload ?? '';
+      if (payload.contains('type') && payload.contains('stock')) {
+        router.go('/parent/stocks');
+        return;
+      }
+      final trimmed = payload.trim();
+      if (trimmed.isNotEmpty && trimmed != '{}') {
+        _queueInformationalNotification(
+          title: 'Notification',
+          body: trimmed,
+          data: {'rawPayload': trimmed},
+        );
+      }
+      print('⚠️ Payload non JSON ou navigation non traitée');
+    }
+  }
+
+  /// Handler global pour les messages Firebase en arrière-plan
+  @pragma('vm:entry-point')
+  static Future<void> firebaseMessagingBackgroundHandler(
+      RemoteMessage message) async {
+    print(
+        '📱 Message Firebase en arrière-plan: ${message.notification?.title}');
+  }
+
+  static int _agendaNotificationId(String entryId) =>
+      entryId.hashCode & 0x7fffffff;
+
+  static void _queueInformationalNotification({
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) {
+    _pendingNotificationQueue.add({
+      'title': title,
+      'body': body,
+      'data': data,
+    });
+
+    if (_authLockActive) {
+      print('🔒 Notification en attente (auth requise)');
       return;
     }
 
-    Future.microtask(() {
-      final currentState = rootNavigatorKey.currentState;
-      if (currentState == null || !currentState.mounted) {
-        print('⚠️ Contexte non monté pour afficher la popup');
-        return;
-      }
+    showPendingNotificationWhenReady();
+  }
 
-      showDialog<void>(
-        context: currentState.context,
+  static void showPendingNotificationWhenReady() {
+    if (_pendingNotificationQueue.isEmpty) {
+      return;
+    }
+
+    Future.microtask(() async {
+      await _displayNextPendingNotification();
+    });
+  }
+
+  static void setAuthenticationRequired(bool required) {
+    _authLockActive = required;
+    if (!required) {
+      showPendingNotificationWhenReady();
+    } else {
+      print('🔒 Verrou notifications activé (auth requise)');
+    }
+  }
+
+  static Future<void> _displayNextPendingNotification() async {
+    if (_authLockActive) {
+      print('🔒 Notification différée (auth non validée)');
+      return;
+    }
+
+    if (_isDisplayingNotification) {
+      return;
+    }
+
+    if (_pendingNotificationQueue.isEmpty) {
+      return;
+    }
+
+    final navigatorState = rootNavigatorKey.currentState;
+    if (navigatorState == null || !navigatorState.mounted) {
+      print('⚠️ Navigator non prêt - notification conservée');
+      Future.delayed(
+          const Duration(milliseconds: 300), showPendingNotificationWhenReady);
+      return;
+    }
+
+    _isDisplayingNotification = true;
+    final payload = _pendingNotificationQueue.removeAt(0);
+    final title = (payload['title'] ?? '').toString();
+    final body = (payload['body'] ?? '').toString();
+
+    try {
+      await showDialog<void>(
+        context: navigatorState.context,
         builder: (dialogContext) {
           return AlertDialog(
             title: Text(
@@ -663,53 +802,138 @@ class NotificationService {
           );
         },
       );
-    });
-  }
-
-  static void _onDidReceiveNotificationResponse(NotificationResponse response) {
-    print('🔔 Réponse notification: ${response.payload}');
-    // Gestion du clic sur notification locale (Android foreground)
-    try {
-      if (response.payload != null && response.payload!.isNotEmpty) {
-        final Map<String, dynamic> data = jsonDecode(response.payload!);
-        final type = (data['type'] ?? '').toString();
-        if (type == 'stock') {
-          router.go('/parent/stocks');
-          return;
-        }
-        if (_shouldDisplayInfoPopup(type, data)) {
-          final title =
-              (data['_notificationTitle'] ?? data['title'] ?? 'Notification')
-                  .toString();
-          final body =
-              (data['_notificationBody'] ?? data['body'] ?? '').toString();
-          _showInformationalDialog(title, body);
-          return;
-        }
-      }
     } catch (e) {
-      // Fallback si payload n'est pas du JSON
-      final payload = response.payload ?? '';
-      if (payload.contains('type') && payload.contains('stock')) {
-        router.go('/parent/stocks');
-        return;
-      }
-      final trimmed = payload.trim();
-      if (trimmed.isNotEmpty && trimmed != '{}') {
-        _showInformationalDialog('Notification', trimmed);
-      }
-      print('⚠️ Payload non JSON ou navigation non traitée');
+      print('⚠️ Affichage notification impossible: $e');
+    } finally {
+      _isDisplayingNotification = false;
+    }
+
+    if (_pendingNotificationQueue.isNotEmpty) {
+      Future.delayed(
+          const Duration(milliseconds: 120), showPendingNotificationWhenReady);
     }
   }
 
-  /// Handler global pour les messages Firebase en arrière-plan
-  @pragma('vm:entry-point')
-  static Future<void> firebaseMessagingBackgroundHandler(
-      RemoteMessage message) async {
-    print(
-        '📱 Message Firebase en arrière-plan: ${message.notification?.title}');
-  }
+  static Future<void> synchronizeMissedNotifications() async {
+    if (_authLockActive) {
+      print('🔒 Synchronisation notifications reportée (auth requise)');
+      return;
+    }
+    if (_syncInProgress) {
+      return;
+    }
 
-  static int _agendaNotificationId(String entryId) =>
-      entryId.hashCode & 0x7fffffff;
+    _syncInProgress = true;
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final email = currentUser?.email?.toLowerCase();
+      if (email == null || email.isEmpty) {
+        return;
+      }
+
+      if (currentUser == null) {
+        return;
+      }
+
+      print(
+          '🔄 Synchronisation notifications (email=$email, uid=${currentUser.uid})');
+
+      final recipientsToCheck = <String>{};
+      if (email.isNotEmpty) {
+        recipientsToCheck.add(email);
+      }
+      recipientsToCheck.add(currentUser.uid);
+      final fetchedDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      final seenDocIds = <String>{};
+
+      for (final recipient in recipientsToCheck) {
+        if (recipient == null || recipient.isEmpty) continue;
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('notifications')
+              .where('recipientUserId', isEqualTo: recipient)
+              .orderBy('timestamp', descending: true)
+              .limit(20)
+              .get();
+
+          for (final doc in snapshot.docs) {
+            if (seenDocIds.add(doc.id)) {
+              fetchedDocs.add(doc);
+            }
+          }
+        } on FirebaseException catch (e) {
+          print(
+              '⚠️ Erreur lecture notifications pour $recipient: ${e.message}');
+        }
+      }
+
+      if (fetchedDocs.isEmpty) {
+        print('ℹ️ Aucune notification à synchroniser');
+        return;
+      }
+
+      fetchedDocs.sort((a, b) {
+        final tsA = a.data()['timestamp'] as Timestamp?;
+        final tsB = b.data()['timestamp'] as Timestamp?;
+        final dateA = tsA?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final dateB = tsB?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return dateA.compareTo(dateB);
+      });
+
+      print('📬 Notifications candidates: ${fetchedDocs.length}');
+      // Traiter des plus anciennes aux plus récentes
+      final docs = fetchedDocs;
+      for (final doc in docs) {
+        final data = doc.data();
+        final alreadyDelivered = data['appDelivered'] == true;
+        if (alreadyDelivered) {
+          continue;
+        }
+
+        final Map<String, dynamic> payload =
+            Map<String, dynamic>.from(data['data'] ?? <String, dynamic>{});
+        final type = (payload['type'] ?? '').toString();
+        final shouldDisplay = _shouldDisplayInfoPopup(type, payload);
+
+        if (!shouldDisplay) {
+          try {
+            await doc.reference.set(
+              {
+                'appDelivered': true,
+                'appDeliveredAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true),
+            );
+          } catch (_) {}
+          continue;
+        }
+
+        final title = (data['title'] ?? '').toString();
+        final body = (data['body'] ?? '').toString();
+        print('📨 Notification hors-ligne détectée: ${doc.id} ($title)');
+
+        _queueInformationalNotification(
+          title: title,
+          body: body,
+          data: payload,
+        );
+
+        try {
+          await doc.reference.set(
+            {
+              'appDelivered': true,
+              'appDeliveredAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        } catch (e) {
+          print('⚠️ Impossible de marquer la notification comme livrée: $e');
+        }
+      }
+    } catch (e) {
+      print('⚠️ Erreur synchronisation notifications: $e');
+    } finally {
+      _syncInProgress = false;
+    }
+  }
 }

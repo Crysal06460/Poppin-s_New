@@ -244,7 +244,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
       if (parentRoles.contains(userRole)) {
         print("✅ Utilisateur parent détecté, redirection vers parent home");
         UserRoleCache.setRole('parent');
-        context.go('/parent/home');
+        _goAndShowPending('/parent/home');
         return;
       }
 
@@ -265,25 +265,34 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
           print(
               "✅ Structure parent employeur détectée, redirection vers parent home");
           UserRoleCache.setRole('parent');
-          context.go('/parent/home');
+          _goAndShowPending('/parent/home');
           return;
         }
 
         print("✅ Structure trouvée, redirection vers home");
         UserRoleCache.setRole('structure');
-        context.go('/home');
+        _goAndShowPending('/home');
         return;
       }
 
       print(
           "⚠️ Utilisateur sans rôle défini, redirection vers home par défaut");
       UserRoleCache.setRole('structure');
-      context.go('/home');
+      _goAndShowPending('/home');
     } catch (e) {
       print("⚠️ Erreur navigation: $e, fallback vers home");
       UserRoleCache.setRole('structure');
-      context.go('/home');
+      _goAndShowPending('/home');
     }
+  }
+
+  void _goAndShowPending(String route) {
+    NotificationService.setAuthenticationRequired(false);
+    context.go(route);
+    Future.delayed(const Duration(milliseconds: 250), () {
+      NotificationService.synchronizeMissedNotifications();
+      NotificationService.showPendingNotificationWhenReady();
+    });
   }
 
   String _getFirebaseErrorMessage(String errorCode) {

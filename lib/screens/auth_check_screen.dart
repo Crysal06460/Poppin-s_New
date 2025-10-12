@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../utils/user_role_cache.dart';
 import 'dart:async';
+import 'package:poppins_app/services/notification_service.dart';
 
 class AuthCheckScreen extends StatefulWidget {
   const AuthCheckScreen({Key? key}) : super(key: key);
@@ -43,6 +44,7 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
     final bool isFirstLaunchToday = (lastLoginDate != today);
     final bool needsAuthentication =
         isFirstLaunchToday || !isLoggedIn || !hasFirebaseSession;
+    NotificationService.setAuthenticationRequired(needsAuthentication);
 
     print(
         "🔍 AuthCheck - wasAppKilled: $wasAppKilled, isLoggedIn: $isLoggedIn, hasFirebaseSession: $hasFirebaseSession");
@@ -59,11 +61,10 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
       final String reason = dailySecurity ? 'daily_security' : 'app_closed';
 
       // Préférer l'email sauvegardé, sinon tenter celui de Firebase si encore disponible
-      final String? quickLoginEmail = (rememberEmail &&
-              savedEmail != null &&
-              savedEmail.isNotEmpty)
-          ? savedEmail
-          : firebaseUser?.email;
+      final String? quickLoginEmail =
+          (rememberEmail && savedEmail != null && savedEmail.isNotEmpty)
+              ? savedEmail
+              : firebaseUser?.email;
 
       if (dailySecurity) {
         print("🔒 Premier lancement du jour - Sécurité quotidienne activée");
@@ -88,6 +89,10 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
     print(
         "📱 AuthCheck - Session quotidienne valide, redirection directe (wasAppKilled: $wasAppKilled)");
     await _navigateToCorrectHome();
+    Future.delayed(const Duration(milliseconds: 250), () {
+      NotificationService.synchronizeMissedNotifications();
+      NotificationService.showPendingNotificationWhenReady();
+    });
 
     // Marquer que l'app est active
     await prefs.setBool('app_killed', false);

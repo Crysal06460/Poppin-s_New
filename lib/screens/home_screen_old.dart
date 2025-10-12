@@ -7,7 +7,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/subscription_service.dart';
-import '../utils/planning_helper.dart';
 import '../utils/session_util.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -429,12 +428,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // et inclure systématiquement ceux arrivés via délégation aujourd'hui
       final List<Map<String, dynamic>> todayChildren = [];
       final Set<String> todayChildIds = {};
-      final filteredBySchedule = filteredChildren.where((child) {
-        if (_hasLegacySchedule(child, capitalizedWeekday)) {
-          return true;
-        }
-        return PlanningHelper.isScheduledForDate(child, today);
-      });
+      final filteredBySchedule = filteredChildren.where((child) =>
+          child['schedule'] != null &&
+          child['schedule'].containsKey(capitalizedWeekday));
       for (final child in filteredBySchedule) {
         final id = (child['id'] ?? '').toString();
         if (id.isEmpty) continue;
@@ -475,22 +471,16 @@ class _HomeScreenState extends State<HomeScreen> {
       // Vérifier les rappels d'agenda du jour
       _loadTodayAgendaReminders(structureDocId, currentUserEmail);
 
-      final bool structureHasAnyChild = allChildren.isNotEmpty;
-      print(
-          "🔍 DIAGNOSTIC - Enfants totaux dans la structure: ${allChildren.length}");
-
       // NOUVELLE LOGIQUE HIÉRARCHIQUE POUR LES POPUPS
       bool shouldShowPopup = false;
       String popupType = "";
       bool forceWelcome = false;
-      final bool isMyAccountOwner =
-          structureData['ownerEmail']?.toString().trim().toLowerCase() ==
-              currentUserEmail;
 
       final prefs = await SharedPreferences.getInstance();
       final String welcomePopupKey =
           'welcome_steps_popup_shown_${structureDocId}';
-      bool welcomePopupAlreadyShown = prefs.getBool(welcomePopupKey) ?? false;
+      final bool welcomePopupAlreadyShown =
+          prefs.getBool(welcomePopupKey) ?? false;
 
       if (isMamStructure) {
         // Pour les MAM: vérifier d'abord s'il y a assez de membres
@@ -502,38 +492,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Compter le nombre de membres
         final int memberCount = membersSnapshot.docs.length;
-        final bool needsMoreMembers = memberCount <= 1;
-        final bool needsChildren = !structureHasAnyChild;
-        final bool resetToInitialState =
-            isMyAccountOwner && needsMoreMembers && needsChildren;
-        if (resetToInitialState) {
-          await prefs.remove(welcomePopupKey);
-          welcomePopupAlreadyShown = false;
-        }
-        if (isMyAccountOwner) {
-          forceWelcome = forceWelcome || needsMoreMembers || needsChildren;
-        }
+        forceWelcome = forceWelcome || ((memberCount <= 1) && !hasChildren);
 
         print(
             "🔍 DEBUG: Nombre de membres trouvés dans la collection: $memberCount");
 
         final String mamMembersPopupKey =
             'mam_members_popup_shown_${structureDocId}';
-        bool mamMembersPopupAlreadyShown =
+        final bool mamMembersPopupAlreadyShown =
             prefs.getBool(mamMembersPopupKey) ?? false;
-        if (resetToInitialState) {
-          await prefs.remove(mamMembersPopupKey);
-          mamMembersPopupAlreadyShown = false;
-          print('🔁 Réinitialisation des popups MAM (structure vide)');
-        }
 
         print(
             "🔍 DEBUG: Popup membres déjà affiché? $mamMembersPopupAlreadyShown");
 
-        final bool allowMemberPopup = needsMoreMembers &&
-            !mamMembersPopupAlreadyShown &&
-            isMyAccountOwner;
-        if (allowMemberPopup) {
+        if (memberCount == 1 && !mamMembersPopupAlreadyShown) {
           // PRIORITÉ 1 : Premier lancement avec un seul membre, afficher le popup UNE FOIS
           shouldShowPopup = true;
           popupType = "addMAMMembers";
@@ -542,7 +514,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Marquer le popup comme affiché pour ne plus jamais le montrer
           await prefs.setBool(mamMembersPopupKey, true);
-        } else if (needsChildren && isMyAccountOwner) {
+        } else if (!hasChildren) {
           // PRIORITÉ 2 : S'il y a des membres mais pas d'enfants, ajouter des enfants
           shouldShowPopup = true;
           popupType = "addChild";
@@ -554,22 +526,12 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       } else {
         // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants
-        final bool needsChildren = !structureHasAnyChild;
-        final bool resetToInitialState =
-            isMyAccountOwner && needsChildren && !hasChildren;
-        if (resetToInitialState) {
-          await prefs.remove(welcomePopupKey);
-          welcomePopupAlreadyShown = false;
-          print('🔁 Réinitialisation popup bienvenue (structure sans enfant)');
-        }
-        if (needsChildren && isMyAccountOwner) {
+        if (!hasChildren) {
           shouldShowPopup = true;
           popupType = "addChild";
           print("⚠️ Assistante maternelle sans enfant, affichage du popup...");
         }
-        if (isMyAccountOwner) {
-          forceWelcome = forceWelcome || needsChildren;
-        }
+        forceWelcome = forceWelcome || !hasChildren;
       }
 
       if (shouldShowPopup || !welcomePopupAlreadyShown || forceWelcome) {
@@ -744,17 +706,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _buildModernStepItem(
                                   icon: Icons.person_add_rounded,
                                   iconColor: primaryColor,
-                                  title: 'Ajouter un membre de votre MAM',
+                                  title: 'Ajoutez un membre de votre MAM',
                                   description:
-                                      "• Saisissez son email, son prénom et son nom\n• Le membre ajouté reçoit un email d'invitation\n• Il télécharge l'application sur App Store ou Google Play\n• Il choisit \"J'ai reçu un email d'invitation\"\n• Il renseigne son email puis crée son mot de passe\nVous pouvez ajouter ou retirer des membres depuis Dashboard -> Administration",
+                                      "Saisissez son email, son prénom et son nom. Il recevra un email d'invitation : il téléchargera l'application sur App Store ou Google Play, choisira \"J'ai un code d'invitation\", saisira son email et rejoindra la MAM. Vous pourrez ajouter ou retirer des membres depuis Dashboard -> Administration.",
                                 ),
                               if (isMamStructure) SizedBox(height: 20),
                               _buildModernStepItem(
                                 icon: Icons.child_care_rounded,
                                 iconColor: primaryColor.withOpacity(0.8),
-                                title: 'Ajouter un enfant',
+                                title: 'Ajoutez un enfant',
                                 description:
-                                    "• Renseignez toutes les informations de l'enfant, dont l'email des parents\n• Une fois validé, les parents reçoivent un email d'invitation\n• Ils téléchargent l'application sur App Store ou Google Play\n• Ils choisissent \"J'ai reçu un email d'invitation\"\n• Ils saisissent leur email puis créent leur mot de passe\nVous pouvez ajouter ou retirer des enfants depuis Dashboard -> Enfants & parents",
+                                    "Préparez sa date de naissance, l'email des parents, ses horaires de présence, etc. À la fin, les parents reçoivent un email d'invitation : ils téléchargent l'application, choisissent \"J'ai un code d'invitation\", saisissent leur email et accèdent au fil de leur enfant. Vous pouvez gérer ces invitations depuis Dashboard -> Enfants & parents.",
                               ),
                               SizedBox(height: 32),
                             ],
@@ -2615,35 +2577,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-  }
-
-  bool _hasStructuredPlanning(Map<String, dynamic> child) {
-    if (child['planning'] is Map) {
-      return true;
-    }
-    if (child.containsKey('planning.type')) {
-      return true;
-    }
-    if (child.containsKey('planningType')) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _hasLegacySchedule(
-    Map<String, dynamic> child,
-    String dayKey,
-  ) {
-    if (_hasStructuredPlanning(child)) {
-      return false;
-    }
-    final schedule = child['schedule'];
-    if (schedule is Map) {
-      final raw = schedule[dayKey];
-      if (raw is List && raw.isNotEmpty) return true;
-      if (raw is Map && raw.isNotEmpty) return true;
-    }
-    return false;
   }
 
   void _onItemTapped(int index) {

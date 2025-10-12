@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class TransmissionsScreen extends StatefulWidget {
   const TransmissionsScreen({Key? key}) : super(key: key);
@@ -125,7 +126,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -133,12 +135,14 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
-                print('➕ Transmissions: ajout enfants délégués: ${toAddIds.length}');
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
+                print(
+                    '➕ Transmissions: ajout enfants délégués: ${toAddIds.length}');
               }
             }
           }
@@ -155,8 +159,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -509,7 +513,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       },
     );
   }
-  
+
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
     try {
       final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -548,7 +552,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: Text('Arrivée requise'),
-          content: Text("Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une transmission."),
+          content: Text(
+              "Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une transmission."),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -1227,7 +1232,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

@@ -8,6 +8,7 @@ import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class ChangeScreen extends StatefulWidget {
   const ChangeScreen({Key? key}) : super(key: key);
@@ -201,7 +202,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 .collection('delegations')
                 .where('status', isEqualTo: 'accepted')
                 .where('amDelegateId', isEqualTo: myMemberId)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+                .where('date',
+                    isGreaterThanOrEqualTo: Timestamp.fromDate(start))
                 .where('date', isLessThan: Timestamp.fromDate(end))
                 .get();
             delegatedTodayChildIds = delSnap.docs
@@ -209,11 +211,12 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 .where((id) => id.isNotEmpty)
                 .toSet();
             if (delegatedTodayChildIds.isNotEmpty) {
-              final already = filteredChildren.map((c) => c['id'] as String).toSet();
+              final already =
+                  filteredChildren.map((c) => c['id'] as String).toSet();
               final toAddIds = delegatedTodayChildIds.difference(already);
               if (toAddIds.isNotEmpty) {
-                filteredChildren.addAll(
-                    allChildren.where((c) => toAddIds.contains(c['id'] as String)));
+                filteredChildren.addAll(allChildren
+                    .where((c) => toAddIds.contains(c['id'] as String)));
                 print('➕ Change: ajout enfants délégués: ${toAddIds.length}');
               }
             }
@@ -231,8 +234,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
-        final isScheduledToday = child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null;
+        final isScheduledToday =
+            PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
@@ -253,8 +256,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
     }
   }
 
-  void _showChangeDetailsPopup(String structureId, String childId, String changeId,
-      Map<String, dynamic> changeData) {
+  void _showChangeDetailsPopup(String structureId, String childId,
+      String changeId, Map<String, dynamic> changeData) {
     // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
 
@@ -563,13 +566,12 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  _showEditChangePopup(
-                                      structureId, childId, changeId, changeData);
+                                  _showEditChangePopup(structureId, childId,
+                                      changeId, changeData);
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
-                                  padding:
-                                      EdgeInsets.symmetric(vertical: 12),
+                                  padding: EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
@@ -667,7 +669,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                 .doc(changeId)
                                 .delete();
 
-                            if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                            if (Navigator.of(ctx).canPop())
+                              Navigator.of(ctx).pop();
                             if (Navigator.of(dialogContext).canPop()) {
                               Navigator.of(dialogContext).pop();
                             }
@@ -932,8 +935,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                       hint: Text(
                                         'Sélectionner (optionnel)',
                                         style: TextStyle(
-                                          fontSize:
-                                              isTabletDevice ? 16 : 14,
+                                          fontSize: isTabletDevice ? 16 : 14,
                                           color: Colors.grey.shade500,
                                         ),
                                       ),
@@ -962,9 +964,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                               child: Text(
                                                 value,
                                                 style: TextStyle(
-                                                  fontSize: isTabletDevice
-                                                      ? 16
-                                                      : 14,
+                                                  fontSize:
+                                                      isTabletDevice ? 16 : 14,
                                                   color: Colors.grey.shade800,
                                                 ),
                                               ),
@@ -1478,7 +1479,10 @@ class _ChangeScreenState extends State<ChangeScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                            colors: [
+                              primaryColor,
+                              primaryColor.withOpacity(0.85)
+                            ],
                           ),
                           borderRadius: BorderRadius.vertical(
                             top: Radius.circular(24),
@@ -1531,8 +1535,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                     color: Colors.grey.shade800)),
                             SizedBox(height: 12),
                             InkWell(
-                              onTap: () =>
-                                  _selectChangeTime(setState, (time) {
+                              onTap: () => _selectChangeTime(setState, (time) {
                                 localCareTime = time;
                               }),
                               child: Container(
@@ -1557,8 +1560,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                           ? 'Choisir l\'heure'
                                           : localCareTime,
                                       style: TextStyle(
-                                        fontSize:
-                                            isTabletDevice ? 18 : 16,
+                                        fontSize: isTabletDevice ? 18 : 16,
                                         color: localCareTime.isEmpty
                                             ? Colors.grey.shade600
                                             : primaryColor,
@@ -1621,8 +1623,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                       child: Text(
                                         'Aucun',
                                         style: TextStyle(
-                                          fontSize:
-                                              isTabletDevice ? 16 : 14,
+                                          fontSize: isTabletDevice ? 16 : 14,
                                           color: Colors.grey.shade600,
                                         ),
                                       ),
@@ -1637,9 +1638,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                         child: Text(
                                           value,
                                           style: TextStyle(
-                                            fontSize: isTabletDevice
-                                                ? 16
-                                                : 14,
+                                            fontSize: isTabletDevice ? 16 : 14,
                                             color: Colors.grey.shade800,
                                           ),
                                         ),
@@ -1790,7 +1789,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: Text('ANNULER'),
                                   ),
                                 ),
@@ -1811,7 +1811,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                         localErrorMessage = null;
                                       });
                                       try {
-                                        final docRef = FirebaseFirestore.instance
+                                        final docRef = FirebaseFirestore
+                                            .instance
                                             .collection('structures')
                                             .doc(structureId)
                                             .collection('children')
@@ -2570,7 +2571,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

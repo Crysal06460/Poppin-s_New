@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/planning_helper.dart';
 
 class RecapScreen extends StatefulWidget {
   const RecapScreen({Key? key}) : super(key: key);
@@ -156,20 +157,21 @@ class _RecapScreenState extends State<RecapScreen> {
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
-        if (child['schedule'] != null &&
-            child['schedule'][capitalizedWeekday] != null) {
-          enfants.add({
-            'id': child['id'],
-            'prenom': child['firstName'],
-            'nom': child['lastName'] ?? '',
-            'genre': child['gender'],
-            'photoUrl': child['photoUrl'],
-            'birthdate': child['birthdate'],
-            'structureId': structureId,
-            'assignedMemberEmail':
-                child['assignedMemberEmail']?.toString().toLowerCase() ?? '',
-          });
-        }
+        final bool isPlannedToday =
+            PlanningHelper.isScheduledForDate(child, today);
+        if (!isPlannedToday) continue;
+
+        enfants.add({
+          'id': child['id'],
+          'prenom': child['firstName'],
+          'nom': child['lastName'] ?? '',
+          'genre': child['gender'],
+          'photoUrl': child['photoUrl'],
+          'birthdate': child['birthdate'],
+          'structureId': structureId,
+          'assignedMemberEmail':
+              child['assignedMemberEmail']?.toString().toLowerCase() ?? '',
+        });
       }
 
       print("👨‍👧‍👦 Recap: ${enfants.length} enfants prévus aujourd'hui");
