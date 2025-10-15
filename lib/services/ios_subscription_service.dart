@@ -188,6 +188,8 @@ class iOSSubscriptionService {
 
       final String productId = purchase.productID;
       final String transactionId = purchase.purchaseID ?? '';
+      final String structureId = await _resolveStructureId(user);
+      final String fallbackStructureId = user.uid;
 
       print(
           '🍎 Tentative de sauvegarde pour: $productId (transaction: $transactionId)');
@@ -208,15 +210,35 @@ class iOSSubscriptionService {
       }
 
       // ✅ VÉRIFICATION 2 : Éviter les doublons basés sur productId + structureId
-      final existingByProduct = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('productId', isEqualTo: productId)
-          .where('status', isEqualTo: 'active')
-          .limit(1)
-          .get();
+      Future<bool> _hasExistingSubscription(
+          {String? status, String? productId, DateTime? createdAfter}) async {
+        Future<bool> queryFor(String sid) async {
+          Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: sid);
+          if (productId != null) {
+            query = query.where('productId', isEqualTo: productId);
+          }
+          if (status != null) {
+            query = query.where('status', isEqualTo: status);
+          }
+          if (createdAfter != null) {
+            query = query.where('createdAt',
+                isGreaterThan: Timestamp.fromDate(createdAfter));
+          }
+          final snapshot = await query.limit(1).get();
+          return snapshot.docs.isNotEmpty;
+        }
 
-      if (existingByProduct.docs.isNotEmpty) {
+        if (await queryFor(structureId)) return true;
+        if (structureId != fallbackStructureId) {
+          return await queryFor(fallbackStructureId);
+        }
+        return false;
+      }
+
+      if (await _hasExistingSubscription(
+          status: 'active', productId: productId)) {
         print(
             '✅ Abonnement actif déjà existant pour ce produit, pas de duplication');
         return;
@@ -226,15 +248,7 @@ class iOSSubscriptionService {
       final DateTime now = DateTime.now();
       final DateTime recentThreshold = now.subtract(Duration(minutes: 5));
 
-      final recentSubscriptions = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('createdAt',
-              isGreaterThan: Timestamp.fromDate(recentThreshold))
-          .limit(1)
-          .get();
-
-      if (recentSubscriptions.docs.isNotEmpty) {
+      if (await _hasExistingSubscription(createdAfter: recentThreshold)) {
         print('✅ Abonnement récent déjà créé, pas de duplication');
         return;
       }
@@ -278,11 +292,23 @@ class iOSSubscriptionService {
       final DateTime trialEndDate = purchaseDate.add(Duration(days: 7));
 
       // ✅ DÉSACTIVER les anciens abonnements actifs avant d'en créer un nouveau
-      final oldActiveSubscriptions = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .get();
+      Future<QuerySnapshot<Map<String, dynamic>>> _fetchActiveSubscriptions(
+          String sid) {
+        return FirebaseFirestore.instance
+            .collection('subscriptions')
+            .where('structureId', isEqualTo: sid)
+            .where('status', isEqualTo: 'active')
+            .get();
+      }
+
+      QuerySnapshot<Map<String, dynamic>> oldActiveSubscriptions =
+          await _fetchActiveSubscriptions(structureId);
+
+      if (oldActiveSubscriptions.docs.isEmpty &&
+          structureId != fallbackStructureId) {
+        oldActiveSubscriptions =
+            await _fetchActiveSubscriptions(fallbackStructureId);
+      }
 
       // Désactiver les anciens abonnements
       for (final doc in oldActiveSubscriptions.docs) {
@@ -295,7 +321,7 @@ class iOSSubscriptionService {
 
       // ✅ CRÉER le nouvel abonnement avec toutes les données nécessaires
       final Map<String, dynamic> subscriptionData = {
-        'structureId': user.uid,
+        'structureId': structureId,
         'structureType': structureType,
         'memberCount': memberCount,
         'maxMemberCount': maxMemberCount,
@@ -327,10 +353,26 @@ class iOSSubscriptionService {
       print('   - Transaction: $transactionId');
 
       // ✅ METTRE À JOUR la structure principale
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(user.uid)
-          .update({
+      Future<void> _updateStructure(Map<String, dynamic> data) async {
+        final structures =
+            FirebaseFirestore.instance.collection('structures');
+        try {
+          await structures.doc(structureId).update(data);
+        } catch (e) {
+          if (structureId != fallbackStructureId) {
+            try {
+              await structures.doc(fallbackStructureId).update(data);
+            } catch (innerError) {
+              print(
+                  '❌ Impossible de mettre à jour la structure (fallback): $innerError');
+            }
+          } else {
+            print('❌ Impossible de mettre à jour la structure: $e');
+          }
+        }
+      }
+
+      await _updateStructure({
         'maxMemberCount': maxMemberCount,
         'subscriptionActive': true,
         'subscriptionDocId': docRef.id,
@@ -350,6 +392,48 @@ class iOSSubscriptionService {
       // ✅ AJOUTER l'erreur au stream d'erreurs
       _errorController.add('Erreur de sauvegarde: $e');
     }
+  }
+
+  Future<String> _resolveStructureId(User user) async {
+    try {
+      final String? email = user.email?.toLowerCase();
+      if (email != null && email.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(email)
+            .get();
+        final data = userDoc.data();
+        final String? structureId = data?['structureId'] as String?;
+        if (structureId != null && structureId.trim().isNotEmpty) {
+          return structureId.trim();
+        }
+      }
+    } catch (e) {
+      print('⚠️ Impossible de résoudre structureId depuis users: $e');
+    }
+    return user.uid;
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>>
+      _fetchLatestActiveSubscriptionSnapshot(User user) async {
+    final String structureId = await _resolveStructureId(user);
+    final String fallbackStructureId = user.uid;
+
+    Future<QuerySnapshot<Map<String, dynamic>>> queryFor(String sid) {
+      return FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: sid)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+    }
+
+    final primary = await queryFor(structureId);
+    if (primary.docs.isNotEmpty || structureId == fallbackStructureId) {
+      return primary;
+    }
+    return await queryFor(fallbackStructureId);
   }
 
   /// Retourne l'ID produit iOS
@@ -469,15 +553,8 @@ class iOSSubscriptionService {
         return false;
       }
 
-      print('🍎 Vérification abonnement actif pour: ${user.uid}');
-
-      final subscriptionQuery = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
+      final QuerySnapshot<Map<String, dynamic>> subscriptionQuery =
+          await _fetchLatestActiveSubscriptionSnapshot(user);
 
       final bool hasActive = subscriptionQuery.docs.isNotEmpty;
       print('🍎 Résultat vérification abonnement: $hasActive');
@@ -503,15 +580,8 @@ class iOSSubscriptionService {
         return null;
       }
 
-      print('🍎 Récupération abonnement actif pour: ${user.uid}');
-
-      final subscriptionQuery = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
+      final QuerySnapshot<Map<String, dynamic>> subscriptionQuery =
+          await _fetchLatestActiveSubscriptionSnapshot(user);
 
       if (subscriptionQuery.docs.isEmpty) {
         print('🍎 Aucun abonnement actif trouvé');
@@ -560,15 +630,8 @@ class iOSSubscriptionService {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
 
-      print('🍎 Récupération infos détaillées abonnement pour: ${user.uid}');
-
-      final subscriptionQuery = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
+      final QuerySnapshot<Map<String, dynamic>> subscriptionQuery =
+          await _fetchLatestActiveSubscriptionSnapshot(user);
 
       if (subscriptionQuery.docs.isEmpty) {
         print('🍎 Aucun abonnement actif trouvé');
@@ -592,13 +655,8 @@ class iOSSubscriptionService {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
 
-      final subscriptionDoc = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'active')
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
+      final QuerySnapshot<Map<String, dynamic>> subscriptionDoc =
+          await _fetchLatestActiveSubscriptionSnapshot(user);
 
       if (subscriptionDoc.docs.isNotEmpty) {
         return subscriptionDoc.docs.first.data();

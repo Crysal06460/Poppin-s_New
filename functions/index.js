@@ -1773,15 +1773,42 @@ function formatEventLines(category, entry) {
             break;
         }
         case 'repas': {
+            const rawMoment = (entry.moment || '').toString();
+            const momentLabel = rawMoment || (entry.gouter ? 'Goûter' : '');
+            const rawType = (entry.typeAlimentation || '').toString();
+            const isBiberon = entry.biberon || rawType === 'Biberon';
+            const isAllaitement = entry.allaitement || rawType === 'Allaitement';
+            const isSolide = rawType === 'Solide';
+            const isMixte = rawType === 'Mixte';
+            const typeLabel = rawType || (entry.biberon
+                ? 'Biberon'
+                : entry.allaitement
+                    ? 'Allaitement'
+                    : momentLabel || 'Repas');
+            const descriptionAlim = (entry.alimentationDescription || '').toString();
+            const qualite = (entry.qualite || '').toString();
+
             let description = baseTime ? `${baseTime} - ` : '';
-            if (entry.biberon) {
-                description += `Biberon ${entry.ml ? `${entry.ml} ml` : ''}`;
-            } else if (entry.allaitement) {
-                description += 'Allaitement';
-            } else if (entry.qualite) {
-                description += entry.qualite;
+            let detail;
+            if (isBiberon) {
+                detail = `Biberon ${entry.ml ? `${entry.ml} ml` : ''}`.trim();
+            } else if (isAllaitement) {
+                detail = 'Allaitement';
+            } else if (isSolide || isMixte) {
+                const descOrQualite = descriptionAlim || qualite;
+                detail = descOrQualite
+                    ? `${typeLabel} - ${descOrQualite}`
+                    : typeLabel;
+            } else if (qualite) {
+                detail = qualite;
             } else {
-                description += 'Repas';
+                detail = typeLabel || 'Repas';
+            }
+
+            if (momentLabel && !detail.startsWith(momentLabel)) {
+                description += `${momentLabel} - ${detail}`;
+            } else {
+                description += detail;
             }
             lines.push(description.trim());
             if (entry.observations) {

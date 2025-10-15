@@ -258,13 +258,46 @@ class PdfEmailService {
       widgets.add(pw.Text('🍽️ REPAS',
           style: pw.TextStyle(fontWeight: pw.FontWeight.bold)));
       for (var repas in dayData['repas']!) {
+        final String rawMoment = (repas['moment'] ?? '').toString();
+        final String momentLabel = rawMoment.isNotEmpty
+            ? rawMoment
+            : (repas['gouter'] == true ? 'Goûter' : '');
+        final String rawType = (repas['typeAlimentation'] ?? '').toString();
+        final bool isBiberon = rawType == 'Biberon' || repas['biberon'] == true;
+        final bool isAllaitement = rawType == 'Allaitement' || repas['allaitement'] == true;
+        final bool isSolide = rawType == 'Solide';
+        final bool isMixte = rawType == 'Mixte';
+        final String typeLabel = rawType.isNotEmpty
+            ? rawType
+            : isBiberon
+                ? 'Biberon'
+                : isAllaitement
+                    ? 'Allaitement'
+                    : (momentLabel.isNotEmpty ? momentLabel : 'Repas');
+        final String description =
+            (repas['alimentationDescription'] ?? '').toString();
+        final String qualite = (repas['qualite'] ?? '').toString();
+
         String content = '  • ${repas['heure']} - ';
-        if (repas['biberon'] == true) {
-          content += 'Biberon ${repas['ml']}ml';
-        } else if (repas['allaitement'] == true) {
-          content += 'Allaitement';
+        String detail;
+        if (isBiberon) {
+          detail = 'Biberon ${repas['ml']}ml';
+        } else if (isAllaitement) {
+          detail = 'Allaitement';
+        } else if (isSolide || isMixte) {
+          final String descOrQualite =
+              description.isNotEmpty ? description : qualite;
+          detail = descOrQualite.isNotEmpty
+              ? '$typeLabel - $descOrQualite'
+              : typeLabel;
         } else {
-          content += repas['qualite'] ?? 'Repas';
+          detail = qualite.isNotEmpty ? qualite : typeLabel;
+        }
+
+        if (momentLabel.isNotEmpty && !detail.startsWith(momentLabel)) {
+          content += '$momentLabel - $detail';
+        } else {
+          content += detail;
         }
         widgets.add(pw.Text(content));
         if (repas['observations']?.isNotEmpty == true) {

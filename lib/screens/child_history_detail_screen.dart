@@ -119,12 +119,44 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
         final data = doc.data();
         String details = '';
 
-        if (data['biberon'] == true) {
-          details = 'Biberon ${data['ml']?.toInt() ?? 0} ml';
-        } else if (data['allaitement'] == true) {
-          details = 'Allaitement';
+        final String rawMoment = (data['moment'] ?? '').toString();
+        final String momentLabel = rawMoment.isNotEmpty
+            ? rawMoment
+            : (data['gouter'] == true ? 'Goûter' : '');
+        final String rawType = (data['typeAlimentation'] ?? '').toString();
+        final bool isBiberon =
+            rawType == 'Biberon' || data['biberon'] == true;
+        final bool isAllaitement =
+            rawType == 'Allaitement' || data['allaitement'] == true;
+        final bool isSolide = rawType == 'Solide';
+        final bool isMixte = rawType == 'Mixte';
+        final String typeLabel = rawType.isNotEmpty
+            ? rawType
+            : isBiberon
+                ? 'Biberon'
+                : isAllaitement
+                    ? 'Allaitement'
+                    : (momentLabel.isNotEmpty ? momentLabel : 'Repas');
+        final String description =
+            (data['alimentationDescription'] ?? '').toString();
+        final String qualite = (data['qualite'] ?? '').toString();
+
+        if (isBiberon) {
+          details = '$typeLabel ${data['ml']?.toInt() ?? 0} ml';
+        } else if (isAllaitement) {
+          details = typeLabel;
+        } else if (isSolide || isMixte) {
+          final String descOrQualite =
+              description.isNotEmpty ? description : qualite;
+          details = descOrQualite.isNotEmpty
+              ? '$typeLabel - $descOrQualite'
+              : typeLabel;
         } else {
-          details = data['qualite'] ?? '';
+          details = qualite.isNotEmpty ? qualite : typeLabel;
+        }
+
+        if (momentLabel.isNotEmpty && !details.startsWith(momentLabel)) {
+          details = '$momentLabel - $details';
         }
 
         tempRecapData['repas']!.add({

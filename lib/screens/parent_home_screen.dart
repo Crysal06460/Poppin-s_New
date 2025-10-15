@@ -2827,21 +2827,55 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         eventTime = data['heure'];
       }
 
+      final String rawMoment = (data['moment'] ?? '').toString();
+      final String momentLabel = rawMoment.isNotEmpty
+          ? rawMoment
+          : (data['gouter'] == true ? 'Goûter' : '');
+      final String rawType = (data['typeAlimentation'] ?? '').toString();
+      final bool isBiberon =
+          rawType == 'Biberon' || data['biberon'] == true;
+      final bool isAllaitement =
+          rawType == 'Allaitement' || data['allaitement'] == true;
+      final bool isSolide = rawType == 'Solide';
+      final bool isMixte = rawType == 'Mixte';
+      final String typeLabel = rawType.isNotEmpty
+          ? rawType
+          : isBiberon
+              ? 'Biberon'
+              : isAllaitement
+                  ? 'Allaitement'
+                  : (momentLabel.isNotEmpty ? momentLabel : 'Repas');
+      final String description =
+          (data['alimentationDescription'] ?? '').toString();
+      final String qualite = (data['qualite'] ?? '').toString();
+
       String details = '';
-      if (data['biberon'] == true) {
+      if (isBiberon) {
         details = '${data['ml']?.toInt() ?? 0} ml';
-      } else if (data['allaitement'] == true) {
+      } else if (isAllaitement) {
         details = 'Allaitement';
+      } else if (isSolide || isMixte) {
+        details = description.isNotEmpty ? description : qualite;
       } else {
-        details = data['qualite'] ?? '';
+        details = qualite.isNotEmpty ? qualite : description;
+      }
+      if (details.trim().isEmpty) {
+        details = typeLabel;
       }
 
       IconData icon = Icons.restaurant;
-      if (data['biberon'] == true) {
+      if (isBiberon) {
         icon = Icons.local_drink;
-      } else if (data['allaitement'] == true) {
+      } else if (isAllaitement) {
         icon = Icons.child_care;
+      } else if (isSolide || isMixte) {
+        icon = Icons.restaurant_menu;
+      } else if (momentLabel == 'Goûter') {
+        icon = Icons.icecream;
       }
+
+      final String title =
+          momentLabel.isNotEmpty ? momentLabel : typeLabel;
 
       return {
         'id': doc.id,
@@ -2849,11 +2883,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             ? eventTime
             : data['eventTime'] ?? data['date'],
         'type': 'meal',
-        'title': data['biberon'] == true
-            ? 'Biberon'
-            : data['allaitement'] == true
-                ? 'Allaitement'
-                : 'Repas',
+        'title': title,
         'details': details,
         'iconData': icon,
         'color': Colors.orange,

@@ -42,9 +42,9 @@ class SubscriptionService {
       return {
         'assistante_maternelle':
             '$_bundleId.subscription.assistante_maternelle',
-        'mam_2_members': '$_bundleId.subscription.mam_2_members',
-        'mam_3_members': '$_bundleId.subscription.mam_3_members',
-        'mam_4_members': '$_bundleId.subscription.mam_4_members',
+        'mam_2_members': '$_bundleId.subscription.mam_2_membres',
+        'mam_3_members': '$_bundleId.subscription.mam_3_membres',
+        'mam_4_members': '$_bundleId.subscription.mam_4_membres',
       };
     } else {
       // 🔧 IDs Android (alignés avec Google Play + services Android)
@@ -695,25 +695,23 @@ class SubscriptionService {
     if (normalizedId.contains('mam')) {
       structureType = 'MAM';
       if (normalizedId.contains('2_members') ||
+          normalizedId.contains('mam_2_membres') ||
           normalizedId == 'abonnement_mam2' ||
           normalizedId == 'mam2' ||
           normalizedId == 'abonement_mam2') {
-        memberCount = 3;
+        memberCount = 2;
         priceAmount = 19.99;
         priceDisplay = '19,99 € / mois';
       } else if (normalizedId.contains('3_members') ||
+          normalizedId.contains('mam_3_membres') ||
           normalizedId == 'abonnement_mam3' ||
           normalizedId == 'mam3' ||
           normalizedId == 'abonement_mam3') {
-        memberCount = normalizedId.contains('3_members') ? 3 : 4;
-        if (memberCount == 3) {
-          priceAmount = 19.99;
-          priceDisplay = '19,99 € / mois';
-        } else {
-          priceAmount = 24.99;
-          priceDisplay = '24,99 € / mois';
-        }
+        memberCount = 3;
+        priceAmount = 19.99;
+        priceDisplay = '19,99 € / mois';
       } else if (normalizedId.contains('4_members') ||
+          normalizedId.contains('mam_4_membres') ||
           normalizedId == 'abonnement_mam4' ||
           normalizedId == 'mam4' ||
           normalizedId == 'abonement_mam4') {
