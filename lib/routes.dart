@@ -77,6 +77,7 @@ import 'package:poppins_app/screens/mam_group_chat_screen.dart';
 // 🔒 NOUVEAUX IMPORTS POUR LE SYSTÈME DE SÉCURITÉ
 import 'package:poppins_app/screens/auth_check_screen.dart';
 import 'package:poppins_app/screens/quick_login_screen.dart';
+import 'theme/app_colors.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>();
@@ -116,10 +117,10 @@ final GoRouter router = GoRouter(
     print("❌ ERREUR: ${state.error}");
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: kAppBackgroundColor,
       appBar: AppBar(
-        title: Text("Page non trouvée"),
-        backgroundColor: Color(0xFF3D9DF2),
+        title: const Text("Page non trouvée"),
+        backgroundColor: const Color(0xFF3D9DF2),
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
       ),
@@ -130,7 +131,7 @@ final GoRouter router = GoRouter(
             Icon(
               Icons.error_outline,
               size: 80,
-              color: Color(0xFF3D9DF2),
+              color: const Color(0xFF3D9DF2),
             ),
             SizedBox(height: 20),
             Text(
@@ -138,7 +139,7 @@ final GoRouter router = GoRouter(
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF3D9DF2),
+                color: const Color(0xFF3D9DF2),
               ),
             ),
             SizedBox(height: 10),
@@ -165,10 +166,10 @@ final GoRouter router = GoRouter(
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF3D9DF2),
-                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                backgroundColor: const Color(0xFF3D9DF2),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               ),
-              child: Text(
+              child: const Text(
                 "RETOUR À L'ACCUEIL",
                 style: TextStyle(
                   fontSize: 16,
@@ -192,7 +193,7 @@ final GoRouter router = GoRouter(
                   context.go('/');
                 }
               },
-              child: Text(
+              child: const Text(
                 "Redémarrer l'application",
                 style: TextStyle(
                   color: Color(0xFF3D9DF2),

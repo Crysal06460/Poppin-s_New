@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/subscription_service.dart';
 import '../utils/planning_helper.dart';
 import '../utils/session_util.dart';
+import '../theme/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -22,6 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> todayAgendaEntries = [];
   bool isLoading = true;
   bool hasChildren = false;
+  bool _isSubscriptionLoading = true;
+  bool _isSubscribed = true;
 
   // Variable pour stocker le type de structure
   String structureType = "AssistanteMaternelle"; // Valeur par défaut
@@ -39,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     initializeDateFormatting().then((_) => _fetchData());
+    _checkSubscriptionStatus();
   }
 
   bool _hasShownBirthdayAlert = false;
@@ -117,6 +121,75 @@ class _HomeScreenState extends State<HomeScreen> {
           childId: childId,
           structureId: structId,
           allowEditing: canEdit,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkSubscriptionStatus() async {
+    try {
+      final bool result = await SubscriptionService.isUserSubscribed();
+      if (!mounted) return;
+      setState(() {
+        _isSubscribed = result;
+        _isSubscriptionLoading = false;
+      });
+    } catch (e) {
+      print('Erreur vérification abonnement Home: $e');
+      if (!mounted) return;
+      setState(() {
+        _isSubscribed = true;
+        _isSubscriptionLoading = false;
+      });
+    }
+  }
+
+  Widget _buildSubscriptionRequired() {
+    return Scaffold(
+      backgroundColor: kAppBackgroundColor,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline,
+              size: 80,
+              color: primaryColor,
+            ),
+            SizedBox(height: 20),
+            Text(
+              "Abonnement requis",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              "Pour accéder à toutes les fonctionnalités",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: () => context.go('/pricing'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              ),
+              child: Text(
+                "CHOISIR UN ABONNEMENT",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2679,85 +2752,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+    if (_isSubscriptionLoading) {
+      return Scaffold(
+        backgroundColor: kAppBackgroundColor,
+        body: Center(
+          child: CircularProgressIndicator(color: primaryColor),
+        ),
       );
     }
 
-    // 🆕 AJOUT : Vérification de l'abonnement
-    return FutureBuilder<bool>(
-      future: SubscriptionService.isUserSubscribed(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: primaryColor),
-            ),
-          );
-        }
+    if (!_isSubscribed) {
+      return _buildSubscriptionRequired();
+    }
 
-        final bool isSubscribed = snapshot.data ?? false;
+    // Le reste du code existant - utilisateur abonné
+    _setThemeColors();
 
-        if (!isSubscribed) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.lock_outline,
-                    size: 80,
-                    color: primaryColor,
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    "Abonnement requis",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    "Pour accéder à toutes les fonctionnalités",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: () => context.go('/pricing'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    ),
-                    child: Text(
-                      "CHOISIR UN ABONNEMENT",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
 
-        // Le reste du code existant - utilisateur abonné
-        _setThemeColors();
-
-        final Size screenSize = MediaQuery.of(context).size;
-        final bool isTablet = screenSize.shortestSide >= 600;
-
-        final features = [
+    final features = [
           {
             'route': '/horaires',
             'name': 'Horaires',
@@ -2820,17 +2834,15 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ];
 
-        final bool hideStructureName = structureType == 'parent_employeur' ||
-            structureType == 'parentemployeur';
-        final String displayStructureName =
-            hideStructureName ? '' : structureName;
+    final bool hideStructureName = structureType == 'parent_employeur' ||
+        structureType == 'parentemployeur';
+    final String displayStructureName =
+        hideStructureName ? '' : structureName;
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          body: Column(
-            children: [
-              // En-tête avec fond de couleur - hauteur et marges relatives
-              Container(
+    final Widget mainBody = Column(
+      children: [
+        // En-tête avec fond de couleur - hauteur et marges relatives
+        Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -2939,63 +2951,83 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Contenu principal avec adaptation pour iPad
-              Expanded(
-                child: isTablet
-                    ? _buildTabletContent(
-                        features) // Layout spécifique pour iPad
-                    : _buildPhoneContent(
-                        features), // Layout original pour iPhone
-              ),
-            ],
-          ),
-          bottomNavigationBar: BottomNavigationBar(
-            onTap: _onItemTapped,
-            backgroundColor: Colors.white,
-            selectedItemColor: primaryColor,
-            unselectedItemColor: Colors.grey,
-            showSelectedLabels: true,
-            showUnselectedLabels: true,
-            selectedLabelStyle:
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: const TextStyle(fontSize: 12),
-            type: BottomNavigationBarType.fixed,
-            currentIndex: 1, // Home est sélectionné
-            items: [
-              // Premier item - Dashboard
-              BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/Icone_Dashboard.png',
-                  width: screenSize.width *
-                      (isTablet ? 0.07 : 0.14), // Taille relative
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
-                label: "Dashboard",
-              ),
-
-              // Deuxième item - Home (Maison)
-              BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/maison_icon.png',
-                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
-                label: "Accueil",
-              ),
-
-              // Troisième item - Ajouter enfant
-              BottomNavigationBarItem(
-                icon: _buildMessagesNavIcon(
-                    screenSize.width * (isTablet ? 0.07 : 0.14)),
-                activeIcon: _buildMessagesNavIcon(
-                    screenSize.width * (isTablet ? 0.07 : 0.14)),
-                label: "Messages",
-              ),
-            ],
-          ),
-        );
-      },
+        // Contenu principal avec adaptation pour iPad
+        Expanded(
+          child: isTablet
+              ? _buildTabletContent(
+                  features) // Layout spécifique pour iPad
+              : _buildPhoneContent(
+                  features), // Layout original pour iPhone
+        ),
+      ],
     );
+
+    final scaffold = Scaffold(
+      backgroundColor: kAppBackgroundColor,
+      body: mainBody,
+      bottomNavigationBar: BottomNavigationBar(
+        onTap: _onItemTapped,
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle:
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 1, // Home est sélectionné
+        items: [
+          // Premier item - Dashboard
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_Dashboard.png',
+              width: screenSize.width *
+                  (isTablet ? 0.07 : 0.14), // Taille relative
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
+            ),
+            label: "Dashboard",
+          ),
+
+          // Deuxième item - Home (Maison)
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/maison_icon.png',
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
+            ),
+            label: "Accueil",
+          ),
+
+          // Troisième item - Ajouter enfant
+          BottomNavigationBarItem(
+            icon: _buildMessagesNavIcon(
+                screenSize.width * (isTablet ? 0.07 : 0.14)),
+            activeIcon: _buildMessagesNavIcon(
+                screenSize.width * (isTablet ? 0.07 : 0.14)),
+            label: "Messages",
+          ),
+        ],
+      ),
+    );
+
+    if (isLoading) {
+      return Stack(
+        children: [
+          scaffold,
+          Positioned.fill(
+            child: Container(
+              color: kAppBackgroundColor.withOpacity(0.5),
+              child: Center(
+                child: CircularProgressIndicator(color: primaryColor),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return scaffold;
   }
 
   Widget _buildMessagesNavIcon(double size) {

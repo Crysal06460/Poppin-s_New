@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../theme/app_colors.dart';
 
 class ChildProfileDetailsScreen extends StatefulWidget {
   final String childId;
@@ -58,11 +59,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   bool _isPrescriptionUploading = false;
   List<Map<String, dynamic>> _activePrescriptions = [];
   List<Map<String, dynamic>> _prescriptionHistory = [];
+  List<Map<String, dynamic>> _vaccinationDocuments = [];
 
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
   static const Color secondaryColor = Color(0xFFDFE9F2); // Bleu clair #DFE9F2
 
+  final NumberFormat _weightFormat = NumberFormat("0.##", "fr_FR");
   bool _canEditChild = true;
 
   bool get _isParentMode => widget.parentMode;
@@ -293,6 +296,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
         'photoUrl': data['photoUrl'],
         'gender': data['gender'] ?? 'Non spécifié',
         'birthdate': data['birthdate'],
+        'weight': _normalizeWeight(data['weight']),
         // Ajoutez explicitement les données des parents
         'parent1': data['parent1'] ?? {},
         'parent2': data['parent2'] ?? {},
@@ -302,7 +306,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       authorizations = data['authorizations'] ?? {};
 
       // Extraction des documents
-      documents = data['documents'] ?? {};
+      documents = Map<String, dynamic>.from(data['documents'] ?? {});
+      _vaccinationDocuments = _extractVaccinationDocuments(documents);
+      _applyVaccinationDocumentsToCache();
       await _initializePrescriptions();
 
       // Extraction des infos alimentaires
@@ -763,6 +769,685 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     }
   }
 
+  Future<void> _editWeight() async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
+    final TextEditingController controller = TextEditingController(
+      text: childData['weight'] != null
+          ? (_normalizeWeight(childData['weight'])?.toString() ?? '')
+          : '',
+    );
+    String? errorText;
+
+    final String? sanitized = await showDialog<String?>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(builder: (context, dialogSetState) {
+            return AlertDialog(
+              title: Text(
+                'Modifier le poids',
+                style: TextStyle(
+                  color: primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: 'Poids (kg)',
+                      suffixText: 'kg',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: primaryColor, width: 2),
+                      ),
+                      errorText: errorText,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Laissez vide pour supprimer le poids.',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text(
+                    'Annuler',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final raw = controller.text.trim();
+                    if (raw.isEmpty) {
+                      Navigator.pop(context, '');
+                      return;
+                    }
+                    final sanitizedValue = raw.replaceAll(',', '.');
+                    final parsed = double.tryParse(sanitizedValue);
+                    if (parsed == null) {
+                      dialogSetState(
+                        () => errorText = 'Veuillez entrer un poids valide.',
+                      );
+                      return;
+                    }
+                    Navigator.pop(context, sanitizedValue);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text('Enregistrer'),
+                ),
+              ],
+            );
+          });
+        });
+
+    if (sanitized == null) {
+      return;
+    }
+
+    if (sanitized.isEmpty) {
+      await _saveChanges('profile', 'weight', null);
+    } else {
+      final value = double.tryParse(sanitized);
+      if (value != null) {
+        await _saveChanges('profile', 'weight', value);
+      }
+    }
+  }
+
+  Future<String?> _pickDocumentSource() async {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Télécharger un document',
+          style: TextStyle(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library, color: primaryColor),
+              title: Text('Choisir depuis la galerie'),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt, color: primaryColor),
+              title: Text('Prendre une photo'),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: Icon(Icons.file_present, color: primaryColor),
+              title: Text('Sélectionner un fichier'),
+              onTap: () => Navigator.pop(context, 'file'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child:
+                Text('Annuler', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _selectAndUploadDocument({
+    required String storageKey,
+    String? storageFolder,
+  }) async {
+    final action = await _pickDocumentSource();
+    if (action == null) {
+      return null;
+    }
+
+    setState(() => _isDocumentUploading = true);
+
+    String? fileUrl;
+    String? fileName;
+    String? storagePath;
+
+    try {
+      final String folderName = storageFolder ?? storageKey;
+      final baseRef = FirebaseStorage.instance
+          .ref()
+          .child('children_documents')
+          .child(widget.childId);
+      final int timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      if (action == 'gallery' || action == 'camera') {
+        final XFile? image = await _picker.pickImage(
+          source: action == 'gallery' ? ImageSource.gallery : ImageSource.camera,
+          imageQuality: 70,
+          maxWidth: 900,
+          maxHeight: 900,
+        );
+
+        if (image == null) {
+          return null;
+        }
+
+        final bytes = await File(image.path).readAsBytes();
+        fileName = image.name.isNotEmpty
+            ? image.name
+            : 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final storageFileName = '${folderName}_$timestamp.jpg';
+        final storageRef = baseRef.child(folderName).child(storageFileName);
+
+        await storageRef.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+
+        fileUrl = await storageRef.getDownloadURL();
+        storagePath = storageRef.fullPath;
+      } else if (action == 'file') {
+        final FilePickerResult? result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+        );
+
+        if (result == null || result.files.isEmpty) {
+          return null;
+        }
+
+        final file = result.files.first;
+        fileName = file.name;
+        final extension = file.extension ?? 'dat';
+        final storageFileName = '${folderName}_$timestamp.$extension';
+        final storageRef = baseRef.child(folderName).child(storageFileName);
+
+        if (kIsWeb && file.bytes != null) {
+          await storageRef.putData(file.bytes!);
+        } else if (file.path != null) {
+          await storageRef.putFile(File(file.path!));
+        } else {
+          throw Exception("Impossible d'accéder au fichier sélectionné");
+        }
+
+        fileUrl = await storageRef.getDownloadURL();
+        storagePath = storageRef.fullPath;
+      }
+
+      if (fileUrl == null) {
+        return null;
+      }
+
+      return {
+        'url': fileUrl,
+        'name': fileName ?? 'Document',
+        'storagePath': storagePath,
+        'uploadedAt': DateTime.now().toIso8601String(),
+      };
+    } catch (e) {
+      print("Erreur lors de l'upload du document: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de l'upload du document"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
+    } finally {
+      setState(() => _isDocumentUploading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _extractVaccinationDocuments(
+      Map<String, dynamic> source) {
+    final List<Map<String, dynamic>> files = [];
+    final Set<String> seenUrls = {};
+    final dynamic rawFiles = source['vaccinFiles'];
+
+    if (rawFiles is List) {
+      for (final dynamic entry in rawFiles) {
+        if (entry is Map) {
+          final url = entry['url'];
+          if (url is String && url.isNotEmpty && seenUrls.add(url)) {
+            files.add({
+              'url': url,
+              'name':
+                  entry['name'] ?? entry['fileName'] ?? 'Carnet de vaccination',
+              if (entry['storagePath'] != null)
+                'storagePath': entry['storagePath'],
+              if (entry['uploadedAt'] != null)
+                'uploadedAt': entry['uploadedAt'],
+            });
+          }
+        }
+      }
+    }
+
+    final dynamic fallbackUrl = source['vaccinUrl'];
+    if (fallbackUrl is String &&
+        fallbackUrl.isNotEmpty &&
+        seenUrls.add(fallbackUrl)) {
+      files.insert(0, {
+        'url': fallbackUrl,
+        'name': source['vaccinFileName'] ?? 'Carnet de vaccination',
+      });
+    }
+
+    return files;
+  }
+
+  List<Map<String, dynamic>> _serializeVaccinationDocuments() {
+    return _vaccinationDocuments.map((doc) {
+      final Map<String, dynamic> serialized = {
+        'url': doc['url'],
+        if (doc['name'] != null) 'name': doc['name'],
+      };
+      if (doc['storagePath'] != null) {
+        serialized['storagePath'] = doc['storagePath'];
+      }
+      if (doc['uploadedAt'] != null) {
+        serialized['uploadedAt'] = doc['uploadedAt'];
+      }
+      return serialized;
+    }).toList();
+  }
+
+  void _applyVaccinationDocumentsToCache() {
+    documents['vaccinFiles'] = _serializeVaccinationDocuments();
+    if (_vaccinationDocuments.isNotEmpty) {
+      documents['vaccinUrl'] = _vaccinationDocuments.first['url'];
+      documents['vaccinFileName'] =
+          _vaccinationDocuments.first['name'] ?? 'Carnet de vaccination';
+    } else {
+      documents.remove('vaccinUrl');
+      documents.remove('vaccinFileName');
+    }
+  }
+
+  String? _formatVaccinationUploadDate(dynamic rawDate) {
+    DateTime? parsed;
+    if (rawDate is Timestamp) {
+      parsed = rawDate.toDate();
+    } else if (rawDate is DateTime) {
+      parsed = rawDate;
+    } else if (rawDate is String) {
+      parsed = DateTime.tryParse(rawDate);
+    }
+
+    if (parsed == null) {
+      return null;
+    }
+
+    return DateFormat('dd/MM/yyyy').format(parsed);
+  }
+
+  Widget _buildVaccinationDocumentsRow() {
+    final bool hasDocuments = _vaccinationDocuments.isNotEmpty;
+    final int count = _vaccinationDocuments.length;
+    final String statusText =
+        hasDocuments ? 'Fourni${count > 1 ? ' ($count)' : ''}' : 'Non fourni';
+    final Color statusColor = hasDocuments ? Colors.green : Colors.red;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.medical_information, color: primaryColor),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Carnet de vaccination',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              IconButton(
+                icon: _isDocumentUploading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: primaryColor,
+                        ),
+                      )
+                    : Icon(Icons.add_circle_outline, color: primaryColor),
+                tooltip: _isReadOnly
+                    ? "Lecture seule"
+                    : "Ajouter un document de vaccination",
+                onPressed: _isReadOnly || _isDocumentUploading
+                    ? null
+                    : _addVaccinationDocument,
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          if (hasDocuments)
+            ..._vaccinationDocuments.asMap().entries.map(
+              (entry) => _buildVaccinationDocumentTile(
+                entry.value,
+                entry.key,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(left: 4.0),
+              child: Text(
+                'Aucun document téléchargé pour le moment.',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVaccinationDocumentTile(
+      Map<String, dynamic> document, int index) {
+    final String fileName =
+        (document['name'] as String?) ?? 'Document ${index + 1}';
+    final String? uploadedAt = _formatVaccinationUploadDate(
+      document['uploadedAt'],
+    );
+    final String? url = document['url'] as String?;
+
+    return Container(
+      margin: EdgeInsets.only(top: 6),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: secondaryColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.description, color: primaryColor),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fileName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (uploadedAt != null) ...[
+                  SizedBox(height: 4),
+                  Text(
+                    'Ajouté le $uploadedAt',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.visibility_outlined, color: primaryColor),
+            tooltip: 'Voir le document',
+            onPressed: url == null
+                ? null
+                : () => _viewDocument(url, fileName),
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_outline, color: Colors.redAccent),
+            tooltip: _isReadOnly ? null : 'Retirer ce fichier',
+            onPressed: _isReadOnly ? null : () => _removeVaccinationDocument(index),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _persistVaccinationDocuments() async {
+    final List<Map<String, dynamic>> serialized =
+        _serializeVaccinationDocuments();
+    final Map<String, dynamic> updateData = {
+      'documents.vaccinFiles': serialized,
+    };
+
+    if (serialized.isNotEmpty) {
+      updateData['documents.vaccinUrl'] = serialized.first['url'];
+      updateData['documents.vaccinFileName'] =
+          serialized.first['name'] ?? 'Carnet de vaccination';
+    } else {
+      updateData['documents.vaccinUrl'] = FieldValue.delete();
+      updateData['documents.vaccinFileName'] = FieldValue.delete();
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('children')
+          .doc(widget.childId)
+          .update(updateData);
+      return true;
+    } catch (e) {
+      print('Erreur lors de la mise à jour des documents vaccination: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                "Impossible d'enregistrer les documents de vaccination pour le moment"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _addVaccinationDocument() async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
+    final Map<String, dynamic>? uploaded =
+        await _selectAndUploadDocument(storageKey: 'vaccin', storageFolder: 'vaccin');
+
+    if (uploaded == null) {
+      return;
+    }
+
+    final Map<String, dynamic> newDocument = {
+      'url': uploaded['url'],
+      'name': uploaded['name'] ?? 'Carnet de vaccination',
+      if (uploaded['storagePath'] != null)
+        'storagePath': uploaded['storagePath'],
+      if (uploaded['uploadedAt'] != null)
+        'uploadedAt': uploaded['uploadedAt'],
+    };
+
+    final List<Map<String, dynamic>> previous =
+        List<Map<String, dynamic>>.from(_vaccinationDocuments);
+
+    setState(() {
+      _vaccinationDocuments.add(newDocument);
+    });
+
+    final bool success = await _persistVaccinationDocuments();
+
+    if (!success) {
+      setState(() {
+        _vaccinationDocuments = previous;
+      });
+      return;
+    }
+
+    setState(() {
+      _applyVaccinationDocumentsToCache();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Page ajoutée au carnet de vaccination'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _removeVaccinationDocument(int index) async {
+    if (!_ensureEditingAllowed()) {
+      return;
+    }
+
+    if (index < 0 || index >= _vaccinationDocuments.length) {
+      return;
+    }
+
+    final Map<String, dynamic> document = Map<String, dynamic>.from(
+      _vaccinationDocuments[index],
+    );
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Supprimer ce document ?',
+          style: TextStyle(
+            color: primaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Cette page sera retirée du carnet de vaccination.',
+          style: TextStyle(color: Colors.grey.shade800),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final List<Map<String, dynamic>> previous =
+        List<Map<String, dynamic>>.from(_vaccinationDocuments);
+
+    setState(() {
+      _vaccinationDocuments.removeAt(index);
+    });
+
+    final bool success = await _persistVaccinationDocuments();
+
+    if (!success) {
+      setState(() {
+        _vaccinationDocuments = previous;
+      });
+      return;
+    }
+
+    setState(() {
+      _applyVaccinationDocumentsToCache();
+    });
+
+    final String? storagePath = document['storagePath'] as String?;
+    if (storagePath != null && storagePath.isNotEmpty) {
+      try {
+        await FirebaseStorage.instance.ref(storagePath).delete();
+      } catch (e) {
+        print('Erreur lors de la suppression du fichier de vaccination: $e');
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Document supprimé du carnet de vaccination'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   // Méthode pour uploader un document
   Future<void> _uploadDocument(String section, String field) async {
     if (!_ensureEditingAllowed(
@@ -771,150 +1456,29 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       return;
     }
 
-    try {
-      // Afficher un dialogue avec des options
-      final action = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            'Télécharger un document',
-            style: TextStyle(
-              color: primaryColor,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(Icons.photo_library, color: primaryColor),
-                title: Text('Choisir depuis la galerie'),
-                onTap: () => Navigator.pop(context, 'gallery'),
-              ),
-              ListTile(
-                leading: Icon(Icons.camera_alt, color: primaryColor),
-                title: Text('Prendre une photo'),
-                onTap: () => Navigator.pop(context, 'camera'),
-              ),
-              ListTile(
-                leading: Icon(Icons.file_present, color: primaryColor),
-                title: Text('Sélectionner un fichier'),
-                onTap: () => Navigator.pop(context, 'file'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'cancel'),
-              child: Text(
-                'Annuler',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-          ],
-        ),
-      );
+    final Map<String, dynamic>? uploaded =
+        await _selectAndUploadDocument(storageKey: field);
 
-      if (action == 'cancel' || action == null) return;
-
-      setState(() => _isDocumentUploading = true);
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('Utilisateur non connecté');
-
-      String? fileUrl;
-      String? fileName;
-
-      if (action == 'gallery' || action == 'camera') {
-        // Utiliser image picker
-        final XFile? image = await _picker.pickImage(
-          source:
-              action == 'gallery' ? ImageSource.gallery : ImageSource.camera,
-          imageQuality: 70,
-        );
-
-        if (image == null) {
-          setState(() => _isDocumentUploading = false);
-          return;
-        }
-
-        final bytes = await File(image.path).readAsBytes();
-        fileName = image.name;
-
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('children_documents')
-            .child(widget.childId)
-            .child('${field}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-        await storageRef.putData(
-            bytes, SettableMetadata(contentType: 'image/jpeg'));
-        fileUrl = await storageRef.getDownloadURL();
-      } else if (action == 'file') {
-        // Utiliser file picker
-        FilePickerResult? result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
-        );
-
-        if (result == null || result.files.isEmpty) {
-          setState(() => _isDocumentUploading = false);
-          return;
-        }
-
-        final file = result.files.first;
-        fileName = file.name;
-
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('children_documents')
-            .child(widget.childId)
-            .child(
-                '${field}_${DateTime.now().millisecondsSinceEpoch}.${file.extension}');
-
-        if (kIsWeb && file.bytes != null) {
-          await storageRef.putData(file.bytes!);
-        } else if (file.path != null) {
-          await storageRef.putFile(File(file.path!));
-        }
-
-        fileUrl = await storageRef.getDownloadURL();
-      }
-
-      if (fileUrl != null) {
-        // Sauvegarder dans Firestore
-        await _saveChanges(section, field, fileUrl);
-        await _saveChanges(section, '${field}FileName', fileName);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Document téléchargé avec succès'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      print("Erreur lors de l'upload du document: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur lors du téléchargement du document'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    } finally {
-      setState(() => _isDocumentUploading = false);
+    if (uploaded == null) {
+      return;
     }
+
+    final String url = uploaded['url'] as String? ?? '';
+    final String fileName = (uploaded['name'] as String?) ?? 'Document';
+
+    await _saveChanges(section, field, url);
+    await _saveChanges(section, '${field}FileName', fileName);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Document téléchargé avec succès'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
   }
 
   Future<void> _initializePrescriptions() async {
@@ -2026,6 +2590,66 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     }
   }
 
+  double? _normalizeWeight(dynamic rawWeight) {
+    if (rawWeight == null) {
+      return null;
+    }
+    if (rawWeight is num) {
+      return rawWeight.toDouble();
+    }
+    if (rawWeight is String) {
+      final sanitized = rawWeight.trim().replaceAll(',', '.');
+      if (sanitized.isEmpty) {
+        return null;
+      }
+      return double.tryParse(sanitized);
+    }
+    return null;
+  }
+
+  Widget _buildWeightChip() {
+    final double? weightValue = _normalizeWeight(childData['weight']);
+    final bool hasWeight = weightValue != null;
+
+    final String label = hasWeight
+        ? 'Poids : ${_weightFormat.format(weightValue)} kg'
+        : 'Poids : non renseigné';
+
+    return InkWell(
+      onTap: _isReadOnly ? () => _ensureEditingAllowed() : _editWeight,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: primaryColor.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: primaryColor.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: hasWeight ? primaryColor : Colors.grey.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(width: 6),
+            Icon(
+              Icons.edit,
+              size: 16,
+              color: _isReadOnly ? Colors.grey : primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileSection(String title, List<Widget> children) {
     return Container(
       margin: EdgeInsets.only(bottom: 16),
@@ -2228,7 +2852,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: kAppBackgroundColor,
       body: Column(
         children: [
           // En-tête avec fond de couleur - Identique aux autres écrans
@@ -2531,25 +3155,35 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                                       ],
                                     ),
                                     SizedBox(height: 8),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: primaryColor.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: primaryColor.withOpacity(0.3),
-                                          width: 1,
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                primaryColor.withOpacity(0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color:
+                                                  primaryColor.withOpacity(0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _calculateAgeDisplay(
+                                                childData['birthdate']),
+                                            style: TextStyle(
+                                              color: primaryColor,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      child: Text(
-                                        _calculateAgeDisplay(
-                                            childData['birthdate']),
-                                        style: TextStyle(
-                                          color: primaryColor,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                        _buildWeightChip(),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -2603,22 +3237,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                         _buildProfileSection(
                           '📑 Documents',
                           [
-                            _buildInfoRow(
-                              'Carnet de vaccination',
-                              documents['vaccinUrl'] != null
-                                  ? 'Fourni'
-                                  : 'Non fourni',
-                              icon: Icons.medical_information,
-                              valueColor: documents['vaccinUrl'] != null
-                                  ? Colors.green
-                                  : Colors.red,
-                              documentUrl: documents['vaccinUrl'],
-                              documentName: documents['vaccinFileName'] ??
-                                  'Carnet de vaccination',
-                              onEdit: () async {
-                                await _uploadDocument('documents', 'vaccinUrl');
-                              },
-                            ),
+                            _buildVaccinationDocumentsRow(),
                             _buildAuthorizationRow(
                               'PAI (Projet d\'Accueil Individualisé)',
                               documents['hasPAI'],

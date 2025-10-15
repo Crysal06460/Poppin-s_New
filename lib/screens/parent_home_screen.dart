@@ -12,6 +12,7 @@ import '../utils/message_badge_util.dart';
 import '../utils/actualites_badge_util.dart';
 import '../utils/photos_badge_util.dart';
 import '../utils/session_util.dart';
+import '../theme/app_colors.dart';
 import '../services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
@@ -65,6 +66,23 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   DateTime _selectedTimelineDate = DateTime.now();
   List<Map<String, dynamic>> _hourDocEvents = [];
   List<Map<String, dynamic>> _hourHistoryEvents = [];
+  final RegExp _timeExtractRegex = RegExp(r'(\d{1,2})[hH:]?(\d{0,2})');
+  final RegExp _rangeIndicatorRegex = RegExp(r'[-–…]');
+  static const List<String> _timeCandidateKeys = [
+    'heure',
+    'start',
+    'startTime',
+    'startHour',
+    'arrivee',
+    'depart',
+    'time',
+    'hour',
+    'eventTime',
+    'heureDebut',
+    'heureFin',
+    'debut',
+    'fin',
+  ];
   bool _loadingTimeline = false;
   bool _showStockBadge = false;
   bool _showMessageBadge = false;
@@ -2479,7 +2497,31 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       }
 
       final List<Map<String, dynamic>> childrenData = [];
+      final Set<String> knownChildIds = {};
+      final Set<String> syncedChildIds = {};
       List<String> effectiveChildIds = List<String>.from(childIds);
+
+      void addChildFromSnapshot(DocumentSnapshot<Map<String, dynamic>> childDoc,
+          {bool markForSync = false}) {
+        final data = childDoc.data() ?? {};
+        if (!knownChildIds.add(childDoc.id)) {
+          return;
+        }
+        childrenData.add({
+          'id': childDoc.id,
+          'firstName': data['firstName'] ?? 'Sans nom',
+          'lastName': data['lastName'] ?? '',
+          'photoUrl': data['photoUrl'],
+          'structureId': structureId,
+          'gender': data['gender'] ?? 'Non spécifié',
+          'birthdate': data['birthdate'],
+          'parentId': data['parentId'] ?? '',
+        });
+        if (markForSync) {
+          syncedChildIds.add(childDoc.id);
+        }
+      }
+
       if (structureId.isNotEmpty) {
         if (effectiveChildIds.isEmpty && userDoc.exists) {
           final userData = userDoc.data();
@@ -2508,58 +2550,51 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 .where(FieldPath.documentId, whereIn: chunk)
                 .get();
             for (final childDoc in childDocs.docs) {
-              final data = childDoc.data() ?? {};
-              childrenData.add({
-                'id': childDoc.id,
-                'firstName': data['firstName'] ?? 'Sans nom',
-                'lastName': data['lastName'] ?? '',
-                'photoUrl': data['photoUrl'],
-                'structureId': structureId,
-                'gender': data['gender'] ?? 'Non spécifié',
-                'birthdate': data['birthdate'],
-                'parentId': data['parentId'] ?? '',
-              });
+              addChildFromSnapshot(childDoc);
             }
           }
         }
 
-        if (childrenData.isEmpty) {
-          final createdChildrenSnap = await _firestore
-              .collection('structures')
-              .doc(structureId)
-              .collection('children')
-              .where('createdByEmail', isEqualTo: userEmail)
-              .get();
+        final createdChildrenSnap = await _firestore
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .where('createdByEmail', isEqualTo: userEmail)
+            .get();
+        for (final childDoc in createdChildrenSnap.docs) {
+          addChildFromSnapshot(childDoc, markForSync: true);
+        }
 
-          if (createdChildrenSnap.docs.isNotEmpty) {
-            final newIds = <String>[];
-            for (final childDoc in createdChildrenSnap.docs) {
-              final data = childDoc.data() ?? {};
-              final childId = childDoc.id;
-              newIds.add(childId);
-              childrenData.add({
-                'id': childId,
-                'firstName': data['firstName'] ?? 'Sans nom',
-                'lastName': data['lastName'] ?? '',
-                'photoUrl': data['photoUrl'],
-                'structureId': structureId,
-                'gender': data['gender'] ?? 'Non spécifié',
-                'birthdate': data['birthdate'],
-                'parentId': data['parentId'] ?? '',
-              });
-            }
+        final parent1Snap = await _firestore
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .where('parent1.email', isEqualTo: userEmail)
+            .get();
+        for (final childDoc in parent1Snap.docs) {
+          addChildFromSnapshot(childDoc, markForSync: true);
+        }
 
-            if (newIds.isNotEmpty) {
-              await _firestore.collection('users').doc(userEmail).set({
-                'children': newIds,
-                'createdChildren': FieldValue.arrayUnion(newIds),
-                'structureId': structureId,
-                'structureName': structureName,
-                'role': 'parent',
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-            }
-          }
+        final parent2Snap = await _firestore
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .where('parent2.email', isEqualTo: userEmail)
+            .get();
+        for (final childDoc in parent2Snap.docs) {
+          addChildFromSnapshot(childDoc, markForSync: true);
+        }
+
+        if (syncedChildIds.isNotEmpty) {
+          final List<String> idsToSync = syncedChildIds.toList();
+          await _firestore.collection('users').doc(userEmail).set({
+            'children': FieldValue.arrayUnion(idsToSync),
+            'createdChildren': FieldValue.arrayUnion(idsToSync),
+            'structureId': structureId,
+            'structureName': structureName,
+            'role': 'parent',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       }
 
@@ -2789,22 +2824,182 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     }
   }
 
+  Map<String, dynamic> _resolveTimeInfo({
+    dynamic primary,
+    Map<String, dynamic>? data,
+    List<dynamic> extraCandidates = const [],
+  }) {
+    final List<dynamic> candidates = [];
+
+    void addCandidate(dynamic value) {
+      if (value == null) return;
+      if (value is String && value.trim().isEmpty) return;
+      candidates.add(value);
+    }
+
+    addCandidate(primary);
+    for (final extra in extraCandidates) {
+      addCandidate(extra);
+    }
+
+    if (data != null) {
+      for (final key in _timeCandidateKeys) {
+        if (data.containsKey(key)) {
+          addCandidate(data[key]);
+        }
+      }
+      addCandidate(data['date']);
+      addCandidate(data['timestamp']);
+      addCandidate(data['createdAt']);
+    }
+
+    String label = '';
+    for (final candidate in candidates) {
+      final formatted = _formatTimeLabel(candidate);
+      if (formatted.isNotEmpty) {
+        label = formatted;
+        break;
+      }
+    }
+
+    int? minutes;
+    for (final candidate in candidates) {
+      minutes = _extractMinutes(candidate);
+      if (minutes != null) break;
+    }
+
+    if ((label.isEmpty || minutes == null) && data != null) {
+      final fallback = data['date'] ?? data['timestamp'] ?? data['createdAt'];
+      if (label.isEmpty) {
+        label = _formatTimeLabel(fallback);
+      }
+      minutes ??= _extractMinutes(fallback);
+    }
+
+    return {
+      'label': label,
+      'minutes': minutes ?? 0,
+    };
+  }
+
+  String _formatTimeLabel(dynamic raw) {
+    if (raw == null) return '';
+
+    if (raw is Timestamp) {
+      final dt = raw.toDate();
+      return DateFormat('HH:mm').format(dt);
+    }
+
+    if (raw is DateTime) {
+      return DateFormat('HH:mm').format(raw);
+    }
+
+    if (raw is num) {
+      if (!raw.isFinite) return '';
+      final totalMinutes = raw.toInt();
+      final hour = ((totalMinutes ~/ 60) % 24);
+      final minute = totalMinutes % 60;
+      return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    }
+
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return '';
+
+      final match = _timeExtractRegex.firstMatch(trimmed);
+      if (match != null) {
+        final int hourValue = int.tryParse(match.group(1)!) ?? 0;
+        final String minuteGroup = match.group(2) ?? '';
+        int minuteValue = 0;
+        if (minuteGroup.isNotEmpty) {
+          final padded = minuteGroup.padRight(2, '0');
+          minuteValue = int.tryParse(padded) ?? 0;
+        }
+
+        final int hour = hourValue < 0 ? 0 : (hourValue > 23 ? 23 : hourValue);
+        final int minute =
+            minuteValue < 0 ? 0 : (minuteValue > 59 ? 59 : minuteValue);
+
+        final normalized =
+            '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+        final bool hasRangeIndicator =
+            _rangeIndicatorRegex.hasMatch(trimmed) || trimmed.contains('...');
+        final bool hasStatusIndicator =
+            trimmed.toLowerCase().contains('en cours') || trimmed.contains('…');
+
+        if (trimmed.length > (match.group(0)?.length ?? 0) &&
+            (hasRangeIndicator || hasStatusIndicator)) {
+          return trimmed;
+        }
+
+        return normalized;
+      }
+
+      return trimmed;
+    }
+
+    return '';
+  }
+
+  int? _extractMinutes(dynamic raw) {
+    if (raw == null) return null;
+
+    if (raw is int) return raw;
+    if (raw is double) {
+      if (!raw.isFinite) return null;
+      return raw.round();
+    }
+
+    if (raw is Timestamp) {
+      final dt = raw.toDate();
+      return dt.hour * 60 + dt.minute;
+    }
+
+    if (raw is DateTime) {
+      return raw.hour * 60 + raw.minute;
+    }
+
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return null;
+
+      final match = _timeExtractRegex.firstMatch(trimmed);
+      if (match != null) {
+        final int? hourParsed = int.tryParse(match.group(1)!);
+        if (hourParsed == null) return null;
+
+        final String minuteGroup = match.group(2) ?? '';
+        int minuteParsed = 0;
+        if (minuteGroup.isNotEmpty) {
+          final padded = minuteGroup.padRight(2, '0');
+          minuteParsed = int.tryParse(padded) ?? 0;
+        }
+
+        final int hour =
+            hourParsed < 0 ? 0 : (hourParsed > 23 ? 23 : hourParsed);
+        final int minute =
+            minuteParsed < 0 ? 0 : (minuteParsed > 59 ? 59 : minuteParsed);
+
+        return hour * 60 + minute;
+      }
+    }
+
+    return null;
+  }
+
   void _processActivitiesSnapshot(QuerySnapshot snapshot) {
     _eventsMap['activity'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
-
-      // Ajouter cette partie pour gérer l'heure
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        // Si l'heure est stockée comme "13:00", l'utiliser
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'activity',
         'title': 'Activité: ${data['type'] ?? ""}',
         'details': data['duration'] ?? "",
@@ -2821,19 +3016,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['meal'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       final String rawMoment = (data['moment'] ?? '').toString();
       final String momentLabel = rawMoment.isNotEmpty
           ? rawMoment
           : (data['gouter'] == true ? 'Goûter' : '');
       final String rawType = (data['typeAlimentation'] ?? '').toString();
-      final bool isBiberon =
-          rawType == 'Biberon' || data['biberon'] == true;
+      final bool isBiberon = rawType == 'Biberon' || data['biberon'] == true;
       final bool isAllaitement =
           rawType == 'Allaitement' || data['allaitement'] == true;
       final bool isSolide = rawType == 'Solide';
@@ -2874,14 +3067,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         icon = Icons.icecream;
       }
 
-      final String title =
-          momentLabel.isNotEmpty ? momentLabel : typeLabel;
+      final String title = momentLabel.isNotEmpty ? momentLabel : typeLabel;
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'meal',
         'title': title,
         'details': details,
@@ -2896,17 +3087,16 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['sleep'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+        extraCandidates: [data['start']],
+      );
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'sleep',
         'title': 'Sieste',
         'details': data['duration'] ?? "",
@@ -2922,11 +3112,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['change'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       String details = '';
       if (data['pipi'] == true) details += 'Pipi ';
@@ -2934,9 +3123,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'change',
         'title': 'Change',
         'details': details.trim(),
@@ -2954,11 +3142,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['health'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       String details = '';
       if (data['type'] == 'Température') {
@@ -2973,9 +3160,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'health',
         'title': 'Santé: ${data['type'] ?? ""}',
         'details': details,
@@ -2990,19 +3176,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['photo'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       final isVideo = (data['type']?.toString().toLowerCase() == 'video');
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': isVideo ? 'video' : 'photo',
         'title': isVideo ? 'Vidéo' : 'Photo',
         'details': data['description'] ?? '',
@@ -3039,9 +3223,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       final timestamp =
           data['exactTime'] as Timestamp? ?? data['timestamp'] as Timestamp?;
 
+      final timeInfo = _resolveTimeInfo(
+        primary: eventTime.isNotEmpty ? eventTime : timestamp,
+        data: {
+          'date': timestamp,
+        },
+      );
+
       events.add({
         'id': doc.id,
-        'time': eventTime.isNotEmpty ? eventTime : timestamp,
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': normalized,
         'title': normalized == 'arrival' ? 'Arrivée' : 'Départ',
         'details': normalized == 'arrival'
@@ -3080,9 +3272,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             final arr = seg['arrivee'];
             final dep = seg['depart'];
             if (arr != null && arr.toString().isNotEmpty) {
+              final timeInfo = _resolveTimeInfo(primary: arr);
               events.add({
                 'id': 'arr_${arr}_${events.length}',
-                'time': arr,
+                'time': timeInfo['label'],
+                'sortKey': timeInfo['minutes'],
                 'type': 'arrival',
                 'title': 'Arrivée',
                 'details': arr,
@@ -3091,9 +3285,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
               });
             }
             if (dep != null && dep.toString().isNotEmpty) {
+              final timeInfo = _resolveTimeInfo(primary: dep);
               events.add({
                 'id': 'dep_${dep}_${events.length}',
-                'time': dep,
+                'time': timeInfo['label'],
+                'sortKey': timeInfo['minutes'],
                 'type': 'departure',
                 'title': 'Départ',
                 'details': dep,
@@ -3107,9 +3303,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           final arr = childData['arrivee'];
           final dep = childData['depart'];
           if (arr != null && arr.toString().isNotEmpty) {
+            final timeInfo = _resolveTimeInfo(primary: arr);
             events.add({
               'id': 'arr_${arr}_0',
-              'time': arr,
+              'time': timeInfo['label'],
+              'sortKey': timeInfo['minutes'],
               'type': 'arrival',
               'title': 'Arrivée',
               'details': arr,
@@ -3118,9 +3316,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             });
           }
           if (dep != null && dep.toString().isNotEmpty) {
+            final timeInfo = _resolveTimeInfo(primary: dep);
             events.add({
               'id': 'dep_${dep}_0',
-              'time': dep,
+              'time': timeInfo['label'],
+              'sortKey': timeInfo['minutes'],
               'type': 'departure',
               'title': 'Départ',
               'details': dep,
@@ -3170,9 +3370,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
     final events = <Map<String, dynamic>>[];
     if (arrival != null && arrival!.isNotEmpty) {
+      final timeInfo = _resolveTimeInfo(primary: arrival);
       events.add({
         'id': 'history_arrival',
-        'time': arrival,
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'arrival',
         'title': 'Arrivée',
         'details': arrival,
@@ -3181,9 +3383,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       });
     }
     if (departure != null && departure!.isNotEmpty) {
+      final timeInfo = _resolveTimeInfo(primary: departure);
       events.add({
         'id': 'history_departure',
-        'time': departure,
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'departure',
         'title': 'Départ',
         'details': departure,
@@ -3223,11 +3427,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     _eventsMap['transmission'] = snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Récupérer l'heure réelle si disponible
-      String eventTime = '';
-      if (data['heure'] != null && data['heure'] is String) {
-        eventTime = data['heure'];
-      }
+      final timeInfo = _resolveTimeInfo(
+        primary: data['heure'],
+        data: data,
+      );
 
       IconData icon = Icons.info_outline;
       switch (data['category']) {
@@ -3247,9 +3450,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
       return {
         'id': doc.id,
-        'time': eventTime.isNotEmpty
-            ? eventTime
-            : data['eventTime'] ?? data['date'],
+        'time': timeInfo['label'],
+        'sortKey': timeInfo['minutes'],
         'type': 'transmission',
         'title': 'Message: ${data['category'] ?? ""}',
         'details': data['content'] ?? '',
@@ -3271,30 +3473,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       print("  - $key: ${events.length} événements");
     });
 
-    // Trier tous les événements par heure réelle (minutes depuis minuit)
-    int toMinutes(dynamic value) {
-      // Chaîne HH:mm
-      if (value is String && value.contains(':')) {
-        final parts = value.split(':');
-        final h = int.tryParse(parts[0]) ?? 0;
-        final m = int.tryParse(parts[1]) ?? 0;
-        return h * 60 + m;
-      }
-      // Timestamp
-      if (value is Timestamp) {
-        final dt = value.toDate();
-        return dt.hour * 60 + dt.minute;
-      }
-      // DateTime
-      if (value is DateTime) {
-        return value.hour * 60 + value.minute;
-      }
-      return 0;
-    }
-
     allEvents.sort((a, b) {
-      final aMin = toMinutes(a['time']);
-      final bMin = toMinutes(b['time']);
+      int resolveMinutes(Map<String, dynamic> event) {
+        if (event['sortKey'] is int) {
+          return event['sortKey'] as int;
+        }
+        final extracted = _extractMinutes(event['time']);
+        return extracted ?? 0;
+      }
+
+      final aMin = resolveMinutes(a);
+      final bMin = resolveMinutes(b);
       final cmp = aMin.compareTo(bMin);
       if (cmp != 0) return cmp; // Ordre chronologique croissant
       // En cas d'égalité parfaite (même minute), garder un ordre stable
@@ -3338,6 +3527,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       // Sinon comparer le type et l'heure
       if (map1['type'] != map2['type']) return false;
 
+      if ((map1['sortKey'] ?? 0) != (map2['sortKey'] ?? 0)) return false;
+
       final time1 = map1['time'];
       final time2 = map2['time'];
 
@@ -3349,6 +3540,29 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
     }
 
     return true;
+  }
+
+  void _onChildSelected(Map<String, dynamic> child) async {
+    final alreadySelected =
+        _selectedChild != null && _selectedChild!['id'] == child['id'];
+    if (alreadySelected) return;
+
+    setState(() {
+      _selectedChild = child;
+      _selectedTimelineDate = _normalizeDate(DateTime.now());
+    });
+
+    await _loadChildTimeline(
+      child['id'],
+      child['structureId'],
+      selectedDay: _selectedTimelineDate,
+    );
+
+    final structureId = child['structureId']?.toString() ?? '';
+    if (structureId.isNotEmpty) {
+      await _loadActualites(structureId);
+      await _checkActualitesBadges();
+    }
   }
 
   DateTime _normalizeDate(DateTime date) {
@@ -3595,13 +3809,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         () => _showActualiteDetails("menu"),
       ),
       _buildHeaderIcon(
-        "Événements",
+        "Événement",
         Icons.event,
         () => _showActualiteDetails("evenement"),
         showBadge: _showEventsBadge,
       ),
       _buildHeaderIcon(
-        "Sorties",
+        "Sortie",
         Icons.directions_bus,
         () => _showActualiteDetails("sortie"),
         showBadge: _showSortiesBadge,
@@ -3624,6 +3838,162 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           ),
         )
         .toList();
+  }
+
+  Widget _buildChildSwitcher() {
+    if (_children.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEEF3FF), Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFDCE4FF), width: 1.3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _children.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final child = _children[index];
+                final bool isSelected = _selectedChild != null &&
+                    _selectedChild!['id'] == child['id'];
+
+                final Color tileColor = isSelected ? primaryBlue : Colors.white;
+                final Color textColor =
+                    isSelected ? Colors.white : Colors.black87;
+                final Color badgeColor =
+                    isSelected ? Colors.white : primaryBlue;
+
+                return GestureDetector(
+                  onTap: () => _onChildSelected(child),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: tileColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color:
+                            isSelected ? primaryBlue : const Color(0xFFDCE4FF),
+                        width: isSelected ? 1.8 : 1.2,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: primaryBlue.withOpacity(0.28),
+                                blurRadius: 18,
+                                offset: const Offset(0, 12),
+                              )
+                            ]
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              )
+                            ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: isSelected
+                                      ? [Colors.white, Colors.white70]
+                                      : const [Color(0xFFEEF3FF), Colors.white],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: badgeColor.withOpacity(0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: child['photoUrl'] != null
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        child['photoUrl'],
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                Icon(Icons.child_care,
+                                                    color: badgeColor),
+                                      ),
+                                    )
+                                  : Icon(Icons.child_care, color: badgeColor),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              child['firstName']?.toString() ?? 'Enfant',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: isSelected ? 1.0 : 0.8,
+                          child: Text(
+                            isSelected ? "Fil en cours" : "Voir la journée",
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white70
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildActualiteCard(String title, String subtitle, IconData icon,
@@ -3995,8 +4365,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF7F9FA), // Couleur de fond légère et moderne
+      backgroundColor: kAppBackgroundColor,
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : CustomScrollView(
@@ -4128,74 +4497,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEEF0FF),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.campaign_outlined,
-                                    color: primaryBlue,
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  "Actualités",
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _buildActualiteCard(
-                                    "Menu de la semaine",
-                                    "Découvrez les repas prévus",
-                                    Icons.restaurant_menu,
-                                    Colors.green.shade400,
-                                    () {
-                                      _showActualiteDetails("menu");
-                                    },
-                                  ),
-                                  SizedBox(width: 12),
-                                  _buildActualiteCard(
-                                    "Événements",
-                                    "Activités spéciales à venir",
-                                    Icons.event,
-                                    Colors.orange.shade400,
-                                    () {
-                                      _showActualiteDetails("evenement");
-                                    },
-                                    showBadge: _showEventsBadge,
-                                  ),
-                                  SizedBox(width: 12),
-                                  _buildActualiteCard(
-                                    "Sorties",
-                                    "Prévisions de sorties",
-                                    Icons.directions_bus,
-                                    Colors.blue.shade400,
-                                    () {
-                                      _showActualiteDetails("sortie");
-                                    },
-                                    showBadge: _showSortiesBadge,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                        child: _buildChildSwitcher(),
                       ),
                     ),
                   SliverToBoxAdapter(
@@ -4291,18 +4593,18 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                             ),
                         ],
                       ),
+                    ),
                   ),
-                ),
-                SliverToBoxAdapter(
-                  child: _selectedChild != null
-                      ? _buildTimelineDateSelector()
-                      : SizedBox.shrink(),
-                ),
-                _loadingTimeline
-                    ? SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: 200,
-                          child: Center(
+                  SliverToBoxAdapter(
+                    child: _selectedChild != null
+                        ? _buildTimelineDateSelector()
+                        : SizedBox.shrink(),
+                  ),
+                  _loadingTimeline
+                      ? SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 200,
+                            child: Center(
                               child: CircularProgressIndicator(),
                             ),
                           ),
@@ -4602,14 +4904,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
   }
 
   Widget _buildTimelineItem(Map<String, dynamic> event) {
-    String time = '';
-    if (event['time'] is Timestamp) {
-      time = DateFormat('HH:mm').format((event['time'] as Timestamp).toDate());
-    } else if (event['time'] is DateTime) {
-      time = DateFormat('HH:mm').format(event['time']);
-    } else if (event['time'] is String && event['time'].contains(':')) {
-      // Si c'est déjà une chaîne formatée HH:mm
-      time = event['time'];
+    final dynamic rawTime = event['time'];
+    String time = _formatTimeLabel(rawTime);
+    if (time.isEmpty && rawTime is String) {
+      time = rawTime.trim();
+    }
+    if (time.isEmpty) {
+      time = '--';
     }
 
     return Container(

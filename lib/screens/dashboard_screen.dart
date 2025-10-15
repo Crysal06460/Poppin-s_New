@@ -28,6 +28,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
+import '../theme/app_colors.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -88,6 +89,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _rssError;
   DateTime? _lastRssFetch;
   bool _showDashboardNews = true;
+  bool _isSubscriptionLoading = true;
+  bool _isSubscribed = true;
 
   // Couleurs dédiées aux tuiles de la grille (style 2025)
   final Color _tileBlue = const Color(0xFF3D9DF2);
@@ -133,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _checkIfMAMStructure();
       _refreshDelegationsCount();
     });
+    _checkSubscriptionStatus();
   }
 
   void _showPhotoAdministration() {
@@ -152,6 +156,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(
         builder: (context) => AdminCleanupScreen(),
       ),
+    );
+  }
+
+  Future<void> _checkSubscriptionStatus() async {
+    try {
+      final bool result = await SubscriptionService.isUserSubscribed();
+      if (!mounted) return;
+      setState(() {
+        _isSubscribed = result;
+        _isSubscriptionLoading = false;
+      });
+    } catch (e) {
+      print('Erreur vérification abonnement Dashboard: $e');
+      if (!mounted) return;
+      setState(() {
+        _isSubscribed = true;
+        _isSubscriptionLoading = false;
+      });
+    }
+  }
+
+  Widget _buildSubscriptionRequired() {
+    return Scaffold(
+      backgroundColor: kAppBackgroundColor,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.dashboard_outlined,
+              size: 80,
+              color: primaryColor,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Tableau de bord premium",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryColor,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Accédez à la gestion complète",
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: () => context.go('/pricing'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              ),
+              child: const Text(
+                "DÉBLOQUER LE DASHBOARD",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wrapWithLoadingOverlay(Widget child) {
+    if (!isLoading) {
+      return child;
+    }
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: Container(
+            color: kAppBackgroundColor.withOpacity(0.5),
+            child: Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -5796,159 +5888,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
+    if (_isSubscriptionLoading) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: kAppBackgroundColor,
         body: Center(
           child: CircularProgressIndicator(color: primaryColor),
         ),
       );
     }
 
-    // 🆕 AJOUT : Vérification de l'abonnement
-    return FutureBuilder<bool>(
-      future: SubscriptionService.isUserSubscribed(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: primaryColor),
-            ),
-          );
-        }
+    if (!_isSubscribed) {
+      return _buildSubscriptionRequired();
+    }
 
-        final bool isSubscribed = snapshot.data ?? false;
-
-        if (!isSubscribed) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.dashboard_outlined,
-                    size: 80,
-                    color: primaryColor,
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    "Tableau de bord premium",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    "Accédez à la gestion complète",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: () => context.go('/pricing'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    ),
-                    child: Text(
-                      "DÉBLOQUER LE DASHBOARD",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+    // NOUVEAU: Vérifier s'il faut afficher les dialogues de choix pour Assistante Maternelle
+    if (!isMAMStructure &&
+        (showAssmatFridgeChoice || showAssmatFreezerChoice)) {
+      final scaffold = Scaffold(
+        backgroundColor: kAppBackgroundColor,
+        body: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft:
+                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
+                  bottomRight:
+                      Radius.circular(MediaQuery.of(context).size.width * 0.06),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.3),
+                    offset: const Offset(0, 4),
+                    blurRadius: 8,
                   ),
                 ],
               ),
-            ),
-          );
-        }
-
-        // NOUVEAU: Vérifier s'il faut afficher les dialogues de choix pour Assistante Maternelle
-        if (!isMAMStructure &&
-            (showAssmatFridgeChoice || showAssmatFreezerChoice)) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Column(
-              children: [
-                // En-tête identique
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [primaryColor, primaryColor.withOpacity(0.85)],
-                    ),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(
-                          MediaQuery.of(context).size.width * 0.06),
-                      bottomRight: Radius.circular(
-                          MediaQuery.of(context).size.width * 0.06),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryColor.withOpacity(0.3),
-                        offset: const Offset(0, 4),
-                        blurRadius: 8,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Configuration",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        structureName,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(16, 16, 16, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Configuration",
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            structureName,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
-
-                // Contenu avec dialogue de choix
-                Expanded(
-                  child: _buildAssmatEquipmentChoiceDialog(),
-                ),
-              ],
+              ),
             ),
-          );
-        }
+            Expanded(
+              child: _buildAssmatEquipmentChoiceDialog(),
+            ),
+          ],
+        ),
+      );
+      return _wrapWithLoadingOverlay(scaffold);
+    }
 
-        // Récupérer les dimensions de l'écran
-        final Size screenSize = MediaQuery.of(context).size;
-        final bool isTablet = screenSize.shortestSide >= 600;
+    // Récupérer les dimensions de l'écran
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          body: Column(
-            children: [
-              // En-tête avec fond de couleur - identique pour phone et tablet
-              Container(
+    final scaffold = Scaffold(
+      backgroundColor: kAppBackgroundColor,
+      body: Column(
+        children: [
+          // En-tête avec fond de couleur - identique pour phone et tablet
+          Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -6067,56 +6095,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               // Contenu principal avec adaptation pour iPad
-              Expanded(
-                child: isTablet
-                    ? _buildTabletContent()
-                    : _buildPhoneContentCentered(),
-              ),
-            ],
+          Expanded(
+            child: isTablet
+                ? _buildTabletContent()
+                : _buildPhoneContentCentered(),
           ),
-
-          // BottomNavigationBar identique
-          bottomNavigationBar: BottomNavigationBar(
-            onTap: _onItemTapped,
-            backgroundColor: Colors.white,
-            selectedItemColor: primaryColor,
-            unselectedItemColor: Colors.grey,
-            showSelectedLabels: true,
-            showUnselectedLabels: true,
-            selectedLabelStyle:
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: const TextStyle(fontSize: 12),
-            type: BottomNavigationBarType.fixed,
-            currentIndex: 0, // Dashboard est sélectionné
-            items: [
-              BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/Icone_Dashboard.png',
-                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
-                label: "Dashboard",
-              ),
-              BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/maison_icon.png',
-                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
-                label: "Accueil",
-              ),
-              BottomNavigationBarItem(
-                icon: Image.asset(
-                  'assets/images/Icone_Echanges.png',
-                  width: screenSize.width * (isTablet ? 0.07 : 0.14),
-                  height: screenSize.width * (isTablet ? 0.07 : 0.14),
-                ),
-                label: "Messages",
-              ),
-            ],
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        onTap: _onItemTapped,
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle:
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 0, // Dashboard est sélectionné
+        items: [
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_Dashboard.png',
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
+            ),
+            label: "Dashboard",
           ),
-        );
-      },
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/maison_icon.png',
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
+            ),
+            label: "Accueil",
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_Echanges.png',
+              width: screenSize.width * (isTablet ? 0.07 : 0.14),
+              height: screenSize.width * (isTablet ? 0.07 : 0.14),
+            ),
+            label: "Messages",
+          ),
+        ],
+      ),
     );
+
+    return _wrapWithLoadingOverlay(scaffold);
   }
 }

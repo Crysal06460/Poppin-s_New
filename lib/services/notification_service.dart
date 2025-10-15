@@ -4,19 +4,24 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:poppins_app/routes.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Top-level background handler (recommandé par firebase_messaging)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   try {
     print('📱 (BG) Message Firebase: ${message.notification?.title}');
+    await NotificationService.handleBackgroundMessage(message);
   } catch (e) {
     // Garder minimal pour l'isolement background
     // ignore: avoid_print
@@ -34,6 +39,12 @@ class NotificationService {
   static bool _isDisplayingNotification = false;
   static bool _authLockActive = false;
   static bool _syncInProgress = false;
+  static const String _persistedNotificationsKey =
+      'notification_service.pending_info_notifications';
+  static bool _restoringPersistedNotifications = false;
+  static final Set<String> _processedNotificationIds = <String>{};
+  static final List<String> _processedNotificationIdOrder = <String>[];
+  static final Set<String> _queuedNotificationIds = <String>{};
 
   /// Initialise le service de notifications
   static Future<void> initialize() async {
@@ -47,6 +58,7 @@ class NotificationService {
 
       // 2. Configuration Firebase commune
       await _initializeFirebase();
+      await _maybeRestorePersistedNotifications();
 
       _isInitialized = true;
       print('✅ Service de notifications initialisé avec succès');
@@ -541,6 +553,10 @@ class NotificationService {
           body: body,
           data: {
             ...message.data,
+            if (!message.data.containsKey('notificationId') &&
+                message.messageId != null &&
+                message.messageId!.isNotEmpty)
+              'notificationId': message.messageId!,
             '_notificationTitle': title,
             '_notificationBody': body,
           },
@@ -717,21 +733,70 @@ class NotificationService {
     required String body,
     required Map<String, dynamic> data,
   }) {
+    final sanitizedData = Map<String, dynamic>.from(data);
+    final notificationId = _extractNotificationId(sanitizedData);
+
+    if (notificationId != null &&
+        (_processedNotificationIds.contains(notificationId) ||
+            _queuedNotificationIds.contains(notificationId))) {
+      print('ℹ️ Notification ignorée (doublon en mémoire) ($notificationId)');
+      return;
+    }
+
     _pendingNotificationQueue.add({
       'title': title,
       'body': body,
-      'data': data,
+      'data': sanitizedData,
     });
+    if (notificationId != null) {
+      _queuedNotificationIds.add(notificationId);
+    }
 
     if (_authLockActive) {
       print('🔒 Notification en attente (auth requise)');
+      unawaited(_persistNotificationRecord(
+        title: title,
+        body: body,
+        data: sanitizedData,
+      ));
       return;
     }
 
     showPendingNotificationWhenReady();
   }
 
+  static String? _extractNotificationId(Map<String, dynamic> data) {
+    final dynamic directId = data['notificationId'] ??
+        data['notification_id'] ??
+        data['id'];
+    if (directId == null) {
+      return null;
+    }
+    final String candidate = directId.toString().trim();
+    if (candidate.isEmpty) {
+      return null;
+    }
+    return candidate;
+  }
+
+  static void _markNotificationAsDelivered(String id) {
+    if (id.isEmpty) {
+      return;
+    }
+    if (_processedNotificationIds.contains(id)) {
+      return;
+    }
+    _processedNotificationIds.add(id);
+    _processedNotificationIdOrder.add(id);
+    const int maxHistory = 120;
+    if (_processedNotificationIdOrder.length > maxHistory) {
+      final String oldest = _processedNotificationIdOrder.removeAt(0);
+      _processedNotificationIds.remove(oldest);
+    }
+  }
+
   static void showPendingNotificationWhenReady() {
+    Future.microtask(_maybeRestorePersistedNotifications);
     if (_pendingNotificationQueue.isEmpty) {
       return;
     }
@@ -746,6 +811,21 @@ class NotificationService {
     if (!required) {
       showPendingNotificationWhenReady();
     } else {
+      for (final payload in _pendingNotificationQueue) {
+        try {
+          final Map<String, dynamic> data = Map<String, dynamic>.from(
+              payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{});
+          final String title = (payload['title'] ?? '').toString();
+          final String body = (payload['body'] ?? '').toString();
+          unawaited(_persistNotificationRecord(
+            title: title.isEmpty ? 'Notification' : title,
+            body: body,
+            data: data,
+          ));
+        } catch (e) {
+          print('⚠️ Impossible de persister une notification en attente: $e');
+        }
+      }
       print('🔒 Verrou notifications activé (auth requise)');
     }
   }
@@ -776,6 +856,10 @@ class NotificationService {
     final payload = _pendingNotificationQueue.removeAt(0);
     final title = (payload['title'] ?? '').toString();
     final body = (payload['body'] ?? '').toString();
+    final Map<String, dynamic> payloadData = Map<String, dynamic>.from(
+        payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{});
+    final String? deliveredNotificationId =
+        _extractNotificationId(payloadData);
 
     try {
       await showDialog<void>(
@@ -804,13 +888,189 @@ class NotificationService {
       );
     } catch (e) {
       print('⚠️ Affichage notification impossible: $e');
+      _pendingNotificationQueue.insert(0, payload);
+      Future.delayed(
+          const Duration(milliseconds: 300), showPendingNotificationWhenReady);
+      return;
     } finally {
       _isDisplayingNotification = false;
+    }
+
+    if (deliveredNotificationId != null) {
+      _queuedNotificationIds.remove(deliveredNotificationId);
+      _markNotificationAsDelivered(deliveredNotificationId);
     }
 
     if (_pendingNotificationQueue.isNotEmpty) {
       Future.delayed(
           const Duration(milliseconds: 120), showPendingNotificationWhenReady);
+    }
+  }
+
+  static Future<void> _maybeRestorePersistedNotifications() async {
+    if (_restoringPersistedNotifications) {
+      return;
+    }
+    if (_authLockActive) {
+      return;
+    }
+    _restoringPersistedNotifications = true;
+    try {
+      final List<Map<String, dynamic>> records =
+          await _consumePersistedNotifications();
+      if (records.isEmpty) {
+        return;
+      }
+
+      print('🔁 Restauration ${records.length} notification(s) persistées');
+      for (final record in records) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(
+            record['data'] as Map<String, dynamic>? ?? <String, dynamic>{});
+        data['restoredFromPersistence'] = true;
+        final title = (record['title'] ?? '').toString();
+        final body = (record['body'] ?? '').toString();
+        _queueInformationalNotification(
+          title: title.isEmpty ? 'Notification' : title,
+          body: body,
+          data: data,
+        );
+      }
+    } finally {
+      _restoringPersistedNotifications = false;
+    }
+  }
+
+  static Future<void> _persistNotificationRecord({
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<String> rawRecords =
+          prefs.getStringList(_persistedNotificationsKey) ?? <String>[];
+      final String? recordId = _extractNotificationId(data);
+
+      if (recordId != null) {
+        rawRecords.removeWhere((encoded) {
+          try {
+            final dynamic decoded = jsonDecode(encoded);
+            if (decoded is! Map) return false;
+            final dynamic storedData = decoded['data'];
+            if (storedData is Map) {
+              final storedId =
+                  (storedData['notificationId'] ??
+                          storedData['notification_id'] ??
+                          storedData['id'])
+                      ?.toString();
+              return storedId != null && storedId == recordId;
+            }
+          } catch (_) {
+            return false;
+          }
+          return false;
+        });
+      }
+
+      rawRecords.add(jsonEncode({
+        'title': title,
+        'body': body,
+        'data': data,
+        'savedAt': DateTime.now().toIso8601String(),
+      }));
+
+      const int maxPersistedRecords = 25;
+      if (rawRecords.length > maxPersistedRecords) {
+        rawRecords.removeRange(
+            0, rawRecords.length - maxPersistedRecords);
+      }
+
+      await prefs.setStringList(_persistedNotificationsKey, rawRecords);
+      print('💾 Notification persistée (${recordId ?? 'sans id'})');
+    } on MissingPluginException catch (e) {
+      print(
+          '⚠️ SharedPreferences indisponible (background) - notification non persistée: $e');
+    } catch (e) {
+      print('⚠️ Impossible de persister la notification: $e');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> _consumePersistedNotifications() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<String> rawRecords =
+          prefs.getStringList(_persistedNotificationsKey) ?? <String>[];
+      if (rawRecords.isEmpty) {
+        return <Map<String, dynamic>>[];
+      }
+
+      await prefs.remove(_persistedNotificationsKey);
+
+      final List<Map<String, dynamic>> parsed = <Map<String, dynamic>>[];
+      for (final encoded in rawRecords) {
+        try {
+          final dynamic decoded = jsonDecode(encoded);
+          if (decoded is! Map) continue;
+          final Map<String, dynamic> data = decoded['data'] is Map
+              ? Map<String, dynamic>.from(
+                  decoded['data'] as Map<dynamic, dynamic>)
+              : <String, dynamic>{};
+          parsed.add({
+            'title': (decoded['title'] ?? '').toString(),
+            'body': (decoded['body'] ?? '').toString(),
+            'data': data,
+          });
+        } catch (e) {
+          print('⚠️ Impossible de décoder une notification persistée: $e');
+        }
+      }
+      return parsed;
+    } on MissingPluginException catch (e) {
+      print(
+          '⚠️ SharedPreferences indisponible (restore) - notifications ignorées: $e');
+      return <Map<String, dynamic>>[];
+    } catch (e) {
+      print('⚠️ Impossible de restaurer les notifications persistées: $e');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> handleBackgroundMessage(RemoteMessage message) async {
+    try {
+      final Map<String, dynamic> data =
+          Map<String, dynamic>.from(message.data);
+      final String type = (data['type'] ?? '').toString();
+      if (!_shouldDisplayInfoPopup(type, data)) {
+        return;
+      }
+
+      final String title = (message.notification?.title ??
+              data['_notificationTitle']?.toString() ??
+              data['title']?.toString() ??
+              '')
+          .trim();
+      final String body = (message.notification?.body ??
+              data['_notificationBody']?.toString() ??
+              data['body']?.toString() ??
+              '')
+          .trim();
+
+      data['_notificationTitle'] = title;
+      data['_notificationBody'] = body;
+      data['persistedFromBackground'] = true;
+      if (!data.containsKey('notificationId') &&
+          message.messageId != null &&
+          message.messageId!.isNotEmpty) {
+        data['notificationId'] = message.messageId!;
+      }
+
+      await _persistNotificationRecord(
+        title: title.isEmpty ? 'Notification' : title,
+        body: body,
+        data: data,
+      );
+    } catch (e) {
+      print('⚠️ Erreur traitement notification en background: $e');
     }
   }
 

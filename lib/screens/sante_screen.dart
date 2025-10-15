@@ -11,6 +11,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../theme/app_colors.dart';
 
 class SanteScreen extends StatefulWidget {
   const SanteScreen({Key? key}) : super(key: key);
@@ -1333,6 +1334,21 @@ class _SanteScreenState extends State<SanteScreen> {
                                       errorMessage = null;
                                     });
 
+                                    if (localCareType == 'Poids') {
+                                      final sanitizedWeight = _weightController
+                                          .text
+                                          .trim()
+                                          .replaceAll(',', '.');
+                                      if (double.tryParse(sanitizedWeight) ==
+                                          null) {
+                                        setState(() {
+                                          errorMessage =
+                                              'Veuillez indiquer un poids valide';
+                                        });
+                                        return;
+                                      }
+                                    }
+
                                     _careTime = localCareTime;
                                     _careType = localCareType;
                                     _medicationType = localMedicationType;
@@ -1620,7 +1636,7 @@ class _SanteScreenState extends State<SanteScreen> {
                                     decimal: true),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.allow(
-                                      RegExp(r'[0-9\.]')),
+                                      RegExp(r'[0-9,.]')),
                                 ],
                                 decoration: InputDecoration(
                                   hintText: 'Ex: 37.2',
@@ -1679,7 +1695,7 @@ class _SanteScreenState extends State<SanteScreen> {
                                     decimal: true),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.allow(
-                                      RegExp(r'[0-9\.]')),
+                                      RegExp(r'[0-9,.]')),
                                 ],
                                 decoration: InputDecoration(
                                   hintText: 'Ex: 9.3',
@@ -1768,6 +1784,26 @@ class _SanteScreenState extends State<SanteScreen> {
                                             .doc(childId)
                                             .collection('sante')
                                             .doc(careId);
+                                        double? newWeight;
+                                        if (localType == 'Poids') {
+                                          final sanitizedWeight = weightCtrl
+                                              .text
+                                              .trim()
+                                              .replaceAll(',', '.');
+                                          newWeight =
+                                              double.tryParse(sanitizedWeight);
+                                          if (newWeight == null) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Veuillez indiquer un poids valide'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                        }
                                         Map<String, dynamic> update = {
                                           'heure': localTime.isNotEmpty
                                               ? localTime
@@ -1784,9 +1820,7 @@ class _SanteScreenState extends State<SanteScreen> {
                                           update.remove('weight');
                                           update.remove('medicationType');
                                         } else if (localType == 'Poids') {
-                                          update['weight'] = double.tryParse(
-                                                  weightCtrl.text) ??
-                                              0;
+                                          update['weight'] = newWeight;
                                           update.remove('temperature');
                                           update.remove('route');
                                           update.remove('medicationType');
@@ -1799,6 +1833,15 @@ class _SanteScreenState extends State<SanteScreen> {
                                         }
 
                                         await docRef.update(update);
+
+                                        if (localType == 'Poids' &&
+                                            newWeight != null) {
+                                          await _updateChildWeightOnProfile(
+                                            structureId: structureId,
+                                            childId: childId,
+                                            weight: newWeight,
+                                          );
+                                        }
                                         Navigator.of(context).pop();
                                       } catch (e) {
                                         ScaffoldMessenger.of(context)
@@ -1828,6 +1871,26 @@ class _SanteScreenState extends State<SanteScreen> {
     );
   }
 
+  Future<void> _updateChildWeightOnProfile({
+    required String structureId,
+    required String childId,
+    double? weight,
+  }) async {
+    try {
+      final update =
+          weight == null ? {'weight': FieldValue.delete()} : {'weight': weight};
+
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .update(update);
+    } catch (e) {
+      print('Erreur lors de la mise à jour du poids: $e');
+    }
+  }
+
   Future<void> _addCareToFirebase(String childId) async {
     try {
       // Trouver l'enfant pour récupérer l'ID de structure
@@ -1855,12 +1918,27 @@ class _SanteScreenState extends State<SanteScreen> {
             double.tryParse(_temperatureController.text) ?? 0;
         careData['route'] = _route;
       } else if (_careType == 'Poids') {
-        careData['weight'] = double.tryParse(_weightController.text) ?? 0;
+        final raw = _weightController.text.trim().replaceAll(RegExp(r','), '.');
+        final weightValue = double.tryParse(raw);
+        if (weightValue != null) {
+          careData['weight'] = weightValue;
+        }
       } else if (_careType == 'Médicaments') {
         careData['medicationType'] = _medicationType;
       }
 
       await careRef.set(careData);
+
+      if (_careType == 'Poids') {
+        final weightValue = careData['weight'];
+        if (weightValue is num) {
+          await _updateChildWeightOnProfile(
+            structureId: structureId,
+            childId: childId,
+            weight: weightValue.toDouble(),
+          );
+        }
+      }
 
       setState(() {
         _careTime = '';
@@ -2207,7 +2285,7 @@ class _SanteScreenState extends State<SanteScreen> {
     return SwipeNavigationWrapper(
       backRoute: '/home', // Swipe vers la droite = retour Home
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: kAppBackgroundColor,
         body: Column(
           children: [
             // 🎉 NOUVEAU : CommonAppBar au lieu de _buildAppBar(context)

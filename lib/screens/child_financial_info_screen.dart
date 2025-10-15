@@ -1122,27 +1122,36 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           structureDoc.data()?['structureName'] ?? 'Structure d\'accueil';
 
       // Liste des parents à qui envoyer des invitations
-      List<Map<String, dynamic>> parentsToInvite = [];
+      final Map<String, Map<String, dynamic>> parentMap = {};
 
       // Ajouter le parent 1 s'il a un email
       if (parent1Data['email'] != null &&
           parent1Data['email'].toString().isNotEmpty) {
-        parentsToInvite.add({
-          'email': parent1Data['email'].toString().toLowerCase(),
-          'firstName': parent1Data['firstName'] ?? '',
-          'lastName': parent1Data['lastName'] ?? '',
+        final email = parent1Data['email'].toString().toLowerCase();
+        parentMap.putIfAbsent(email, () {
+          return {
+            'email': email,
+            'firstName': parent1Data['firstName'] ?? '',
+            'lastName': parent1Data['lastName'] ?? '',
+          };
         });
       }
 
       // Ajouter le parent 2 s'il a un email
       if (parent2Data['email'] != null &&
           parent2Data['email'].toString().isNotEmpty) {
-        parentsToInvite.add({
-          'email': parent2Data['email'].toString().toLowerCase(),
-          'firstName': parent2Data['firstName'] ?? '',
-          'lastName': parent2Data['lastName'] ?? '',
+        final email = parent2Data['email'].toString().toLowerCase();
+        parentMap.putIfAbsent(email, () {
+          return {
+            'email': email,
+            'firstName': parent2Data['firstName'] ?? '',
+            'lastName': parent2Data['lastName'] ?? '',
+          };
         });
       }
+
+      final List<Map<String, dynamic>> parentsToInvite =
+          parentMap.values.toList();
 
       // Vérifier s'il y a des parents à inviter
       if (parentsToInvite.isEmpty) {
@@ -1154,10 +1163,46 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
       // Définir la date d'expiration (30 jours à partir de maintenant)
       final DateTime expirationDate = DateTime.now().add(Duration(days: 30));
 
-      // Envoyer une invitation à chaque parent
+      bool hasSentInvitation = false;
+      bool hasLinkedExistingParent = false;
+
+      // Envoyer une invitation à chaque parent ou rattacher l'enfant
       for (var parentData in parentsToInvite) {
         final String normalizedEmail = parentData['email'];
         print("🔑 Création d'une invitation pour $normalizedEmail");
+
+        final parentUserRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(normalizedEmail);
+        final parentUserDoc = await parentUserRef.get();
+
+        // Données communes pour le document utilisateur parent
+        final Map<String, dynamic> userData = {
+          'role': 'parent',
+          'email': normalizedEmail,
+          'structureId': structureId,
+          'structureName': structureName,
+          'childId': widget.childId,
+          'childName': childData['firstName'] ?? "Enfant",
+          'children': FieldValue.arrayUnion([widget.childId]),
+          'createdChildren': FieldValue.arrayUnion([widget.childId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (!parentUserDoc.exists) {
+          userData['createdAt'] = FieldValue.serverTimestamp();
+          userData['isFirstLogin'] = true;
+        }
+
+        await parentUserRef.set(userData, SetOptions(merge: true));
+
+        if (parentUserDoc.exists) {
+          hasLinkedExistingParent = true;
+          print(
+              "ℹ️ Parent déjà existant, ajout de l'enfant sans renvoyer d'invitation ($normalizedEmail).");
+          // Passer à l'itération suivante sans renvoyer d'invitation
+          continue;
+        }
 
         // 1. Créer l'entrée d'invitation dans Firestore
         await FirebaseFirestore.instance.collection('invitations').add({
@@ -1223,9 +1268,24 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         });
 
         print("✅ Invitation envoyée au parent: $normalizedEmail");
+        hasSentInvitation = true;
       }
 
       if (mounted) {
+        String snackMessage;
+        if (hasSentInvitation && hasLinkedExistingParent) {
+          snackMessage =
+              "Invitations envoyées. Parents existants mis à jour.";
+        } else if (hasSentInvitation) {
+          snackMessage = "Invitations envoyées aux parents.";
+        } else if (hasLinkedExistingParent) {
+          snackMessage =
+              "L'enfant a été rattaché au(x) parent(s) déjà invité(s).";
+        } else {
+          snackMessage =
+              "Aucune invitation nécessaire pour les parents enregistrés.";
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -1233,7 +1293,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text("Invitations envoyées aux parents"),
+                  child: Text(snackMessage),
                 ),
               ],
             ),

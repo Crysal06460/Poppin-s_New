@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'firebase_options.dart';
 import 'routes.dart';
+import 'theme/app_colors.dart';
 
 import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
@@ -205,6 +206,12 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       title: "Poppin's",
       scaffoldMessengerKey: scaffoldMessengerKey,
+      builder: (context, child) {
+        return ColoredBox(
+          color: kAppBackgroundColor,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -221,10 +228,18 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
           primary: primaryBlue,
           secondary: brightCyan,
           error: primaryRed,
-          background: Colors.white,
+          background: kAppBackgroundColor,
           surface: Colors.white,
         ),
+        scaffoldBackgroundColor: kAppBackgroundColor,
+        canvasColor: kAppBackgroundColor,
         fontFamily: 'Roboto',
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: primaryBlue,
