@@ -300,6 +300,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
         // Ajoutez explicitement les données des parents
         'parent1': data['parent1'] ?? {},
         'parent2': data['parent2'] ?? {},
+        'assignedMemberEmail':
+            data['assignedMemberEmail']?.toString().trim() ?? '',
       };
 
       // Extraction des autorisations
@@ -349,6 +351,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      bool assignedMemberUpdated = false;
 
       // Créer le chemin pour la mise à jour
       String updatePath = '';
@@ -401,7 +404,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       if (section == 'financialInfo' &&
           field == 'useMonthlyTable' &&
           value == true) {
-        updateData['assignedMemberEmail'] = currentUserEmail;
+        final currentAssigned =
+            (childData['assignedMemberEmail'] ?? '').toString().trim();
+        if (currentAssigned.isEmpty) {
+          updateData['assignedMemberEmail'] = currentUserEmail;
+          assignedMemberUpdated = true;
+        }
         updateData['lastUpdatedBy'] = currentUserEmail;
         updateData['lastUpdatedAt'] = FieldValue.serverTimestamp();
       }
@@ -414,6 +422,12 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
           .collection('children')
           .doc(widget.childId)
           .update(updateData);
+
+      if (assignedMemberUpdated) {
+        setState(() {
+          childData['assignedMemberEmail'] = currentUserEmail;
+        });
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -502,9 +516,17 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
                 // Assurer l'affichage Dashboard pour MAM: marquer le membre assigné et métadonnées
                 final currentUser = FirebaseAuth.instance.currentUser;
+                bool assignedMemberUpdated = false;
                 if (currentUser != null) {
                   final email = currentUser.email?.toLowerCase() ?? '';
-                  updates['assignedMemberEmail'] = email;
+                  final currentAssigned =
+                      (childData['assignedMemberEmail'] ?? '')
+                          .toString()
+                          .trim();
+                  if (currentAssigned.isEmpty && email.isNotEmpty) {
+                    updates['assignedMemberEmail'] = email;
+                    assignedMemberUpdated = true;
+                  }
                   updates['lastUpdatedBy'] = email;
                   updates['lastUpdatedAt'] = FieldValue.serverTimestamp();
                 }
@@ -525,6 +547,11 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                     financialInfo.remove('careExpenses');
                     financialInfo.remove('mealExpenses');
                     financialInfo.remove('kmExpenses');
+                    if (assignedMemberUpdated &&
+                        updates['assignedMemberEmail'] is String) {
+                      childData['assignedMemberEmail'] =
+                          updates['assignedMemberEmail'];
+                    }
                   });
 
                   Navigator.pop(context, true);
@@ -952,7 +979,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
 
       if (action == 'gallery' || action == 'camera') {
         final XFile? image = await _picker.pickImage(
-          source: action == 'gallery' ? ImageSource.gallery : ImageSource.camera,
+          source:
+              action == 'gallery' ? ImageSource.gallery : ImageSource.camera,
           imageQuality: 70,
           maxWidth: 900,
           maxHeight: 900,
@@ -1176,11 +1204,11 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
           SizedBox(height: 8),
           if (hasDocuments)
             ..._vaccinationDocuments.asMap().entries.map(
-              (entry) => _buildVaccinationDocumentTile(
-                entry.value,
-                entry.key,
-              ),
-            )
+                  (entry) => _buildVaccinationDocumentTile(
+                    entry.value,
+                    entry.key,
+                  ),
+                )
           else
             Padding(
               padding: const EdgeInsets.only(left: 4.0),
@@ -1259,14 +1287,13 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
           IconButton(
             icon: Icon(Icons.visibility_outlined, color: primaryColor),
             tooltip: 'Voir le document',
-            onPressed: url == null
-                ? null
-                : () => _viewDocument(url, fileName),
+            onPressed: url == null ? null : () => _viewDocument(url, fileName),
           ),
           IconButton(
             icon: Icon(Icons.delete_outline, color: Colors.redAccent),
             tooltip: _isReadOnly ? null : 'Retirer ce fichier',
-            onPressed: _isReadOnly ? null : () => _removeVaccinationDocument(index),
+            onPressed:
+                _isReadOnly ? null : () => _removeVaccinationDocument(index),
           ),
         ],
       ),
@@ -1317,8 +1344,8 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       return;
     }
 
-    final Map<String, dynamic>? uploaded =
-        await _selectAndUploadDocument(storageKey: 'vaccin', storageFolder: 'vaccin');
+    final Map<String, dynamic>? uploaded = await _selectAndUploadDocument(
+        storageKey: 'vaccin', storageFolder: 'vaccin');
 
     if (uploaded == null) {
       return;
@@ -1329,8 +1356,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
       'name': uploaded['name'] ?? 'Carnet de vaccination',
       if (uploaded['storagePath'] != null)
         'storagePath': uploaded['storagePath'],
-      if (uploaded['uploadedAt'] != null)
-        'uploadedAt': uploaded['uploadedAt'],
+      if (uploaded['uploadedAt'] != null) 'uploadedAt': uploaded['uploadedAt'],
     };
 
     final List<Map<String, dynamic>> previous =

@@ -2016,6 +2016,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         child: Row(
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 Container(
                   width: 80,
@@ -2074,6 +2075,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                       .collection('exchanges')
                       .where('childId', isEqualTo: enfant['id'])
                       .where('nonLu', isEqualTo: true)
+                      .where('senderType', isEqualTo: 'parent')
                       .snapshots(),
                   builder: (context, snapshot) {
                     final nonLuCount = snapshot.data?.docs.length ?? 0;
@@ -2082,6 +2084,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         right: 0,
                         top: 0,
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Container(
@@ -2103,19 +2106,23 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             ),
                             // Label "Messages non lus"
                             Container(
-                              margin: EdgeInsets.only(top: 2, right: 4),
+                              width: 68,
+                              margin: EdgeInsets.only(top: 4, right: 4),
                               padding: EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: primaryRed.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text(
-                                "Messages non lus",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w500,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "Messages non lus",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ),
@@ -2221,6 +2228,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                           final lastMessage =
                               docs.first.data() as Map<String, dynamic>;
                           final isFile = lastMessage['type'] == 'file';
+                          final bool unreadFromParent =
+                              lastMessage['senderType'] == 'parent' &&
+                                  lastMessage['nonLu'] == true;
 
                           return Padding(
                             padding: EdgeInsets.only(top: 4),
@@ -2237,10 +2247,10 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                       : "",
                               style: TextStyle(
                                 fontSize: 12,
-                                color: lastMessage['nonLu'] == true
+                                color: unreadFromParent
                                     ? Colors.black87
                                     : Colors.grey.shade500,
-                                fontWeight: lastMessage['nonLu'] == true
+                                fontWeight: unreadFromParent
                                     ? FontWeight.bold
                                     : FontWeight.normal,
                               ),
@@ -2581,6 +2591,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             final isFile = lastMessage['type'] == 'file';
                             final timestamp =
                                 lastMessage['timestamp'] as Timestamp?;
+                            final bool unreadFromParent =
+                                lastMessage['senderType'] == 'parent' &&
+                                    lastMessage['nonLu'] == true;
                             final formattedTime = timestamp != null
                                 ? DateFormat('HH:mm').format(timestamp.toDate())
                                 : '';
@@ -2610,13 +2623,12 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                                 : "",
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: lastMessage['nonLu'] == true
+                                          color: unreadFromParent
                                               ? Colors.black87
                                               : Colors.grey.shade600,
-                                          fontWeight:
-                                              lastMessage['nonLu'] == true
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
+                                          fontWeight: unreadFromParent
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
                                         ),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -2678,6 +2690,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                   .collection('exchanges')
                   .where('childId', isEqualTo: enfant['id'])
                   .where('nonLu', isEqualTo: true)
+                  .where('senderType', isEqualTo: 'parent')
                   .snapshots(),
               builder: (context, snapshot) {
                 final nonLuCount = snapshot.data?.docs.length ?? 0;

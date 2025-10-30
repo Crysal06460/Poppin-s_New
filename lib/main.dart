@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -10,9 +13,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
-import 'firebase_options.dart';
 import 'routes.dart';
 import 'theme/app_colors.dart';
+import 'firebase_options.dart';
 
 import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
@@ -26,12 +29,48 @@ const Color lightBlue = Color(0xFFDFE9F2);
 const Color brightCyan = Color(0xFF05C7F2);
 const Color primaryYellow = Color(0xFFF2B705);
 
+bool _isTabletView(ui.FlutterView? view) {
+  if (view == null) return false;
+  final physicalSize = view.physicalSize;
+  double devicePixelRatio = view.devicePixelRatio;
+  if (devicePixelRatio == 0) {
+    final dispatcher = WidgetsBinding.instance.platformDispatcher;
+    if (dispatcher.views.isNotEmpty) {
+      devicePixelRatio = dispatcher.views.first.devicePixelRatio;
+    }
+  }
+  if (devicePixelRatio == 0) return false;
+  final logicalWidth = physicalSize.width / devicePixelRatio;
+  final logicalHeight = physicalSize.height / devicePixelRatio;
+  final shortestSide = math.min(logicalWidth, logicalHeight);
+  return shortestSide >= 600;
+}
+
+bool _detectTablet() {
+  final dispatcher = WidgetsBinding.instance.platformDispatcher;
+  final ui.FlutterView? view = dispatcher.views.isNotEmpty
+      ? dispatcher.views.first
+      : dispatcher.implicitView;
+  return _isTabletView(view);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  final bool isTablet = _detectTablet();
+
+  final orientations = isTablet
+      ? const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]
+      : const [
+          DeviceOrientation.portraitUp,
+        ];
+
+  await SystemChrome.setPreferredOrientations(orientations);
 
   // ✅ CORRECTION : Firebase.initializeApp() AVANT d'utiliser FirebaseMessaging
   await Firebase.initializeApp();
@@ -122,11 +161,13 @@ void main() async {
   }
 
   print('🚀 Démarrage Poppins - Fix Android appliqué, iOS préservé');
-  runApp(const PoppinsApp());
+  runApp(PoppinsApp(isTablet: isTablet));
 }
 
 class PoppinsApp extends StatefulWidget {
-  const PoppinsApp({Key? key}) : super(key: key);
+  const PoppinsApp({Key? key, required this.isTablet}) : super(key: key);
+
+  final bool isTablet;
 
   @override
   State<PoppinsApp> createState() => _PoppinsAppState();
@@ -137,7 +178,7 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _setPortraitOrientation();
+    _applyPreferredOrientations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService.synchronizeMissedNotifications();
       NotificationService.showPendingNotificationWhenReady();
@@ -156,7 +197,7 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
-      _setPortraitOrientation();
+      _applyPreferredOrientations();
       try {
         NotificationService.clearBadge();
         NotificationService.synchronizeMissedNotifications();
@@ -194,10 +235,18 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     }
   }
 
-  void _setPortraitOrientation() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
+  void _applyPreferredOrientations() {
+    final orientations = widget.isTablet
+        ? const [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]
+        : const [
+            DeviceOrientation.portraitUp,
+          ];
+    SystemChrome.setPreferredOrientations(orientations);
   }
 
   @override

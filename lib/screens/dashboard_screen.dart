@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -29,6 +31,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
 import '../theme/app_colors.dart';
+import '../services/structure_notification_service.dart';
+import 'admin_broadcast_notification_screen.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
@@ -77,6 +81,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _structureOwnerEmail;
   bool _currentMemberIsAdmin = false;
   Set<String> _delegatedChildIds = {};
+  String? _structureId;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _structureNotificationSub;
+  Map<String, dynamic>? _latestStructureNotification;
+  String? _latestStructureNotificationId;
+  bool _hasUnreadStructureNotification = false;
+  bool _showNotificationAdminButton = false;
 
   static const int _rssMaxItems = 1;
   static const Duration _rssRefreshCooldown = Duration(minutes: 15);
@@ -137,6 +148,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _refreshDelegationsCount();
     });
     _checkSubscriptionStatus();
+  }
+
+  @override
+  void dispose() {
+    _structureNotificationSub?.cancel();
+    super.dispose();
   }
 
   void _showPhotoAdministration() {
@@ -211,7 +228,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: () => context.go('/pricing'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               ),
               child: const Text(
                 "DÉBLOQUER LE DASHBOARD",
@@ -1786,7 +1804,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _openMamAdministration() {
     final List<Widget> actions = [
       _sheetAction(
-        label: 'Modifier coordonnées de la structure',
+        label: 'Modifier coordonnées',
         onTap: () => context.go('/structure-management'),
         bulletColor: _tileBlue,
       ),
@@ -1870,7 +1888,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: _tileRed,
         children: [
           _sheetAction(
-            label: 'Planning entretien (qui fait quoi)',
+            label: 'Planning entretien',
             onTap: () => context.go('/cleaning-schedule'),
             bulletColor: _tileRed,
           ),
@@ -1883,7 +1901,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             bulletColor: _tileRed,
           ),
           _sheetAction(
-            label: 'Délégations / Remplacement',
+            label: 'Délégations',
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (c) => const DelegationsScreen()),
@@ -1937,14 +1955,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'Fonctionnalité disponible avec l\'abonnement professionnel.';
         actions.addAll([
           _sheetAction(
-            label: 'Planning entretien (qui fait quoi)',
+            label: 'Planning entretien',
             onTap: () {},
             bulletColor: _tileRed,
             enabled: false,
             disabledMessage: lockedMessage,
           ),
           _sheetAction(
-            label: 'Délégations / Remplacement',
+            label: 'Délégations',
             onTap: () {},
             bulletColor: _tileRed,
             enabled: false,
@@ -1999,7 +2017,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             disabledMessage: lockedMessage,
           ),
           _sheetAction(
-            label: 'Profils enfants complets (santé, besoins, alimentation…)',
+            label: 'Profils enfants (santé, besoins, alimentation…)',
             onTap: () {},
             bulletColor: _tileCyan,
             enabled: false,
@@ -2048,7 +2066,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bulletColor: _tileCyan,
         ),
         _sheetAction(
-          label: 'Profils enfants complets (santé, besoins, alimentation…)',
+          label: 'Profils enfants (santé, besoins, alimentation…)',
           onTap: _showChildProfilesSelection,
           bulletColor: _tileCyan,
         ),
@@ -2087,7 +2105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bulletColor: _tileYellow,
         ),
         _sheetAction(
-          label: 'Historique complet (présences, repas, sieste…)',
+          label: 'Historique (présences, repas, sieste…)',
           onTap: _showHistorySelection,
           bulletColor: _tileYellow,
         ),
@@ -3362,6 +3380,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
+      _currentUserEmail = user.email?.toLowerCase() ?? '';
+
       // D'abord, vérifier si l'utilisateur est un membre MAM
       final userEmail = user.email?.toLowerCase() ?? '';
       final userDoc = await FirebaseFirestore.instance
@@ -3399,6 +3419,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final Map<String, dynamic> structureData =
           structureSnapshot.data() ?? <String, dynamic>{};
+
+      _structureId = structureId;
+      _listenToStructureNotifications(structureId);
+
+      final bool canBroadcastNotifications =
+          userEmail == 'cbeylet06@gmail.com' ||
+              structureId == 'e5udQot4UtYxsrOoqaHZ2n4VEkk1';
 
       final dynamic showNewsRaw = structureData['showDashboardNews'];
       final bool hasNewsPreference = showNewsRaw is bool;
@@ -3451,6 +3478,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _lastRssFetch = null;
         }
         isLoading = false;
+        _showNotificationAdminButton = canBroadcastNotifications;
       });
 
       if (newRss.isNotEmpty && showNewsPreference) {
@@ -3461,6 +3489,269 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print("Erreur lors du chargement: $e");
       setState(() => isLoading = false);
     }
+  }
+
+  void _listenToStructureNotifications(String structureId) {
+    if (structureId.isEmpty) return;
+    _structureNotificationSub?.cancel();
+    _structureNotificationSub =
+        StructureNotificationService.collection(structureId)
+            .orderBy('createdAt', descending: true)
+            .limit(1)
+            .snapshots()
+            .listen(
+      (snapshot) {
+        if (!mounted) return;
+        if (snapshot.docs.isEmpty) {
+          setState(() {
+            _latestStructureNotification = null;
+            _latestStructureNotificationId = null;
+            _hasUnreadStructureNotification = false;
+          });
+          return;
+        }
+
+        final doc = snapshot.docs.first;
+        final data = doc.data();
+        final List<dynamic> readByRaw;
+        if (data['readBy'] is List) {
+          readByRaw = List<dynamic>.from(data['readBy'] as List);
+        } else {
+          readByRaw = const [];
+        }
+        final List<String> readBy =
+            readByRaw.map((e) => e.toString()).toList(growable: false);
+        final String normalizedEmail = _currentUserEmail.toLowerCase();
+        final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final bool isRead = (normalizedEmail.isNotEmpty &&
+                readBy.map((e) => e.toLowerCase()).contains(normalizedEmail)) ||
+            (uid.isNotEmpty && readBy.contains(uid));
+
+        setState(() {
+          _latestStructureNotification = data;
+          _latestStructureNotificationId = doc.id;
+          _hasUnreadStructureNotification = !isRead;
+        });
+      },
+      onError: (error) {
+        print('Erreur écoute notifications structure: $error');
+      },
+    );
+  }
+
+  Future<void> _markLatestNotificationAsRead() async {
+    final structureId = _structureId;
+    final notificationId = _latestStructureNotificationId;
+    if (structureId == null ||
+        structureId.isEmpty ||
+        notificationId == null ||
+        notificationId.isEmpty) {
+      return;
+    }
+
+    String readerId = _currentUserEmail;
+    if (readerId.isEmpty) {
+      readerId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    }
+    if (readerId.isEmpty) return;
+
+    try {
+      await StructureNotificationService.markAsRead(
+        structureId: structureId,
+        notificationId: notificationId,
+        readerId: readerId,
+      );
+      if (mounted) {
+        setState(() {
+          _hasUnreadStructureNotification = false;
+        });
+      }
+    } catch (e) {
+      print('Erreur marquage notification lue: $e');
+    }
+  }
+
+  Future<void> _showNotificationsPopup() async {
+    if (!mounted) return;
+    final notification = _latestStructureNotification;
+    if (notification == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: const Text('Notifications'),
+            content: const Text('Aucune notification récente à afficher.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('FERMER'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    if (_hasUnreadStructureNotification) {
+      await _markLatestNotificationAsRead();
+    }
+
+    final String title =
+        (notification['title'] ?? 'Notification').toString().trim();
+    final String body = (notification['body'] ?? '').toString().trim();
+    final dynamic createdAtRaw = notification['createdAt'];
+    DateTime? createdAt;
+    if (createdAtRaw is Timestamp) {
+      createdAt = createdAtRaw.toDate();
+    } else if (createdAtRaw is int) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(createdAtRaw);
+    } else if (createdAtRaw is String) {
+      createdAt = DateTime.tryParse(createdAtRaw);
+    }
+
+    final String? formattedDate = createdAt != null
+        ? DateFormat('EEEE d MMMM yyyy à HH:mm', 'fr_FR').format(createdAt)
+        : null;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            title.isEmpty ? 'Notification' : title,
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (formattedDate != null) ...[
+                Text(
+                  formattedDate,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                body.isEmpty ? 'Aucun contenu supplémentaire.' : body,
+                style: const TextStyle(fontSize: 16, height: 1.4),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('FERMER'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openNotificationsAdminPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AdminBroadcastNotificationScreen(),
+      ),
+    );
+  }
+
+  Widget _buildNotificationAdminButton(bool isTablet) {
+    final double fontSize =
+        (isTablet ? 14.0 : 12.0) * MediaQuery.of(context).textScaleFactor;
+    return OutlinedButton.icon(
+      onPressed: _openNotificationsAdminPage,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withOpacity(0.7)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: const Icon(Icons.notifications_active),
+      label: Text(
+        'Publier',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationChip(Size screenSize, bool isTablet) {
+    final bool hasNotification = _latestStructureNotification != null;
+    final bool hasUnread = _hasUnreadStructureNotification;
+
+    final double horizontalPadding =
+        screenSize.width * (isTablet ? 0.015 : 0.035);
+    final double verticalPadding =
+        screenSize.height * (isTablet ? 0.008 : 0.006);
+    final double rawFontSize = screenSize.width * (isTablet ? 0.018 : 0.032);
+    final double fontSize = rawFontSize.clamp(12.0, 18.0).toDouble();
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(26),
+      onTap: _showNotificationsPopup,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(hasNotification ? 0.22 : 0.12),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: Colors.white.withOpacity(hasUnread ? 0.95 : 0.5),
+            width: hasUnread ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Notifications',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (hasUnread)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '1',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: fontSize * 0.75,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showScheduleModification() async {
@@ -4015,7 +4306,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildTabletActionItem(
           icon: Icons.history,
           title: "Consulter l'historique",
-          description: "Voir l'historique complet par enfant et par date",
+          description: "Voir l'historique par enfant et par date",
           onTap: _showHistorySelection,
           maxWidth: maxWidth,
         ),
@@ -4128,7 +4419,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
           icon: Icons.edit_note,
-          title: "Modifier les profils complets",
+          title: "Modifier les profils",
           description: "Éditer toutes les informations de l'enfant",
           onTap: _showChildProfilesSelection,
           maxWidth: maxWidth,
@@ -5635,7 +5926,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     _buildActionItem(
                       icon: Icons.edit_note,
-                      title: "Modifier les profils complets",
+                      title: "Modifier les profils",
                       onTap: _showChildProfilesSelection,
                     ),
                     _buildActionItem(
@@ -5977,128 +6268,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           // En-tête avec fond de couleur - identique pour phone et tablet
           Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      primaryColor,
-                      primaryColor.withOpacity(0.85),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(screenSize.width * 0.06),
-                    bottomRight: Radius.circular(screenSize.width * 0.06),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withOpacity(0.3),
-                      offset: const Offset(0, 4),
-                      blurRadius: 8,
-                    ),
-                  ],
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  primaryColor,
+                  primaryColor.withOpacity(0.85),
+                ],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(screenSize.width * 0.06),
+                bottomRight: Radius.circular(screenSize.width * 0.06),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.3),
+                  offset: const Offset(0, 4),
+                  blurRadius: 8,
                 ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      screenSize.width * (isTablet ? 0.03 : 0.04),
-                      screenSize.height * 0.02,
-                      screenSize.width * (isTablet ? 0.03 : 0.04),
-                      screenSize.height * (isTablet ? 0.02 : 0.025),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Date du jour (sans le titre 'Tableau de bord')
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal:
-                                  screenSize.width * (isTablet ? 0.018 : 0.03),
-                              vertical:
-                                  screenSize.height * (isTablet ? 0.01 : 0.006),
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(
-                                screenSize.width * (isTablet ? 0.025 : 0.05),
-                              ),
-                            ),
-                            child: Text(
-                              DateFormat('EEEE d MMMM', 'fr_FR')
-                                  .format(DateTime.now()),
-                              style: TextStyle(
-                                fontSize: screenSize.width *
-                                    (isTablet ? 0.018 : 0.035),
-                                color: Colors.white.withOpacity(0.95),
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+              ],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * 0.02,
+                  screenSize.width * (isTablet ? 0.03 : 0.04),
+                  screenSize.height * (isTablet ? 0.02 : 0.025),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date du jour (sans le titre 'Tableau de bord')
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              screenSize.width * (isTablet ? 0.018 : 0.03),
+                          vertical:
+                              screenSize.height * (isTablet ? 0.01 : 0.006),
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(
+                            screenSize.width * (isTablet ? 0.025 : 0.05),
                           ),
                         ),
-                        SizedBox(height: 8),
-                        // Nom de la structure
-                        Text(
-                          structureName,
+                        child: Text(
+                          DateFormat('EEEE d MMMM', 'fr_FR')
+                              .format(DateTime.now()),
                           style: TextStyle(
                             fontSize:
-                                screenSize.width * (isTablet ? 0.024 : 0.045),
+                                screenSize.width * (isTablet ? 0.018 : 0.035),
+                            color: Colors.white.withOpacity(0.95),
                             fontWeight: FontWeight.w500,
-                            color: Colors.white,
                           ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        // Afficher le type de structure si c'est une MAM
-                        if (isMAMStructure)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    "MAM",
-                                    style: TextStyle(
-                                      fontSize: screenSize.width *
-                                          (isTablet ? 0.016 : 0.03),
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  // ✅ CORRECTION : Affichage correct selon la situation
-                                  _getMAMStatusText(),
-                                  style: TextStyle(
-                                    fontSize: screenSize.width *
-                                        (isTablet ? 0.016 : 0.03),
-                                    color: Colors.white.withOpacity(0.9),
-                                  ),
-                                ),
-                              ],
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    // Nom de la structure + accès notifications
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            structureName,
+                            style: TextStyle(
+                              fontSize:
+                                  screenSize.width * (isTablet ? 0.024 : 0.045),
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ),
+                        if ((_structureId ?? '').isNotEmpty) ...[
+                          SizedBox(
+                            width: screenSize.width * (isTablet ? 0.02 : 0.04),
+                          ),
+                          _buildNotificationChip(screenSize, isTablet),
+                        ],
+                        if (_showNotificationAdminButton) ...[
+                          SizedBox(
+                            width: screenSize.width * (isTablet ? 0.015 : 0.03),
+                          ),
+                          _buildNotificationAdminButton(isTablet),
+                        ],
                       ],
                     ),
-                  ),
+                    // Afficher le type de structure si c'est une MAM
+                    if (isMAMStructure)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "MAM",
+                                style: TextStyle(
+                                  fontSize: screenSize.width *
+                                      (isTablet ? 0.016 : 0.03),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              // ✅ CORRECTION : Affichage correct selon la situation
+                              _getMAMStatusText(),
+                              style: TextStyle(
+                                fontSize: screenSize.width *
+                                    (isTablet ? 0.016 : 0.03),
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
+            ),
+          ),
 
-              // Contenu principal avec adaptation pour iPad
+          // Contenu principal avec adaptation pour iPad
           Expanded(
-            child: isTablet
-                ? _buildTabletContent()
-                : _buildPhoneContentCentered(),
+            child:
+                isTablet ? _buildTabletContent() : _buildPhoneContentCentered(),
           ),
         ],
       ),

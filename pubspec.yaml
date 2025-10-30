@@ -3,7 +3,7 @@ description: "Une application pour la gestion des enfants en crèche."
 
 publish_to: 'none'
 
-version: 2.0.7
+version: 2.0.10
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -50,8 +50,6 @@ dependencies:
   video_thumbnail: ^0.5.3
   xml: ^6.5.0
   local_auth: ^2.2.0
-  firebase_messaging: ^15.1.2
-  firebase_in_app_messaging: ^0.8.0+14
 
   # 🛒 IN-APP PURCHASE - Version mise à jour pour les abonnements
   in_app_purchase: ^3.1.11

@@ -28,14 +28,41 @@ class _RecapScreenState extends State<RecapScreen> {
   bool isLoading = true;
   String structureName = "Chargement...";
   int _selectedIndex = 1;
+  static const String _sortDateKey = '_sortDate';
   int _convertHoursToMinutes(String timeStr) {
-    if (timeStr == '--:--') return 0;
+    if (timeStr.isEmpty || timeStr == '--:--') return 0;
+    final raw = timeStr.trim();
+    if (raw.isEmpty) return 0;
+
+    String normalized = raw.replaceAll(
+      RegExp('h', caseSensitive: false),
+      ':',
+    );
+    normalized = normalized.replaceAll(' ', '');
+
     try {
-      final parts = timeStr.split(':');
-      if (parts.length == 2) {
-        final hours = int.tryParse(parts[0]) ?? 0;
-        final minutes = int.tryParse(parts[1]) ?? 0;
-        return hours * 60 + minutes;
+      final colonParts = normalized.split(':');
+      if (colonParts.length >= 2) {
+        final hours = int.tryParse(colonParts[0]) ?? 0;
+        final minutes = int.tryParse(colonParts[1]) ?? 0;
+        return (hours * 60) + minutes;
+      }
+
+      final match = RegExp(r'(\d{1,2})\D*(\d{1,2})').firstMatch(raw);
+      if (match != null) {
+        final hours = int.tryParse(match.group(1)!) ?? 0;
+        final minutes = int.tryParse(match.group(2)!) ?? 0;
+        return (hours * 60) + minutes;
+      }
+
+      final digitsOnly = RegExp(r'\d+').stringMatch(raw);
+      if (digitsOnly != null && digitsOnly.length >= 3) {
+        final value = int.tryParse(digitsOnly);
+        if (value != null) {
+          final hours = value ~/ 100;
+          final minutes = value % 100;
+          return (hours * 60) + minutes;
+        }
       }
     } catch (e) {
       print("Erreur lors de la conversion de l'heure: $e");
@@ -293,6 +320,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'heure': data['heure'] ?? _formatTimestamp(data['date']),
           'details': details,
           'observations': data['observations'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -316,6 +344,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'duration': data['duration'] ?? '',
           'participation': data['participation'] ?? '',
           'observations': data['observations'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -338,6 +367,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'duration': data['duration'] ?? '',
           'qualite': data['qualite'] ?? '',
           'observations': data['observations'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -363,6 +393,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'heure': data['heure'] ?? _formatTimestamp(data['date']),
           'details': details,
           'observations': data['observations'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -395,6 +426,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'type': data['type'] ?? 'Soin',
           'details': details,
           'observations': data['observations'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -541,16 +573,24 @@ class _RecapScreenState extends State<RecapScreen> {
           // Injecter au plus deux éléments (Arrivée, Départ)
           for (final h in finalHoraires) {
             if (h['actionType'] == 'arrivee') {
+              final rawHour = (h['heure'] ?? '00:00').toString();
               tempRecapData['horaires']!.add({
-                'heure': h['heure'],
+                'heure': rawHour,
                 'type': 'arrivee',
                 'details': 'Arrivée',
+                _sortDateKey: todayStart.add(
+                  Duration(minutes: _convertHoursToMinutes(rawHour)),
+                ),
               });
             } else if (h['actionType'] == 'depart') {
+              final rawHour = (h['heure'] ?? '00:00').toString();
               tempRecapData['horaires']!.add({
-                'heure': h['heure'],
+                'heure': rawHour,
                 'type': 'depart',
                 'details': 'Départ',
+                _sortDateKey: todayStart.add(
+                  Duration(minutes: _convertHoursToMinutes(rawHour)),
+                ),
               });
             }
           }
@@ -586,6 +626,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'details': data['title'] ?? 'Photo',
           'observations': data['description'] ?? '',
           'photoUrl': data['photoUrl'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -608,6 +649,7 @@ class _RecapScreenState extends State<RecapScreen> {
           'type': data['type'] ?? 'Transmission',
           'details': data['title'] ?? 'Message',
           'observations': data['content'] ?? '',
+          _sortDateKey: _extractSortDate(data['date']),
         });
       }
 
@@ -616,6 +658,10 @@ class _RecapScreenState extends State<RecapScreen> {
       tempRecapData.forEach((category, items) {
         totalActivites += items.length;
       });
+
+      for (final entry in tempRecapData.entries) {
+        _sortRecapItems(entry.value);
+      }
 
       setState(() {
         recapDataByChild[childId] = tempRecapData;
@@ -631,6 +677,46 @@ class _RecapScreenState extends State<RecapScreen> {
       return DateFormat('HH:mm').format(timestamp.toDate());
     }
     return '';
+  }
+
+  DateTime? _extractSortDate(dynamic raw) {
+    if (raw is Timestamp) {
+      return raw.toDate();
+    }
+    if (raw is DateTime) {
+      return raw;
+    }
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return DateTime.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  void _sortRecapItems(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) return;
+    items.sort((a, b) {
+      final DateTime? dateA = a[_sortDateKey] as DateTime?;
+      final DateTime? dateB = b[_sortDateKey] as DateTime?;
+      if (dateA != null && dateB != null) {
+        return dateA.compareTo(dateB);
+      }
+      if (dateA != null) return -1;
+      if (dateB != null) return 1;
+
+      final String heureA = (a['heure'] ?? '00:00').toString();
+      final String heureB = (b['heure'] ?? '00:00').toString();
+      final int minutesA = _convertHoursToMinutes(heureA);
+      final int minutesB = _convertHoursToMinutes(heureB);
+      return minutesA.compareTo(minutesB);
+    });
+
+    for (final item in items) {
+      item.remove(_sortDateKey);
+    }
   }
 
   void _onItemTapped(int index) {

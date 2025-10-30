@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +21,26 @@ class ActivityScreen extends StatefulWidget {
 
 bool isTablet(BuildContext context) {
   return MediaQuery.of(context).size.shortestSide >= 600;
+}
+
+class _MaxWordInputFormatter extends TextInputFormatter {
+  _MaxWordInputFormatter(this.maxWords);
+
+  final int maxWords;
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final trimmed = newValue.text.trim();
+    final words = trimmed.isEmpty
+        ? <String>[]
+        : trimmed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).toList();
+
+    if (words.length <= maxWords) {
+      return newValue;
+    }
+    return oldValue;
+  }
 }
 
 class _ActivityScreenState extends State<ActivityScreen> {
@@ -90,6 +111,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
       default:
         return Icons.sentiment_neutral;
     }
+  }
+
+  String _formatActivityLabel(String? raw) {
+    if (raw == null) return '';
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final words = trimmed
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.length <= 3) {
+      return words.join(' ');
+    }
+    return '${words.take(3).join(' ')}...';
   }
 
   // Confirmation & suppression d'une activité
@@ -352,7 +387,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   // Fonction pour ajouter une activité personnalisée
   Future<bool> _addCustomActivity(String newActivity) async {
-    if (newActivity.trim().isEmpty) return false;
+    final trimmed = newActivity.trim();
+    if (trimmed.isEmpty) return false;
+
+    final words =
+        trimmed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).toList();
+
+    if (words.length > 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum 3 mots pour une activité personnalisée.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
+
+    final normalized = words.join(' ');
 
     try {
       if (structureId.isEmpty) {
@@ -360,8 +411,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       }
 
       setState(() {
-        if (!customActivityTypes.contains(newActivity.trim())) {
-          customActivityTypes.add(newActivity.trim());
+        if (!customActivityTypes.contains(normalized)) {
+          customActivityTypes.add(normalized);
         }
       });
 
@@ -375,13 +426,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Activité ajoutée avec succès'),
-          backgroundColor: primaryColor,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Activité ajoutée avec succès'),
+            backgroundColor: primaryColor,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
 
       return true;
     } catch (e) {
@@ -408,17 +461,34 @@ class _ActivityScreenState extends State<ActivityScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text('Ajouter une activité personnalisée'),
-          content: TextField(
-            controller: newActivityController,
-            decoration: InputDecoration(
-              hintText: "Nom de l'activité",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: newActivityController,
+                decoration: InputDecoration(
+                  hintText: "Nom de l'activité",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+                autofocus: true,
+                inputFormatters: [
+                  _MaxWordInputFormatter(3),
+                ],
               ),
-              filled: true,
-              fillColor: Colors.grey.shade100,
-            ),
-            autofocus: true,
+              SizedBox(height: 6),
+              Text(
+                '3 activités maximum',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -431,9 +501,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (newActivityController.text.trim().isNotEmpty) {
-                  await _addCustomActivity(newActivityController.text);
-                  Navigator.pop(dialogContext);
-                  _showAddActivityPopup(childId);
+                  final added =
+                      await _addCustomActivity(newActivityController.text);
+                  if (added) {
+                    Navigator.pop(dialogContext);
+                    _showAddActivityPopup(childId);
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -777,6 +850,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(
                                 _getActivityTypeIcon(activityData['type']),
@@ -784,15 +858,22 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 size: isTabletDevice ? 24 : 20,
                               ),
                               SizedBox(width: 12),
-                              Text(
-                                activityData['type'],
-                                style: TextStyle(
-                                  fontSize: isTabletDevice ? 18 : 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: primaryColor,
+                              Expanded(
+                                child: Text(
+                                  _formatActivityLabel(
+                                    activityData['type'],
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: primaryColor,
+                                  ),
+                                  softWrap: true,
+                                  overflow: TextOverflow.visible,
+                                  textAlign: TextAlign.start,
                                 ),
                               ),
-                              Spacer(),
+                              SizedBox(width: 12),
                               Icon(
                                 _getAttitudeIcon(
                                     activityData['attitude'] ?? 'Curieux'),
@@ -800,12 +881,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 size: isTabletDevice ? 22 : 18,
                               ),
                               SizedBox(width: 8),
-                              Text(
-                                "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}",
-                                style: TextStyle(
-                                  fontSize: isTabletDevice ? 18 : 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryColor,
+                              Flexible(
+                                child: Text(
+                                  "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}",
+                                  style: TextStyle(
+                                    fontSize: isTabletDevice ? 18 : 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryColor,
+                                  ),
+                                  softWrap: true,
+                                  overflow: TextOverflow.visible,
                                 ),
                               ),
                             ],
@@ -968,17 +1053,34 @@ class _ActivityScreenState extends State<ActivityScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text('Ajouter une activité personnalisée'),
-          content: TextField(
-            controller: newActivityController,
-            decoration: InputDecoration(
-              hintText: "Nom de l'activité",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: newActivityController,
+                decoration: InputDecoration(
+                  hintText: "Nom de l'activité",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+                autofocus: true,
+                inputFormatters: [
+                  _MaxWordInputFormatter(3),
+                ],
               ),
-              filled: true,
-              fillColor: Colors.grey.shade100,
-            ),
-            autofocus: true,
+              SizedBox(height: 6),
+              Text(
+                '3 activités maximum',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -986,10 +1088,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
               child: Text('ANNULER', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (newActivityController.text.trim().isNotEmpty) {
-                  _addCustomActivity(newActivityController.text);
-                  Navigator.pop(context);
+                  final added =
+                      await _addCustomActivity(newActivityController.text);
+                  if (added) {
+                    Navigator.pop(context);
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -1031,7 +1136,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         itemCount: customActivityTypes.length,
                         itemBuilder: (context, index) {
                           return ListTile(
-                            title: Text(customActivityTypes[index]),
+                            title: Text(
+                              _formatActivityLabel(customActivityTypes[index]),
+                              softWrap: true,
+                              textAlign: TextAlign.start,
+                            ),
                             trailing: IconButton(
                               icon: Icon(
                                 Icons.delete_outline,
@@ -1356,15 +1465,25 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                                         : 16,
                                                   ),
                                                   SizedBox(width: 8),
-                                                  Text(
-                                                    value,
-                                                    style: TextStyle(
-                                                      fontSize: isTabletDevice
-                                                          ? 16
-                                                          : 14,
-                                                      color: primaryColor,
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                                  Expanded(
+                                                    child: Text(
+                                                      _formatActivityLabel(
+                                                        value,
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            isTabletDevice
+                                                                ? 16
+                                                                : 14,
+                                                        color: primaryColor,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                      softWrap: true,
+                                                      overflow:
+                                                          TextOverflow.visible,
+                                                      textAlign:
+                                                          TextAlign.start,
                                                     ),
                                                   ),
                                                 ],
@@ -1379,7 +1498,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                                 vertical: 8,
                                               ),
                                               child: Text(
-                                                value,
+                                                _formatActivityLabel(value),
                                                 style: TextStyle(
                                                   fontSize:
                                                       isTabletDevice ? 16 : 14,
@@ -2050,7 +2169,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   }
                                   return DropdownMenuItem<String>(
                                     value: value,
-                                    child: Text(value),
+                                    child: Text(
+                                      _formatActivityLabel(value),
+                                      softWrap: true,
+                                      textAlign: TextAlign.start,
+                                    ),
                                   );
                                 }).toList(),
                                 onChanged: (val) {
@@ -2602,6 +2725,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       activityData['heure'],
@@ -2612,11 +2736,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                       ),
                                     ),
                                     SizedBox(width: 8),
-                                    Text(
-                                      activityData['type'],
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.black54,
+                                    Expanded(
+                                      child: Text(
+                                        _formatActivityLabel(
+                                          activityData['type'],
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.black54,
+                                        ),
+                                        softWrap: true,
+                                        overflow: TextOverflow.visible,
+                                        textAlign: TextAlign.start,
                                       ),
                                     ),
                                   ],
@@ -2946,6 +3077,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         activityData['heure'],
@@ -2956,11 +3088,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         ),
                                       ),
                                       SizedBox(width: 8),
-                                      Text(
-                                        activityData['type'],
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.black54,
+                                      Expanded(
+                                        child: Text(
+                                          _formatActivityLabel(
+                                            activityData['type'],
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.black54,
+                                          ),
+                                          softWrap: true,
+                                          overflow: TextOverflow.visible,
+                                          textAlign: TextAlign.start,
                                         ),
                                       ),
                                     ],

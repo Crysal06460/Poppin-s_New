@@ -1310,37 +1310,6 @@ class _RepasScreenState extends State<RepasScreen> {
                                   );
                                   return;
                                 }
-                                if (isSolide &&
-                                    _solideController.text.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                          "Veuillez décrire le repas solide"),
-                                      backgroundColor: primaryRed,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                if (isMixte &&
-                                    _mixteController.text.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                          "Veuillez décrire le repas mixte"),
-                                      backgroundColor: primaryRed,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
                                 setState(() {
                                   _mealTime = localMealTime;
                                   _selectedMoment = localMoment;
@@ -2089,39 +2058,6 @@ class _RepasScreenState extends State<RepasScreen> {
                                   return;
                                 }
 
-                                if (isSolide &&
-                                    solideCtrl.text.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                        "Veuillez décrire le repas solide",
-                                      ),
-                                      backgroundColor: primaryRed,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                if (isMixte && mixteCtrl.text.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                        "Veuillez décrire le repas mixte",
-                                      ),
-                                      backgroundColor: primaryRed,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-
                                 try {
                                   final docRef = FirebaseFirestore.instance
                                       .collection('structures')
@@ -2158,11 +2094,19 @@ class _RepasScreenState extends State<RepasScreen> {
                                   } else {
                                     update['ml'] = FieldValue.delete();
                                     if (isSolide) {
-                                      update['alimentationDescription'] =
+                                      final description =
                                           solideCtrl.text.trim();
-                                    } else if (isMixte) {
                                       update['alimentationDescription'] =
+                                          description.isNotEmpty
+                                              ? description
+                                              : FieldValue.delete();
+                                    } else if (isMixte) {
+                                      final description =
                                           mixteCtrl.text.trim();
+                                      update['alimentationDescription'] =
+                                          description.isNotEmpty
+                                              ? description
+                                              : FieldValue.delete();
                                     } else {
                                       update['alimentationDescription'] =
                                           FieldValue.delete();
@@ -2451,9 +2395,15 @@ class _RepasScreenState extends State<RepasScreen> {
       }
 
       if (isSolide) {
-        mealData['alimentationDescription'] = _solideController.text.trim();
+        final description = _solideController.text.trim();
+        if (description.isNotEmpty) {
+          mealData['alimentationDescription'] = description;
+        }
       } else if (isMixte) {
-        mealData['alimentationDescription'] = _mixteController.text.trim();
+        final description = _mixteController.text.trim();
+        if (description.isNotEmpty) {
+          mealData['alimentationDescription'] = description;
+        }
       }
 
       if (!isBiberon && !isAllaitement) {

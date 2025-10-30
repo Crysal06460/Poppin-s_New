@@ -131,6 +131,37 @@ class PlanningHelper {
     return resolveSlotsForDate(child, date).isNotEmpty;
   }
 
+  static bool shouldShowChildOnDate(
+    Map<String, dynamic> child,
+    DateTime date,
+  ) {
+    final planning = planningFromChild(child);
+    if (planning == null) {
+      return true;
+    }
+    if (isScheduledForDate(child, date)) {
+      return true;
+    }
+    if (planning.type == PlanningType.monthly) {
+      final monthly = planning.monthly;
+      if (monthly == null) {
+        return false;
+      }
+      final monthKey = toYearMonth(date);
+      final dayKey = toIsoDate(date);
+      final monthData = monthly.months[monthKey];
+      if (monthData == null) {
+        return false;
+      }
+      if (!monthData.days.containsKey(dayKey)) {
+        return false;
+      }
+      // Only show the child when the specific day has at least one slot defined.
+      return monthData.days[dayKey]?.isNotEmpty ?? false;
+    }
+    return false;
+  }
+
   static Future<PlanningData?> fetchPlanning({
     required String structureId,
     required String childId,

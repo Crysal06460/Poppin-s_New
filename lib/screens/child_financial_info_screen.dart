@@ -1032,29 +1032,36 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         }
       }
 
-      // Mise à jour dans Firestore avec l'email du membre actuel
-      await FirebaseFirestore.instance
+      final childRef = FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
           .collection('children')
-          .doc(widget.childId)
-          .update({
-        'financialInfo': {
-          'useMonthlyTable': _useMonthlyTable,
-          'monthlySalary': double.tryParse(
-                  _monthlySalaryController.text.replaceAll(',', '.')) ??
-              0,
-        },
-        // Cleanup des anciens champs au niveau racine si existaient déjà
+          .doc(widget.childId);
+
+      final childSnapshot = await childRef.get();
+      final currentAssigned =
+          (childSnapshot.data()?['assignedMemberEmail'] ?? '')
+              .toString()
+              .trim();
+
+      final Map<String, dynamic> updates = {
+        'financialInfo.useMonthlyTable': _useMonthlyTable,
+        'financialInfo.monthlySalary': double.tryParse(
+                _monthlySalaryController.text.replaceAll(',', '.')) ??
+            0,
         'financialInfo.careExpenses': FieldValue.delete(),
         'financialInfo.mealExpenses': FieldValue.delete(),
         'financialInfo.kmExpenses': FieldValue.delete(),
-        // Ajouter l'email du membre ACTUEL (qui ajoute l'enfant)
-        'assignedMemberEmail': currentUserEmail,
-        // Stockez également ces informations supplémentaires pour plus de robustesse
         'lastUpdatedBy': currentUserEmail,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (currentAssigned.isEmpty && currentUserEmail.isNotEmpty) {
+        updates['assignedMemberEmail'] = currentUserEmail;
+      }
+
+      // Mise à jour dans Firestore avec l'email du membre actuel
+      await childRef.update(updates);
 
       print(
           "✅ Informations financières sauvegardées avec succès pour le membre: $currentUserEmail");
@@ -1171,9 +1178,8 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         final String normalizedEmail = parentData['email'];
         print("🔑 Création d'une invitation pour $normalizedEmail");
 
-        final parentUserRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(normalizedEmail);
+        final parentUserRef =
+            FirebaseFirestore.instance.collection('users').doc(normalizedEmail);
         final parentUserDoc = await parentUserRef.get();
 
         // Données communes pour le document utilisateur parent
@@ -1274,8 +1280,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
       if (mounted) {
         String snackMessage;
         if (hasSentInvitation && hasLinkedExistingParent) {
-          snackMessage =
-              "Invitations envoyées. Parents existants mis à jour.";
+          snackMessage = "Invitations envoyées. Parents existants mis à jour.";
         } else if (hasSentInvitation) {
           snackMessage = "Invitations envoyées aux parents.";
         } else if (hasLinkedExistingParent) {
@@ -1442,7 +1447,8 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         unselectedItemColor: Colors.grey,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        selectedLabelStyle:
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,

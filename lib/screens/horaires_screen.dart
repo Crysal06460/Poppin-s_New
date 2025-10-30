@@ -1,13 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
 import '../planning/planning_models.dart';
 import '../utils/planning_helper.dart';
+import '../widgets/common_app_bar.dart';
+import '../widgets/swipe_navigation_wrapper.dart';
 
 class HorairesScreen extends StatefulWidget {
   @override
@@ -48,28 +50,37 @@ class _HorairesScreenState extends State<HorairesScreen> {
   Widget build(BuildContext context) {
     final bool isTabletDevice = isTablet(context);
 
-    return Scaffold(
-      key: Key(_rebuildKey), // FORCE LE REBUILD COMPLET
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildAppBar(context),
-          Expanded(
-            child: isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                    ),
-                  )
-                : enfants.isEmpty
-                    ? _buildEmptyState()
-                    : isTabletDevice
-                        ? _buildChildrenGridForTablet()
-                        : _buildChildrenGrid(),
-          )
-        ],
+    return SwipeNavigationWrapper(
+      backRoute: '/home',
+      child: Scaffold(
+        key: Key(_rebuildKey), // FORCE LE REBUILD COMPLET
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            CommonAppBar(
+              title: 'Horaires',
+              structureName: structureName,
+              iconPath: 'assets/images/Icone_Horaires.png',
+              backRoute: '/home',
+              primaryColor: primaryColor,
+            ),
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                    )
+                  : enfants.isEmpty
+                      ? _buildEmptyState()
+                      : isTabletDevice
+                          ? _buildChildrenGridForTablet()
+                          : _buildChildrenGrid(),
+            )
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -1356,132 +1367,6 @@ class _HorairesScreenState extends State<HorairesScreen> {
   // === MÉTHODES POUR IPHONE ===
 
   // AppBar personnalisé avec gradient
-  Widget _buildAppBar(BuildContext context) {
-    // Détection de l'iPad
-    final bool isTabletDevice = isTablet(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            primaryColor,
-            primaryColor.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.3),
-            offset: const Offset(0, 4),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          // Plus de padding vertical pour iPad
-          padding: EdgeInsets.fromLTRB(
-              16,
-              isTabletDevice ? 24 : 16, // Augmenté pour iPad
-              16,
-              isTabletDevice ? 28 : 20 // Augmenté pour iPad
-              ),
-          child: Column(
-            children: [
-              // Première ligne: nom structure et date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      structureName,
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 28 : 24, // Plus grand pour iPad
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          isTabletDevice ? 16 : 12, // Plus grand pour iPad
-                      vertical: isTabletDevice ? 8 : 6, // Plus grand pour iPad
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now()),
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 16 : 14, // Plus grand pour iPad
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(
-                  height: isTabletDevice ? 22 : 15), // Plus d'espace pour iPad
-              // Icône et titre de la page
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTabletDevice ? 22 : 16, // Plus grand pour iPad
-                  vertical: isTabletDevice ? 12 : 8, // Plus grand pour iPad
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.white,
-                      width: isTabletDevice ? 2.5 : 2 // Plus épais pour iPad
-                      ),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/Icone_Horaires.png',
-                      width: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      height: isTabletDevice ? 36 : 30, // Plus grand pour iPad
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.schedule,
-                        size: isTabletDevice ? 32 : 26, // Plus grand pour iPad
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(
-                        width:
-                            isTabletDevice ? 12 : 8), // Plus d'espace pour iPad
-                    Text(
-                      'Horaires',
-                      style: TextStyle(
-                        fontSize:
-                            isTabletDevice ? 24 : 20, // Plus grand pour iPad
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // Navigation du bas
   Widget _buildBottomNavigationBar() {
     return BottomNavigationBar(

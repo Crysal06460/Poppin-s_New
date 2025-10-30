@@ -2425,20 +2425,78 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
       final userDoc = await _firestore.collection('users').doc(userEmail).get();
       final Map<String, dynamic> userData = userDoc.data() ?? {};
 
-      String structureId =
-          (userData['structureId'] ?? user.uid).toString().trim();
+      String structureId = (userData['structureId'] ?? '').toString().trim();
       List<String> childIds =
           List<String>.from(userData['children'] ?? const <String>[]);
       String parentFirstName = (userData['firstName'] ?? '').toString();
       String parentLastName = (userData['lastName'] ?? '').toString();
 
+      Future<String> inferStructureId({
+        required String candidate,
+      }) async {
+        if (candidate.isNotEmpty) {
+          return candidate;
+        }
+
+        final Set<String> potentialChildIds = {
+          ...childIds.where((id) => id.isNotEmpty),
+        };
+
+        final createdChildren = userData['createdChildren'];
+        if (createdChildren is List) {
+          potentialChildIds.addAll(createdChildren
+              .map((e) => e.toString())
+              .where((e) => e.isNotEmpty));
+        }
+
+        for (final childId in potentialChildIds) {
+          try {
+            final query = await _firestore
+                .collectionGroup('children')
+                .where(FieldPath.documentId, isEqualTo: childId)
+                .limit(1)
+                .get();
+            if (query.docs.isNotEmpty) {
+              final segments = query.docs.first.reference.path.split('/');
+              final index = segments.indexOf('structures');
+              if (index != -1 && index + 1 < segments.length) {
+                return segments[index + 1];
+              }
+            }
+          } catch (e) {
+            print('⚠️ Impossible de déterminer la structure via $childId: $e');
+          }
+        }
+
+        return user.uid;
+      }
+
+      structureId = await inferStructureId(candidate: structureId);
+
       Map<String, dynamic>? structureData;
+      DocumentSnapshot<Map<String, dynamic>>? structureDoc;
       if (structureId.isNotEmpty) {
-        final structureDoc =
+        structureDoc =
             await _firestore.collection('structures').doc(structureId).get();
         if (structureDoc.exists) {
           structureData = structureDoc.data();
+        } else {
+          final resolvedId = await inferStructureId(candidate: '');
+          if (resolvedId != structureId) {
+            structureId = resolvedId;
+            structureDoc = await _firestore
+                .collection('structures')
+                .doc(structureId)
+                .get();
+            if (structureDoc.exists) {
+              structureData = structureDoc.data();
+            }
+          }
         }
+      }
+
+      if (structureData == null && structureId.isEmpty) {
+        structureId = user.uid;
       }
 
       bool isParentEmployeur = false;
@@ -2490,6 +2548,16 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                 (structureData['assistantLinkedUserId'] ?? '').toString(),
           };
         }
+      }
+
+      final String storedStructureId =
+          (userData['structureId'] ?? '').toString().trim();
+      if (structureId.isNotEmpty && structureId != storedStructureId) {
+        await _firestore.collection('users').doc(userEmail).set({
+          'structureId': structureId,
+          if (structureName.isNotEmpty) 'structureName': structureName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
 
       if (structureId.isEmpty) {

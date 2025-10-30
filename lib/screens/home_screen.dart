@@ -506,7 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_hasLegacySchedule(child, capitalizedWeekday)) {
           return true;
         }
-        return PlanningHelper.isScheduledForDate(child, today);
+        return PlanningHelper.shouldShowChildOnDate(child, today);
       });
       for (final child in filteredBySchedule) {
         final id = (child['id'] ?? '').toString();
@@ -556,6 +556,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bool shouldShowPopup = false;
       String popupType = "";
       bool forceWelcome = false;
+      bool allowWelcomeFlow = false;
       final bool isMyAccountOwner =
           structureData['ownerEmail']?.toString().trim().toLowerCase() ==
               currentUserEmail;
@@ -577,13 +578,15 @@ class _HomeScreenState extends State<HomeScreen> {
         final int memberCount = membersSnapshot.docs.length;
         final bool needsMoreMembers = memberCount <= 1;
         final bool needsChildren = !structureHasAnyChild;
+        allowWelcomeFlow =
+            isMyAccountOwner && (needsMoreMembers || needsChildren);
         final bool resetToInitialState =
             isMyAccountOwner && needsMoreMembers && needsChildren;
         if (resetToInitialState) {
           await prefs.remove(welcomePopupKey);
           welcomePopupAlreadyShown = false;
         }
-        if (isMyAccountOwner) {
+        if (allowWelcomeFlow) {
           forceWelcome = forceWelcome || needsMoreMembers || needsChildren;
         }
 
@@ -603,9 +606,9 @@ class _HomeScreenState extends State<HomeScreen> {
         print(
             "🔍 DEBUG: Popup membres déjà affiché? $mamMembersPopupAlreadyShown");
 
-        final bool allowMemberPopup = needsMoreMembers &&
-            !mamMembersPopupAlreadyShown &&
-            isMyAccountOwner;
+        final bool allowMemberPopup = allowWelcomeFlow &&
+            needsMoreMembers &&
+            !mamMembersPopupAlreadyShown;
         if (allowMemberPopup) {
           // PRIORITÉ 1 : Premier lancement avec un seul membre, afficher le popup UNE FOIS
           shouldShowPopup = true;
@@ -628,6 +631,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants
         final bool needsChildren = !structureHasAnyChild;
+        allowWelcomeFlow = isMyAccountOwner && needsChildren;
         final bool resetToInitialState =
             isMyAccountOwner && needsChildren && !hasChildren;
         if (resetToInitialState) {
@@ -635,17 +639,18 @@ class _HomeScreenState extends State<HomeScreen> {
           welcomePopupAlreadyShown = false;
           print('🔁 Réinitialisation popup bienvenue (structure sans enfant)');
         }
-        if (needsChildren && isMyAccountOwner) {
+        if (allowWelcomeFlow && needsChildren) {
           shouldShowPopup = true;
           popupType = "addChild";
           print("⚠️ Assistante maternelle sans enfant, affichage du popup...");
         }
-        if (isMyAccountOwner) {
+        if (allowWelcomeFlow) {
           forceWelcome = forceWelcome || needsChildren;
         }
       }
 
-      if (shouldShowPopup || !welcomePopupAlreadyShown || forceWelcome) {
+      if (allowWelcomeFlow &&
+          (shouldShowPopup || !welcomePopupAlreadyShown || forceWelcome)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showFirstLaunchGuidance(
             isMamStructure: isMamStructure,
@@ -654,6 +659,8 @@ class _HomeScreenState extends State<HomeScreen> {
             forceWelcome: forceWelcome,
           );
         });
+      } else if (!allowWelcomeFlow && !welcomePopupAlreadyShown) {
+        await prefs.setBool(welcomePopupKey, true);
       }
     } catch (e) {
       print("🚨 Erreur Firebase : $e");
@@ -2772,192 +2779,188 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isTablet = screenSize.shortestSide >= 600;
 
     final features = [
-          {
-            'route': '/horaires',
-            'name': 'Horaires',
-            'imagePath': 'assets/images/Icone_Horaires.png'
-          },
-          {
-            'route': '/repas',
-            'name': 'Repas',
-            'imagePath': 'assets/images/Icone_Repas.png'
-          },
-          {
-            'route': '/activites',
-            'name': 'Activités',
-            'imagePath': 'assets/images/Icone_Activites.png'
-          },
-          {
-            'route': '/sieste',
-            'name': 'Sieste',
-            'imagePath': 'assets/images/Icone_Siestes.png'
-          },
-          {
-            'route': '/sante',
-            'name': 'Santé',
-            'imagePath': 'assets/images/Icone_Sante.png'
-          },
-          {
-            'route': '/change',
-            'name': 'Change',
-            'imagePath': 'assets/images/Icone_Changes.png'
-          },
-          {
-            'route': '/photos',
-            'name': 'Photos',
-            'imagePath': 'assets/images/Icone_Photos.png'
-          },
-          {
-            'route': '/agenda',
-            'name': 'Agenda',
-            'imagePath': 'assets/images/Icone_Agenda.png'
-          },
-          {
-            'route': '/stock',
-            'name': 'Stock',
-            'imagePath': 'assets/images/Icone_Stock.png'
-          },
-          {
-            'route': '/recap-enfant',
-            'name': 'Recap',
-            'imagePath': 'assets/images/Icone_Recaptitulatif.png'
-          },
-          {
-            'route': '/actualites',
-            'name': 'Actualités',
-            'imagePath': 'assets/images/Icone_Actualites.png'
-          },
-          {
-            'route': '/transmissions',
-            'name': 'Transm.',
-            'imagePath': 'assets/images/Icone_Transmission.png'
-          },
-        ];
+      {
+        'route': '/horaires',
+        'name': 'Horaires',
+        'imagePath': 'assets/images/Icone_Horaires.png'
+      },
+      {
+        'route': '/repas',
+        'name': 'Repas',
+        'imagePath': 'assets/images/Icone_Repas.png'
+      },
+      {
+        'route': '/activites',
+        'name': 'Activités',
+        'imagePath': 'assets/images/Icone_Activites.png'
+      },
+      {
+        'route': '/sieste',
+        'name': 'Sieste',
+        'imagePath': 'assets/images/Icone_Siestes.png'
+      },
+      {
+        'route': '/sante',
+        'name': 'Santé',
+        'imagePath': 'assets/images/Icone_Sante.png'
+      },
+      {
+        'route': '/change',
+        'name': 'Change',
+        'imagePath': 'assets/images/Icone_Changes.png'
+      },
+      {
+        'route': '/photos',
+        'name': 'Photos',
+        'imagePath': 'assets/images/Icone_Photos.png'
+      },
+      {
+        'route': '/agenda',
+        'name': 'Agenda',
+        'imagePath': 'assets/images/Icone_Agenda.png'
+      },
+      {
+        'route': '/stock',
+        'name': 'Stock',
+        'imagePath': 'assets/images/Icone_Stock.png'
+      },
+      {
+        'route': '/recap-enfant',
+        'name': 'Recap',
+        'imagePath': 'assets/images/Icone_Recaptitulatif.png'
+      },
+      {
+        'route': '/actualites',
+        'name': 'Actualités',
+        'imagePath': 'assets/images/Icone_Actualites.png'
+      },
+      {
+        'route': '/transmissions',
+        'name': 'Transm.',
+        'imagePath': 'assets/images/Icone_Transmission.png'
+      },
+    ];
 
     final bool hideStructureName = structureType == 'parent_employeur' ||
         structureType == 'parentemployeur';
-    final String displayStructureName =
-        hideStructureName ? '' : structureName;
+    final String displayStructureName = hideStructureName ? '' : structureName;
 
     final Widget mainBody = Column(
       children: [
         // En-tête avec fond de couleur - hauteur et marges relatives
         Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      primaryColor,
-                      primaryColor.withOpacity(0.85),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                primaryColor,
+                primaryColor.withOpacity(0.85),
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(screenSize.width * 0.06),
+              bottomRight: Radius.circular(screenSize.width * 0.06),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withOpacity(0.3),
+                offset: const Offset(0, 4),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                screenSize.width *
+                    (isTablet ? 0.03 : 0.025), // 3% ou 2.5% de la largeur
+                screenSize.height * 0.02, // 2% de la hauteur
+                screenSize.width * (isTablet ? 0.03 : 0.025),
+                screenSize.height *
+                    (isTablet
+                        ? 0.02
+                        : 0.01), // Plus grand padding bas sur tablette
+              ),
+              child: Column(
+                children: [
+                  // Nom de la structure et date
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: hideStructureName
+                            ? const SizedBox.shrink()
+                            : Text(
+                                displayStructureName,
+                                style: TextStyle(
+                                  fontSize: screenSize.width *
+                                      (isTablet
+                                          ? 0.032
+                                          : 0.06), // Taille relative
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                      ),
+                      Row(
+                        children: [
+                          // Conteneur de la date
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal:
+                                  screenSize.width * (isTablet ? 0.018 : 0.03),
+                              vertical:
+                                  screenSize.height * (isTablet ? 0.01 : 0.006),
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(
+                                  screenSize.width * (isTablet ? 0.025 : 0.05)),
+                            ),
+                            child: Text(
+                              DateFormat('EEEE d MMMM', 'fr_FR')
+                                  .format(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: screenSize.width *
+                                    (isTablet ? 0.018 : 0.035),
+                                color: Colors.white.withOpacity(0.95),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          // Bouton de déconnexion
+                          IconButton(
+                            icon: Icon(
+                              Icons.logout,
+                              color: Colors.white,
+                              size:
+                                  screenSize.width * (isTablet ? 0.028 : 0.05),
+                            ),
+                            tooltip: 'Se déconnecter',
+                            onPressed: _logout,
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                            splashRadius:
+                                screenSize.width * (isTablet ? 0.028 : 0.05),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(screenSize.width * 0.06),
-                    bottomRight: Radius.circular(screenSize.width * 0.06),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withOpacity(0.3),
-                      offset: const Offset(0, 4),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      screenSize.width *
-                          (isTablet ? 0.03 : 0.025), // 3% ou 2.5% de la largeur
-                      screenSize.height * 0.02, // 2% de la hauteur
-                      screenSize.width * (isTablet ? 0.03 : 0.025),
-                      screenSize.height *
-                          (isTablet
-                              ? 0.02
-                              : 0.01), // Plus grand padding bas sur tablette
-                    ),
-                    child: Column(
-                      children: [
-                        // Nom de la structure et date
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: hideStructureName
-                                  ? const SizedBox.shrink()
-                                  : Text(
-                                      displayStructureName,
-                                      style: TextStyle(
-                                        fontSize: screenSize.width *
-                                            (isTablet
-                                                ? 0.032
-                                                : 0.06), // Taille relative
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                            ),
-                            Row(
-                              children: [
-                                // Conteneur de la date
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: screenSize.width *
-                                        (isTablet ? 0.018 : 0.03),
-                                    vertical: screenSize.height *
-                                        (isTablet ? 0.01 : 0.006),
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(
-                                        screenSize.width *
-                                            (isTablet ? 0.025 : 0.05)),
-                                  ),
-                                  child: Text(
-                                    DateFormat('EEEE d MMMM', 'fr_FR')
-                                        .format(DateTime.now()),
-                                    style: TextStyle(
-                                      fontSize: screenSize.width *
-                                          (isTablet ? 0.018 : 0.035),
-                                      color: Colors.white.withOpacity(0.95),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                // Bouton de déconnexion
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.logout,
-                                    color: Colors.white,
-                                    size: screenSize.width *
-                                        (isTablet ? 0.028 : 0.05),
-                                  ),
-                                  tooltip: 'Se déconnecter',
-                                  onPressed: _logout,
-                                  padding: EdgeInsets.zero,
-                                  constraints: BoxConstraints(),
-                                  splashRadius: screenSize.width *
-                                      (isTablet ? 0.028 : 0.05),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                ],
               ),
+            ),
+          ),
+        ),
 
         // Contenu principal avec adaptation pour iPad
         Expanded(
           child: isTablet
-              ? _buildTabletContent(
-                  features) // Layout spécifique pour iPad
-              : _buildPhoneContent(
-                  features), // Layout original pour iPhone
+              ? _buildTabletContent(features) // Layout spécifique pour iPad
+              : _buildPhoneContent(features), // Layout original pour iPhone
         ),
       ],
     );
