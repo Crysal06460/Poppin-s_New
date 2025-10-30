@@ -79,8 +79,7 @@ import 'package:poppins_app/screens/auth_check_screen.dart';
 import 'package:poppins_app/screens/quick_login_screen.dart';
 import 'theme/app_colors.dart';
 
-final GlobalKey<NavigatorState> rootNavigatorKey =
-    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 // Ajouter cette fonction dans votre fichier routes.dart
 Future<String> _getStructureId() async {
@@ -167,7 +166,8 @@ final GoRouter router = GoRouter(
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3D9DF2),
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               ),
               child: const Text(
                 "RETOUR À L'ACCUEIL",
@@ -315,11 +315,13 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/structure-confirmation',
       builder: (context, state) {
-        final Map<String, dynamic> structureInfo =
-            state.extra as Map<String, dynamic>? ?? {};
-        // Extraire le type de structure de structureInfo
-        final String structureType =
-            structureInfo['structureType'] ?? "Structure inconnue";
+        final dynamic extra = state.extra;
+        String structureType = "Structure inconnue";
+        if (extra is Map<String, dynamic>) {
+          structureType = (extra['structureType'] ?? structureType).toString();
+        } else if (extra is String && extra.isNotEmpty) {
+          structureType = extra;
+        }
         return StructureConfirmationScreen(structureType: structureType);
       },
     ),
@@ -333,12 +335,22 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/congratulations',
       builder: (context, state) {
-        final Map<String, dynamic> structureInfo =
-            state.extra as Map<String, dynamic>? ?? {};
-        // Extraire le type de structure de structureInfo
-        final String structureType =
-            structureInfo['structureType'] ?? "Structure inconnue";
-        return CongratulationsScreen(structureType: structureType);
+        final dynamic extra = state.extra;
+        String structureType = "Structure inconnue";
+        bool skipStructureFlow = false;
+        if (extra is Map<String, dynamic>) {
+          structureType = (extra['structureType'] ?? structureType).toString();
+          final dynamic skipValue = extra['skipStructureFlow'];
+          if (skipValue is bool) {
+            skipStructureFlow = skipValue;
+          }
+        } else if (extra is String && extra.isNotEmpty) {
+          structureType = extra;
+        }
+        return CongratulationsScreen(
+          structureType: structureType,
+          skipStructureFlow: skipStructureFlow,
+        );
       },
     ),
     GoRoute(

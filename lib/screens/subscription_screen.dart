@@ -11,7 +11,7 @@ class SubscriptionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Ajout de logs pour déboguer
     print("📋 SubscriptionScreen reçoit structureType: '$structureType'");
-    
+
     // Définition des tarifs avec noms bien formatés
     Map<String, String> pricing = {
       'Assistante Maternelle': '10 € / mois',
@@ -75,28 +75,32 @@ class SubscriptionScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             const Text(
-              '7 jours dessai gratuit puis abonnement mensuel, résiliation possible à tout moment.',
+              'Abonnement mensuel sans engagement, résiliable à tout moment via la boutique.',
               textAlign: TextAlign.center,
             ),
             const Spacer(),
             ElevatedButton(
               onPressed: () {
                 // Correction: Passer le type de structure à l'écran de félicitations
-                print("🚀 Naviguer vers /congratulations avec structureType: '$structureType'");
-                context.go('/congratulations', extra: structureType);
+                print(
+                    "🚀 Naviguer vers /congratulations avec structureType: '$structureType'");
+                context.go('/congratulations', extra: {
+                  'structureType': structureType,
+                  'skipStructureFlow': false,
+                });
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8B8FE5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-    ),
-  ),
-  child: const Padding(
-    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-    child: Text('Sabonner',
-        style: TextStyle(fontSize: 18, color: Colors.white)),
-  ),
-),
+                ),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                child: Text('S\'abonner',
+                    style: TextStyle(fontSize: 18, color: Colors.white)),
+              ),
+            ),
             const SizedBox(height: 40),
           ],
         ),

@@ -82,6 +82,17 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     }
   }
 
+  String _formatMessageTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) {
+      return '';
+    }
+    final dateTime = timestamp.toDate();
+    final datePart =
+        DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(dateTime);
+    final timePart = DateFormat('HH:mm', 'fr_FR').format(dateTime);
+    return '$datePart à $timePart';
+  }
+
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
@@ -1076,8 +1087,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   Widget _buildMessage(
       Map<String, dynamic> messageData, bool isMe, bool isTablet) {
     final timestamp = messageData['timestamp'] as Timestamp?;
-    final formattedTime =
-        timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '';
+    final formattedTimestamp = _formatMessageTimestamp(timestamp);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: isTablet ? 6 : 4),
@@ -1151,7 +1161,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                       ),
                       SizedBox(height: isTablet ? 8 : 4),
                       Text(
-                        formattedTime,
+                        formattedTimestamp,
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: isTablet ? 12 : 10,
@@ -1172,8 +1182,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     final fileType = message['fileType'] ?? '';
     final isImage = fileType.startsWith('image/');
     final timestamp = message['timestamp'] as Timestamp?;
-    final formattedTime =
-        timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '';
+    final formattedTimestamp = _formatMessageTimestamp(timestamp);
 
     Future<void> _openFile() async {
       try {
@@ -1271,7 +1280,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ],
         SizedBox(height: isTablet ? 8 : 4),
         Text(
-          formattedTime,
+          formattedTimestamp,
           style: TextStyle(
             color: Colors.grey.shade600,
             fontSize: isTablet ? 12 : 10,
@@ -1285,8 +1294,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     final fileType = message['fileType'] ?? '';
     final isImage = fileType.startsWith('image/');
     final timestamp = message['timestamp'] as Timestamp?;
-    final formattedTime =
-        timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '';
+    final formattedTimestamp = _formatMessageTimestamp(timestamp);
 
     Future<void> _openFile() async {
       try {
@@ -1378,7 +1386,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ],
         const SizedBox(height: 4),
         Text(
-          formattedTime,
+          formattedTimestamp,
           style: TextStyle(
             color: Colors.grey.shade600,
             fontSize: 10,
@@ -2594,9 +2602,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                             final bool unreadFromParent =
                                 lastMessage['senderType'] == 'parent' &&
                                     lastMessage['nonLu'] == true;
-                            final formattedTime = timestamp != null
-                                ? DateFormat('HH:mm').format(timestamp.toDate())
-                                : '';
+                            final formattedTimestamp =
+                                _formatMessageTimestamp(timestamp);
 
                             return Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -2634,10 +2641,10 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                         overflow: TextOverflow.ellipsis,
                                         textAlign: TextAlign.center,
                                       ),
-                                      if (formattedTime.isNotEmpty) ...[
+                                      if (formattedTimestamp.isNotEmpty) ...[
                                         SizedBox(height: 4),
                                         Text(
-                                          formattedTime,
+                                          formattedTimestamp,
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: Colors.grey.shade500,

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:poppins_app/screens/child_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/subscription_service.dart';
+import '../services/firebase_trial_service.dart';
 import '../utils/planning_helper.dart';
 import '../utils/session_util.dart';
 import '../theme/app_colors.dart';
@@ -25,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool hasChildren = false;
   bool _isSubscriptionLoading = true;
   bool _isSubscribed = true;
+  int? _mamMembersCount; // 3 => 2-3 membres, 4 => 4+ membres
+  String _routingStructureType = 'assistante_maternelle';
+  TrialStatus? _trialStatus;
 
   // Variable pour stocker le type de structure
   String structureType = "AssistanteMaternelle"; // Valeur par défaut
@@ -129,9 +135,24 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkSubscriptionStatus() async {
     try {
       final bool result = await SubscriptionService.isUserSubscribed();
+      final TrialStatus trialStatus =
+          await FirebaseTrialService.fetchTrialStatusForCurrentUser();
+      bool isAllowed = result;
+      final bool hasActivePaidSubscription = result && !trialStatus.hasStarted;
+
+      if (trialStatus.isActive) {
+        isAllowed = true;
+      } else if (trialStatus.isExpired) {
+        await FirebaseTrialService.markTrialExpiredForCurrentUser();
+        isAllowed = hasActivePaidSubscription;
+      } else {
+        isAllowed = result;
+      }
+
       if (!mounted) return;
       setState(() {
-        _isSubscribed = result;
+        _isSubscribed = isAllowed;
+        _trialStatus = trialStatus;
         _isSubscriptionLoading = false;
       });
     } catch (e) {
@@ -139,60 +160,563 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _isSubscribed = true;
+        _trialStatus ??= TrialStatus.empty();
         _isSubscriptionLoading = false;
       });
     }
   }
 
   Widget _buildSubscriptionRequired() {
-    return Scaffold(
-      backgroundColor: kAppBackgroundColor,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    final TrialStatus? trialStatus = _trialStatus;
+    final bool trialStarted = trialStatus?.hasStarted ?? false;
+    final bool trialExpired = trialStatus?.isExpired ?? false;
+    final bool trialActive = trialStatus?.isActive ?? false;
+    final int daysLeft = trialStatus?.daysRemaining ?? 0;
+    final int totalDays = (trialStatus?.totalDays ?? 0) > 0
+        ? trialStatus!.totalDays
+        : FirebaseTrialService.defaultTrialDays;
+    final int daysUsed =
+        trialStarted ? (totalDays - daysLeft).clamp(0, totalDays) : 0;
+    final double progress =
+        totalDays > 0 ? (daysUsed / totalDays).clamp(0.0, 1.0) : 0.0;
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isCompactWidth = screenSize.width < 360;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
+    String expiryText = "";
+    if (trialStatus?.endAt != null) {
+      try {
+        expiryText =
+            DateFormat('d MMMM yyyy', 'fr_FR').format(trialStatus!.endAt!);
+      } catch (_) {
+        expiryText = "";
+      }
+    }
+
+    final String title = trialExpired
+        ? "Votre essai gratuit est terminé"
+        : trialStarted
+            ? (daysLeft <= 0
+                ? "Dernières heures d'essai"
+                : "Plus que $daysLeft jour${daysLeft > 1 ? 's' : ''}")
+            : "Bienvenue chez Poppin's";
+
+    final String subtitle;
+    if (trialExpired && trialStarted) {
+      subtitle = expiryText.isNotEmpty
+          ? "Votre essai s'est achevé le $expiryText. Activez votre abonnement pour continuer à utiliser votre application sans interruption."
+          : "Votre période d'essai est arrivée à son terme. Passez à l'abonnement pour conserver vos données et votre organisation.";
+    } else if (trialStarted && !trialExpired) {
+      subtitle = totalDays > 0
+          ? "Profitez des $totalDays jours d'essai pour découvrir les outils premium. Il vous reste $daysLeft jour${daysLeft > 1 ? 's' : ''} pour faire le plein d'automatisations."
+          : "Explorez les fonctionnalités premium avant la fin de votre essai.";
+    } else {
+      subtitle =
+          "Débloquez la gestion complète de votre structure avec des outils pensés pour les pros de la petite enfance.";
+    }
+
+    final String badgeLabel;
+    if (trialExpired) {
+      badgeLabel = "Essai terminé";
+    } else if (trialStarted) {
+      badgeLabel = daysLeft <= 0
+          ? "Dernières heures"
+          : "$daysLeft jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}";
+    } else {
+      badgeLabel = "Découverte";
+    }
+
+    final String primaryCtaLabel =
+        trialExpired ? "Activer mon abonnement" : "Découvrir les offres";
+
+    final List<Map<String, dynamic>> highlights = [
+      {
+        'icon': Icons.auto_graph_rounded,
+        'title': "Tout piloter en un seul écran",
+        'description':
+            "Présences, agendas, documents : gagnez du temps sur votre quotidien."
+      },
+      {
+        'icon': Icons.task_alt_rounded,
+        'title': "Restez conforme sans effort",
+        'description': "Des rappels intelligents pour ne rien oublier."
+      },
+      {
+        'icon': Icons.favorite_rounded,
+        'title': "Un support humain",
+        'description':
+            "Une équipe disponible en cas de questions, avec des ressources dédiées."
+      },
+    ];
+
+    Widget buildHighlight(Map<String, dynamic> item) {
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isTablet ? 20 : 16,
+          vertical: isTablet ? 18 : 14,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              offset: const Offset(0, 4),
+              blurRadius: 16,
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.lock_outline,
-              size: 80,
-              color: primaryColor,
-            ),
-            SizedBox(height: 20),
-            Text(
-              "Abonnement requis",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            Container(
+              decoration: BoxDecoration(
+                color: primaryColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Icon(
+                item['icon'] as IconData,
                 color: primaryColor,
+                size: isTablet ? 28 : 24,
               ),
             ),
-            SizedBox(height: 10),
-            Text(
-              "Pour accéder à toutes les fonctionnalités",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () => context.go('/pricing'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              ),
-              child: Text(
-                "CHOISIR UN ABONNEMENT",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['title'] as String,
+                    style: TextStyle(
+                      fontSize: isTablet ? 18 : 16,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E2A33),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item['description'] as String,
+                    style: TextStyle(
+                      fontSize: isTablet ? 15 : 14,
+                      height: 1.4,
+                      color: const Color(0xFF5B6670),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F5FA),
+      body: Stack(
+        children: [
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: isTablet ? 320 : 220,
+              height: isTablet ? 320 : 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.35),
+                    primaryColor.withOpacity(0.1),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -160,
+            left: -100,
+            child: Container(
+              width: isTablet ? 360 : 240,
+              height: isTablet ? 360 : 240,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF5DE0E6).withOpacity(0.35),
+                    primaryColor.withOpacity(0.1),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet
+                    ? 36
+                    : isCompactWidth
+                        ? 20
+                        : 28,
+                vertical: isTablet ? 32 : 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(32),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          primaryColor,
+                          primaryColor.withOpacity(0.85),
+                          const Color(0xFF5DE0E6),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withOpacity(0.25),
+                          offset: const Offset(0, 18),
+                          blurRadius: 38,
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isTablet ? 36 : 24,
+                        vertical: isTablet ? 40 : 32,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.25),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  trialExpired
+                                      ? Icons.lock_outline_rounded
+                                      : Icons.workspace_premium_rounded,
+                                  color: Colors.white,
+                                  size: isTablet ? 22 : 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  badgeLabel,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isTablet ? 15 : 13,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: isTablet ? 28 : 20),
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: isTablet ? 28 : 26,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.15,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          SizedBox(height: isTablet ? 18 : 16),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: isTablet ? 18 : 16,
+                              color: Colors.white.withOpacity(0.92),
+                              height: 1.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (trialStarted && !trialExpired) ...[
+                            SizedBox(height: isTablet ? 28 : 22),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: isTablet ? 12 : 10,
+                                backgroundColor: Colors.white.withOpacity(0.22),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isTablet ? 14 : 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Essai ${trialActive ? 'en cours' : 'limité'}",
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.75),
+                                    fontSize: isTablet ? 15 : 13,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                                Text(
+                                  daysLeft <= 0
+                                      ? "Dernières heures"
+                                      : "$daysUsed / $totalDays jours",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isTablet ? 16 : 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: isTablet ? 32 : 28),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      color: Colors.white.withOpacity(0.15),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.65),
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isTablet ? 28 : 22,
+                            vertical: isTablet ? 30 : 24,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                "Pourquoi les pros choisissent Poppin's",
+                                style: TextStyle(
+                                  fontSize: isTablet ? 22 : 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1E2A33),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              ...highlights
+                                  .map((item) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 14),
+                                        child: buildHighlight(item),
+                                      ))
+                                  .toList(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: isTablet ? 26 : 22),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 24 : 20,
+                      vertical: isTablet ? 22 : 18,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF7FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: primaryColor.withOpacity(0.18),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.verified_user_rounded,
+                            color: primaryColor,
+                            size: isTablet ? 26 : 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Vous restez maître de vos données",
+                                style: TextStyle(
+                                  fontSize: isTablet ? 17 : 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1E2A33),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Aucun renouvellement automatique sans votre accord. Vos informations restent protégées et accessibles en cas de réactivation.",
+                                style: TextStyle(
+                                  fontSize: isTablet ? 15 : 13.5,
+                                  height: 1.45,
+                                  color: const Color(0xFF50606D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: isTablet ? 30 : 24),
+                  ElevatedButton(
+                    onPressed: _openPricing,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        vertical: isTablet ? 20 : 18,
+                      ),
+                      elevation: 6,
+                      shadowColor: primaryColor.withOpacity(0.4),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          primaryCtaLabel,
+                          style: TextStyle(
+                            fontSize: isTablet ? 18 : 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.arrow_forward_rounded),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => context.go('/welcome'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: primaryColor,
+                      textStyle: TextStyle(
+                        fontSize: isTablet ? 16 : 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text("Revenir à l'accueil"),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _openPricing() async {
+    final Map<String, dynamic> extra = await _buildPricingExtras();
+    if (!mounted) return;
+    context.go('/pricing', extra: extra);
+  }
+
+  Future<Map<String, dynamic>> _buildPricingExtras() async {
+    try {
+      final String structureId = await _getStructureId();
+      if (structureId.isEmpty) {
+        return _fallbackPricingPayload();
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      if (!snapshot.exists) {
+        return _fallbackPricingPayload();
+      }
+
+      final data = snapshot.data() ?? {};
+      String rawType =
+          (data['structureType'] ?? _routingStructureType).toString();
+      final String routingType = rawType.toLowerCase().contains('mam')
+          ? 'mam'
+          : 'assistante_maternelle';
+
+      Map<String, dynamic> payload = {
+        'structureType': routingType,
+      };
+
+      if (routingType == 'mam') {
+        final int? plan = _resolveMamPlanFromData(data);
+        if (plan != null) {
+          payload['memberCount'] = plan;
+        }
+      }
+
+      return payload;
+    } catch (e) {
+      print('⚠️ Erreur lors de la préparation du pricing: $e');
+      return _fallbackPricingPayload();
+    }
+  }
+
+  Map<String, dynamic> _fallbackPricingPayload() {
+    final Map<String, dynamic> map = {
+      'structureType': _routingStructureType,
+    };
+    if (_routingStructureType == 'mam' && _mamMembersCount != null) {
+      map['memberCount'] = _mamMembersCount;
+    }
+    return map;
+  }
+
+  int? _resolveMamPlanFromData(Map<String, dynamic> data) {
+    final dynamic preferredPlan = data['mamPreferredPlan'];
+    final dynamic memberCount = data['memberCount'];
+    final dynamic maxMemberCount = data['maxMemberCount'];
+
+    if (preferredPlan is int && preferredPlan >= 3) {
+      return preferredPlan >= 4 ? 4 : 3;
+    }
+
+    if (memberCount is int && memberCount >= 3) {
+      return memberCount >= 4 ? 4 : 3;
+    }
+
+    if (maxMemberCount is int && maxMemberCount >= 3) {
+      return maxMemberCount >= 4 ? 4 : 3;
+    }
+
+    return _mamMembersCount;
   }
 
   Future<void> _logout() async {
@@ -333,7 +857,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Récupération du type de structure existant
-      String fetchedStructureType =
+      String fetchedStructureTypeRaw =
           (structureData['structureType'] ?? 'AssistanteMaternelle').toString();
       final dynamic showAllField = structureData['showAllChildrenOnHome'];
       bool showAllChildrenOnHome = true;
@@ -351,11 +875,29 @@ class _HomeScreenState extends State<HomeScreen> {
         await FirebaseFirestore.instance
             .collection('structures')
             .doc(structureDocId)
-            .update({'structureType': fetchedStructureType});
+            .update({'structureType': fetchedStructureTypeRaw});
       }
 
-      fetchedStructureType = fetchedStructureType.trim().toLowerCase();
-      final bool isMamStructure = fetchedStructureType == 'mam';
+      final String normalizedStructureType =
+          fetchedStructureTypeRaw.trim().toLowerCase();
+      final bool isMamStructure = normalizedStructureType.contains('mam');
+
+      int? mamPlan;
+      if (isMamStructure) {
+        final dynamic preferredPlan = structureData['mamPreferredPlan'];
+        final dynamic storedMemberCount = structureData['memberCount'];
+        final dynamic storedMaxMemberCount = structureData['maxMemberCount'];
+
+        if (preferredPlan is int && preferredPlan >= 3) {
+          mamPlan = preferredPlan >= 4 ? 4 : 3;
+        } else if (storedMemberCount is int && storedMemberCount >= 3) {
+          mamPlan = storedMemberCount >= 4 ? 4 : 3;
+        } else if (storedMaxMemberCount is int && storedMaxMemberCount >= 3) {
+          mamPlan = storedMaxMemberCount >= 4 ? 4 : 3;
+        } else {
+          mamPlan = 3;
+        }
+      }
 
       // Récupérer les enfants de la structure
       QuerySnapshot childrenSnapshot = await FirebaseFirestore.instance
@@ -530,7 +1072,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         structureName = fetchedStructureName;
-        structureType = fetchedStructureType;
+        structureType = isMamStructure ? 'MAM' : 'AssistanteMaternelle';
+        _mamMembersCount = mamPlan;
+        _routingStructureType =
+            isMamStructure ? 'mam' : 'assistante_maternelle';
         children = todayChildren;
         // Vérifier si le membre a des enfants qui lui sont assignés
         hasChildren = filteredChildren.isNotEmpty;
@@ -580,28 +1125,45 @@ class _HomeScreenState extends State<HomeScreen> {
         final bool needsChildren = !structureHasAnyChild;
         allowWelcomeFlow =
             isMyAccountOwner && (needsMoreMembers || needsChildren);
-        final bool resetToInitialState =
-            isMyAccountOwner && needsMoreMembers && needsChildren;
-        if (resetToInitialState) {
-          await prefs.remove(welcomePopupKey);
-          welcomePopupAlreadyShown = false;
-        }
-        if (allowWelcomeFlow) {
-          forceWelcome = forceWelcome || needsMoreMembers || needsChildren;
-        }
 
-        print(
-            "🔍 DEBUG: Nombre de membres trouvés dans la collection: $memberCount");
+        final String mamInitialStateKey = 'mam_initial_state_${structureDocId}';
+        bool mamInitialStateHandled =
+            prefs.getBool(mamInitialStateKey) ?? false;
+        final bool isMamInInitialState =
+            isMyAccountOwner && needsMoreMembers && needsChildren;
 
         final String mamMembersPopupKey =
             'mam_members_popup_shown_${structureDocId}';
         bool mamMembersPopupAlreadyShown =
             prefs.getBool(mamMembersPopupKey) ?? false;
-        if (resetToInitialState) {
-          await prefs.remove(mamMembersPopupKey);
-          mamMembersPopupAlreadyShown = false;
-          print('🔁 Réinitialisation des popups MAM (structure vide)');
+
+        print(
+            "🔧 DEBUG STATE: key=$mamMembersPopupKey shown=$mamMembersPopupAlreadyShown initialKey=$mamInitialStateKey initialHandled=$mamInitialStateHandled initialState=$isMamInInitialState");
+
+        if (isMamInInitialState) {
+          if (!mamInitialStateHandled) {
+            if (welcomePopupAlreadyShown) {
+              await prefs.remove(welcomePopupKey);
+              welcomePopupAlreadyShown = false;
+            }
+            if (mamMembersPopupAlreadyShown) {
+              await prefs.remove(mamMembersPopupKey);
+              mamMembersPopupAlreadyShown = false;
+              print('🔁 Réinitialisation des popups MAM (structure vide)');
+            }
+            await prefs.setBool(mamInitialStateKey, true);
+            mamInitialStateHandled = true;
+            print("🔧 DEBUG STATE: initial state handled -> true");
+            forceWelcome = true;
+          }
+        } else if (mamInitialStateHandled) {
+          await prefs.setBool(mamInitialStateKey, false);
+          mamInitialStateHandled = false;
+          print("🔧 DEBUG STATE: initial state handled -> false");
         }
+
+        print(
+            "🔍 DEBUG: Nombre de membres trouvés dans la collection: $memberCount");
 
         print(
             "🔍 DEBUG: Popup membres déjà affiché? $mamMembersPopupAlreadyShown");
@@ -618,6 +1180,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Marquer le popup comme affiché pour ne plus jamais le montrer
           await prefs.setBool(mamMembersPopupKey, true);
+          print("🔧 DEBUG STATE: popup key $mamMembersPopupKey set to true");
         } else if (needsChildren && isMyAccountOwner) {
           // PRIORITÉ 2 : S'il y a des membres mais pas d'enfants, ajouter des enfants
           shouldShowPopup = true;
@@ -632,20 +1195,31 @@ class _HomeScreenState extends State<HomeScreen> {
         // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants
         final bool needsChildren = !structureHasAnyChild;
         allowWelcomeFlow = isMyAccountOwner && needsChildren;
-        final bool resetToInitialState =
+        final String amInitialStateKey =
+            'assistant_initial_state_${structureDocId}';
+        bool amInitialStateHandled = prefs.getBool(amInitialStateKey) ?? false;
+        final bool isAssistantInInitialState =
             isMyAccountOwner && needsChildren && !hasChildren;
-        if (resetToInitialState) {
-          await prefs.remove(welcomePopupKey);
-          welcomePopupAlreadyShown = false;
-          print('🔁 Réinitialisation popup bienvenue (structure sans enfant)');
+        if (isAssistantInInitialState) {
+          if (!amInitialStateHandled && welcomePopupAlreadyShown) {
+            await prefs.remove(welcomePopupKey);
+            welcomePopupAlreadyShown = false;
+            print(
+                '🔁 Réinitialisation popup bienvenue (structure sans enfant)');
+          }
+          if (!amInitialStateHandled) {
+            await prefs.setBool(amInitialStateKey, true);
+            amInitialStateHandled = true;
+            forceWelcome = true;
+          }
+        } else if (amInitialStateHandled) {
+          await prefs.setBool(amInitialStateKey, false);
+          amInitialStateHandled = false;
         }
         if (allowWelcomeFlow && needsChildren) {
           shouldShowPopup = true;
           popupType = "addChild";
           print("⚠️ Assistante maternelle sans enfant, affichage du popup...");
-        }
-        if (allowWelcomeFlow) {
-          forceWelcome = forceWelcome || needsChildren;
         }
       }
 

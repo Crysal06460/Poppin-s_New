@@ -639,16 +639,19 @@ class NotificationService {
 
   static bool _shouldDisplayInfoPopup(
       String rawType, Map<String, dynamic> data) {
-    final type = rawType.toLowerCase();
+    final type = rawType.toLowerCase().trim();
+
+    if (_looksLikeMessageNotification(type, data)) {
+      return false;
+    }
+
     const suppressedTypes = {
-      'message',
       'stock',
-      'chat',
-      'conversation',
     };
     if (suppressedTypes.contains(type)) {
       return false;
     }
+
     const infoTypes = {
       'info',
       'broadcast',
@@ -661,16 +664,126 @@ class NotificationService {
       'alert',
       'test',
     };
+
     if (type.isEmpty) {
-      // Si les données ressemblent à un message (childId + messageId), ne pas afficher de popup
-      final hasMessageKeys =
-          data.containsKey('messageId') || data.containsKey('childId');
-      return !hasMessageKeys;
+      return true;
     }
+
     if (infoTypes.contains(type)) {
       return true;
     }
+
     return true;
+  }
+
+  // Offre une heuristique souple pour reconnaître les notifications de messagerie
+  // (messages privés, conversations, chat, etc.) afin d'éviter les popups bloquants.
+  static bool _looksLikeMessageNotification(
+      String lowerType, Map<String, dynamic> data) {
+    final normalizedType = lowerType.toLowerCase();
+    const typeHints = {
+      'message',
+      'messages',
+      'message_parent',
+      'message-parent',
+      'parent_message',
+      'parent-message',
+      'new_message',
+      'new-message',
+      'chat',
+      'chat_message',
+      'chat-message',
+      'conversation',
+      'conversation_message',
+      'conversation-message',
+      'direct_message',
+      'direct-message',
+    };
+    if (typeHints.contains(normalizedType)) {
+      return true;
+    }
+
+    if (normalizedType.contains('message') ||
+        normalizedType.contains('chat') ||
+        normalizedType.contains('conversation')) {
+      return true;
+    }
+
+    if (data.isEmpty) {
+      return false;
+    }
+
+    final Set<String> lowerCaseKeys =
+        data.keys.map((key) => key.toString().toLowerCase()).toSet();
+    const keyHints = {
+      'messageid',
+      'message_id',
+      'messagekey',
+      'message_key',
+      'messageref',
+      'message_ref',
+      'messagetype',
+      'message_type',
+      'conversationid',
+      'conversation_id',
+      'conversationpath',
+      'conversation_path',
+      'chatid',
+      'chat_id',
+      'threadid',
+      'thread_id',
+      'senderid',
+      'sender_id',
+      'receiverid',
+      'receiver_id',
+      'recipientid',
+      'recipient_id',
+      'exchangeid',
+      'exchange_id',
+    };
+    if (lowerCaseKeys.any((key) =>
+        keyHints.contains(key) ||
+        key.contains('message') ||
+        key.contains('chat') ||
+        key.contains('conversation'))) {
+      return true;
+    }
+
+    final List<String> indicatorFields = [
+      'category',
+      'notificationCategory',
+      'notificationcategory',
+      'notificationType',
+      'notificationtype',
+      'notification_type',
+      'messageCategory',
+      'messagecategory',
+      'messageType',
+      'messagetype',
+      'eventType',
+      'eventtype',
+    ];
+
+    for (final field in indicatorFields) {
+      final dynamic value = data[field];
+      if (value == null) continue;
+      final String normalizedValue = value.toString().toLowerCase();
+      if (normalizedValue.contains('message') ||
+          normalizedValue.contains('chat') ||
+          normalizedValue.contains('conversation')) {
+        return true;
+      }
+    }
+
+    // Conserver l'ancienne heuristique basée sur childId/messageId.
+    if (data.containsKey('messageId') ||
+        data.containsKey('message_id') ||
+        data.containsKey('childId') ||
+        data.containsKey('child_id')) {
+      return true;
+    }
+
+    return false;
   }
 
   static void _onDidReceiveNotificationResponse(NotificationResponse response) {

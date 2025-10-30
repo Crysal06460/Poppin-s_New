@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'dart:async';
+import 'firebase_trial_service.dart';
 
 class SubscriptionService {
   static bool get _isProduction {
@@ -105,17 +106,36 @@ class SubscriptionService {
 
       if (subscriptionQuery.docs.isNotEmpty) {
         QueryDocumentSnapshot<Map<String, dynamic>>? activeDoc;
+        bool shouldMarkTrialExpired = false;
+
         for (final doc in subscriptionQuery.docs) {
-          if (_isSubscriptionDocActive(doc.data())) {
+          final Map<String, dynamic> data = doc.data();
+          final TrialStatus trialStatus = TrialStatus.fromSubscriptionDoc(data);
+
+          if (_isSubscriptionDocActive(data, trialStatus: trialStatus)) {
             activeDoc = doc;
             break;
+          }
+
+          final String statusValue =
+              (data['status'] ?? '').toString().toLowerCase();
+          final bool isTrialStatus =
+              statusValue.contains('trial') || data['isTrialPeriod'] == true;
+
+          if (isTrialStatus && trialStatus.isExpired) {
+            shouldMarkTrialExpired = true;
           }
         }
 
         if (activeDoc != null) {
-          print(
-              '✅ Abonnement actif trouvé dans Firestore (${activeDoc.id})');
+          print('✅ Abonnement actif trouvé dans Firestore (${activeDoc.id})');
           return true;
+        }
+
+        if (shouldMarkTrialExpired) {
+          print(
+              '⏰ Essai Firebase expiré détecté via collection subscriptions.');
+          await FirebaseTrialService.markTrialExpired(structureId);
         }
 
         for (final doc in subscriptionQuery.docs) {
@@ -135,6 +155,22 @@ class SubscriptionService {
         if (structureSnapshot.exists) {
           final Map<String, dynamic> structureData =
               structureSnapshot.data() ?? <String, dynamic>{};
+          final TrialStatus structureTrial =
+              TrialStatus.fromStructureData(structureData);
+          final String structureStatus =
+              (structureData['subscriptionStatus'] ?? '').toString();
+
+          if (structureTrial.isActive) {
+            print('✅ Abonnement actif via structure (essai Firebase actif)');
+            return true;
+          }
+
+          final bool structureStatusIndicatesTrial =
+              structureStatus.toLowerCase().contains('trial');
+          if (structureTrial.isExpired && structureStatusIndicatesTrial) {
+            print('⏰ Essai Firebase expiré détecté via structure.');
+            await FirebaseTrialService.markTrialExpired(structureId);
+          }
 
           final String? subscriptionDocId =
               (structureData['subscriptionDocId'] ?? '').toString();
@@ -147,33 +183,19 @@ class SubscriptionService {
 
             if (linkedSubscription.exists) {
               final linkedData = linkedSubscription.data() ?? {};
-              final Timestamp? linkedTrial = linkedData['trialEndsAt'];
-              if (linkedTrial != null &&
-                  DateTime.now().isBefore(linkedTrial.toDate())) {
-                print(
-                    '✅ Abonnement actif via doc lié (essai en cours): $subscriptionDocId');
-                return true;
-              }
+              final TrialStatus linkedTrialStatus =
+                  TrialStatus.fromSubscriptionDoc(linkedData);
 
-              if ((linkedData['status'] ?? '').toString().toLowerCase() ==
-                  'active') {
-                print(
-                    '✅ Abonnement actif via doc lié (statut actif): $subscriptionDocId');
+              if (_isSubscriptionDocActive(linkedData,
+                  trialStatus: linkedTrialStatus)) {
+                print('✅ Abonnement actif via doc lié: $subscriptionDocId');
                 return true;
               }
             }
           }
 
-          if (structureData['subscriptionActive'] == true) {
-            final Timestamp? structureTrial =
-                structureData['subscriptionTrialEndsAt'] ??
-                    structureData['trialEndsAt'];
-            if (structureTrial is Timestamp &&
-                DateTime.now().isBefore(structureTrial.toDate())) {
-              print('✅ Abonnement actif via structure (essai en cours)');
-              return true;
-            }
-
+          if (structureData['subscriptionActive'] == true &&
+              !structureStatusIndicatesTrial) {
             final Timestamp? subscriptionUpdatedAt =
                 structureData['subscriptionUpdatedAt'];
             if (subscriptionUpdatedAt is Timestamp) {
@@ -189,10 +211,9 @@ class SubscriptionService {
             }
           }
 
-          final String structureStatus =
-              (structureData['subscriptionStatus'] ?? '').toString();
           if (structureStatus.isNotEmpty &&
-              _isStatusLikelyActive(structureStatus)) {
+              _isStatusLikelyActive(structureStatus,
+                  trialStatus: structureTrial)) {
             print(
                 '✅ Abonnement actif via structure (subscriptionStatus=$structureStatus)');
             return true;
@@ -221,13 +242,15 @@ class SubscriptionService {
               structureData['subscriptionExpiresAtIso'];
           if (rawStructureExpiresIso is String &&
               _isDateStringInFuture(rawStructureExpiresIso)) {
-            print('✅ Abonnement actif via structure (subscriptionExpiresAtIso)');
+            print(
+                '✅ Abonnement actif via structure (subscriptionExpiresAtIso)');
             return true;
           }
 
           final dynamic rawStripeStatus = structureData['stripeStatus'];
           if (rawStripeStatus is String &&
-              _isStatusLikelyActive(rawStripeStatus)) {
+              _isStatusLikelyActive(rawStripeStatus,
+                  trialStatus: structureTrial)) {
             print(
                 '✅ Abonnement actif via structure (stripeStatus=$rawStripeStatus)');
             return true;
@@ -237,7 +260,8 @@ class SubscriptionService {
               'ℹ️ Aucun abonnement actif via structure, champs disponibles: ${structureData.keys.toList()}');
         }
       } catch (structureCheckError) {
-        print('⚠️ Erreur lors de la vérification structure: $structureCheckError');
+        print(
+            '⚠️ Erreur lors de la vérification structure: $structureCheckError');
       }
 
       // 2. PRIORITÉ 2 : Si pas dans Firestore, essayer Google Play (avec timeout)
@@ -374,19 +398,21 @@ class SubscriptionService {
     return await isUserSubscribed();
   }
 
-  static bool _isSubscriptionDocActive(Map<String, dynamic> data) {
-    final String status = (data['status'] ?? '').toString().toLowerCase();
+  static bool _isSubscriptionDocActive(Map<String, dynamic> data,
+      {TrialStatus? trialStatus}) {
+    final TrialStatus effectiveTrialStatus =
+        trialStatus ?? TrialStatus.fromSubscriptionDoc(data);
+    final String status = (data['status'] ?? '').toString();
 
-    if (_isStatusLikelyActive(status)) {
+    if (_isStatusLikelyActive(status, trialStatus: effectiveTrialStatus)) {
+      return true;
+    }
+
+    if (effectiveTrialStatus.isActive) {
       return true;
     }
 
     final now = DateTime.now();
-
-    final dynamic trialEndsRaw = data['trialEndsAt'];
-    if (trialEndsRaw is Timestamp && now.isBefore(trialEndsRaw.toDate())) {
-      return true;
-    }
 
     final dynamic expiresAtRaw = data['expiresAt'];
     if (expiresAtRaw is Timestamp && now.isBefore(expiresAtRaw.toDate())) {
@@ -427,17 +453,17 @@ class SubscriptionService {
     return null;
   }
 
-  static bool _isStatusLikelyActive(String status) {
+  static bool _isStatusLikelyActive(String status, {TrialStatus? trialStatus}) {
     final normalized = status.toLowerCase().trim();
     if (normalized.isEmpty) return false;
 
+    if (normalized.contains('trial')) {
+      return trialStatus?.isActive ?? false;
+    }
+
     const activeStatuses = {
       'active',
-      'trial',
-      'trialing',
-      'trial_active',
-      'trial-period',
-      'trialperiod',
+      'purchased',
       'pending_activation',
       'pending-activation',
       'pending',
@@ -589,8 +615,7 @@ class SubscriptionService {
           .doc(user.email?.toLowerCase() ?? user.uid)
           .get();
       if (userDoc.exists) {
-        final Map<String, dynamic> data =
-            userDoc.data() ?? <String, dynamic>{};
+        final Map<String, dynamic> data = userDoc.data() ?? <String, dynamic>{};
         final String? sid = data['structureId'] as String?;
         if (sid != null && sid.isNotEmpty) return sid;
       }

@@ -441,6 +441,9 @@ class _PricingScreenState extends State<PricingScreen> {
     final bool isMam =
         normalizedType == 'mam' || normalizedType.contains('maison');
 
+    final String storeName = Platform.isIOS ? 'l\'App Store' : 'Google Play';
+    final String cancelPlatformLabel = Platform.isIOS ? 'iOS' : 'Google Play';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Choisir un Abonnement'),
@@ -454,7 +457,6 @@ class _PricingScreenState extends State<PricingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // En-tête avec badge essai gratuit
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
@@ -468,28 +470,7 @@ class _PricingScreenState extends State<PricingScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        // Badge essai gratuit
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: orange,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            '🎁 7 JOURS GRATUITS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Titre et prix
+                        const SizedBox(height: 8),
                         Text(
                           _getTitle(),
                           style: const TextStyle(
@@ -522,11 +503,19 @@ class _PricingScreenState extends State<PricingScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Résiliation possible à tout moment via $storeName.',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'Sans engagement : l\'abonnement ne débute qu\'après l\'essai et peut être résilié à tout moment.',
-                          style: TextStyle(
+                        Text(
+                          'Paiement sécurisé directement par $storeName.',
+                          style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 13,
                           ),
@@ -564,7 +553,7 @@ class _PricingScreenState extends State<PricingScreen> {
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
-                                'Essai 100% gratuit et sans engagement',
+                                'Paiement sécurisé & flexible',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -575,15 +564,21 @@ class _PricingScreenState extends State<PricingScreen> {
                         ),
                         const SizedBox(height: 12),
                         _ReassurancePoint(
-                          icon: Icons.lock_open,
+                          icon: Icons.verified_user,
                           text:
-                              'Aucun prélèvement : si vous annulez avant la fin des 7 jours.',
+                              'Transaction gérée directement par $storeName pour une facturation sécurisée.',
                         ),
                         const SizedBox(height: 8),
                         _ReassurancePoint(
-                          icon: Icons.calendar_today,
+                          icon: Icons.autorenew,
                           text:
-                              'Au 8ème jour seulement, l\'abonnement débute (résiliable à tout moment).',
+                              'Résiliation en quelques clics depuis les paramètres $cancelPlatformLabel.',
+                        ),
+                        const SizedBox(height: 8),
+                        const _ReassurancePoint(
+                          icon: Icons.receipt_long,
+                          text:
+                              'Pas de frais cachés : un seul prix mensuel pour toutes les fonctionnalités.',
                         ),
                       ],
                     ),
@@ -652,17 +647,17 @@ class _PricingScreenState extends State<PricingScreen> {
                                             horizontal: 8,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: _selectedMamMembers ==
-                                                    members
-                                                ? Colors.blue[600]
-                                                : Colors.grey[100],
+                                            color:
+                                                _selectedMamMembers == members
+                                                    ? Colors.blue[600]
+                                                    : Colors.grey[100],
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: _selectedMamMembers ==
-                                                      members
-                                                  ? Colors.blue[600]!
-                                                  : Colors.grey[300]!,
+                                              color:
+                                                  _selectedMamMembers == members
+                                                      ? Colors.blue[600]!
+                                                      : Colors.grey[300]!,
                                               width: 2,
                                             ),
                                           ),
@@ -751,11 +746,12 @@ class _PricingScreenState extends State<PricingScreen> {
                           if (_activeSubscription!.isTrialPeriod) ...[
                             const SizedBox(height: 8),
                             Text(
-                              '🎁 Période d\'essai gratuit',
+                              'Informations : abonnement géré via $storeName.',
                               style: TextStyle(
                                 color: Colors.green[700],
                                 fontWeight: FontWeight.w500,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ],
@@ -839,7 +835,7 @@ class _PricingScreenState extends State<PricingScreen> {
                         const SizedBox(height: 8),
                         Text(
                           '• L\'abonnement se renouvelle automatiquement\n'
-                          '• Résiliation possible à tout moment dans les paramètres ${Platform.isIOS ? 'iOS' : 'Android'}\n'
+                          '• Résiliation possible à tout moment dans les paramètres $cancelPlatformLabel\n'
                           '• Prix affiché TTC pour la France',
                           style: TextStyle(
                             fontSize: 12,
@@ -885,7 +881,7 @@ class _PricingScreenState extends State<PricingScreen> {
                                 ],
                               )
                             : const Text(
-                                'Commencer l\'essai gratuit de 7 jours',
+                                'Activer mon abonnement',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

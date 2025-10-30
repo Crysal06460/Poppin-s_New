@@ -107,8 +107,8 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
 
       // Vérification de différentes valeurs possibles pour les types
       final normalizedType = structureType?.toLowerCase();
-      isMAM = normalizedType == 'mam' ||
-          normalizedType?.contains('mam') == true;
+      isMAM =
+          normalizedType == 'mam' || normalizedType?.contains('mam') == true;
       isParent = normalizedType == 'parent_employeur' ||
           normalizedType == 'parentemployeur';
 
@@ -143,8 +143,7 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
           setState(() {
             structureType = data['structureType'];
             final normalized = structureType?.toLowerCase();
-            isMAM = normalized == 'mam' ||
-                normalized?.contains('mam') == true;
+            isMAM = normalized == 'mam' || normalized?.contains('mam') == true;
             isParent = normalized == 'parent_employeur' ||
                 normalized == 'parentemployeur';
             primaryColor = isMAM ? primaryRed : primaryBlue;
@@ -386,12 +385,19 @@ class _StructureInfoScreenState extends State<StructureInfoScreen> {
     final bool isTablet = screenSize.shortestSide >= 600;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F8FF),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: primaryColor,
         elevation: 0,
-        iconTheme: IconThemeData(color: primaryColor),
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
+        title: const Text(
+          'Informations de la structure',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: isTablet ? _buildTabletContent(screenSize) : _buildPhoneContent(),
     );

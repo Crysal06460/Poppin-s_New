@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'unified_subscription_service.dart';
+import 'firebase_trial_service.dart';
 
 class SubscriptionHelper {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,7 +23,7 @@ class SubscriptionHelper {
       }
 
       // Vérifier dans Firestore
-      final subscriptionQuery = await _firestore
+      QuerySnapshot<Map<String, dynamic>> subscriptionQuery = await _firestore
           .collection('subscriptions')
           .where('structureId', isEqualTo: user.uid)
           .where('status', isEqualTo: 'active')
@@ -31,46 +32,92 @@ class SubscriptionHelper {
           .get();
 
       if (subscriptionQuery.docs.isEmpty) {
+        subscriptionQuery = await _firestore
+            .collection('subscriptions')
+            .where('structureId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'trial')
+            .limit(1)
+            .get();
+      }
+
+      if (subscriptionQuery.docs.isEmpty) {
+        subscriptionQuery = await _firestore
+            .collection('subscriptions')
+            .where('structureId', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+      }
+
+      if (subscriptionQuery.docs.isEmpty) {
         return {'hasActiveSubscription': false};
       }
 
-      final subscriptionData = subscriptionQuery.docs.first.data();
+      final subscriptionDoc = subscriptionQuery.docs.first;
+      final subscriptionData = subscriptionDoc.data();
 
-      // Vérifier si l'abonnement n'a pas expiré
-      final String expirationDateStr = subscriptionData['expirationDate'] ?? '';
+      final TrialStatus trialStatus =
+          TrialStatus.fromSubscriptionDoc(subscriptionData);
+      final bool isTrialPeriod = (subscriptionData['isTrialPeriod'] == true) ||
+          trialStatus.normalizedStatus == 'trial';
+
       DateTime? expirationDate;
+      bool isExpired = false;
+      if (isTrialPeriod) {
+        expirationDate = trialStatus.endAt;
+        isExpired = trialStatus.isExpired;
+      } else {
+        final String expirationDateStr =
+            (subscriptionData['expirationDate'] ?? '').toString();
+        if (expirationDateStr.isNotEmpty) {
+          expirationDate = DateTime.tryParse(expirationDateStr);
+        }
 
-      if (expirationDateStr.isNotEmpty) {
-        try {
-          expirationDate = DateTime.parse(expirationDateStr);
-        } catch (e) {
-          print('Erreur de parsing de la date d\'expiration: $e');
+        if (expirationDate == null) {
+          final dynamic expiresAtRaw = subscriptionData['expiresAt'];
+          if (expiresAtRaw is Timestamp) {
+            expirationDate = expiresAtRaw.toDate();
+          }
+        }
+
+        final DateTime now = DateTime.now();
+        if (expirationDate != null && expirationDate.isBefore(now)) {
+          isExpired = true;
         }
       }
 
-      final DateTime now = DateTime.now();
-      final bool isExpired =
-          expirationDate != null && expirationDate.isBefore(now);
+      if (isTrialPeriod && trialStatus.isExpired) {
+        return {
+          'hasActiveSubscription': false,
+          'expiredDate': trialStatus.endAt,
+          'isTrialPeriod': true,
+          'trialStatus': trialStatus.normalizedStatus,
+        };
+      }
 
-      if (isExpired) {
+      if (!isTrialPeriod && isExpired) {
         return {'hasActiveSubscription': false, 'expiredDate': expirationDate};
       }
 
-      // Calculer les jours restants
       int daysRemaining = 0;
-      if (expirationDate != null) {
-        daysRemaining = expirationDate.difference(now).inDays;
+      if (isTrialPeriod) {
+        daysRemaining = trialStatus.daysRemaining;
+      } else if (expirationDate != null) {
+        final Duration diff = expirationDate.difference(DateTime.now());
+        daysRemaining = diff.isNegative ? 0 : diff.inDays;
       }
 
       return {
-        'hasActiveSubscription': true,
+        'hasActiveSubscription':
+            isTrialPeriod ? trialStatus.isActive : !isExpired,
         'subscriptionData': subscriptionData,
         'daysRemaining': daysRemaining,
         'expirationDate': expirationDate,
         'priceAmount': subscriptionData['priceAmount'] ?? 0.0,
         'priceDisplay': subscriptionData['priceDisplay'] ?? 'N/A',
         'platform': subscriptionData['platform'] ?? 'unknown',
-        'isTrialPeriod': subscriptionData['isTrialPeriod'] ?? false,
+        'isTrialPeriod': isTrialPeriod,
+        'trialStatus': trialStatus.normalizedStatus,
+        'trialEndsAt': trialStatus.endAt,
         'structureType': subscriptionData['structureType'] ?? 'unknown',
         'memberCount': subscriptionData['memberCount'] ?? 1,
         'productId': subscriptionData['productId'] ?? '',

@@ -26,6 +26,7 @@ import '../services/photo_cleanup_service.dart';
 import '../screens/admin_cleanup_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import '../services/subscription_service.dart';
+import '../services/firebase_trial_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
@@ -102,6 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _showDashboardNews = true;
   bool _isSubscriptionLoading = true;
   bool _isSubscribed = true;
+  TrialStatus? _trialStatus;
 
   // Couleurs dédiées aux tuiles de la grille (style 2025)
   final Color _tileBlue = const Color(0xFF3D9DF2);
@@ -176,12 +178,238 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  String _getSubscriptionTitle(bool trialStarted, bool trialExpired) {
+    if (trialExpired && trialStarted) {
+      return "Votre essai est terminé";
+    } else if (trialStarted && !trialExpired) {
+      return "Profitez de votre essai gratuit";
+    }
+    return "Débloquez le tableau de bord";
+  }
+
+  String _getSubscriptionDescription(bool trialStarted, bool trialExpired,
+      int daysLeft, TrialStatus? trialStatus) {
+    if (trialExpired && trialStarted) {
+      String expiryText = "";
+      if (trialStatus?.endAt != null) {
+        try {
+          expiryText =
+              DateFormat('d MMMM yyyy', 'fr_FR').format(trialStatus!.endAt!);
+        } catch (_) {
+          expiryText = "";
+        }
+      }
+      return expiryText.isNotEmpty
+          ? "Votre essai gratuit s'est terminé le $expiryText. Pour continuer à profiter du tableau de bord et de toutes ses fonctionnalités, activez votre abonnement."
+          : "Votre essai gratuit est terminé. Pour continuer à profiter du tableau de bord, activez votre abonnement.";
+    } else if (trialStarted && !trialExpired) {
+      return "Découvrez toutes les fonctionnalités du tableau de bord gratuitement pendant votre période d'essai. Prenez le temps d'explorer !";
+    }
+    return "Accédez à la gestion complète de votre structure avec un tableau de bord intuitif et des outils professionnels.";
+  }
+
+  Widget _buildTrialProgressBar(int daysLeft, Size screenSize, bool isTablet) {
+    final int totalTrialDays = 30; // ou récupérer depuis trialStatus
+    final double progress = (daysLeft / totalTrialDays).clamp(0.0, 1.0);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: progress,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white,
+                          Colors.white.withOpacity(0.9),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.4),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.schedule_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "$daysLeft jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}",
+                style: TextStyle(
+                  fontSize: screenSize.width * (isTablet ? 0.02 : 0.038),
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCards(Size screenSize, bool isTablet) {
+    final features = [
+      {
+        'icon': Icons.dashboard_customize_rounded,
+        'title': 'Tableau de bord complet',
+        'description': 'Visualisez toute votre activité',
+        'color': const Color(0xFF3D9DF2),
+      },
+      {
+        'icon': Icons.groups_rounded,
+        'title': 'Gestion des enfants',
+        'description': 'Suivez chaque enfant facilement',
+        'color': const Color(0xFF05C7F2),
+      },
+      {
+        'icon': Icons.calendar_month_rounded,
+        'title': 'Planning intégré',
+        'description': 'Organisez vos journées',
+        'color': const Color(0xFFF2B705),
+      },
+      {
+        'icon': Icons.insert_chart_rounded,
+        'title': 'Rapports mensuels',
+        'description': 'Suivez votre activité',
+        'color': const Color(0xFFD94350),
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: screenSize.width * (isTablet ? 0.02 : 0.03),
+        mainAxisSpacing: screenSize.width * (isTablet ? 0.02 : 0.03),
+        childAspectRatio: isTablet ? 1.2 : 1.0,
+      ),
+      itemCount: features.length,
+      itemBuilder: (context, index) {
+        final feature = features[index];
+        return Container(
+          padding: EdgeInsets.all(screenSize.width * (isTablet ? 0.025 : 0.04)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: (feature['color'] as Color).withOpacity(0.15),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                offset: const Offset(0, 2),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (feature['color'] as Color).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  feature['icon'] as IconData,
+                  color: feature['color'] as Color,
+                  size: screenSize.width * (isTablet ? 0.04 : 0.08),
+                ),
+              ),
+              SizedBox(height: screenSize.height * 0.012),
+              Text(
+                feature['title'] as String,
+                style: TextStyle(
+                  fontSize: screenSize.width * (isTablet ? 0.018 : 0.036),
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF2D3436),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              SizedBox(height: screenSize.height * 0.006),
+              Text(
+                feature['description'] as String,
+                style: TextStyle(
+                  fontSize: screenSize.width * (isTablet ? 0.016 : 0.03),
+                  color: const Color(0xFF636E72),
+                  height: 1.3,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _checkSubscriptionStatus() async {
     try {
       final bool result = await SubscriptionService.isUserSubscribed();
+      final TrialStatus trialStatus =
+          await FirebaseTrialService.fetchTrialStatusForCurrentUser();
+      bool isAllowed = result;
+      final bool hasActivePaidSubscription = result && !trialStatus.hasStarted;
+
+      if (trialStatus.isActive) {
+        isAllowed = true;
+      } else if (trialStatus.isExpired) {
+        await FirebaseTrialService.markTrialExpiredForCurrentUser();
+        isAllowed = hasActivePaidSubscription;
+      } else {
+        isAllowed = result;
+      }
+
       if (!mounted) return;
       setState(() {
-        _isSubscribed = result;
+        _isSubscribed = isAllowed;
+        _trialStatus = trialStatus;
         _isSubscriptionLoading = false;
       });
     } catch (e) {
@@ -189,61 +417,341 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _isSubscribed = true;
+        _trialStatus ??= TrialStatus.empty();
         _isSubscriptionLoading = false;
       });
     }
   }
 
   Widget _buildSubscriptionRequired() {
+    final TrialStatus? trialStatus = _trialStatus;
+    final bool trialStarted = trialStatus?.hasStarted ?? false;
+    final bool trialExpired = trialStatus?.isExpired ?? false;
+    final int daysLeft = trialStatus?.daysRemaining ?? 0;
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isTablet = screenSize.shortestSide >= 600;
+
     return Scaffold(
-      backgroundColor: kAppBackgroundColor,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.dashboard_outlined,
-              size: 80,
-              color: primaryColor,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Tableau de bord premium",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            // Header avec gradient moderne
+            SliverToBoxAdapter(
+              child: Container(
+                margin:
+                    EdgeInsets.all(screenSize.width * (isTablet ? 0.03 : 0.04)),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      primaryColor,
+                      primaryColor.withOpacity(0.8),
+                      brightCyan.withOpacity(0.6),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      offset: const Offset(0, 10),
+                      blurRadius: 30,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenSize.width * (isTablet ? 0.04 : 0.06),
+                    vertical: screenSize.height * (isTablet ? 0.04 : 0.05),
+                  ),
+                  child: Column(
+                    children: [
+                      // Icône moderne avec effet glassmorphism
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.workspace_premium_rounded,
+                          size: screenSize.width * (isTablet ? 0.08 : 0.16),
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: screenSize.height * 0.025),
+
+                      // Titre principal
+                      Text(
+                        _getSubscriptionTitle(trialStarted, trialExpired),
+                        style: TextStyle(
+                          fontSize:
+                              screenSize.width * (isTablet ? 0.032 : 0.065),
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.2,
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+
+                      if (trialStarted && !trialExpired) ...[
+                        SizedBox(height: screenSize.height * 0.02),
+                        // Progress bar pour l'essai
+                        _buildTrialProgressBar(daysLeft, screenSize, isTablet),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              "Accédez à la gestion complète",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () => context.go('/pricing'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              ),
-              child: const Text(
-                "DÉBLOQUER LE DASHBOARD",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+
+            // Description et avantages
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenSize.width * (isTablet ? 0.03 : 0.04),
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(height: screenSize.height * 0.02),
+
+                    // Card description principale
+                    Container(
+                      padding: EdgeInsets.all(
+                          screenSize.width * (isTablet ? 0.03 : 0.05)),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            offset: const Offset(0, 4),
+                            blurRadius: 20,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            _getSubscriptionDescription(trialStarted,
+                                trialExpired, daysLeft, trialStatus),
+                            style: TextStyle(
+                              fontSize:
+                                  screenSize.width * (isTablet ? 0.02 : 0.04),
+                              color: const Color(0xFF2D3436),
+                              height: 1.6,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (trialExpired && trialStarted) ...[
+                            SizedBox(height: screenSize.height * 0.02),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    color: primaryColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      "Aucune facturation automatique. Vous restez maître de votre abonnement.",
+                                      style: TextStyle(
+                                        fontSize: screenSize.width *
+                                            (isTablet ? 0.018 : 0.034),
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: screenSize.height * 0.025),
+
+                    // Avantages en cards modernes
+                    _buildFeatureCards(screenSize, isTablet),
+
+                    SizedBox(height: screenSize.height * 0.03),
+                  ],
                 ),
               ),
             ),
           ],
         ),
       ),
+
+      // Bottom bar avec CTA fixe
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: screenSize.width * (isTablet ? 0.03 : 0.04),
+          vertical: screenSize.height * 0.02,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              offset: const Offset(0, -4),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // CTA principal
+              SizedBox(
+                width: double.infinity,
+                height: screenSize.height * (isTablet ? 0.07 : 0.065),
+                child: ElevatedButton(
+                  onPressed: _openPricing,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shadowColor: primaryColor.withOpacity(0.3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        trialExpired
+                            ? "Activer mon abonnement"
+                            : "Découvrir les offres",
+                        style: TextStyle(
+                          fontSize:
+                              screenSize.width * (isTablet ? 0.022 : 0.042),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: screenSize.width * (isTablet ? 0.025 : 0.05),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              SizedBox(height: screenSize.height * 0.012),
+
+              // Lien secondaire
+              TextButton(
+                onPressed: () => context.go('/home'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF636E72),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  "Retourner à l'accueil",
+                  style: TextStyle(
+                    fontSize: screenSize.width * (isTablet ? 0.02 : 0.037),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  Future<void> _openPricing() async {
+    final Map<String, dynamic> extra = await _buildPricingExtras();
+    if (!mounted) return;
+    context.go('/pricing', extra: extra);
+  }
+
+  Future<Map<String, dynamic>> _buildPricingExtras() async {
+    try {
+      final String structureId = await _getStructureId();
+      if (structureId.isEmpty) {
+        return {
+          'structureType': isMAMStructure ? 'mam' : 'assistante_maternelle'
+        };
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .get();
+
+      if (!snapshot.exists) {
+        return {
+          'structureType': isMAMStructure ? 'mam' : 'assistante_maternelle'
+        };
+      }
+
+      final data = snapshot.data() ?? {};
+      final String rawType = (data['structureType'] ??
+              (isMAMStructure ? 'MAM' : 'AssistanteMaternelle'))
+          .toString();
+      final String routingType = rawType.toLowerCase().contains('mam')
+          ? 'mam'
+          : 'assistante_maternelle';
+
+      final Map<String, dynamic> payload = {'structureType': routingType};
+      if (routingType == 'mam') {
+        final int? plan = _resolveMamPlanFromData(data);
+        if (plan != null) {
+          payload['memberCount'] = plan;
+        }
+      }
+      return payload;
+    } catch (e) {
+      print('⚠️ Erreur préparation pricing (dashboard): $e');
+      return {
+        'structureType': isMAMStructure ? 'mam' : 'assistante_maternelle'
+      };
+    }
+  }
+
+  int? _resolveMamPlanFromData(Map<String, dynamic> data) {
+    final dynamic preferredPlan = data['mamPreferredPlan'];
+    final dynamic memberCount = data['memberCount'];
+    final dynamic maxMemberCount = data['maxMemberCount'];
+
+    if (preferredPlan is int && preferredPlan >= 3) {
+      return preferredPlan >= 4 ? 4 : 3;
+    }
+
+    if (memberCount is int && memberCount >= 3) {
+      return memberCount >= 4 ? 4 : 3;
+    }
+
+    if (maxMemberCount is int && maxMemberCount >= 3) {
+      return maxMemberCount >= 4 ? 4 : 3;
+    }
+
+    return null;
   }
 
   Widget _wrapWithLoadingOverlay(Widget child) {

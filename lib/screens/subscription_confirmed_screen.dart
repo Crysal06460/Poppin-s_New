@@ -44,8 +44,7 @@ class _SubscriptionConfirmedScreenState
 
     // Sinon, calculer le prix comme avant (fallback) - ✅ PRIX CORRIGÉS
     final String normalized = structureType.toLowerCase();
-    final bool isMam =
-        normalized == 'mam' || normalized.contains('maison');
+    final bool isMam = normalized == 'mam' || normalized.contains('maison');
     if (isMam) {
       if (memberCount <= 3) {
         return '19,99 € / mois';
@@ -61,7 +60,6 @@ class _SubscriptionConfirmedScreenState
     // Récupérer les informations de la structure
     final String structureType =
         widget.structureInfo['structureType'] ?? 'assistante_maternelle';
-    final String structureId = widget.structureInfo['structureId'] ?? '';
     final int memberCount = widget.structureInfo['memberCount'] ?? 1;
     final String normalizedType = structureType.toLowerCase();
     final bool isMam =
@@ -257,16 +255,6 @@ class _SubscriptionConfirmedScreenState
                             const SizedBox(height: 10),
                           ],
 
-                          // Période d'essai
-                          _buildInfoRow(
-                            icon: Icons.date_range,
-                            title: "Période d'essai",
-                            value: "7 jours gratuits",
-                            color: primaryColor,
-                          ),
-
-                          const SizedBox(height: 10),
-
                           // Facturation
                           _buildInfoRow(
                             icon: Icons.payment,
@@ -317,15 +305,7 @@ class _SubscriptionConfirmedScreenState
                 onPressed: _isSaving
                     ? null
                     : () {
-                        // Rediriger vers la page des informations de structure
-                        context.go('/structure-info', extra: {
-                          'structureType':
-                              widget.structureInfo['structureType'] ??
-                                  'assistante_maternelle',
-                          'structureId':
-                              widget.structureInfo['structureId'] ?? '',
-                          'memberCount': memberCount,
-                        });
+                        context.go('/home');
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
@@ -345,7 +325,7 @@ class _SubscriptionConfirmedScreenState
                         ),
                       )
                     : const Text(
-                        "CONTINUER",
+                        "ACCÉDER À L'APPLICATION",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -369,56 +349,43 @@ class _SubscriptionConfirmedScreenState
       Color primaryColor,
       double maxWidth,
       double maxHeight) {
-    // Créer une liste complète de tous les détails possibles
-    List<Map<String, dynamic>> allDetails = [
-      {
-        'icon': Icons.business_outlined,
-        'title': 'Type d\'abonnement',
-        'value': shortName, // ✅ UTILISE LA VERSION COURTE
-      },
-      {
-        'icon': Icons.euro_outlined,
-        'title': 'Tarif mensuel',
-        'value': price,
-      },
-      {
-        'icon': Icons.people_outline,
-        'title': 'Nombre de membres',
-        'value': '$memberCount membres',
-      },
-      {
-        'icon': Icons.calendar_today_outlined,
-        'title': 'Période d\'essai',
-        'value': '7 jours gratuits',
-      },
-      {
-        'icon': Icons.payment_outlined,
-        'title': 'Mode de facturation',
-        'value': 'Mensuelle',
-      },
-      {
-        'icon': Icons.check_circle_outline,
-        'title': 'Statut',
-        'value': 'Actif',
-      },
+    final Map<String, dynamic> typeDetail = {
+      'icon': Icons.business_outlined,
+      'title': 'Type d\'abonnement',
+      'value': shortName,
+    };
+
+    final Map<String, dynamic> priceDetail = {
+      'icon': Icons.euro_outlined,
+      'title': 'Tarif mensuel',
+      'value': price,
+    };
+
+    final Map<String, dynamic> membersDetail = {
+      'icon': Icons.people_outline,
+      'title': 'Nombre de membres',
+      'value': '$memberCount membres',
+    };
+
+    final Map<String, dynamic> billingDetail = {
+      'icon': Icons.payment_outlined,
+      'title': 'Mode de facturation',
+      'value': 'Mensuelle',
+    };
+
+    final Map<String, dynamic> statusDetail = {
+      'icon': Icons.check_circle_outline,
+      'title': 'Statut',
+      'value': 'Actif',
+    };
+
+    final List<Map<String, dynamic>> details = [
+      typeDetail,
+      priceDetail,
+      if (isMam) membersDetail,
+      billingDetail,
+      statusDetail,
     ];
-
-    // Filtrer les détails selon le type de structure
-    List<Map<String, dynamic>> details = [];
-
-    // Toujours inclure : Type, Prix
-    details.add(allDetails[0]); // Type
-    details.add(allDetails[1]); // Prix
-
-    // Ajouter le nombre de membres seulement pour MAM
-    if (isMam) {
-      details.add(allDetails[2]); // Membres
-    }
-
-    // Toujours inclure : Période d'essai, Facturation, Statut
-    details.add(allDetails[3]); // Période d'essai
-    details.add(allDetails[4]); // Facturation
-    details.add(allDetails[5]); // Statut
 
     // Maintenant organiser en rangées selon le nombre d'éléments
     if (isMam) {
@@ -454,7 +421,7 @@ class _SubscriptionConfirmedScreenState
 
           SizedBox(height: maxHeight * 0.025),
 
-          // Deuxième rangée : Membres et Période d'essai
+          // Deuxième rangée : Membres & Facturation
           Row(
             children: [
               Expanded(
@@ -544,12 +511,12 @@ class _SubscriptionConfirmedScreenState
 
           SizedBox(height: maxHeight * 0.025),
 
-          // Deuxième rangée : Période d'essai et Facturation
+          // Deuxième rangée : Membres (si MAM) et Facturation
           Row(
             children: [
               Expanded(
                 child: _buildTabletDetailItem(
-                  details[2]['icon'], // Période d'essai
+                  details[2]['icon'],
                   details[2]['title'],
                   details[2]['value'],
                   primaryColor,
@@ -560,7 +527,7 @@ class _SubscriptionConfirmedScreenState
               SizedBox(width: maxWidth * 0.02),
               Expanded(
                 child: _buildTabletDetailItem(
-                  details[3]['icon'], // Facturation
+                  details[3]['icon'],
                   details[3]['title'],
                   details[3]['value'],
                   primaryColor,
@@ -583,7 +550,7 @@ class _SubscriptionConfirmedScreenState
               Expanded(
                 flex: 3,
                 child: _buildTabletDetailItem(
-                  details[4]['icon'], // Statut
+                  details[4]['icon'],
                   details[4]['title'],
                   details[4]['value'],
                   primaryColor,
@@ -668,24 +635,7 @@ class _SubscriptionConfirmedScreenState
         ],
       ),
       child: ElevatedButton(
-        onPressed: _isSaving
-            ? null
-            : () {
-                final String structureType =
-                    widget.structureInfo['structureType'] ??
-                        'assistante_maternelle';
-                final String structureId =
-                    widget.structureInfo['structureId'] ?? '';
-                final int memberCount =
-                    widget.structureInfo['memberCount'] ?? 1;
-
-                // Rediriger vers la page des informations de structure
-                context.go('/structure-info', extra: {
-                  'structureType': structureType,
-                  'structureId': structureId,
-                  'memberCount': memberCount,
-                });
-              },
+        onPressed: _isSaving ? null : () => context.go('/home'),
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
@@ -704,7 +654,7 @@ class _SubscriptionConfirmedScreenState
                 ),
               )
             : Text(
-                "CONTINUER",
+                "ACCÉDER À L'APPLICATION",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: maxWidth * 0.02,
