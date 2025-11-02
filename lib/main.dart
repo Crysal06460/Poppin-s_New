@@ -29,37 +29,31 @@ const Color lightBlue = Color(0xFFDFE9F2);
 const Color brightCyan = Color(0xFF05C7F2);
 const Color primaryYellow = Color(0xFFF2B705);
 
-bool _isTabletView(ui.FlutterView? view) {
-  if (view == null) return false;
-  final physicalSize = view.physicalSize;
-  double devicePixelRatio = view.devicePixelRatio;
-  if (devicePixelRatio == 0) {
-    final dispatcher = WidgetsBinding.instance.platformDispatcher;
-    if (dispatcher.views.isNotEmpty) {
-      devicePixelRatio = dispatcher.views.first.devicePixelRatio;
-    }
-  }
-  if (devicePixelRatio == 0) return false;
-  final logicalWidth = physicalSize.width / devicePixelRatio;
-  final logicalHeight = physicalSize.height / devicePixelRatio;
-  final shortestSide = math.min(logicalWidth, logicalHeight);
-  return shortestSide >= 600;
-}
-
-bool _detectTablet() {
+List<DeviceOrientation>? _preferredOrientationsForCurrentView() {
   final dispatcher = WidgetsBinding.instance.platformDispatcher;
   final ui.FlutterView? view = dispatcher.views.isNotEmpty
       ? dispatcher.views.first
       : dispatcher.implicitView;
-  return _isTabletView(view);
-}
+  if (view == null) {
+    return null;
+  }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final Size physicalSize = view.physicalSize;
+  if (physicalSize.width == 0 || physicalSize.height == 0) {
+    return null;
+  }
 
-  final bool isTablet = _detectTablet();
+  double devicePixelRatio = view.devicePixelRatio;
+  if (devicePixelRatio <= 0) {
+    devicePixelRatio = 1;
+  }
 
-  final orientations = isTablet
+  final double logicalWidth = physicalSize.width / devicePixelRatio;
+  final double logicalHeight = physicalSize.height / devicePixelRatio;
+  final double shortestSide = math.min(logicalWidth, logicalHeight);
+  final bool isTablet = shortestSide >= 600;
+
+  return isTablet
       ? const [
           DeviceOrientation.portraitUp,
           DeviceOrientation.portraitDown,
@@ -69,8 +63,19 @@ void main() async {
       : const [
           DeviceOrientation.portraitUp,
         ];
+}
 
-  await SystemChrome.setPreferredOrientations(orientations);
+Future<void> _setPreferredOrientationsForCurrentView() async {
+  final orientations = _preferredOrientationsForCurrentView();
+  if (orientations != null) {
+    await SystemChrome.setPreferredOrientations(orientations);
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await _setPreferredOrientationsForCurrentView();
 
   // ✅ CORRECTION : Firebase.initializeApp() AVANT d'utiliser FirebaseMessaging
   await Firebase.initializeApp();
@@ -161,25 +166,26 @@ void main() async {
   }
 
   print('🚀 Démarrage Poppins - Fix Android appliqué, iOS préservé');
-  runApp(PoppinsApp(isTablet: isTablet));
+  runApp(const PoppinsApp());
 }
 
 class PoppinsApp extends StatefulWidget {
-  const PoppinsApp({Key? key, required this.isTablet}) : super(key: key);
-
-  final bool isTablet;
+  const PoppinsApp({Key? key}) : super(key: key);
 
   @override
   State<PoppinsApp> createState() => _PoppinsAppState();
 }
 
 class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
+  bool? _lastIsTabletForOrientation;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _applyPreferredOrientations();
+    _applyPreferredOrientations(force: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyPreferredOrientations(force: true);
       NotificationService.synchronizeMissedNotifications();
       NotificationService.showPendingNotificationWhenReady();
     });
@@ -235,18 +241,32 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
     }
   }
 
-  void _applyPreferredOrientations() {
-    final orientations = widget.isTablet
-        ? const [
-            DeviceOrientation.portraitUp,
-            DeviceOrientation.portraitDown,
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ]
-        : const [
-            DeviceOrientation.portraitUp,
-          ];
-    SystemChrome.setPreferredOrientations(orientations);
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _applyPreferredOrientations();
+  }
+
+  Future<void> _applyPreferredOrientations({bool force = false}) async {
+    if (!mounted) return;
+
+    final orientations = _preferredOrientationsForCurrentView();
+    if (orientations == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _applyPreferredOrientations(force: force);
+        }
+      });
+      return;
+    }
+
+    final bool isTablet = orientations.length > 1;
+    if (!force && _lastIsTabletForOrientation == isTablet) {
+      return;
+    }
+
+    _lastIsTabletForOrientation = isTablet;
+    await SystemChrome.setPreferredOrientations(orientations);
   }
 
   @override

@@ -13,6 +13,7 @@ import 'package:poppins_app/services/delegation_service.dart';
 import 'package:poppins_app/models/delegation_model.dart';
 import 'package:poppins_app/screens/planning_history_screen.dart';
 import 'package:go_router/go_router.dart';
+import 'package:poppins_app/utils/planning_helper.dart';
 
 class PlanningScreen extends StatefulWidget {
   const PlanningScreen({Key? key}) : super(key: key);
@@ -413,149 +414,57 @@ class _PlanningScreenState extends State<PlanningScreen> {
           ),
         );
 
-        // Déterminer l'assistante maternelle responsable de cet enfant
-        // CORRECTION ICI: Chercher le membre correct basé sur assignedMemberEmail
-        String membreResponsableId = '';
+        final membreResponsableId =
+            _resolveMembreIdForChild(childData, enfant);
 
-        // Priorité 1: Vérifier le champ assignedMemberEmail pour trouver le membre correspondant
-        if (childData.containsKey('assignedMemberEmail') &&
-            childData['assignedMemberEmail'] != null) {
-          final assignedEmail = childData['assignedMemberEmail'];
-          // Trouver le membre avec cet email
-          for (var membre in _membres) {
-            // Chercher dans la collection membres
-            if (_membres.isNotEmpty) {
-              final membreDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(assignedEmail)
-                  .get();
+        final childForPlanning = {
+          ...childData,
+          'id': childId,
+          'firstName': childData['firstName'] ?? enfant.prenom,
+          'lastName': childData['lastName'] ?? enfant.nom,
+        };
 
-              if (membreDoc.exists && membreDoc.data() != null) {
-                final membreId = membreDoc.id;
-                // Trouver si ce membre existe dans notre liste
-                final membreCorrespondant = _membres.firstWhere(
-                  (m) => m.id == membreId || m.email == assignedEmail,
-                  orElse: () => Membre(
-                    id: '',
-                    nom: '',
-                    prenom: '',
-                    mamId: '',
-                    role: '',
-                  ),
-                );
+        final slots = PlanningHelper.resolveSlotsForDate(
+          childForPlanning,
+          _selectedDate,
+        );
 
-                if (membreCorrespondant.id.isNotEmpty) {
-                  membreResponsableId = membreCorrespondant.id;
-                  break;
-                }
-              }
-            }
+        if (membreResponsableId.isEmpty && slots.isNotEmpty) {
+          print(
+              "Impossible de créer une garde pour l'enfant $childId: pas de membre responsable trouvé");
+        }
+
+        for (final slot in slots) {
+          final start = slot.start;
+          final end = slot.end;
+          if (start.isEmpty || end.isEmpty) {
+            continue;
           }
-        }
 
-        // Priorité 2: Vérifier le champ assignedToMembre si on n'a pas trouvé avec l'email
-        if (membreResponsableId.isEmpty &&
-            childData.containsKey('assignedToMembre') &&
-            childData['assignedToMembre'] != null) {
-          membreResponsableId = childData['assignedToMembre'];
-        }
-        // Priorité 3: Prendre la première assistante dans membresIds
-        else if (membreResponsableId.isEmpty && enfant.membresIds.isNotEmpty) {
-          membreResponsableId = enfant.membresIds.first;
-        }
-        // Priorité 4: En dernier recours, utiliser l'utilisateur connecté ou le premier membre
-        else if (membreResponsableId.isEmpty && _membres.isNotEmpty) {
-          final currentUserUid = _auth.currentUser?.uid ?? '';
-          final currentMembre = _membres.firstWhere(
-            (m) => m.id == currentUserUid,
-            orElse: () => _membres.first,
-          );
-          membreResponsableId = currentMembre.id;
-        }
-
-        // Vérifier si l'enfant a un planning
-        if (childData.containsKey('schedule')) {
-          final schedule = childData['schedule'];
-
-          // Pour chaque jour dans l'horaire
-          if (schedule is Map<String, dynamic>) {
-            schedule.forEach((day, segments) {
-              // Convertir le nom du jour en numéro de jour (1=Lundi, etc.)
-              int jourSchedule;
-              switch (day.toLowerCase()) {
-                case 'lundi':
-                  jourSchedule = 1;
-                  break;
-                case 'mardi':
-                  jourSchedule = 2;
-                  break;
-                case 'mercredi':
-                  jourSchedule = 3;
-                  break;
-                case 'jeudi':
-                  jourSchedule = 4;
-                  break;
-                case 'vendredi':
-                  jourSchedule = 5;
-                  break;
-                default:
-                  jourSchedule = 0;
-                  break;
-              }
-
-              // Vérifier si c'est le jour que nous sommes en train d'afficher
-              if (jourSchedule == jourSemaine) {
-                // Traiter les segments selon leur type
-                List<Map<String, dynamic>> segmentsList = [];
-
-                if (segments is List) {
-                  for (var segment in segments) {
-                    if (segment is Map &&
-                        segment.containsKey('start') &&
-                        segment.containsKey('end')) {
-                      segmentsList.add(
-                          {'start': segment['start'], 'end': segment['end']});
-                    }
-                  }
-                } else if (segments is Map) {
-                  if (segments.containsKey('0')) {
-                    segments.forEach((key, value) {
-                      if (value is Map &&
-                          value.containsKey('start') &&
-                          value.containsKey('end')) {
-                        segmentsList.add(
-                            {'start': value['start'], 'end': value['end']});
-                      }
-                    });
-                  } else if (segments.containsKey('start') &&
-                      segments.containsKey('end')) {
-                    segmentsList.add(
-                        {'start': segments['start'], 'end': segments['end']});
-                  }
-                }
-
-                // Créer une garde pour chaque segment
-                for (var segment in segmentsList) {
-                  // Vérifier que nous avons bien trouvé un membre responsable
-                  if (membreResponsableId.isNotEmpty) {
-                    allGardes.add(Garde(
-                      id: 'schedule_${childId}_${day}_${segment['start']}',
-                      enfantId: childId,
-                      membreId: membreResponsableId,
-                      mamId: _structureId,
-                      jourSemaine: jourSchedule,
-                      heureDebut: segment['start'],
-                      heureFin: segment['end'],
-                      recurrent: true,
-                    ));
-                  } else {
-                    print(
-                        "Impossible de créer une garde pour l'enfant $childId: pas de membre responsable trouvé");
-                  }
-                }
-              }
-            });
+          if (membreResponsableId.isEmpty) {
+            continue;
           }
+
+          final alreadyExists = allGardes.any((g) =>
+              g.enfantId == childId &&
+              g.jourSemaine == jourSemaine &&
+              g.heureDebut == start &&
+              g.heureFin == end);
+
+          if (alreadyExists) {
+            continue;
+          }
+
+          allGardes.add(Garde(
+            id: 'auto_${childId}_${jourSemaine}_$start',
+            enfantId: childId,
+            membreId: membreResponsableId,
+            mamId: _structureId,
+            jourSemaine: jourSemaine,
+            heureDebut: start,
+            heureFin: end,
+            recurrent: true,
+          ));
         }
       }
 
@@ -564,6 +473,70 @@ class _PlanningScreenState extends State<PlanningScreen> {
       print("Erreur lors du chargement des gardes: $e");
       setState(() => _gardes = []);
     }
+  }
+
+  String _resolveMembreIdForChild(
+      Map<String, dynamic> childData, Enfant enfant) {
+    final assignedEmailRaw = childData['assignedMemberEmail'];
+    final assignedEmail = assignedEmailRaw is String
+        ? assignedEmailRaw.trim().toLowerCase()
+        : '';
+
+    if (assignedEmail.isNotEmpty) {
+      for (final membre in _membres) {
+        final membreEmail = membre.email.toLowerCase();
+        if (membreEmail == assignedEmail) {
+          return membre.id;
+        }
+      }
+    }
+
+    final assignedToMembre = childData['assignedToMembre'];
+    if (assignedToMembre is String && assignedToMembre.isNotEmpty) {
+      for (final membre in _membres) {
+        if (membre.id == assignedToMembre) {
+          return membre.id;
+        }
+      }
+    }
+
+    final assignedList = childData['assignedTo'];
+    if (assignedList is List) {
+      for (final rawId in assignedList) {
+        if (rawId == null) continue;
+        final id = rawId.toString();
+        if (id.isEmpty) continue;
+        for (final membre in _membres) {
+          if (membre.id == id) {
+            return membre.id;
+          }
+        }
+      }
+    }
+
+    for (final id in enfant.membresIds) {
+      if (id.isEmpty) continue;
+      for (final membre in _membres) {
+        if (membre.id == id) {
+          return membre.id;
+        }
+      }
+    }
+
+    final currentUserUid = _auth.currentUser?.uid ?? '';
+    if (currentUserUid.isNotEmpty) {
+      for (final membre in _membres) {
+        if (membre.id == currentUserUid) {
+          return membre.id;
+        }
+      }
+    }
+
+    if (_membres.isNotEmpty) {
+      return _membres.first.id;
+    }
+
+    return '';
   }
 
   // Créer la collection gardes si elle n'existe pas encore

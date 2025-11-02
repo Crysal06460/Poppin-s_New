@@ -44,6 +44,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Color primaryColor = const Color(0xFF3D9DF2);
   Color secondaryColor = const Color(0xFFDFE9F2);
 
+  Map<String, Color> _memberColorAssignments = {};
+  Map<String, int> _memberSortOrder = {};
+  static const List<Color> _mamMemberColorPalette = [
+    Color(0xFF3D9DF2), // Bleu principal
+    Color(0xFF2ECC71), // Vert
+    Color(0xFFFFC107), // Jaune
+    Color(0xFF9B59B6), // Violet
+    Color(0xFFE67E22), // Orange
+    Color(0xFF1ABC9C), // Turquoise
+    Color(0xFFEB5757), // Rouge doux
+  ];
+  static const Color _mamUnassignedMemberColor = Color(0xFF95A5A6);
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +77,50 @@ class _HomeScreenState extends State<HomeScreen> {
     // Utilisation des couleurs de la palette (identique pour tous les types)
     primaryColor = const Color(0xFF3D9DF2); // Bleu #3D9DF2
     secondaryColor = const Color(0xFFDFE9F2); // Bleu clair #DFE9F2
+  }
+
+  bool get _isMamStructure =>
+      structureType.trim().toLowerCase() == 'mam';
+
+  bool _shouldUseMamColoring() {
+    return _isMamStructure && _memberColorAssignments.isNotEmpty;
+  }
+
+  Map<String, Color> _generateMamMemberColorAssignments(
+      Iterable<Map<String, dynamic>> children,
+      {List<String>? outSortedEmails}) {
+    final Set<String> uniqueEmails = <String>{};
+    for (final child in children) {
+      final dynamic rawEmail = child['assignedMemberEmail'];
+      if (rawEmail == null) {
+        continue;
+      }
+      final String email = rawEmail.toString().trim().toLowerCase();
+      if (email.isNotEmpty) {
+        uniqueEmails.add(email);
+      }
+    }
+
+    final List<String> sortedEmails = uniqueEmails.toList()..sort();
+    if (outSortedEmails != null) {
+      outSortedEmails
+        ..clear()
+        ..addAll(sortedEmails);
+    }
+    final Map<String, Color> assignments = <String, Color>{};
+    for (int i = 0; i < sortedEmails.length; i++) {
+      final Color paletteColor =
+          _mamMemberColorPalette[i % _mamMemberColorPalette.length];
+      assignments[sortedEmails[i]] = paletteColor;
+    }
+    return assignments;
+  }
+
+  Color _getMamColorForEmail(String email) {
+    if (email.isEmpty) {
+      return _mamUnassignedMemberColor;
+    }
+    return _memberColorAssignments[email] ?? _mamUnassignedMemberColor;
   }
 
   bool _canCurrentUserEditChild(Map<String, dynamic> child) {
@@ -1070,18 +1127,54 @@ class _HomeScreenState extends State<HomeScreen> {
       print(
           "📅 ENFANTS DU JOUR - Mode tous les enfants: $showAllChildrenOnHome, total: ${todayChildren.length}");
 
+      final List<String> mamMemberOrder = <String>[];
+      final Map<String, Color> memberColorAssignments = isMamStructure
+          ? _generateMamMemberColorAssignments(allChildren,
+              outSortedEmails: mamMemberOrder)
+          : <String, Color>{};
+      final Map<String, int> memberSortOrder = <String, int>{};
+      for (int i = 0; i < mamMemberOrder.length; i++) {
+        memberSortOrder[mamMemberOrder[i]] = i;
+      }
+
+      List<Map<String, dynamic>> sortedTodayChildren =
+          List<Map<String, dynamic>>.from(todayChildren);
+      if (isMamStructure && sortedTodayChildren.length > 1) {
+        sortedTodayChildren.sort((a, b) {
+          final String emailA =
+              (a['assignedMemberEmail'] ?? '').toString().trim().toLowerCase();
+          final String emailB =
+              (b['assignedMemberEmail'] ?? '').toString().trim().toLowerCase();
+          final int orderA =
+              memberSortOrder[emailA] ?? (mamMemberOrder.length + 1);
+          final int orderB =
+              memberSortOrder[emailB] ?? (mamMemberOrder.length + 1);
+          if (orderA != orderB) {
+            return orderA.compareTo(orderB);
+          }
+
+          final String nameA =
+              (a['firstName'] ?? '').toString().trim().toLowerCase();
+          final String nameB =
+              (b['firstName'] ?? '').toString().trim().toLowerCase();
+          return nameA.compareTo(nameB);
+        });
+      }
+
       setState(() {
         structureName = fetchedStructureName;
         structureType = isMamStructure ? 'MAM' : 'AssistanteMaternelle';
         _mamMembersCount = mamPlan;
         _routingStructureType =
             isMamStructure ? 'mam' : 'assistante_maternelle';
-        children = todayChildren;
+        children = sortedTodayChildren;
         // Vérifier si le membre a des enfants qui lui sont assignés
         hasChildren = filteredChildren.isNotEmpty;
         isLoading = false;
         _delegatedChildIds = delegatedTodayChildIds;
         _myAssignedChildIds = myAssignedChildIds;
+        _memberColorAssignments = memberColorAssignments;
+        _memberSortOrder = memberSortOrder;
       });
 
       // Définir les couleurs après avoir récupéré le type de structure
@@ -2658,6 +2751,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayName = child['firstName'] ?? 'Enfant';
     final photoUrl = child['photoUrl'];
     final childId = child['id'];
+    final String assignedMemberEmail =
+        (child['assignedMemberEmail'] ?? '').toString().trim().toLowerCase();
+    final Color baseColor = _shouldUseMamColoring()
+        ? _getMamColorForEmail(assignedMemberEmail)
+        : (isBoy ? primaryColor : Colors.pink);
+    final List<Color> gradientColors = [
+      baseColor.withOpacity(0.7),
+      baseColor,
+    ];
+    final Color shadowColor = baseColor.withOpacity(0.3);
 
     // Tailles proportionnelles pour l'affichage vertical - AUGMENTÉES
     final double avatarSize =
@@ -2682,15 +2785,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryColor.withOpacity(0.7), primaryColor]
-                          : [Colors.pink.withOpacity(0.7), Colors.pink],
+                      colors: gradientColors,
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: (isBoy ? primaryColor : Colors.pink)
-                            .withOpacity(0.3),
+                        color: shadowColor,
                         blurRadius: 6, // Augmenté de 4 à 6
                         offset: const Offset(0, 3), // Augmenté de 2 à 3
                       ),
@@ -2709,6 +2809,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 displayName,
                                 avatarSize * 0.9,
                                 avatarSize * 0.4,
+                                textColor: baseColor,
                               ),
                             ),
                           )
@@ -2716,6 +2817,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             displayName,
                             avatarSize * 0.9,
                             avatarSize * 0.4,
+                            textColor: baseColor,
                           ),
                   ),
                 ),
@@ -2742,7 +2844,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 // Version simplifiée pour le layout vertical
-  Widget _buildFallbackAvatarSimple(String name, double size, double fontSize) {
+  Widget _buildFallbackAvatarSimple(
+      String name, double size, double fontSize,
+      {required Color textColor}) {
     return Container(
       width: size,
       height: size,
@@ -2756,7 +2860,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.bold,
-            color: primaryColor,
+            color: textColor,
           ),
         ),
       ),
@@ -3666,8 +3770,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFallbackAvatarResponsive(
-      String name, bool isTablet, double innerAvatarSize, double initialsSize) {
+  Widget _buildFallbackAvatarResponsive(String name, bool isTablet,
+      double innerAvatarSize, double initialsSize,
+      {required Color textColor}) {
     return Container(
       width: innerAvatarSize,
       height: innerAvatarSize,
@@ -3681,7 +3786,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             fontSize: initialsSize,
             fontWeight: FontWeight.bold,
-            color: primaryColor,
+            color: textColor,
           ),
         ),
       ),
@@ -3694,6 +3799,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayName = child['firstName'] ?? 'Enfant';
     final photoUrl = child['photoUrl'];
     final childId = child['id'];
+    final String assignedMemberEmail =
+        (child['assignedMemberEmail'] ?? '').toString().trim().toLowerCase();
+    final Color baseColor = _shouldUseMamColoring()
+        ? _getMamColorForEmail(assignedMemberEmail)
+        : (isBoy ? primaryColor : Colors.pink);
+    final List<Color> gradientColors = [
+      baseColor.withOpacity(0.7),
+      baseColor,
+    ];
+    final Color shadowColor = baseColor.withOpacity(0.3);
 
     // Utilisez MediaQuery pour obtenir la taille de l'écran
     final screenSize = MediaQuery.of(context).size;
@@ -3725,15 +3840,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: isBoy
-                        ? [primaryColor.withOpacity(0.7), primaryColor]
-                        : [Colors.pink.withOpacity(0.7), Colors.pink],
+                    colors: gradientColors,
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color:
-                          (isBoy ? primaryColor : Colors.pink).withOpacity(0.3),
+                      color: shadowColor,
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -3748,12 +3860,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: innerAvatarSize,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) =>
-                                _buildFallbackAvatarResponsive(displayName,
-                                    isTablet, innerAvatarSize, initialsSize),
+                                _buildFallbackAvatarResponsive(
+                              displayName,
+                              isTablet,
+                              innerAvatarSize,
+                              initialsSize,
+                              textColor: baseColor,
+                            ),
                           ),
                         )
                       : _buildFallbackAvatarResponsive(
-                          displayName, isTablet, innerAvatarSize, initialsSize),
+                          displayName,
+                          isTablet,
+                          innerAvatarSize,
+                          initialsSize,
+                          textColor: baseColor,
+                        ),
                 ),
               ),
             ),
