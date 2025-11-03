@@ -11,3 +11,6 @@ android/*.hprof
 build/
 .pub/
 
+serviceAccountKey.json
+poppin-s-app-firebase-adminsdk-fbsvc-c97039f864.json
+*.json # Ou plus spécifique : poppin-s-app-firebase-adminsdk-fbsvc-c97039f864.json
