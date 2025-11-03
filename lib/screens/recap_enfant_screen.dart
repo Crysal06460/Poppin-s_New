@@ -8,6 +8,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class RecapScreen extends StatefulWidget {
   const RecapScreen({Key? key}) : super(key: key);
@@ -130,6 +131,8 @@ class _RecapScreenState extends State<RecapScreen> {
 
       // Appliquer le filtrage selon le type de structure et le rôle de l'utilisateur
       List<Map<String, dynamic>> filteredChildren = [];
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
 
       if (structureType == 'mam') {
         if (allowAllChildren) {
@@ -151,6 +154,13 @@ class _RecapScreenState extends State<RecapScreen> {
         filteredChildren = allChildren;
         print(
             "👩‍👧‍👦 Recap: Assistante Maternelle - affichage de tous les enfants");
+      }
+
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
       }
 
 // Diagnostic détaillé pour aider au débogage
@@ -187,6 +197,15 @@ class _RecapScreenState extends State<RecapScreen> {
         final bool isPlannedToday =
             PlanningHelper.isScheduledForDate(child, today);
         if (!isPlannedToday) continue;
+        final String assignedEmail =
+            ChildAvatarColorHelper.normalizeEmail(
+                child['assignedMemberEmail']);
+        final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+          isMamStructure: useMamColors,
+          mamAssignments: mamColorAssignments,
+          assignedMemberEmail: assignedEmail,
+          gender: child['gender']?.toString(),
+        );
 
         enfants.add({
           'id': child['id'],
@@ -196,8 +215,8 @@ class _RecapScreenState extends State<RecapScreen> {
           'photoUrl': child['photoUrl'],
           'birthdate': child['birthdate'],
           'structureId': structureId,
-          'assignedMemberEmail':
-              child['assignedMemberEmail']?.toString().toLowerCase() ?? '',
+          'assignedMemberEmail': assignedEmail,
+          'avatarColor': avatarColor,
         });
       }
 
@@ -786,9 +805,12 @@ class _RecapScreenState extends State<RecapScreen> {
 
     // Trouver l'enfant correspondant à l'ID
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final bool isBoy = genre == 'Garçon';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
     final childData = recapDataByChild[childId]!;
-    final avatarColor = isBoy ? primaryBlue : primaryRed;
 
     // Déterminer si nous sommes sur iPad
     final bool isTabletDevice = isTablet(context);
@@ -1100,7 +1122,11 @@ class _RecapScreenState extends State<RecapScreen> {
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
     final childId = enfant['id'];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final isBoy = genre == 'Garçon';
 
     // Vérifier si des activités existent pour cet enfant
     final hasActivites = activitesCountByChild.containsKey(childId) &&
@@ -1146,15 +1172,15 @@ class _RecapScreenState extends State<RecapScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: isBoy
-                            ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                            : [primaryRed.withOpacity(0.7), primaryRed],
+                        colors: [
+                          avatarColor.withOpacity(0.7),
+                          avatarColor,
+                        ],
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: (isBoy ? primaryBlue : primaryRed)
-                              .withOpacity(0.3),
+                          color: avatarColor.withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -1186,7 +1212,7 @@ class _RecapScreenState extends State<RecapScreen> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: isBoy ? primaryBlue : primaryRed,
+                            color: Colors.black,
                           ),
                         ),
                         Text(
@@ -1323,8 +1349,11 @@ class _RecapScreenState extends State<RecapScreen> {
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     final childId = enfant['id'];
-    final isBoy = enfant['genre'] == 'Garçon';
-    final avatarColor = isBoy ? primaryBlue : primaryRed;
+    final String genre = enfant['genre']?.toString() ?? '';
+    final bool isBoy = genre == 'Garçon';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
 
     // Vérifier si des activités existent pour cet enfant
     final hasActivites = activitesCountByChild.containsKey(childId) &&

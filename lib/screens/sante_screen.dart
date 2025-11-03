@@ -12,6 +12,7 @@ import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
 import '../theme/app_colors.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class SanteScreen extends StatefulWidget {
   const SanteScreen({Key? key}) : super(key: key);
@@ -183,6 +184,8 @@ class _SanteScreenState extends State<SanteScreen> {
       List<Map<String, dynamic>> filteredChildren = [];
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
 
       if (structureType == 'mam') {
         if (allowAllChildren) {
@@ -248,6 +251,13 @@ class _SanteScreenState extends State<SanteScreen> {
             "👩‍👧‍👦 Santé: Assistante Maternelle - affichage de tous les enfants");
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
+      }
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
@@ -255,12 +265,23 @@ class _SanteScreenState extends State<SanteScreen> {
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
+          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+            isMamStructure: useMamColors,
+            mamAssignments: mamColorAssignments,
+            assignedMemberEmail: assignedEmail,
+            gender: child['gender']?.toString(),
+          );
           String? photoUrl = child['photoUrl'];
           enfants.add({
             'id': child['id'],
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
+            'avatarColor': avatarColor,
             'structureId':
                 structureId, // Ajouter l'ID de structure pour les requêtes futures
           });
@@ -1972,7 +1993,11 @@ class _SanteScreenState extends State<SanteScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final bool isBoy = genre == 'Garçon';
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2002,15 +2027,15 @@ class _SanteScreenState extends State<SanteScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -2038,7 +2063,7 @@ class _SanteScreenState extends State<SanteScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -2341,7 +2366,11 @@ class _SanteScreenState extends State<SanteScreen> {
   // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final bool isBoy = genre == 'Garçon';
 
     return Container(
       decoration: BoxDecoration(
@@ -2360,7 +2389,7 @@ class _SanteScreenState extends State<SanteScreen> {
           // En-tête avec photo et nom
           Container(
             decoration: BoxDecoration(
-              color: isBoy ? primaryBlue : primaryRed,
+              color: avatarColor,
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             padding: EdgeInsets.all(16),
@@ -2374,15 +2403,15 @@ class _SanteScreenState extends State<SanteScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -2435,7 +2464,7 @@ class _SanteScreenState extends State<SanteScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(Icons.add,
-                          color: isBoy ? primaryBlue : primaryRed, size: 24),
+                          color: avatarColor, size: 24),
                       onPressed: () => _guardAddCare(
                           enfant['structureId'] ??
                               FirebaseAuth.instance.currentUser?.uid,

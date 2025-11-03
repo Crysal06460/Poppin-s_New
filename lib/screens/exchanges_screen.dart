@@ -19,7 +19,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/safe_query.dart';
 import '../utils/structure_context.dart';
-import '../utils/structure_context.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -37,6 +37,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
+  Map<String, Color> _mamColorAssignments = {};
+  bool _useMamColors = false;
   String? selectedChildId;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -99,8 +101,12 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       final structureContext = await StructureResolver().resolve();
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
-      final String structureType = structureContext.normalizedStructureType;
+      final String normalizedCurrentEmail =
+          ChildAvatarColorHelper.normalizeEmail(currentUserEmail);
+      final String structureType =
+          structureContext.normalizedStructureType.trim();
       final bool allowAllChildren = structureContext.showAllChildren;
+      final bool useMamColors = structureType == 'mam';
 
       setState(() {
         structureName = structureContext.structureName;
@@ -123,19 +129,28 @@ class _ExchangesScreenState extends State<ExchangesScreen>
           .map((doc) => {...doc.data(), 'id': doc.id})
           .toList();
 
+      allChildren = allChildren
+          .map((child) => {
+                ...child,
+                'assignedMemberEmail':
+                    ChildAvatarColorHelper.normalizeEmail(
+                        child['assignedMemberEmail'])
+              })
+          .toList();
+
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == 'mam') {
+      if (useMamColors) {
         if (allowAllChildren) {
           filteredChildren = List<Map<String, dynamic>>.from(allChildren);
           print(
               "👨‍👧‍👦 Échanges: Membre MAM - affichage de tous les enfants de la structure");
         } else {
           filteredChildren = allChildren.where((child) {
-            String assignedEmail =
-                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-            return assignedEmail == currentUserEmail;
+            final String assignedEmail =
+                child['assignedMemberEmail']?.toString() ?? '';
+            return assignedEmail == normalizedCurrentEmail;
           }).toList();
 
           print(
@@ -159,14 +174,25 @@ class _ExchangesScreenState extends State<ExchangesScreen>
           'prenom': child['firstName'] ?? 'Sans nom',
           'genre': child['gender'] ?? 'Non spécifié',
           'photoUrl': child['photoUrl'] ?? '',
+          'assignedMemberEmail': child['assignedMemberEmail'] ?? '',
           'parentId': child['parentId'] ?? '',
           'discussionEnCours': child['discussionEnCours'] ?? false,
           'structureId': structureId,
         });
       }
 
+      Map<String, Color> mamColorAssignments = {};
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          loadedEnfants,
+        );
+      }
+
       setState(() {
         enfants = loadedEnfants;
+        _useMamColors = useMamColors && mamColorAssignments.isNotEmpty;
+        _mamColorAssignments = mamColorAssignments;
         isLoading = false;
       });
     } catch (e) {
@@ -502,8 +528,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       if (!childDoc.exists) return;
 
       final childData = childDoc.data()!;
-      final String? assignedMemberEmail =
-          childData['assignedMemberEmail']?.toString().toLowerCase();
+      final String? assignedMemberEmail = ChildAvatarColorHelper.normalizeEmail(
+          childData['assignedMemberEmail']);
 
       // Vérifier si c'est un membre MAM
       final userDoc = await FirebaseFirestore.instance
@@ -517,9 +543,11 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       final bool isMamMember = userData['role'] == 'mamMember';
 
       if (isMamMember) {
+        final String normalizedCurrentUserEmail =
+            ChildAvatarColorHelper.normalizeEmail(currentUserEmail);
         final bool isAssignedToUser = assignedMemberEmail != null &&
             assignedMemberEmail.isNotEmpty &&
-            assignedMemberEmail == currentUserEmail;
+            assignedMemberEmail == normalizedCurrentUserEmail;
 
         if (allowAllChildren || isAssignedToUser) {
           final prefs = await SharedPreferences.getInstance();
@@ -2003,7 +2031,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: genre,
+    );
 
     return GestureDetector(
       onTap: () => _showChatPopup(enfant),
@@ -2033,48 +2069,37 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: ClipOval(
+                  child: Center(
                     child: enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Center(
-                              child: Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
+                        ? ClipOval(
+                            child: Image.network(
+                              enfant['photoUrl'],
+                              width: 72,
+                              height: 72,
+                              fit: BoxFit.cover,
+                              errorBuilder:
+                                  (context, error, stackTrace) =>
+                                      _buildInitialsFallback(
+                                enfant['prenom'],
                               ),
                             ),
                           )
-                        : Center(
-                            child: Text(
-                              enfant['prenom'][0].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                        : _buildInitialsFallback(enfant['prenom']),
                   ),
                 ),
                 // Indicateur de messages non lus modifié
@@ -2158,7 +2183,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: isBoy ? primaryBlue : primaryRed,
+                          color: Colors.black,
                         ),
                       );
                     },
@@ -2390,8 +2415,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   // Nouvelle carte enfant optimisée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
-    final avatarColor = isBoy ? primaryBlue : primaryRed;
+    final String genre = enfant['genre']?.toString() ?? '';
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: genre,
+    );
 
     return GestureDetector(
       onTap: () => _showChatPopup(enfant),
@@ -2795,6 +2827,18 @@ class _ExchangesScreenState extends State<ExchangesScreen>
           label: "Messages",
         ),
       ],
+    );
+  }
+
+  Widget _buildInitialsFallback(String name) {
+    final String initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Text(
+      initial,
+      style: const TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
     );
   }
 }

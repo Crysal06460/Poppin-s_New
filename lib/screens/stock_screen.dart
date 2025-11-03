@@ -8,6 +8,7 @@ import '../utils/stock_badge_util.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({Key? key}) : super(key: key);
@@ -25,6 +26,8 @@ class _StockScreenState extends State<StockScreen> {
   bool isLoading = true;
   String structureName = "Chargement...";
   String structureId = "";
+  Map<String, Color> _mamColorAssignments = {};
+  bool _useMamColors = false;
   int _selectedIndex = 1;
   TextEditingController newItemController = TextEditingController();
 
@@ -287,6 +290,10 @@ class _StockScreenState extends State<StockScreen> {
       final String currentUserEmail = structureContext.currentUserEmail;
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
+      final String normalizedCurrentEmail =
+          ChildAvatarColorHelper.normalizeEmail(currentUserEmail);
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
 
       setState(() {
         structureName = structureContext.structureName;
@@ -344,7 +351,8 @@ class _StockScreenState extends State<StockScreen> {
           'photoUrl': photoUrl,
           'stockNeeds': stockNeeds,
           'assignedMemberEmail':
-              data['assignedMemberEmail']?.toString().toLowerCase() ?? '',
+              ChildAvatarColorHelper.normalizeEmail(
+                  data['assignedMemberEmail']),
           'structureId': structureId,
         });
       }
@@ -352,14 +360,14 @@ class _StockScreenState extends State<StockScreen> {
       // Appliquer le filtrage selon le type de structure
       List<Map<String, dynamic>> filteredChildren = [];
 
-      if (structureType == 'mam') {
+      if (useMamColors) {
         if (allowAllChildren) {
           filteredChildren = List<Map<String, dynamic>>.from(allChildren);
           print(
               "👨‍👧‍👦 Stock: Membre MAM - affichage de tous les enfants de la structure");
         } else {
           filteredChildren = allChildren.where((child) {
-            return child['assignedMemberEmail'] == currentUserEmail;
+            return child['assignedMemberEmail'] == normalizedCurrentEmail;
           }).toList();
 
           print(
@@ -372,8 +380,17 @@ class _StockScreenState extends State<StockScreen> {
             "👩‍👧‍👦 Stock: Assistante Maternelle - affichage de tous les enfants");
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
+      }
+
       setState(() {
         enfants = filteredChildren;
+        _useMamColors = useMamColors && mamColorAssignments.isNotEmpty;
+        _mamColorAssignments = mamColorAssignments;
         isLoading = false;
       });
       await _cleanCorruptedStockData();
@@ -1022,8 +1039,14 @@ class _StockScreenState extends State<StockScreen> {
     final enfant = enfants[index];
     final stockNeeds = enfant['stockNeeds'] as Map<String, bool>;
     final hasNeeds = stockNeeds.values.any((value) => value);
-    final isBoy = enfant['genre'] == 'Garçon';
-    final avatarColor = isBoy ? primaryBlue : primaryRed;
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: enfant['genre']?.toString(),
+    );
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1053,15 +1076,15 @@ class _StockScreenState extends State<StockScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -1090,7 +1113,7 @@ class _StockScreenState extends State<StockScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -1228,8 +1251,14 @@ class _StockScreenState extends State<StockScreen> {
     final enfant = enfants[index];
     final stockNeeds = enfant['stockNeeds'] as Map<String, bool>;
     final hasNeeds = stockNeeds.values.any((value) => value);
-    final isBoy = enfant['genre'] == 'Garçon';
-    final avatarColor = isBoy ? primaryBlue : primaryRed;
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: enfant['genre']?.toString(),
+    );
 
     return Container(
       decoration: BoxDecoration(

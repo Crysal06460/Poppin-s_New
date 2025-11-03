@@ -928,14 +928,20 @@ class _HorairesScreenState extends State<HorairesScreen> {
   // === MÉTHODES POUR IPAD ===
 
   // Nouvelle méthode pour la grille adaptée à l'iPad
+  // Nouvelle méthode pour la grille adaptée à l'iPad
   Widget _buildChildrenGridForTablet() {
+    // Détecter l'orientation
+    final orientation = MediaQuery.of(context).orientation;
+    final isLandscape = orientation == Orientation.landscape;
+
     return GridView.builder(
       padding: EdgeInsets.all(20),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.85, // Ratio plus carré pour iPad
-        crossAxisSpacing: 24, // Plus d'espace horizontal
-        mainAxisSpacing: 24, // Plus d'espace vertical
+        crossAxisCount:
+            isLandscape ? 3 : 2, // 3 colonnes en paysage, 2 en portrait
+        childAspectRatio: isLandscape ? 0.75 : 0.85, // Plus compact en paysage
+        crossAxisSpacing: isLandscape ? 16 : 24, // Espacement adapté
+        mainAxisSpacing: isLandscape ? 16 : 24,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -946,23 +952,22 @@ class _HorairesScreenState extends State<HorairesScreen> {
   // Nouvelle méthode pour la carte enfant adaptée à l'iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    bool isAbsent = enfant['absent'] == true;
-    String genre = enfant['genre']?.toString() ?? 'Garçon';
-    bool hasMultipleSegments = enfant['segments'].length > 1;
+    final isAbsent = enfant['absent'] == true;
+    final genre = enfant['genre']?.toString() ?? 'Garçon';
+    final hasMultipleSegments = enfant['segments'].length > 1;
 
-    Color getCardColor() {
-      if (isAbsent) return Colors.grey.shade200;
-      return Colors.white;
-    }
+    // ✅ Détecter l'orientation AVANT les fonctions locales
+    final orientation = MediaQuery.of(context).orientation;
+    final isLandscape = orientation == Orientation.landscape;
 
-    Color getTextColor() {
-      if (isAbsent) return Colors.grey;
-      return (genre == 'Fille') ? primaryRed : primaryBlue;
-    }
+    // ✅ Calculer les couleurs directement (pas de fonctions locales)
+    final cardColor = isAbsent ? Colors.grey.shade200 : Colors.white;
+    final textColor =
+        isAbsent ? Colors.grey : (genre == 'Fille' ? primaryRed : primaryBlue);
 
     return Container(
       decoration: BoxDecoration(
-        color: getCardColor(),
+        color: cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -974,23 +979,44 @@ class _HorairesScreenState extends State<HorairesScreen> {
       ),
       child: Column(
         children: [
-          // Photo de l'enfant (40% de la hauteur)
+          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
           Expanded(
-            flex: 40,
+            flex: isLandscape ? 35 : 40,
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Fond dégradé élégant pour mettre en valeur la photo
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        (genre == 'Fille' ? primaryRed : primaryBlue)
+                            .withOpacity(0.08),
+                        Colors.white,
+                      ],
+                    ),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                ),
+                // Photo centrée et ENTIÈRE (pas coupée)
                 ClipRRect(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  child: enfant['photoUrl'] != null
-                      ? Image.network(
-                          enfant['photoUrl'],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildPlaceholder(),
-                        )
-                      : _buildPlaceholder(),
+                  child: Padding(
+                    padding: EdgeInsets.all(isLandscape ? 8.0 : 12.0),
+                    child: enfant['photoUrl'] != null
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            fit: BoxFit.contain, // ✅ Photo entière
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildPlaceholder(),
+                          )
+                        : _buildPlaceholder(),
+                  ),
                 ),
+                // Overlay "ABSENT" si nécessaire
                 if (isAbsent)
                   Container(
                     decoration: BoxDecoration(
@@ -1003,7 +1029,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
                         'ABSENT',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22, // Plus grand pour iPad
+                          fontSize: isLandscape ? 18.0 : 22.0,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                         ),
@@ -1014,33 +1040,35 @@ class _HorairesScreenState extends State<HorairesScreen> {
             ),
           ),
 
-          // Contenu de la carte (60% de la hauteur)
+          // Contenu de la carte - ADAPTÉ selon orientation
           Expanded(
-            flex: 60,
+            flex: isLandscape ? 65 : 60,
             child: Padding(
-              padding: EdgeInsets.all(16), // Padding plus important pour iPad
+              padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
               child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceEvenly, // Répartition uniforme
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   Text(
                     enfant['prenom'],
                     style: TextStyle(
-                      fontSize: 24, // Plus grand pour iPad
+                      fontSize: isLandscape ? 20.0 : 24.0,
                       fontWeight: FontWeight.bold,
-                      color: getTextColor(),
+                      color: textColor,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 10),
+                  SizedBox(height: isLandscape ? 6.0 : 10.0),
                   if (isAbsent)
                     Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
+                      padding: EdgeInsets.symmetric(
+                          vertical: isLandscape ? 6.0 : 10.0),
                       child: Text(
                         'Absent aujourd\'hui',
                         style: TextStyle(
                           color: Colors.grey,
                           fontStyle: FontStyle.italic,
-                          fontSize: 18, // Plus grand pour iPad
+                          fontSize: isLandscape ? 14.0 : 18.0,
                         ),
                       ),
                     )
@@ -1063,6 +1091,10 @@ class _HorairesScreenState extends State<HorairesScreen> {
   // Widget pour un seul segment adapté à l'iPad
   Widget _buildSimpleSegmentForTablet(Map<String, dynamic> enfant,
       Map<String, dynamic> segment, int segmentIndex) {
+    // ✅ AJOUTER : Détecter l'orientation dans CETTE méthode
+    final orientation = MediaQuery.of(context).orientation;
+    final isLandscape = orientation == Orientation.landscape;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1070,23 +1102,24 @@ class _HorairesScreenState extends State<HorairesScreen> {
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-                vertical: 10, horizontal: 16), // Plus grand pour iPad
-            margin: EdgeInsets.only(bottom: 16), // Plus d'espace
+                vertical: isLandscape ? 6.0 : 10.0,
+                horizontal: isLandscape ? 12.0 : 16.0),
+            margin: EdgeInsets.only(bottom: isLandscape ? 10.0 : 16.0),
             decoration: BoxDecoration(
               color: primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16), // Plus arrondi
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
               '${segment['heureDebut']} - ${segment['heureFin']}',
               style: TextStyle(
-                fontSize: 20, // Plus grand pour iPad
+                fontSize: isLandscape ? 16.0 : 20.0,
                 color: primaryColor,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
             ),
           ),
-        SizedBox(height: 10),
+        SizedBox(height: isLandscape ? 6.0 : 10.0),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -1094,33 +1127,34 @@ class _HorairesScreenState extends State<HorairesScreen> {
               'Arrivée',
               segment['arrivee'],
               () => _enregistrerHeure('arrivee', enfant, segmentIndex),
-              enfant, segmentIndex,
-              'arrivee', // Paramètres supplémentaires pour modification
+              enfant,
+              segmentIndex,
+              'arrivee',
             ),
             _buildTimeButtonForTablet(
               'Départ',
               segment['depart'],
               () => _enregistrerHeure('depart', enfant, segmentIndex),
-              enfant, segmentIndex,
-              'depart', // Paramètres supplémentaires pour modification
+              enfant,
+              segmentIndex,
+              'depart',
             ),
           ],
         ),
-        // AJOUT : Indication pour la modification sur iPad
         if (segment['arrivee'] != null || segment['depart'] != null)
           Padding(
-            padding: EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: isLandscape ? 4.0 : 8.0),
             child: Text(
               'Appui long sur une heure pour modifier',
               style: TextStyle(
-                fontSize: 14, // Plus grand pour iPad
+                fontSize: isLandscape ? 11.0 : 14.0,
                 color: Colors.grey[600],
                 fontStyle: FontStyle.italic,
               ),
               textAlign: TextAlign.center,
             ),
           ),
-        SizedBox(height: 16), // Plus d'espace
+        SizedBox(height: isLandscape ? 10.0 : 16.0),
         _buildAbsentButtonForTablet(enfant),
       ],
     );
@@ -1161,21 +1195,27 @@ class _HorairesScreenState extends State<HorairesScreen> {
   }
 
   // Élément de segment adapté pour iPad
+  // Élément de segment adapté pour iPad
   Widget _buildSegmentItemForTablet(Map<String, dynamic> enfant,
       Map<String, dynamic> segment, int segmentIndex, bool isLastSegment) {
+    // ✅ AJOUTER : Détecter l'orientation dans CETTE méthode
+    final orientation = MediaQuery.of(context).orientation;
+    final isLandscape = orientation == Orientation.landscape;
+
     String heureDebut = segment['heureDebut'] ?? '--:--';
     String heureFin = segment['heureFin'] ?? '--:--';
 
     return Padding(
-      padding: EdgeInsets.only(bottom: isLastSegment ? 8 : 12), // Plus d'espace
+      padding: EdgeInsets.only(bottom: isLastSegment ? 8.0 : 12.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: double.infinity,
-            padding:
-                EdgeInsets.symmetric(vertical: 8, horizontal: 12), // Plus grand
-            margin: EdgeInsets.only(bottom: 8), // Plus d'espace
+            padding: EdgeInsets.symmetric(
+                vertical: isLandscape ? 6.0 : 8.0,
+                horizontal: isLandscape ? 10.0 : 12.0),
+            margin: EdgeInsets.only(bottom: isLandscape ? 6.0 : 8.0),
             decoration: BoxDecoration(
               color: primaryColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
@@ -1183,14 +1223,14 @@ class _HorairesScreenState extends State<HorairesScreen> {
             child: Text(
               'Créneau ${segmentIndex + 1}: $heureDebut - $heureFin',
               style: TextStyle(
-                fontSize: 16, // Plus grand pour iPad
+                fontSize: isLandscape ? 14.0 : 16.0,
                 color: primaryColor,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
             ),
           ),
-          SizedBox(height: 8), // Plus d'espace
+          SizedBox(height: isLandscape ? 6.0 : 8.0),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -1225,19 +1265,21 @@ class _HorairesScreenState extends State<HorairesScreen> {
       Map<String, dynamic> enfant,
       int segmentIndex,
       String type) {
-    // CORRECTION: Ne plus désactiver les boutons quand l'enfant est absent
+    // ✅ AJOUTER : Détecter l'orientation dans CETTE méthode
+    final orientation = MediaQuery.of(context).orientation;
+    final isLandscape = orientation == Orientation.landscape;
+
     bool isDisabled = (type == 'depart' &&
         time == null &&
         enfant['segments'][segmentIndex]['arrivee'] == null &&
-        !enfant['absent']); // Seule condition de désactivation réelle
+        !enfant['absent']);
 
     return SizedBox(
-      width: 100,
-      height: 44,
+      width: isLandscape ? 85.0 : 100.0,
+      height: isLandscape ? 38.0 : 44.0,
       child: time != null
           ? GestureDetector(
               onLongPress: () {
-                // Appui long pour modifier l'horaire (même si absent)
                 _showEditTimeDialog(type, enfant, segmentIndex);
               },
               child: ElevatedButton(
@@ -1249,12 +1291,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: isLandscape ? 8.0 : 12.0),
                 ),
                 child: Text(
                   time,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: isLandscape ? 14.0 : 16.0,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
@@ -1270,12 +1313,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 12),
+                padding:
+                    EdgeInsets.symmetric(horizontal: isLandscape ? 8.0 : 12.0),
               ),
               child: Text(
                 label,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: isLandscape ? 14.0 : 16.0,
                   fontWeight: FontWeight.w600,
                   color: isDisabled ? Colors.grey[500] : Colors.white,
                 ),
@@ -1461,6 +1505,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
     bool isAbsent = enfant['absent'] == true;
     String genre = enfant['genre']?.toString() ?? 'Garçon';
     bool hasMultipleSegments = enfant['segments'].length > 1;
+    final bool isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     print(
         "🏗️ DEBUG _buildEnfantCard() pour ${enfant['prenom']}: absent=$isAbsent, multipleSegments=$hasMultipleSegments");
@@ -1491,22 +1537,47 @@ class _HorairesScreenState extends State<HorairesScreen> {
       child: Column(
         children: [
           // Photo de l'enfant
+          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
+          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
+          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
           Expanded(
-            flex: hasMultipleSegments ? 35 : 45,
+            flex: isLandscape ? 35 : 40,
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Fond dégradé élégant pour mettre en valeur la photo
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        (genre == 'Fille' ? primaryRed : primaryBlue)
+                            .withOpacity(0.08),
+                        Colors.white,
+                      ],
+                    ),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                ),
+                // Photo centrée et ENTIÈRE (pas coupée)
                 ClipRRect(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  child: enfant['photoUrl'] != null
-                      ? Image.network(
-                          enfant['photoUrl'],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildPlaceholder(),
-                        )
-                      : _buildPlaceholder(),
+                  child: Padding(
+                    padding: EdgeInsets.all(isLandscape ? 8.0 : 12.0),
+                    child: enfant['photoUrl'] != null
+                        ? Image.network(
+                            enfant['photoUrl'],
+                            fit: BoxFit
+                                .contain, // ✅ CRUCIAL : contain au lieu de cover pour photo entière
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildPlaceholder(),
+                          )
+                        : _buildPlaceholder(),
+                  ),
                 ),
+                // Overlay "ABSENT" si nécessaire
                 if (isAbsent)
                   Container(
                     decoration: BoxDecoration(
@@ -1519,7 +1590,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
                         'ABSENT',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: isLandscape ? 18.0 : 22.0,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                         ),

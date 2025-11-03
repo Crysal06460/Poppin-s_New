@@ -17,6 +17,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class PhotosScreen extends StatefulWidget {
   const PhotosScreen({Key? key}) : super(key: key);
@@ -277,6 +278,8 @@ class _PhotosScreenState extends State<PhotosScreen>
       List<Map<String, dynamic>> filteredChildren = [];
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
 
       if (structureType == 'mam') {
         if (allowAllChildren) {
@@ -342,6 +345,13 @@ class _PhotosScreenState extends State<PhotosScreen>
             "👩‍👧‍👦 Photos: Assistante Maternelle - affichage de tous les enfants");
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
+      }
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
@@ -349,6 +359,15 @@ class _PhotosScreenState extends State<PhotosScreen>
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
+          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+            isMamStructure: useMamColors,
+            mamAssignments: mamColorAssignments,
+            assignedMemberEmail: assignedEmail,
+            gender: child['gender']?.toString(),
+          );
           String? photoUrl = child['photoUrl'];
           // Récupérer l'autorisation photos en supportant plusieurs formats (booléen, texte, numérique)
           final bool photosAllowed = _normalizePermissionValue(
@@ -360,6 +379,8 @@ class _PhotosScreenState extends State<PhotosScreen>
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
+            'avatarColor': avatarColor,
             'photosAllowed': photosAllowed,
             'structureId':
                 structureId, // Ajouter l'ID de structure pour les requêtes futures
@@ -2229,8 +2250,10 @@ class _PhotosScreenState extends State<PhotosScreen>
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    String genre = enfant['genre']?.toString() ?? 'Garçon';
-    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
+    String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2310,7 +2333,7 @@ class _PhotosScreenState extends State<PhotosScreen>
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Colors.black,
                         ),
                       ),
                     ],
@@ -3072,8 +3095,10 @@ class _PhotosScreenState extends State<PhotosScreen>
 // Nouvelle carte enfant optimisée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    final String genre = enfant['genre']?.toString() ?? 'Garçon';
-    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       decoration: BoxDecoration(

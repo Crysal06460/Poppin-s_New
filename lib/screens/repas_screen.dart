@@ -9,6 +9,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class RepasScreen extends StatefulWidget {
   const RepasScreen({Key? key}) : super(key: key);
@@ -51,6 +52,8 @@ class _RepasScreenState extends State<RepasScreen> {
   TextEditingController _solideController = TextEditingController();
   TextEditingController _mixteController = TextEditingController();
   String _mealTime = "";
+  Map<String, Color> _mamColorAssignments = {};
+  bool _useMamColors = false;
 
   @override
   void dispose() {
@@ -204,6 +207,8 @@ class _RepasScreenState extends State<RepasScreen> {
       final String currentUserEmail = contextInfo.currentUserEmail;
       final String structureType = contextInfo.normalizedStructureType;
       final bool allowAllChildren = contextInfo.showAllChildren;
+      final String normalizedCurrentEmail =
+          ChildAvatarColorHelper.normalizeEmail(currentUserEmail);
 
       // Récupérer tous les enfants de la structure
       final snapshot = await FirebaseFirestore.instance
@@ -216,11 +221,22 @@ class _RepasScreenState extends State<RepasScreen> {
       List<Map<String, dynamic>> allChildren =
           snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
 
+      allChildren = allChildren
+          .map((child) => {
+                ...child,
+                'assignedMemberEmail':
+                    ChildAvatarColorHelper.normalizeEmail(
+                        child['assignedMemberEmail']),
+              })
+          .toList();
+
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
       if (structureType == 'mam') {
         if (allowAllChildren) {
           filteredChildren = List<Map<String, dynamic>>.from(allChildren);
@@ -228,9 +244,9 @@ class _RepasScreenState extends State<RepasScreen> {
               "👨‍👧‍👦 Repas: Membre MAM - affichage de tous les enfants de la structure");
         } else {
           filteredChildren = allChildren.where((child) {
-            String assignedEmail =
-                child['assignedMemberEmail']?.toString().toLowerCase() ?? '';
-            return assignedEmail == currentUserEmail;
+            final String assignedEmail =
+                child['assignedMemberEmail']?.toString() ?? '';
+            return assignedEmail == normalizedCurrentEmail;
           }).toList();
 
           print(
@@ -299,6 +315,9 @@ class _RepasScreenState extends State<RepasScreen> {
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
           String? photoUrl = child['photoUrl'];
           // Récupérer la date de naissance pour calculer l'âge
           String ageText = "Âge inconnu";
@@ -348,6 +367,7 @@ class _RepasScreenState extends State<RepasScreen> {
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
             'age': ageText,
             'structureId':
                 structureId, // Ajouter l'ID de structure pour les requêtes futures
@@ -356,8 +376,18 @@ class _RepasScreenState extends State<RepasScreen> {
         }
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          tempEnfants,
+        );
+      }
+
       setState(() {
         enfants = tempEnfants;
+        _useMamColors =
+            useMamColors && mamColorAssignments.isNotEmpty;
+        _mamColorAssignments = mamColorAssignments;
         isLoading = false;
       });
     } catch (e) {
@@ -2430,7 +2460,15 @@ class _RepasScreenState extends State<RepasScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    bool isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: genre,
+    );
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2460,49 +2498,39 @@ class _RepasScreenState extends State<RepasScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                  child: ClipOval(
+                  child: Center(
                     child: enfant['photoUrl'] != null &&
                             enfant['photoUrl'].isNotEmpty
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Center(
-                              child: Text(
-                                enfant['prenom'][0].toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
+                        ? ClipOval(
+                            child: Image.network(
+                              enfant['photoUrl'],
+                              width: 54,
+                              height: 54,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildInitialsFallback(
+                                enfant['prenom'],
+                                avatarColor,
                               ),
                             ),
                           )
-                        : Center(
-                            child: Text(
-                              enfant['prenom'][0].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
+                        : _buildInitialsFallback(
+                            enfant['prenom'],
+                            avatarColor,
                           ),
                   ),
                 ),
@@ -2517,7 +2545,7 @@ class _RepasScreenState extends State<RepasScreen> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: isBoy ? primaryBlue : primaryRed,
+                          color: Colors.black,
                         ),
                       ),
                       SizedBox(height: 4),
@@ -2821,8 +2849,16 @@ class _RepasScreenState extends State<RepasScreen> {
 // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    bool isBoy = enfant['genre'] == 'Garçon';
-    Color cardColor = isBoy ? primaryBlue : primaryRed;
+    final String genre = enfant['genre']?.toString() ?? '';
+    final String assignedEmail =
+        ChildAvatarColorHelper.normalizeEmail(enfant['assignedMemberEmail']);
+    final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+      isMamStructure: _useMamColors,
+      mamAssignments: _mamColorAssignments,
+      assignedMemberEmail: assignedEmail,
+      gender: genre,
+    );
+    final Color cardColor = avatarColor;
 
     return Container(
       decoration: BoxDecoration(
@@ -2863,35 +2899,26 @@ class _RepasScreenState extends State<RepasScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
-                      child: ClipOval(
+                      child: Center(
                         child: enfant['photoUrl'] != null &&
                                 enfant['photoUrl'].isNotEmpty
-                            ? Image.network(
-                                enfant['photoUrl'],
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Center(
-                                  child: Text(
-                                    enfant['prenom'][0].toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
+                            ? ClipOval(
+                                child: Image.network(
+                                  enfant['photoUrl'],
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (context, error, stackTrace) =>
+                                          _buildInitialsFallback(
+                                    enfant['prenom'],
+                                    cardColor,
                                   ),
                                 ),
                               )
-                            : Center(
-                                child: Text(
-                                  enfant['prenom'][0].toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            : _buildInitialsFallback(
+                                enfant['prenom'],
+                                cardColor,
                               ),
                       ),
                     ),
@@ -3249,6 +3276,18 @@ class _RepasScreenState extends State<RepasScreen> {
           label: "Messages",
         ),
       ],
+    );
+  }
+
+  Widget _buildInitialsFallback(String name, Color avatarColor) {
+    final String initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Text(
+      initial,
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
     );
   }
 

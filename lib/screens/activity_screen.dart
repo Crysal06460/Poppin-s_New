@@ -9,6 +9,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class ActivityScreen extends StatefulWidget {
   final BuildContext context;
@@ -588,6 +589,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
       if (structureType == 'mam') {
         if (allowAllChildren) {
           filteredChildren = List<Map<String, dynamic>>.from(allChildren);
@@ -655,6 +658,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
         );
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
+      }
+
       print(
         "🔍 DIAGNOSTIC ACTIVITÉS - Type de structure: $structureType, Utilisateur: $currentUserEmail",
       );
@@ -669,11 +679,22 @@ class _ActivityScreenState extends State<ActivityScreen> {
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
+          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+            isMamStructure: useMamColors,
+            mamAssignments: mamColorAssignments,
+            assignedMemberEmail: assignedEmail,
+            gender: child['gender']?.toString(),
+          );
           tempEnfants.add({
             'id': child['id'],
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
+            'avatarColor': avatarColor,
             'structureId': structureId,
           });
         }
@@ -2518,9 +2539,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    String genre = enfant['genre']?.toString() ?? 'Garçon';
-    Color cardColor = Colors.white;
-    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
+    String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2599,7 +2621,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Colors.black,
                         ),
                       ),
                     ],
@@ -2861,8 +2883,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    String genre = enfant['genre']?.toString() ?? 'Garçon';
-    Color avatarColor = (genre == 'Fille') ? primaryRed : primaryBlue;
+    String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       decoration: BoxDecoration(

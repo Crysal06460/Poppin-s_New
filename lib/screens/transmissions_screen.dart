@@ -8,6 +8,7 @@ import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 
 class TransmissionsScreen extends StatefulWidget {
   const TransmissionsScreen({Key? key}) : super(key: key);
@@ -90,6 +91,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       List<Map<String, dynamic>> filteredChildren = [];
       Set<String> delegatedTodayChildIds = {};
       String? myMemberId;
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
 
       if (structureType == 'mam') {
         if (allowAllChildren) {
@@ -156,6 +159,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
             "👩‍👧‍👦 Transmissions: Assistante Maternelle - affichage de tous les enfants");
       }
 
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+          filteredChildren,
+        );
+      }
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
@@ -163,12 +173,23 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
+          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+            isMamStructure: useMamColors,
+            mamAssignments: mamColorAssignments,
+            assignedMemberEmail: assignedEmail,
+            gender: child['gender']?.toString(),
+          );
           String? photoUrl = child['photoUrl'];
           enfants.add({
             'id': child['id'],
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
+            'avatarColor': avatarColor,
             'structureId':
                 structureId, // Ajouter l'ID de structure pour les requêtes futures
           });
@@ -644,7 +665,11 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
-    final isBoy = enfant['genre'] == 'Garçon';
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final bool isBoy = genre == 'Garçon';
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -674,15 +699,15 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isBoy
-                          ? [primaryBlue.withOpacity(0.7), primaryBlue]
-                          : [primaryRed.withOpacity(0.7), primaryRed],
+                      colors: [
+                        avatarColor.withOpacity(0.7),
+                        avatarColor,
+                      ],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            (isBoy ? primaryBlue : primaryRed).withOpacity(0.3),
+                        color: avatarColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -710,7 +735,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: isBoy ? primaryBlue : primaryRed,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -964,8 +989,12 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 // Carte enfant adaptée pour iPad
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
-    bool isBoy = enfant['genre'] == 'Garçon';
-    Color cardColor = isBoy ? primaryBlue : primaryRed;
+    final String genre = enfant['genre']?.toString() ?? '';
+    final Color avatarColor =
+        (enfant['avatarColor'] as Color?) ??
+            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final bool isBoy = genre == 'Garçon';
+    final Color cardColor = avatarColor;
 
     return Container(
       decoration: BoxDecoration(
