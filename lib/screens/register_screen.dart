@@ -1,8 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../services/firebase_trial_service.dart';
+
+enum _PurgeStatus { purged, blocked, failed }
+
+class _ResumeResult {
+  const _ResumeResult._(this.success, this.requiresRetry, this.errorMessage);
+
+  const _ResumeResult.success() : this._(true, false, null);
+
+  const _ResumeResult.failure({String? message})
+      : this._(false, false, message);
+
+  const _ResumeResult.retry() : this._(false, true, null);
+
+  final bool success;
+  final bool requiresRetry;
+  final String? errorMessage;
+}
+
+class _PurgeResult {
+  const _PurgeResult(this.status, {this.blockingReasons = const <String>[]});
+
+  final _PurgeStatus status;
+  final List<String> blockingReasons;
+
+  bool get isPurged => status == _PurgeStatus.purged;
+  bool get isBlocked => status == _PurgeStatus.blocked;
+}
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -32,6 +60,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool hasDigit = false;
   bool _showPassword = false;
   bool _showConfirmPassword = false;
+
+  static const String _functionsRegion = 'europe-west1';
 
   @override
   void initState() {
@@ -1146,6 +1176,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    final String normalizedEmail = emailController.text.trim().toLowerCase();
+    final String normalizedPassword = passwordController.text.trim();
+
     setState(() {
       isLoading = true;
       errorMessage = "";
@@ -1155,44 +1188,60 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // Créer l'utilisateur
       final userCredential =
           await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailController.text.trim().toLowerCase(),
-        password: passwordController.text.trim(),
+        email: normalizedEmail,
+        password: normalizedPassword,
       );
 
-      // Déterminer le type de structure sélectionné
-      final String structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
-
-      // Créer le document structure dans Firestore
-      await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': emailController.text.trim().toLowerCase(),
-        'structureType': structureType,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await FirebaseTrialService.ensureTrialForStructure(
-        structureId: userCredential.user!.uid,
-        ownerEmail: emailController.text.trim().toLowerCase(),
-        structureType: structureType,
+      await _finalizeAccountSetup(
+        userCredential.user!,
+        email: normalizedEmail,
+        structureSnapshot: null,
       );
-
-      // Après l'inscription, rediriger vers l'écran de tarification
-      if (mounted) {
-        context.go('/congratulations', extra: {
-          'structureType': structureType,
-          'structureId': userCredential.user!.uid,
-          'skipStructureFlow': false,
-        });
-      }
     } catch (e) {
       String message = "Une erreur est survenue lors de l'inscription";
 
       if (e is FirebaseAuthException) {
         switch (e.code) {
           case 'email-already-in-use':
-            message = "Cette adresse e-mail est déjà utilisée";
+            final _ResumeResult resumeResult =
+                await _tryResumeAccountCreation(
+              normalizedEmail,
+              normalizedPassword,
+            );
+
+            if (resumeResult.success) {
+              return;
+            }
+
+            if (resumeResult.requiresRetry) {
+              try {
+                final UserCredential retryCredential =
+                    await FirebaseAuth.instance
+                        .createUserWithEmailAndPassword(
+                  email: normalizedEmail,
+                  password: normalizedPassword,
+                );
+
+                await _finalizeAccountSetup(
+                  retryCredential.user!,
+                  email: normalizedEmail,
+                  structureSnapshot: null,
+                );
+                return;
+              } on FirebaseAuthException catch (retryError) {
+                print(
+                    '❌ échec création après purge pour $normalizedEmail: ${retryError.code}');
+                message = "Impossible de recréer le compte automatiquement. "
+                    "Veuillez essayer de vous connecter ou contacter le support.";
+              } catch (retryGeneric) {
+                print(
+                    '❌ erreur inattendue après purge pour $normalizedEmail: $retryGeneric');
+                message = "Impossible de recréer le compte automatiquement. "
+                    "Veuillez essayer de vous connecter ou contacter le support.";
+              }
+            } else {
+              message = resumeResult.errorMessage ?? message;
+            }
             break;
           case 'invalid-email':
             message = "Format d'e-mail invalide";
@@ -1208,5 +1257,294 @@ class _RegisterScreenState extends State<RegisterScreen> {
         isLoading = false;
       });
     }
+  }
+
+  Future<void> _finalizeAccountSetup(
+    User user, {
+    required String email,
+    DocumentSnapshot<Map<String, dynamic>>? structureSnapshot,
+  }) async {
+    final String structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
+    final DocumentReference<Map<String, dynamic>> structureRef =
+        FirebaseFirestore.instance.collection('structures').doc(user.uid);
+
+    structureSnapshot ??= await structureRef.get();
+
+    final bool shouldSetCreatedAt = !structureSnapshot.exists ||
+        structureSnapshot.data()?['createdAt'] == null;
+
+    final Map<String, dynamic> structureData = {
+      'email': email,
+      'ownerEmail': email,
+      'structureType': structureType,
+    };
+
+    if (shouldSetCreatedAt) {
+      structureData['createdAt'] = FieldValue.serverTimestamp();
+    }
+
+    await structureRef.set(structureData, SetOptions(merge: true));
+
+    await FirebaseTrialService.ensureTrialForStructure(
+      structureId: user.uid,
+      ownerEmail: email,
+      structureType: structureType,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      isLoading = false;
+      errorMessage = "";
+    });
+
+    context.go('/congratulations', extra: {
+      'structureType': structureType,
+      'structureId': user.uid,
+      'skipStructureFlow': false,
+    });
+  }
+
+  Future<_ResumeResult> _tryResumeAccountCreation(
+    String email,
+    String password,
+  ) async {
+    try {
+      final UserCredential credential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final User? user = credential.user;
+      if (user == null) {
+        print('❌ reprise impossible: credential.user nul pour $email');
+        return const _ResumeResult.failure(
+          message:
+              "Impossible de récupérer votre compte existant. Veuillez contacter le support (code R1).",
+        );
+      }
+
+      print('🔁 tentative de reprise pour $email (uid=${user.uid})');
+
+      final DocumentReference<Map<String, dynamic>> structureRef =
+          FirebaseFirestore.instance.collection('structures').doc(user.uid);
+      final DocumentSnapshot<Map<String, dynamic>> structureSnapshot =
+          await structureRef.get();
+
+      final bool hasBlockingData = await _hasBlockingAccountData(
+        user,
+        structureSnapshot: structureSnapshot,
+      );
+
+      if (hasBlockingData) {
+        await FirebaseAuth.instance.signOut();
+        return const _ResumeResult.failure(
+          message: "Cette adresse e-mail est déjà utilisée. Veuillez vous connecter.",
+        );
+      }
+
+      await _finalizeAccountSetup(
+        user,
+        email: email,
+        structureSnapshot: structureSnapshot,
+      );
+      return const _ResumeResult.success();
+    } on FirebaseAuthException catch (signInError) {
+      switch (signInError.code) {
+        case 'wrong-password':
+        case 'invalid-credential': // nouveau code pour mauvais mot de passe
+          print(
+              '⚠️ mot de passe incorrect pour $email, tentative de purge de compte incomplet');
+          final _PurgeResult purgeResult =
+              await _purgeIncompleteAccount(email);
+          if (purgeResult.isPurged) {
+            print('🧹 purge réussie pour $email, nouvelle création possible');
+            return const _ResumeResult.retry();
+          }
+          if (purgeResult.isBlocked) {
+            if (purgeResult.blockingReasons.isNotEmpty) {
+              print(
+                  '⛔️ purge refusée pour $email (données détectées: ${purgeResult.blockingReasons.join(", ")})');
+            }
+            return const _ResumeResult.failure(
+              message:
+                  "Cette adresse e-mail est déjà utilisée. Veuillez vous connecter.",
+            );
+          }
+          return const _ResumeResult.failure(
+            message:
+                "Mot de passe incorrect pour ce compte. Utilisez \"Mot de passe oublié\" pour le réinitialiser.",
+          );
+        case 'user-disabled':
+          return const _ResumeResult.failure(
+            message: "Ce compte est désactivé. Veuillez contacter le support.",
+          );
+        default:
+          print('⚠️ reprise bloquée: code firebase ${signInError.code}');
+          return _ResumeResult.failure(
+            message:
+                "Impossible de vérifier le compte existant (code ${signInError.code}). Veuillez essayer de vous connecter.",
+          );
+      }
+    } catch (error) {
+      print('❌ erreur inattendue pendant la reprise pour $email: $error');
+      return const _ResumeResult.failure(
+        message:
+            "Une erreur est survenue lors de la vérification du compte existant. Veuillez réessayer (code R2).",
+      );
+    }
+  }
+
+  Future<_PurgeResult> _purgeIncompleteAccount(String email) async {
+    try {
+      final FirebaseFunctions functions =
+          FirebaseFunctions.instanceFor(region: _functionsRegion);
+      final HttpsCallable callable =
+          functions.httpsCallable('purgeIncompleteAccount');
+      final HttpsCallableResult<dynamic> result =
+          await callable.call(<String, dynamic>{'email': email});
+
+      final bool purged = result.data is Map && result.data['purged'] == true;
+      print('🧹 résultat purge pour $email: $purged');
+      if (purged) {
+        return const _PurgeResult(_PurgeStatus.purged);
+      }
+      return const _PurgeResult(_PurgeStatus.failed);
+    } on FirebaseFunctionsException catch (e) {
+      print(
+          '❌ purge impossible pour $email: code=${e.code}, message=${e.message}, details=${e.details}');
+      if (e.code == 'failed-precondition') {
+        final dynamic details = e.details;
+        final List<String> reasons = details is Map && details['reasons'] is List
+            ? List<String>.from(details['reasons'] as List)
+            : <String>[];
+        return _PurgeResult(_PurgeStatus.blocked, blockingReasons: reasons);
+      }
+      return const _PurgeResult(_PurgeStatus.failed);
+    } catch (e) {
+      print('❌ erreur purge inattendue pour $email: $e');
+      return const _PurgeResult(_PurgeStatus.failed);
+    }
+  }
+
+  Future<bool> _hasBlockingAccountData(
+    User user, {
+    DocumentSnapshot<Map<String, dynamic>>? structureSnapshot,
+  }) async {
+    structureSnapshot ??= await FirebaseFirestore.instance
+        .collection('structures')
+        .doc(user.uid)
+        .get();
+
+    final Map<String, dynamic>? data = structureSnapshot.data();
+    final bool hasMeaningfulStructureFields = _hasMeaningfulStructureData(data);
+
+    final List<String> blockingReasons = [];
+
+    if (hasMeaningfulStructureFields) {
+      blockingReasons.add('structure_fields');
+    }
+
+    final DocumentReference<Map<String, dynamic>> structureRef =
+        FirebaseFirestore.instance.collection('structures').doc(user.uid);
+
+    if (await _collectionHasDocuments(structureRef.collection('children'))) {
+      blockingReasons.add('children');
+    }
+
+    if (await _collectionHasDocuments(structureRef.collection('members'))) {
+      blockingReasons.add('members');
+    }
+
+    if (await _hasActiveSubscription(user.uid)) {
+      blockingReasons.add('subscription');
+    }
+
+    final bool hasBlockingData = blockingReasons.isNotEmpty;
+
+    print(
+        '🔍 reprise pour ${user.email}: ${hasBlockingData ? "bloquée" : "autorisée"} (reasons: ${blockingReasons.join(", ")})');
+
+    return hasBlockingData;
+  }
+
+  bool _hasMeaningfulStructureData(Map<String, dynamic>? data) {
+    if (data == null || data.isEmpty) return false;
+
+    final List<String> nameFields = ['structureName', 'name', 'nom'];
+    final List<String> cityFields = ['city', 'ville', 'town'];
+
+    final List<String> ownerFields = ['ownerFirstName', 'ownerLastName'];
+    final List<String> contactFields = ['address', 'phone'];
+
+    final bool hasName =
+        nameFields.any((field) => _hasNonEmptyText(data[field]));
+    final bool hasCity =
+        cityFields.any((field) => _hasNonEmptyText(data[field]));
+    final bool hasOwnerInfo =
+        ownerFields.any((field) => _hasNonEmptyText(data[field]));
+    final bool hasContactInfo =
+        contactFields.any((field) => _hasNonEmptyText(data[field]));
+
+    final bool hasMemberCount = (data['memberCount'] is num &&
+            (data['memberCount'] as num) > 0) ||
+        (data['maxMemberCount'] is num && (data['maxMemberCount'] as num) > 0);
+
+    return hasName || hasCity || hasOwnerInfo || hasContactInfo || hasMemberCount;
+  }
+
+  Future<bool> _collectionHasDocuments(
+      CollectionReference<Map<String, dynamic>> collection) async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await collection.limit(1).get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> _hasActiveSubscription(String structureId) async {
+    try {
+      final QuerySnapshot<Map<String, dynamic>> subscriptionSnapshot =
+          await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: structureId)
+              .limit(1)
+              .get();
+
+      if (subscriptionSnapshot.docs.isEmpty) return false;
+
+      final Map<String, dynamic> subscriptionData =
+          subscriptionSnapshot.docs.first.data();
+      final String status =
+          (subscriptionData['status'] ?? '').toString().toLowerCase();
+
+      const Set<String> blockingStatuses = {
+        'active',
+        'purchased',
+        'past_due',
+      };
+
+      final bool hasBlockingStatus = blockingStatuses.contains(status);
+      if (hasBlockingStatus) {
+        print(
+            '🔔 abonnement détecté pour $structureId avec statut "$status" (bloquant)');
+      } else {
+        print(
+            'ℹ️ abonnement ignoré pour $structureId avec statut "$status" (non bloquant)');
+      }
+      return hasBlockingStatus;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  bool _hasNonEmptyText(dynamic value) {
+    if (value == null) return false;
+    if (value is String) {
+      return value.trim().isNotEmpty;
+    }
+    return false;
   }
 }

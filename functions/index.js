@@ -1,6 +1,6 @@
 const {onDocumentCreated, onDocumentWritten} = require('firebase-functions/v2/firestore');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
-const {onCall} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
+const {onCall, HttpsError} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue, Timestamp} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
@@ -177,6 +177,167 @@ exports.sendEmailToParent = onCall({
         throw new Error('internal');
     }
 });
+
+exports.purgeIncompleteAccount = onCall({
+    region: 'europe-west1'
+}, async (request) => {
+    const rawEmail = request.data?.email;
+    if (!rawEmail || typeof rawEmail !== 'string') {
+        throw new HttpsError('invalid-argument', 'email-required');
+    }
+
+    const email = rawEmail.trim().toLowerCase();
+    console.log(`🧹 purgeIncompleteAccount demandé pour ${email}`);
+
+    let userRecord;
+    try {
+        userRecord = await getAuth().getUserByEmail(email);
+    } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+            console.log(`ℹ️ Aucun utilisateur Firebase Auth pour ${email}`);
+            return {purged: false, reason: 'user-not-found'};
+        }
+        console.error('❌ Erreur récupération utilisateur pour purge:', error);
+        throw new HttpsError('internal', 'auth-lookup-failed');
+    }
+
+    const uid = userRecord.uid;
+    const structureRef = db.collection('structures').doc(uid);
+    const structureSnapshot = await structureRef.get();
+
+    const blockingReasons = await collectBlockingReasons(uid, structureSnapshot);
+    if (blockingReasons.length > 0) {
+        console.log(
+            `⛔️ purge refusée pour ${email} (${uid}) - données détectées: ${blockingReasons.join(', ')}`
+        );
+        throw new HttpsError('failed-precondition', 'account-has-data', {
+            reasons: blockingReasons
+        });
+    }
+
+    // Nettoyer les sous-collections basiques (au cas où)
+    await deleteCollection(structureRef.collection('notifications'));
+    await deleteCollection(structureRef.collection('children'));
+    await deleteCollection(structureRef.collection('members'));
+    await deleteCollection(structureRef.collection('horaires'));
+
+    const batch = db.batch();
+
+    if (structureSnapshot.exists) {
+        batch.delete(structureRef);
+    }
+
+    const userDocRef = db.collection('users').doc(email);
+    const userDoc = await userDocRef.get();
+    if (userDoc.exists) {
+        batch.delete(userDocRef);
+    }
+
+    await batch.commit().catch((error) => {
+        console.error('❌ Erreur lors de la suppression Firestore pour purge:', error);
+        throw new HttpsError('internal', 'firestore-cleanup-failed');
+    });
+
+    try {
+        await getAuth().deleteUser(uid);
+        console.log(`✅ Compte Firebase Auth supprimé pour ${email} (${uid})`);
+    } catch (error) {
+        console.error('❌ Erreur suppression utilisateur Firebase Auth:', error);
+        throw new HttpsError('internal', 'auth-delete-failed');
+    }
+
+    return {purged: true};
+});
+
+async function collectBlockingReasons(uid, structureSnapshot) {
+    const reasons = [];
+
+    const data = structureSnapshot.exists ? structureSnapshot.data() : null;
+    if (hasMeaningfulStructureData(data)) {
+        reasons.push('structure_fields');
+    }
+
+    const structureRef = db.collection('structures').doc(uid);
+
+    if (await collectionHasDocuments(structureRef.collection('children'))) {
+        reasons.push('children');
+    }
+
+    if (await collectionHasDocuments(structureRef.collection('members'))) {
+        reasons.push('members');
+    }
+
+    if (await hasBlockingSubscription(uid)) {
+        reasons.push('subscription');
+    }
+
+    return reasons;
+}
+
+function hasMeaningfulStructureData(data) {
+    if (!data) return false;
+
+    const fields = ['structureName', 'name', 'nom', 'city', 'ville', 'town', 'ownerFirstName', 'ownerLastName', 'address', 'phone'];
+    const hasTextField = fields.some((field) => {
+        const value = data[field];
+        return typeof value === 'string' && value.trim().length > 0;
+    });
+
+    const hasMemberCount =
+        (typeof data.memberCount === 'number' && data.memberCount > 0) ||
+        (typeof data.maxMemberCount === 'number' && data.maxMemberCount > 0);
+
+    return hasTextField || hasMemberCount;
+}
+
+async function collectionHasDocuments(collectionRef) {
+    try {
+        const snapshot = await collectionRef.limit(1).get();
+        return !snapshot.empty;
+    } catch (error) {
+        console.error('⚠️ Erreur lors de la vérification de collection:', error);
+        return false;
+    }
+}
+
+async function hasBlockingSubscription(uid) {
+    try {
+        const snapshot = await db
+            .collection('subscriptions')
+            .where('structureId', '==', uid)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) return false;
+
+        const status = (snapshot.docs[0].data().status || '').toString().toLowerCase();
+        const blockingStatuses = new Set(['active', 'purchased', 'past_due']);
+
+        return blockingStatuses.has(status);
+    } catch (error) {
+        console.error('⚠️ Erreur lors de la vérification des abonnements:', error);
+        return false;
+    }
+}
+
+async function deleteCollection(collectionRef, batchSize = 50) {
+    try {
+        const snapshot = await collectionRef.limit(batchSize).get();
+        if (snapshot.empty) {
+            return;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+
+        if (snapshot.size === batchSize) {
+            await deleteCollection(collectionRef, batchSize);
+        }
+    } catch (error) {
+        console.error('⚠️ Erreur lors de la suppression de collection:', error);
+    }
+}
 
 // ===== FONCTION HELPER : Générer le HTML de l'email =====
 function generateEmailHtml(content) {
