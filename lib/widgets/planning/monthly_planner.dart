@@ -44,16 +44,8 @@ class _MonthlyPlannerState extends State<MonthlyPlanner> {
   }
 
   DateTime _initialMonth() {
-    if (widget.schema.months.isEmpty) {
-      final now = DateTime.now();
-      return DateTime(now.year, now.month);
-    }
-    final keys = widget.schema.months.keys.toList()..sort();
-    final first = keys.first.split('-');
-    return DateTime(
-      int.parse(first[0]),
-      int.parse(first[1]),
-    );
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
   }
 
   MonthData _ensureMonth(DateTime month) {

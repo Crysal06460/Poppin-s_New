@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart'
-    show SubscriptionOfferDetailsWrapper, PricingPhaseWrapper;
+    show
+        SubscriptionOfferDetailsWrapper,
+        PricingPhaseWrapper,
+        ReplacementMode;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -368,6 +371,10 @@ class AndroidSubscriptionService {
       final DateTime trialEndDate =
           isTrialPurchase ? purchaseDate.add(Duration(days: 7)) : purchaseDate;
 
+      final String? purchaseToken = purchase is GooglePlayPurchaseDetails
+          ? purchase.billingClientPurchase.purchaseToken
+          : null;
+
       final Map<String, dynamic> subscriptionData = {
         'structureId': structureId,
         'structureType': structureType,
@@ -376,6 +383,7 @@ class AndroidSubscriptionService {
         'productId': productId,
         'productKey': productKey,
         'transactionId': transactionId,
+        if (purchaseToken != null) 'purchaseToken': purchaseToken,
         'purchaseDate': purchaseDate.toIso8601String(),
         'expirationDate': expirationDate.toIso8601String(),
         'trialEndsAt': Timestamp.fromDate(trialEndDate),
@@ -542,6 +550,62 @@ class AndroidSubscriptionService {
         .any((PricingPhaseWrapper phase) => phase.priceAmountMicros == 0);
   }
 
+  Future<GooglePlayPurchaseDetails?> _findExistingGooglePlaySubscription({
+    String? excludeProductId,
+  }) async {
+    try {
+      final InAppPurchaseAndroidPlatformAddition addition =
+          _inAppPurchase.getPlatformAddition<
+              InAppPurchaseAndroidPlatformAddition>();
+      final QueryPurchaseDetailsResponse response =
+          await addition.queryPastPurchases();
+
+      if (response.error != null) {
+        print(
+            '⚠️ Erreur lors de la récupération des achats existants: ${response.error}');
+      }
+
+      GooglePlayPurchaseDetails? latest;
+
+      for (final PurchaseDetails purchase in response.pastPurchases) {
+        if (purchase is! GooglePlayPurchaseDetails) {
+          continue;
+        }
+
+        if (!_allProductIds.contains(purchase.productID)) {
+          continue;
+        }
+
+        if (excludeProductId != null &&
+            purchase.productID == excludeProductId) {
+          continue;
+        }
+
+        if (purchase.status != PurchaseStatus.purchased &&
+            purchase.status != PurchaseStatus.pending) {
+          continue;
+        }
+
+        final int? candidateTimestamp =
+            int.tryParse(purchase.transactionDate ?? '');
+        final int? currentTimestamp =
+            int.tryParse(latest?.transactionDate ?? '');
+
+        if (latest == null ||
+            (candidateTimestamp != null &&
+                (currentTimestamp == null ||
+                    candidateTimestamp >= currentTimestamp))) {
+          latest = purchase;
+        }
+      }
+
+      return latest;
+    } catch (e) {
+      print('⚠️ Impossible de récupérer l\'achat existant: $e');
+      return null;
+    }
+  }
+
   /// Lance l'achat d'un produit
   Future<bool> _attemptPurchase(
     ProductDetails product,
@@ -549,10 +613,28 @@ class AndroidSubscriptionService {
     Map<String, dynamic> subscriptionInfo,
   ) async {
     try {
+      ChangeSubscriptionParam? changeParam;
+      if (product is GooglePlayProductDetails) {
+        final GooglePlayPurchaseDetails? existingPurchase =
+            await _findExistingGooglePlaySubscription(
+          excludeProductId: product.id,
+        );
+
+        if (existingPurchase != null) {
+          changeParam = ChangeSubscriptionParam(
+            oldPurchaseDetails: existingPurchase,
+            replacementMode: ReplacementMode.chargeProratedPrice,
+          );
+          print(
+              '🔄 Mise à niveau détectée: ${existingPurchase.productID} -> ${product.id}');
+        }
+      }
+
       final purchaseParam = GooglePlayPurchaseParam(
         productDetails: product,
         offerToken: offer?.offerIdToken ??
             (product is GooglePlayProductDetails ? product.offerToken : null),
+        changeSubscriptionParam: changeParam,
       );
 
       final int resolvedMemberCount =
@@ -699,6 +781,12 @@ class AndroidSubscriptionService {
   /// Vérifie si un abonnement est actif
   Future<bool> hasActiveSubscription() async {
     try {
+      final GooglePlayPurchaseDetails? activePurchase =
+          await _findExistingGooglePlaySubscription();
+      if (activePurchase != null) {
+        return true;
+      }
+
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
 
@@ -715,6 +803,12 @@ class AndroidSubscriptionService {
   /// Retourne l'abonnement actif
   Future<PurchaseDetails?> getActiveSubscription() async {
     try {
+      final GooglePlayPurchaseDetails? activePurchase =
+          await _findExistingGooglePlaySubscription();
+      if (activePurchase != null) {
+        return activePurchase;
+      }
+
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
 

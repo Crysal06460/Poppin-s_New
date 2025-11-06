@@ -350,9 +350,8 @@ class _StockScreenState extends State<StockScreen> {
           'genre': data['gender'],
           'photoUrl': photoUrl,
           'stockNeeds': stockNeeds,
-          'assignedMemberEmail':
-              ChildAvatarColorHelper.normalizeEmail(
-                  data['assignedMemberEmail']),
+          'assignedMemberEmail': ChildAvatarColorHelper.normalizeEmail(
+              data['assignedMemberEmail']),
           'structureId': structureId,
         });
       }
@@ -1233,13 +1232,26 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 2 cartes par ligne
-        childAspectRatio: 1.2, // Ajustement du ratio pour les cartes
-        crossAxisSpacing: 20, // Espace horizontal entre les cartes
-        mainAxisSpacing: 20, // Espace vertical entre les cartes
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -1330,7 +1342,15 @@ class _StockScreenState extends State<StockScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87, // 🆕 NOIR
+                      shadows: [
+                        // 🆕 Ombre blanche pour lisibilité
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1532,7 +1552,8 @@ class _StockScreenState extends State<StockScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

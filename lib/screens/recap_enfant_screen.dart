@@ -94,11 +94,11 @@ class _RecapScreenState extends State<RecapScreen> {
       final String currentUserEmail = structureContext.currentUserEmail;
       final String normalizedRole =
           (structureContext.userRole ?? '').toLowerCase().trim();
-      final bool isStructureAdmin = structureContext.userData['isAdmin'] == true ||
-          normalizedRole == 'structureadmin';
-      final bool isMamMember =
-          normalizedRole == 'mammember' &&
-              structureContext.normalizedStructureType == 'mam';
+      final bool isStructureAdmin =
+          structureContext.userData['isAdmin'] == true ||
+              normalizedRole == 'structureadmin';
+      final bool isMamMember = normalizedRole == 'mammember' &&
+          structureContext.normalizedStructureType == 'mam';
 
       print("👑 Recap: Statut admin: ${isStructureAdmin ? 'OUI' : 'NON'}");
       if (isMamMember) {
@@ -170,7 +170,8 @@ class _RecapScreenState extends State<RecapScreen> {
         String assignedEmail =
             child['assignedMemberEmail']?.toString().toLowerCase() ??
                 'NON ASSIGNÉ';
-        bool isVisible = structureType != 'mam' || allowAllChildren ||
+        bool isVisible = structureType != 'mam' ||
+            allowAllChildren ||
             assignedEmail == currentUserEmail;
         print(
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
@@ -198,8 +199,7 @@ class _RecapScreenState extends State<RecapScreen> {
             PlanningHelper.isScheduledForDate(child, today);
         if (!isPlannedToday) continue;
         final String assignedEmail =
-            ChildAvatarColorHelper.normalizeEmail(
-                child['assignedMemberEmail']);
+            ChildAvatarColorHelper.normalizeEmail(child['assignedMemberEmail']);
         final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
           isMamStructure: useMamColors,
           mamAssignments: mamColorAssignments,
@@ -300,8 +300,7 @@ class _RecapScreenState extends State<RecapScreen> {
             ? rawMoment
             : (data['gouter'] == true ? 'Goûter' : '');
         final String rawType = (data['typeAlimentation'] ?? '').toString();
-        final bool isBiberon =
-            rawType == 'Biberon' || data['biberon'] == true;
+        final bool isBiberon = rawType == 'Biberon' || data['biberon'] == true;
         final bool isAllaitement =
             rawType == 'Allaitement' || data['allaitement'] == true;
         final bool isSolide = rawType == 'Solide';
@@ -521,7 +520,8 @@ class _RecapScreenState extends State<RecapScreen> {
               }
 
               if (childHoraires['segments'] != null) {
-                final segments = List<Map<String, dynamic>>.from(childHoraires['segments']);
+                final segments =
+                    List<Map<String, dynamic>>.from(childHoraires['segments']);
                 for (final seg in segments) {
                   final arr = seg['arrivee'];
                   final dep = seg['depart'];
@@ -553,10 +553,12 @@ class _RecapScreenState extends State<RecapScreen> {
               }
 
               if (firstArrival != null) {
-                finalHoraires.add({'actionType': 'arrivee', 'heure': firstArrival});
+                finalHoraires
+                    .add({'actionType': 'arrivee', 'heure': firstArrival});
               }
               if (lastDeparture != null) {
-                finalHoraires.add({'actionType': 'depart', 'heure': lastDeparture});
+                finalHoraires
+                    .add({'actionType': 'depart', 'heure': lastDeparture});
               }
             }
           }
@@ -577,16 +579,22 @@ class _RecapScreenState extends State<RecapScreen> {
             for (final d in hist.docs) {
               final data = d.data();
               final action = (data['actionType'] ?? '').toString();
-              if (lastArr == null && (action == 'arrivee' || action == 'arrivee_modifiee')) {
-                lastArr = (data['heure'] ?? _formatTimestamp(data['timestamp'])).toString();
+              if (lastArr == null &&
+                  (action == 'arrivee' || action == 'arrivee_modifiee')) {
+                lastArr = (data['heure'] ?? _formatTimestamp(data['timestamp']))
+                    .toString();
               }
-              if (lastDep == null && (action == 'depart' || action == 'depart_modifiee')) {
-                lastDep = (data['heure'] ?? _formatTimestamp(data['timestamp'])).toString();
+              if (lastDep == null &&
+                  (action == 'depart' || action == 'depart_modifiee')) {
+                lastDep = (data['heure'] ?? _formatTimestamp(data['timestamp']))
+                    .toString();
               }
               if (lastArr != null && lastDep != null) break;
             }
-            if (lastArr != null) finalHoraires.add({'actionType': 'arrivee', 'heure': lastArr});
-            if (lastDep != null) finalHoraires.add({'actionType': 'depart', 'heure': lastDep});
+            if (lastArr != null)
+              finalHoraires.add({'actionType': 'arrivee', 'heure': lastArr});
+            if (lastDep != null)
+              finalHoraires.add({'actionType': 'depart', 'heure': lastDep});
           }
 
           // Injecter au plus deux éléments (Arrivée, Départ)
@@ -807,9 +815,8 @@ class _RecapScreenState extends State<RecapScreen> {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     final String genre = enfant['genre']?.toString() ?? '';
     final bool isBoy = genre == 'Garçon';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
     final childData = recapDataByChild[childId]!;
 
     // Déterminer si nous sommes sur iPad
@@ -1123,9 +1130,8 @@ class _RecapScreenState extends State<RecapScreen> {
     final enfant = enfants[index];
     final childId = enfant['id'];
     final String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
     final isBoy = genre == 'Garçon';
 
     // Vérifier si des activités existent pour cet enfant
@@ -1328,17 +1334,27 @@ class _RecapScreenState extends State<RecapScreen> {
     );
   }
 
-  // Version tablette
-  // Nouveau layout pour iPad - affiche les enfants dans une grille
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 2 cartes par ligne
-        childAspectRatio:
-            1.2, // Un peu plus large que haut, comme dans activity_screen
-        crossAxisSpacing: 20, // Espace horizontal entre les cartes
-        mainAxisSpacing: 20, // Espace vertical entre les cartes
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -1351,9 +1367,8 @@ class _RecapScreenState extends State<RecapScreen> {
     final childId = enfant['id'];
     final String genre = enfant['genre']?.toString() ?? '';
     final bool isBoy = genre == 'Garçon';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
 
     // Vérifier si des activités existent pour cet enfant
     final hasActivites = activitesCountByChild.containsKey(childId) &&
@@ -1442,7 +1457,15 @@ class _RecapScreenState extends State<RecapScreen> {
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Colors.black87, // 🆕 NOIR
+                        shadows: [
+                          // 🆕 Ombre blanche pour lisibilité
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 3,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1639,7 +1662,8 @@ class _RecapScreenState extends State<RecapScreen> {
       unselectedItemColor: Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
-      selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      selectedLabelStyle:
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       unselectedLabelStyle: const TextStyle(fontSize: 12),
       type: BottomNavigationBarType.fixed,
       currentIndex: _selectedIndex,

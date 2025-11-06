@@ -1139,6 +1139,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
       List<Map<String, dynamic>> sortedTodayChildren =
           List<Map<String, dynamic>>.from(todayChildren);
+
+      // 📆 Filtrer les enfants marqués absents dans Horaires
+      Set<String> absentChildIds = {};
+      try {
+        final String todayKey = DateFormat('yyyy-MM-dd').format(today);
+        final DocumentSnapshot<Map<String, dynamic>> horairesDoc =
+            await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureDocId)
+                .collection('horaires')
+                .doc(todayKey)
+                .get();
+
+        final Map<String, dynamic>? horairesData = horairesDoc.data();
+        if (horairesData != null && horairesData.isNotEmpty) {
+          horairesData.forEach((key, value) {
+            if (value is Map<String, dynamic>) {
+              final String actionType =
+                  (value['actionType'] ?? '').toString().toLowerCase();
+              final bool absentFlag = value['absent'] == true;
+              if (absentFlag || actionType == 'absent') {
+                absentChildIds.add(key);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        print("⚠️ Impossible de récupérer les absents du jour: $e");
+      }
+
+      if (absentChildIds.isNotEmpty) {
+        sortedTodayChildren.removeWhere((child) {
+          final String id = (child['id'] ?? '').toString();
+          return id.isNotEmpty && absentChildIds.contains(id);
+        });
+        print(
+            "🚫 Filtrage des absents sur l'accueil: ${absentChildIds.length} enfant(s) retiré(s)");
+      }
+
       if (isMamStructure && sortedTodayChildren.length > 1) {
         sortedTodayChildren.sort((a, b) {
           final String emailA =

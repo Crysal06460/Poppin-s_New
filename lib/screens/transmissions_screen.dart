@@ -173,9 +173,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
-          final String assignedEmail =
-              ChildAvatarColorHelper.normalizeEmail(
-                  child['assignedMemberEmail']);
+          final String assignedEmail = ChildAvatarColorHelper.normalizeEmail(
+              child['assignedMemberEmail']);
           final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
             isMamStructure: useMamColors,
             mamAssignments: mamColorAssignments,
@@ -666,9 +665,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
     final String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
     final bool isBoy = genre == 'Garçon';
 
     return Container(
@@ -970,15 +968,27 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
-// Nouveau layout pour iPad - affiche les enfants dans une grille
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 2 cartes par ligne
-        childAspectRatio: 1.2, // Un peu plus large que haut
-        crossAxisSpacing: 20, // Espace horizontal entre les cartes
-        mainAxisSpacing: 20, // Espace vertical entre les cartes
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -990,9 +1000,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     final String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
     final bool isBoy = genre == 'Garçon';
     final Color cardColor = avatarColor;
 
@@ -1052,20 +1061,20 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   ],
                 ),
 
-                // Informations de l'enfant
+                SizedBox(width: 16), // Informations de l'enfant
                 Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          enfant['prenom'],
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                  child: Text(
+                    enfant['prenom'],
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87, // 🆕 NOIR
+                      shadows: [
+                        // 🆕 Ombre blanche pour lisibilité
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3,
+                          color: Colors.white.withOpacity(0.8),
                         ),
                       ],
                     ),

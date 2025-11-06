@@ -35,7 +35,10 @@ class _MaxWordInputFormatter extends TextInputFormatter {
     final trimmed = newValue.text.trim();
     final words = trimmed.isEmpty
         ? <String>[]
-        : trimmed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).toList();
+        : trimmed
+            .split(RegExp(r'\s+'))
+            .where((word) => word.isNotEmpty)
+            .toList();
 
     if (words.length <= maxWords) {
       return newValue;
@@ -118,10 +121,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (raw == null) return '';
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return '';
-    final words = trimmed
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .toList();
+    final words =
+        trimmed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).toList();
     if (words.length <= 3) {
       return words.join(' ');
     }
@@ -679,9 +680,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
           String? photoUrl = child['photoUrl'];
-          final String assignedEmail =
-              ChildAvatarColorHelper.normalizeEmail(
-                  child['assignedMemberEmail']);
+          final String assignedEmail = ChildAvatarColorHelper.normalizeEmail(
+              child['assignedMemberEmail']);
           final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
             isMamStructure: useMamColors,
             mamAssignments: mamColorAssignments,
@@ -1492,10 +1492,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                                         value,
                                                       ),
                                                       style: TextStyle(
-                                                        fontSize:
-                                                            isTabletDevice
-                                                                ? 16
-                                                                : 14,
+                                                        fontSize: isTabletDevice
+                                                            ? 16
+                                                            : 14,
                                                         color: primaryColor,
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -2540,9 +2539,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
     String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2867,13 +2865,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.2,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -2884,9 +2895,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       decoration: BoxDecoration(
@@ -2956,7 +2966,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87, // 🆕 NOIR au lieu de blanc
+                      shadows: [
+                        // 🆕 Ombre pour lisibilité sur fond coloré
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -3100,53 +3118,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        activityData['heure'],
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _formatActivityLabel(
-                                            activityData['type'],
-                                          ),
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.black54,
-                                          ),
-                                          softWrap: true,
-                                          overflow: TextOverflow.visible,
-                                          textAlign: TextAlign.start,
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    _formatActivityLabel(activityData['type']),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        _getAttitudeIcon(
-                                            activityData['attitude'] ??
-                                                'Curieux'),
-                                        color: primaryColor,
-                                        size: 16,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        "Attitude: ${activityData['attitude'] ?? 'Non renseigné'}", // ✅ CORRIGÉ
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    activityData['heure'] ?? 'Non renseignée',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600,
+                                    ),
                                   ),
                                 ],
                               ),

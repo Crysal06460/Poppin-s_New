@@ -71,15 +71,81 @@ class _HorairesScreenState extends State<HorairesScreen> {
                         valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                       ),
                     )
-                  : enfants.isEmpty
-                      ? _buildEmptyState()
-                      : isTabletDevice
-                          ? _buildChildrenGridForTablet()
-                          : _buildChildrenGrid(),
+                  : _buildChildrenContent(isTabletDevice),
             )
           ],
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+
+  Widget _buildChildrenContent(bool isTabletDevice) {
+    final List<Map<String, dynamic>> presentChildren =
+        enfants.where((child) => child['absent'] != true).toList();
+    final List<Map<String, dynamic>> absentChildren =
+        enfants.where((child) => child['absent'] == true).toList();
+
+    if (presentChildren.isEmpty && absentChildren.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        if (presentChildren.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _buildSectionHeader(
+              isTabletDevice ? 22 : 18,
+              'Enfants présents',
+            ),
+          ),
+        if (presentChildren.isNotEmpty)
+          SliverToBoxAdapter(
+            child: isTabletDevice
+                ? _buildChildrenGridForTablet(
+                    presentChildren,
+                    embedded: true,
+                  )
+                : _buildChildrenGrid(
+                    presentChildren,
+                    embedded: true,
+                  ),
+          ),
+        if (absentChildren.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _buildSectionHeader(
+              isTabletDevice ? 22 : 18,
+              'Absents du jour',
+            ),
+          ),
+        if (absentChildren.isNotEmpty)
+          SliverToBoxAdapter(
+            child: isTabletDevice
+                ? _buildChildrenGridForTablet(
+                    absentChildren,
+                    embedded: true,
+                  )
+                : _buildChildrenGrid(
+                    absentChildren,
+                    embedded: true,
+                  ),
+          ),
+        SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(double fontSize, String title) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          color: Colors.grey.shade800,
+        ),
       ),
     );
   }
@@ -680,6 +746,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
         }
       }
 
+      final String actionType = (horaires['actionType'] ?? '').toString();
+      if (!horaires.containsKey('absent')) {
+        horaires['absent'] = actionType == 'absent' ? true : false;
+      } else if (actionType != 'absent' && horaires['absent'] == null) {
+        horaires['absent'] = false;
+      }
+
       horaires['timestamp'] = now;
       horaires['childId'] = childId;
       horaires['date'] = dateActuelle;
@@ -911,6 +984,147 @@ class _HorairesScreenState extends State<HorairesScreen> {
     });
   }
 
+  void _openExistingTimeOptions(
+      String type, Map<String, dynamic> enfant, int segmentIndex) {
+    final bool isTabletDevice = isTablet(context);
+
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 12,
+              horizontal: isTabletDevice ? 24 : 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Icons.edit, color: primaryColor),
+                  title: Text(
+                    'Modifier l\'heure',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showEditTimeDialog(type, enfant, segmentIndex);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: primaryRed),
+                  title: Text(
+                    'Supprimer l\'horaire',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: primaryRed,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _confirmDeleteTime(type, enfant, segmentIndex);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDeleteTime(
+      String type, Map<String, dynamic> enfant, int segmentIndex) async {
+    final String label =
+        type == 'arrivee' ? 'l\'heure d\'arrivée' : 'l\'heure de départ';
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text('Supprimer $label ?'),
+          content: Text(
+            'Cette action effacera l\'horaire enregistré pour ${enfant['prenom']}.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Annuler'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryRed,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Supprimer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _supprimerHeure(type, enfant, segmentIndex);
+    }
+  }
+
+  Future<void> _supprimerHeure(
+      String type, Map<String, dynamic> enfant, int segmentIndex) async {
+    List<dynamic> segments = enfant['segments'];
+    if (segmentIndex >= segments.length) return;
+
+    final Map<String, dynamic> segment =
+        Map<String, dynamic>.from(segments[segmentIndex]);
+
+    if (!segment.containsKey(type) || segment[type] == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+
+    setState(() {
+      segments[segmentIndex][type] = null;
+
+      if (type == 'arrivee') {
+        // Si plus aucune heure enregistrée, on laisse la possibilité de marquer absent
+        bool hasAnyTimeRecorded = false;
+        for (final seg in segments) {
+          final segMap = seg as Map<String, dynamic>;
+          if ((segMap['arrivee'] ?? '').toString().isNotEmpty ||
+              (segMap['depart'] ?? '').toString().isNotEmpty) {
+            hasAnyTimeRecorded = true;
+            break;
+          }
+        }
+        if (!hasAnyTimeRecorded) {
+          enfant['absent'] = false;
+        }
+      }
+    });
+
+    final List<Map<String, dynamic>> segmentsCopy =
+        segments.map<Map<String, dynamic>>((segment) {
+      return Map<String, dynamic>.from(segment as Map<String, dynamic>);
+    }).toList();
+
+    final Map<String, dynamic> horairesData = {
+      'prenom': enfant['prenom'],
+      'actionType': 'supprimer_$type',
+      'exactTime': now,
+      'heure': null,
+      'segments': segmentsCopy,
+    };
+
+    await _updateHoraires(enfant['id'], horairesData);
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -929,13 +1143,16 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
   // Nouvelle méthode pour la grille adaptée à l'iPad
   // Nouvelle méthode pour la grille adaptée à l'iPad
-  Widget _buildChildrenGridForTablet() {
+  Widget _buildChildrenGridForTablet(List<Map<String, dynamic>> data,
+      {bool embedded = false}) {
     // Détecter l'orientation
     final orientation = MediaQuery.of(context).orientation;
     final isLandscape = orientation == Orientation.landscape;
 
     return GridView.builder(
       padding: EdgeInsets.all(20),
+      shrinkWrap: embedded,
+      physics: embedded ? NeverScrollableScrollPhysics() : null,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount:
             isLandscape ? 3 : 2, // 3 colonnes en paysage, 2 en portrait
@@ -943,15 +1160,17 @@ class _HorairesScreenState extends State<HorairesScreen> {
         crossAxisSpacing: isLandscape ? 16 : 24, // Espacement adapté
         mainAxisSpacing: isLandscape ? 16 : 24,
       ),
-      itemCount: enfants.length,
+      itemCount: data.length,
       itemBuilder: (context, index) =>
-          _buildEnfantCardForTablet(context, index),
+          _buildEnfantCardForTablet(context, index, source: data),
     );
   }
 
   // Nouvelle méthode pour la carte enfant adaptée à l'iPad
-  Widget _buildEnfantCardForTablet(BuildContext context, int index) {
-    final enfant = enfants[index];
+  Widget _buildEnfantCardForTablet(BuildContext context, int index,
+      {List<Map<String, dynamic>>? source}) {
+    final list = source ?? enfants;
+    final enfant = list[index];
     final isAbsent = enfant['absent'] == true;
     final genre = enfant['genre']?.toString() ?? 'Garçon';
     final hasMultipleSegments = enfant['segments'].length > 1;
@@ -986,17 +1205,10 @@ class _HorairesScreenState extends State<HorairesScreen> {
               fit: StackFit.expand,
               children: [
                 // Fond dégradé élégant pour mettre en valeur la photo
+                // 🆕 Fond blanc sobre et net (design 2025)
                 Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        (genre == 'Fille' ? primaryRed : primaryBlue)
-                            .withOpacity(0.08),
-                        Colors.white,
-                      ],
-                    ),
+                    color: Colors.white, // Fond blanc uni
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(24)),
                   ),
@@ -1062,23 +1274,33 @@ class _HorairesScreenState extends State<HorairesScreen> {
                   if (isAbsent)
                     Padding(
                       padding: EdgeInsets.symmetric(
-                          vertical: isLandscape ? 6.0 : 10.0),
-                      child: Text(
-                        'Absent aujourd\'hui',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                          fontSize: isLandscape ? 14.0 : 18.0,
-                        ),
+                          vertical: isLandscape ? 6.0 : 12.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Absent aujourd\'hui',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                              fontSize: isLandscape ? 14.0 : 18.0,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: isLandscape ? 10.0 : 16.0),
+                          Center(child: _buildAbsentButtonForTablet(enfant)),
+                        ],
                       ),
                     )
-                  else if (hasMultipleSegments)
+                  else if (hasMultipleSegments) ...[
                     Expanded(
                       child: _buildSegmentsListForTablet(enfant),
-                    )
-                  else
+                    ),
+                  ] else ...[
                     _buildSimpleSegmentForTablet(
                         enfant, enfant['segments'][0], 0),
+                  ],
                 ],
               ),
             ),
@@ -1145,7 +1367,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
           Padding(
             padding: EdgeInsets.only(top: isLandscape ? 4.0 : 8.0),
             child: Text(
-              'Appui long sur une heure pour modifier',
+              'Appuyez sur l\'heure pour modifier ou supprimer',
               style: TextStyle(
                 fontSize: isLandscape ? 11.0 : 14.0,
                 color: Colors.grey[600],
@@ -1257,7 +1479,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
     );
   }
 
-  // BOUTON MODIFIÉ pour iPad avec appui long pour modification
+  // Bouton horaire iPad avec menu d'options (modifier/supprimer)
   Widget _buildTimeButtonForTablet(
       String label,
       String? time,
@@ -1278,29 +1500,24 @@ class _HorairesScreenState extends State<HorairesScreen> {
       width: isLandscape ? 85.0 : 100.0,
       height: isLandscape ? 38.0 : 44.0,
       child: time != null
-          ? GestureDetector(
-              onLongPress: () {
-                _showEditTimeDialog(type, enfant, segmentIndex);
-              },
-              child: ElevatedButton(
-                onPressed: null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor.withOpacity(0.8),
-                  disabledBackgroundColor: primaryColor.withOpacity(0.8),
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  padding: EdgeInsets.symmetric(
-                      horizontal: isLandscape ? 8.0 : 12.0),
+          ? ElevatedButton(
+              onPressed: () =>
+                  _openExistingTimeOptions(type, enfant, segmentIndex),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor.withOpacity(0.85),
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
                 ),
-                child: Text(
-                  time,
-                  style: TextStyle(
-                    fontSize: isLandscape ? 14.0 : 16.0,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                padding:
+                    EdgeInsets.symmetric(horizontal: isLandscape ? 8.0 : 12.0),
+              ),
+              child: Text(
+                time,
+                style: TextStyle(
+                  fontSize: isLandscape ? 14.0 : 16.0,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
             )
@@ -1329,6 +1546,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
   }
 
   // BOUTON ABSENT pour iPad avec possibilité d'annulation
+  // BOUTON ABSENT pour iPad avec possibilité d'annulation
   Widget _buildAbsentButtonForTablet(Map<String, dynamic> enfant) {
     bool aucunHoraireEnregistre = true;
     for (var segment in enfant['segments']) {
@@ -1345,8 +1563,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
     if (enfant['absent'] == true) {
       print(
           "🟠 CRÉATION du bouton Annuler Absent TABLET pour ${enfant['prenom']}");
-      return SizedBox(
-        width: 140,
+      return Container(
+        width: double.infinity,
+        constraints: BoxConstraints(maxWidth: 200),
         height: 44,
         child: ElevatedButton(
           onPressed: () {
@@ -1485,23 +1704,29 @@ class _HorairesScreenState extends State<HorairesScreen> {
   }
 
   // Grille des enfants
-  Widget _buildChildrenGrid() {
+  Widget _buildChildrenGrid(List<Map<String, dynamic>> data,
+      {bool embedded = false}) {
     return GridView.builder(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      shrinkWrap: embedded,
+      physics: embedded ? NeverScrollableScrollPhysics() : null,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         childAspectRatio: 0.5,
         crossAxisSpacing: 16,
         mainAxisSpacing: 24,
       ),
-      itemCount: enfants.length,
-      itemBuilder: (context, index) => _buildEnfantCard(context, index),
+      itemCount: data.length,
+      itemBuilder: (context, index) =>
+          _buildEnfantCard(context, index, source: data),
     );
   }
 
   // Widget pour afficher une carte enfant
-  Widget _buildEnfantCard(BuildContext context, int index) {
-    final enfant = enfants[index];
+  Widget _buildEnfantCard(BuildContext context, int index,
+      {List<Map<String, dynamic>>? source}) {
+    final list = source ?? enfants;
+    final enfant = list[index];
     bool isAbsent = enfant['absent'] == true;
     String genre = enfant['genre']?.toString() ?? 'Garçon';
     bool hasMultipleSegments = enfant['segments'].length > 1;
@@ -1548,15 +1773,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
                 // Fond dégradé élégant pour mettre en valeur la photo
                 Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        (genre == 'Fille' ? primaryRed : primaryBlue)
-                            .withOpacity(0.08),
-                        Colors.white,
-                      ],
-                    ),
+                    color: Colors.white, // Fond blanc uni
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(24)),
                   ),
@@ -1718,7 +1935,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
           Padding(
             padding: EdgeInsets.only(top: 4),
             child: Text(
-              'Appui long sur une heure pour modifier',
+              'Appuyez sur l\'heure pour modifier ou supprimer',
               style: TextStyle(
                 fontSize: 10,
                 color: Colors.grey[600],
@@ -1819,7 +2036,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             Padding(
               padding: EdgeInsets.only(top: 2),
               child: Text(
-                'Appui long pour modifier',
+                'Appuyez sur l\'heure pour modifier ou supprimer',
                 style: TextStyle(
                   fontSize: 9,
                   color: Colors.grey[600],
@@ -1833,7 +2050,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
     );
   }
 
-  // BOUTON MODIFIÉ avec appui long pour modification
+  // Bouton horaire mobile avec menu d'options (modifier/supprimer)
   Widget _buildTimeButton(String label, String? time, VoidCallback onPressed,
       Map<String, dynamic> enfant, int segmentIndex, String type) {
     // CORRECTION: Ne plus désactiver les boutons quand l'enfant est absent
@@ -1851,34 +2068,25 @@ class _HorairesScreenState extends State<HorairesScreen> {
         child: SizedBox(
           height: 32,
           child: time != null
-              ? GestureDetector(
-                  onLongPress: () {
-                    // Appui long pour modifier l'horaire (même si absent)
-                    _showEditTimeDialog(type, enfant, segmentIndex);
-                  },
-                  child: ElevatedButton(
-                    onPressed:
-                        null, // Désactivé visuellement mais modifiable par appui long
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor.withOpacity(0.8),
-                      disabledBackgroundColor: primaryColor.withOpacity(0.8),
-                      elevation: 1,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 4), // Réduire le padding horizontal
+              ? ElevatedButton(
+                  onPressed: () =>
+                      _openExistingTimeOptions(type, enfant, segmentIndex),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor.withOpacity(0.85),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
-                      child: Text(
-                        time,
-                        style: TextStyle(
-                          fontSize:
-                              12, // Réduire légèrement la taille de police
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      time,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -1948,9 +2156,12 @@ class _HorairesScreenState extends State<HorairesScreen> {
             padding: EdgeInsets.symmetric(horizontal: 4), // Réduire le padding
           ),
           child: FittedBox(
-            fit: BoxFit.scaleDown, // S'assurer que le texte s'adapte
+            fit: BoxFit.scaleDown,
             child: Text(
               'Annuler Absent',
+              maxLines: 1,
+              softWrap:
+                  false, // ← AJOUTER CETTE LIGNE pour empêcher le retour à la ligne
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

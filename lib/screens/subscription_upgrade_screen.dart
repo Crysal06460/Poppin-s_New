@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -38,8 +37,12 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   String _currentPrice = '';
   String _newPrice = '';
 
-  // ✅ AJOUTÉ : Stream subscription pour écouter les achats
-  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+  // ✅ Services unifiés pour la gestion des abonnements
+  final UnifiedSubscriptionService _subscriptionService =
+      UnifiedSubscriptionService.instance;
+  StreamSubscription<SubscriptionInfo>? _subscriptionUpdates;
+  StreamSubscription<String>? _subscriptionErrors;
+  bool _upgradeCompleted = false;
 
   @override
   void initState() {
@@ -50,8 +53,8 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
 
   @override
   void dispose() {
-    // ✅ AJOUTÉ : Nettoyer les listeners
-    _purchaseSubscription?.cancel();
+    _subscriptionUpdates?.cancel();
+    _subscriptionErrors?.cancel();
     super.dispose();
   }
 
@@ -62,159 +65,226 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       await SubscriptionService.initialize();
 
       // Initialiser le service unifié
-      await UnifiedSubscriptionService.instance.initialize();
+      await _subscriptionService.initialize();
 
-      // ✅ ÉCOUTER LES MISES À JOUR D'ACHAT
-      _purchaseSubscription = InAppPurchase.instance.purchaseStream.listen(
-        _handlePurchaseUpdate,
-        onError: (error) {
-          setState(() {
-            _isPurchasing = false;
-            _errorMessage = "Erreur d'achat: $error";
-          });
-        },
+      _subscriptionUpdates =
+          _subscriptionService.subscriptionUpdates.listen(
+        _handleSubscriptionUpdate,
+        onError: (_) {},
       );
 
-      print('✅ Services d\'abonnement initialisés');
+      _subscriptionErrors = _subscriptionService.errors.listen((error) {
+        if (!mounted) return;
+        setState(() {
+          _isPurchasing = false;
+          _errorMessage = "Erreur d'achat: $error";
+        });
+        _showSnackBar("Erreur d'achat: $error", Colors.red);
+      });
+
+      print('✅ Services d\'abonnement initialisés (upgrade)');
     } catch (e) {
       print('❌ Erreur initialisation services: $e');
     }
   }
 
-  // ✅ NOUVELLE MÉTHODE : Traiter les mises à jour d'achat
-  void _handlePurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) {
-    for (final PurchaseDetails purchase in purchaseDetailsList) {
-      print('🛒 Mise à jour achat: ${purchase.productID} - ${purchase.status}');
+  void _handleSubscriptionUpdate(SubscriptionInfo info) async {
+    if (!mounted) return;
 
-      switch (purchase.status) {
-        case PurchaseStatus.purchased:
-          _handlePurchaseSuccess(purchase);
-          break;
-        case PurchaseStatus.error:
-          _handlePurchaseError(purchase.error?.message ?? 'Erreur inconnue');
-          break;
-        case PurchaseStatus.canceled:
-          _handlePurchaseCanceled();
-          break;
-        case PurchaseStatus.pending:
-          // L'achat est en attente (payment deferral sur iOS)
-          print('⏳ Achat en attente: ${purchase.productID}');
-          break;
-        case PurchaseStatus.restored:
-          // Achat restauré
-          _handlePurchaseSuccess(purchase);
-          break;
-      }
-
-      // Finaliser la transaction
-      if (purchase.pendingCompletePurchase) {
-        InAppPurchase.instance.completePurchase(purchase);
-      }
+    switch (info.status) {
+      case SubscriptionStatus.pending:
+        setState(() {
+          _isPurchasing = true;
+          _errorMessage = '';
+        });
+        break;
+      case SubscriptionStatus.purchased:
+      case SubscriptionStatus.restored:
+        final int newCount =
+            _memberCountForProductId(info.productId) ?? _selectedMemberCount;
+        await _finalizeUpgrade(newCount, info.productId);
+        break;
+      case SubscriptionStatus.error:
+        setState(() {
+          _isPurchasing = false;
+          _errorMessage = "Erreur d'achat";
+        });
+        _showSnackBar(
+          "Erreur lors de la mise à niveau. Veuillez réessayer.",
+          Colors.red,
+        );
+        break;
+      case SubscriptionStatus.cancelled:
+      case SubscriptionStatus.expired:
+        setState(() {
+          _isPurchasing = false;
+        });
+        break;
+      case SubscriptionStatus.unknown:
+        break;
     }
   }
 
-  // ✅ NOUVELLE MÉTHODE : Traiter un achat réussi
-  Future<void> _handlePurchaseSuccess(PurchaseDetails purchase) async {
-    try {
-      setState(() {
-        _isPurchasing = false;
-      });
-
-      // Mettre à jour Firestore avec le nouvel abonnement
-      await _updateFirestoreSubscription(purchase);
-
-      // ✅ REDIRECTION VERS L'ÉCRAN DE CONFIRMATION
-      context.go('/upgrade-confirmed', extra: {
-        'structureType': 'MAM',
-        'structureId': await _getStructureId(),
-        'memberCount': _selectedMemberCount,
-        'oldMemberCount': _maxMemberCount,
-        'purchaseId': purchase.purchaseID,
-        'productId': purchase.productID,
-      });
-
-      print('✅ Achat réussi et Firestore mis à jour');
-    } catch (e) {
-      setState(() {
-        _isPurchasing = false;
-        _errorMessage = "Erreur lors de la finalisation: $e";
-      });
+  Future<void> _finalizeUpgrade(int newMemberCount, String productId) async {
+    if (_upgradeCompleted) {
+      return;
     }
-  }
+    _upgradeCompleted = true;
 
-  // ✅ NOUVELLE MÉTHODE : Traiter une erreur d'achat
-  void _handlePurchaseError(String error) {
+    final int previousMemberPlan = _maxMemberCount;
+
+    await _syncStructureAfterUpgrade(newMemberCount);
+
     setState(() {
       _isPurchasing = false;
-      _errorMessage = "Erreur d'achat: $error";
+      _maxMemberCount = newMemberCount;
+      _newPrice = _getPriceForMembers(newMemberCount);
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Erreur d'achat: $error"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  // ✅ NOUVELLE MÉTHODE : Traiter un achat annulé
-  void _handlePurchaseCanceled() {
-    setState(() {
-      _isPurchasing = false;
-      _errorMessage = "";
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Achat annulé"),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  // ✅ MÉTHODE MODIFIÉE : Mettre à jour Firestore après achat réussi
-  Future<void> _updateFirestoreSubscription(PurchaseDetails purchase) async {
     final String structureId = await _getStructureId();
+    if (!mounted) return;
 
-    // 1. Mettre à jour l'abonnement dans la collection subscriptions
-    final subscriptionQuery = await FirebaseFirestore.instance
-        .collection('subscriptions')
-        .where('structureId', isEqualTo: structureId)
-        .where('status', isEqualTo: 'active')
-        .get();
+    context.go('/upgrade-confirmed', extra: {
+      'structureType': 'MAM',
+      'structureId': structureId,
+      'memberCount': newMemberCount >= 4 ? 4 : newMemberCount,
+      'oldMemberCount': previousMemberPlan,
+      'productId': productId,
+      'priceDisplay': _getPriceForMembers(newMemberCount),
+    });
+  }
 
-    if (subscriptionQuery.docs.isNotEmpty) {
+  Future<void> _syncStructureAfterUpgrade(int newMemberCount) async {
+    try {
+      final String structureId = await _getStructureId();
+      if (structureId.isEmpty) return;
+
+      final int maxAllowed = newMemberCount >= 4 ? 99 : newMemberCount;
+
       await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .doc(subscriptionQuery.docs.first.id)
-          .update({
-        'memberCount': _selectedMemberCount,
-        'productId': purchase.productID,
-        'purchaseId': purchase.purchaseID,
-        'purchaseDate': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+          .collection('structures')
+          .doc(structureId)
+          .set(
+        {
+          'maxMemberCount': maxAllowed,
+          'subscriptionActive': true,
+          'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      print('⚠️ Impossible de synchroniser la structure après upgrade: $e');
+    }
+  }
+
+  int? _memberCountForProductId(String productId) {
+    final String normalized = productId.toLowerCase();
+    if (normalized.contains('mam_4') || normalized.contains('mam4')) {
+      return 4;
+    }
+    if (normalized.contains('mam_3') || normalized.contains('mam3')) {
+      return 3;
+    }
+    if (normalized.contains('mam_2') || normalized.contains('mam2')) {
+      return 2;
+    }
+    return null;
+  }
+
+  SubscriptionPlan _planForMemberCount(int memberCount) {
+    if (memberCount >= 4) {
+      return SubscriptionPlan.mam4PlusMembers;
+    }
+    if (memberCount == 3) {
+      return SubscriptionPlan.mam3Members;
+    }
+    return SubscriptionPlan.mam2Members;
+  }
+
+  String _getPlatformProductIdForMembers(int memberCount) {
+    if (Platform.isIOS) {
+      if (memberCount >= 4) {
+        return 'com.beylet.poppinsApp.subscription.mam_4_membres';
+      }
+      if (memberCount == 3) {
+        return 'com.beylet.poppinsApp.subscription.mam_3_membres';
+      }
+      return 'com.beylet.poppinsApp.subscription.mam_2_membres';
     } else {
-      await FirebaseFirestore.instance.collection('subscriptions').add({
-        'structureId': structureId,
-        'structureType': 'MAM',
-        'memberCount': _selectedMemberCount,
-        'productId': purchase.productID,
-        'purchaseId': purchase.purchaseID,
-        'purchaseDate': FieldValue.serverTimestamp(),
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      if (memberCount >= 4) {
+        return 'abonnement_mam4';
+      }
+      if (memberCount == 3) {
+        return 'abonnement_mam3';
+      }
+      return 'abonnement_mam2';
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+      ),
+    );
+  }
+
+  Future<void> _applyDevUpgrade(int newMemberCount, String productId) async {
+    final int previousMemberPlan = _maxMemberCount;
+    _upgradeCompleted = true;
+    final String structureId = await _getStructureId();
+    await _syncStructureAfterUpgrade(newMemberCount);
+
+    try {
+      final QuerySnapshot<Map<String, dynamic>> subscriptionQuery =
+          await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: structureId)
+              .where('status', isEqualTo: 'active')
+              .limit(1)
+              .get();
+
+      final Map<String, dynamic> updates = {
+        'memberCount': newMemberCount,
+        'productId': 'dev_$productId',
+        'purchaseId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (subscriptionQuery.docs.isNotEmpty) {
+        await subscriptionQuery.docs.first.reference.update(updates);
+      } else {
+        await FirebaseFirestore.instance.collection('subscriptions').add({
+          ...updates,
+          'structureId': structureId,
+          'structureType': 'MAM',
+          'status': 'active',
+          'purchaseDate': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('⚠️ Impossible de mettre à jour la collection subscriptions en mode dev: $e');
     }
 
-    // 2. Mettre à jour le document principal de la structure
-    await FirebaseFirestore.instance
-        .collection('structures')
-        .doc(structureId)
-        .update({
-      'maxMemberCount': _selectedMemberCount,
-      'subscriptionActive': true,
-      'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+    setState(() {
+      _isPurchasing = false;
+      _maxMemberCount = newMemberCount;
+      _newPrice = _getPriceForMembers(newMemberCount);
+    });
+
+    if (!mounted) return;
+
+    context.go('/upgrade-confirmed', extra: {
+      'structureType': 'MAM',
+      'structureId': structureId,
+      'memberCount': newMemberCount >= 4 ? 4 : newMemberCount,
+      'oldMemberCount': previousMemberPlan,
+      'productId': productId,
+      'isDev': true,
+      'priceDisplay': _getPriceForMembers(newMemberCount),
     });
   }
 
@@ -335,24 +405,6 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     return '24,99 € / mois';
   }
 
-  // ✅ OBTENIR L'ID PRODUIT POUR LES ACHATS IN-APP
-  String _getProductIdForMembers(int memberCount) {
-    // ✅ CORRECTION : Gérer le cas où memberCount < 2
-    int actualMemberCount = memberCount < 2 ? 2 : memberCount;
-
-    if (Platform.isIOS) {
-      if (actualMemberCount <= 3) {
-        return 'com.beylet.poppinsApp.subscription.mam_2_membres';
-      }
-      return 'com.beylet.poppinsApp.subscription.mam_4_membres';
-    } else {
-      if (actualMemberCount <= 3) {
-        return 'abonnement_mam2';
-      }
-      return 'abonnement_mam4';
-    }
-  }
-
   Future<String> _getStructureId() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return "";
@@ -374,149 +426,65 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     return user.uid;
   }
 
-  // ✅ MÉTHODE COMPLÈTEMENT RÉÉCRITE : Vraie mise à niveau avec Apple Store/Google Play
   Future<void> _upgradeSubscription() async {
+    if (_isPurchasing) return;
+
     setState(() {
       _isPurchasing = true;
       _errorMessage = '';
+      _upgradeCompleted = false;
     });
 
     try {
-      // ✅ OBTENIR L'ID PRODUIT CORRECT
-      final String productId = _getProductIdForMembers(_selectedMemberCount);
-      print('🛒 Tentative d\'achat du produit: $productId');
+      final int targetCount = _selectedMemberCount < 2 ? 2 : _selectedMemberCount;
+      print('🛒 Tentative de mise à niveau vers $targetCount membre(s)');
 
-      // ✅ VÉRIFIER SI ON EST EN MODE DÉVELOPPEMENT
       if (SubscriptionService.isInDevMode) {
         print('🧪 MODE DEV: Simulation d\'achat');
 
-        // Simuler un délai d'achat
-        await Future.delayed(Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 1));
 
-        // Simuler un achat réussi
-        final fakeSuccess =
+        final String productId =
+            _getPlatformProductIdForMembers(targetCount);
+        final Map<String, dynamic> simulated =
             await SubscriptionService.simulateDevPurchaseSuccess(productId);
 
-        // Mettre à jour Firestore directement en mode dev
-        await _updateFirestoreAfterDevPurchase();
+        final int simulatedCount = simulated['memberCount'] is int
+            ? simulated['memberCount'] as int
+            : targetCount;
 
-        // Rediriger vers la confirmation
-        context.go('/upgrade-confirmed', extra: {
-          'structureType': 'MAM',
-          'structureId': await _getStructureId(),
-          'memberCount': _selectedMemberCount,
-          'oldMemberCount': _maxMemberCount,
-          'isDev': true,
-        });
-
-        setState(() {
-          _isPurchasing = false;
-        });
+        await _applyDevUpgrade(simulatedCount, productId);
 
         return;
       }
 
-      // ✅ MODE PRODUCTION : VRAI ACHAT via Apple Store/Google Play
-      final InAppPurchase inAppPurchase = InAppPurchase.instance;
-
-      // Vérifier que les achats sont disponibles
-      final bool isAvailable = await inAppPurchase.isAvailable();
-      if (!isAvailable) {
-        throw Exception('Achats intégrés non disponibles sur cet appareil');
-      }
-
-      // Récupérer les détails du produit
-      final ProductDetailsResponse response =
-          await inAppPurchase.queryProductDetails({productId});
-
-      if (response.error != null) {
-        throw Exception(
-            'Erreur lors de la récupération du produit: ${response.error?.message}');
-      }
-
-      if (response.productDetails.isEmpty) {
-        throw Exception('Produit non trouvé: $productId');
-      }
-
-      // ✅ LANCER L'ACHAT RÉEL
-      final ProductDetails productDetails = response.productDetails.first;
-      print(
-          '✅ Produit trouvé: ${productDetails.title} - ${productDetails.price}');
-
-      final PurchaseParam purchaseParam =
-          PurchaseParam(productDetails: productDetails);
-
-      // 🚀 ACHAT RÉEL via Apple Store/Google Play
+      final SubscriptionPlan plan = _planForMemberCount(targetCount);
       final bool launched =
-          await inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
+          await _subscriptionService.purchaseSubscription(plan);
 
       if (!launched) {
-        throw Exception('Impossible de lancer l\'interface d\'achat');
+        setState(() {
+          _isPurchasing = false;
+          _errorMessage = 'Impossible de lancer l\'achat';
+        });
+        _showSnackBar(
+          "Impossible de lancer l'abonnement. Veuillez réessayer.",
+          Colors.red,
+        );
+      } else {
+        print('🚀 Mise à niveau lancée pour le plan $plan');
       }
-
-      print('🚀 Achat lancé - En attente de la réponse de l\'utilisateur...');
-      // Le résultat sera traité par _handlePurchaseUpdate()
     } catch (e) {
       setState(() {
         _isPurchasing = false;
         _errorMessage = "Erreur lors de la mise à niveau: ${e.toString()}";
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_errorMessage),
-          backgroundColor: Colors.red,
-        ),
+      _showSnackBar(
+        "Erreur lors de la mise à niveau: $e",
+        Colors.red,
       );
     }
   }
-
-  // ✅ NOUVELLE MÉTHODE : Mise à jour Firestore en mode développement
-  Future<void> _updateFirestoreAfterDevPurchase() async {
-    final String structureId = await _getStructureId();
-
-    // Mettre à jour ou créer l'abonnement
-    final subscriptionQuery = await FirebaseFirestore.instance
-        .collection('subscriptions')
-        .where('structureId', isEqualTo: structureId)
-        .where('status', isEqualTo: 'active')
-        .get();
-
-    if (subscriptionQuery.docs.isNotEmpty) {
-      await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .doc(subscriptionQuery.docs.first.id)
-          .update({
-        'memberCount': _selectedMemberCount,
-        'productId': 'dev_${_getProductIdForMembers(_selectedMemberCount)}',
-        'purchaseId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
-        'purchaseDate': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      await FirebaseFirestore.instance.collection('subscriptions').add({
-        'structureId': structureId,
-        'structureType': 'MAM',
-        'memberCount': _selectedMemberCount,
-        'productId': 'dev_${_getProductIdForMembers(_selectedMemberCount)}',
-        'purchaseId': 'dev_${DateTime.now().millisecondsSinceEpoch}',
-        'purchaseDate': FieldValue.serverTimestamp(),
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    // Mettre à jour la structure
-    await FirebaseFirestore.instance
-        .collection('structures')
-        .doc(structureId)
-        .update({
-      'maxMemberCount': _selectedMemberCount,
-      'subscriptionActive': true,
-      'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
   // ✅ CORRECTION - SEULE VERSION de la méthode _buildMemberCountButton
   Widget _buildMemberCountButton({
     required int count,

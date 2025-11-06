@@ -4445,12 +4445,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final double screenWidth = constraints.maxWidth;
         final double screenHeight = constraints.maxHeight;
 
-        // Calculs optimisés pour iPad (expérience 2025)
-        final double maxGridWidth = screenWidth * 0.75; // Max 75% de l'écran
+        // 🔍 Détection de l'orientation
+        final isLandscape = screenWidth > screenHeight;
+
+        // 📐 Calculs adaptés selon l'orientation (UX 2025)
+        final int crossAxisCount =
+            isLandscape ? 4 : 2; // 4 colonnes en paysage, 2 en portrait
+        final double horizontalPadding =
+            isLandscape ? screenWidth * 0.05 : 24.0;
+        final double maxGridWidth = isLandscape
+            ? screenWidth * 0.9 // 90% de la largeur en paysage
+            : screenWidth * 0.75; // 75% en portrait
+
         final double gridWidth =
-            maxGridWidth.clamp(400.0, 600.0); // Entre 400px et 600px
-        final double tileSize =
-            (gridWidth - 24) / 2; // 2 colonnes avec espacement
+            maxGridWidth.clamp(400.0, isLandscape ? 1200.0 : 600.0);
+
+        // Espacement adaptatif
+        final double spacing = isLandscape ? 16.0 : 24.0;
+
+        // Ratio d'aspect optimisé pour chaque mode
+        final double aspectRatio = isLandscape ? 0.95 : 1.0;
 
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -4463,11 +4477,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Espacement adaptatif en haut
-                SizedBox(height: screenHeight * 0.02), // rapproché du bandeau
+                SizedBox(height: screenHeight * (isLandscape ? 0.03 : 0.02)),
 
                 if (_shouldDisplayRssSection) ...[
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: horizontalPadding),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         maxWidth: gridWidth,
@@ -4475,55 +4490,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: _buildRssSection(),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: isLandscape ? 16.0 : 10.0),
                 ],
 
-                // Grille des tuiles centrée
+                // 🎨 Grille des tuiles - Adaptée à l'orientation
                 Container(
                   width: gridWidth,
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: GridView(
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  child: GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing:
-                          24, // Espacement vertical augmenté pour iPad
-                      crossAxisSpacing: 24, // Espacement horizontal augmenté
-                      childAspectRatio: 1,
-                    ),
+                    crossAxisCount:
+                        crossAxisCount, // ✨ Dynamique: 2 ou 4 colonnes
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    childAspectRatio: aspectRatio,
                     children: [
                       _buildTabletTile(
                         color: _tileBlue,
                         onTap: _openMamAdministration,
-                        size: tileSize,
+                        size: (gridWidth -
+                                (spacing * (crossAxisCount - 1)) -
+                                (horizontalPadding * 2)) /
+                            crossAxisCount,
                         assetPath: 'assets/images/Administration.png',
                       ),
                       _buildTabletTile(
                         color: _tileRed,
                         onTap: _openDailyOps,
-                        size: tileSize,
+                        size: (gridWidth -
+                                (spacing * (crossAxisCount - 1)) -
+                                (horizontalPadding * 2)) /
+                            crossAxisCount,
                         assetPath: 'assets/images/Fonctionnement.png',
                       ),
                       _buildTabletTile(
                         color: _tileCyan,
                         onTap: _openChildrenParents,
-                        size: tileSize,
+                        size: (gridWidth -
+                                (spacing * (crossAxisCount - 1)) -
+                                (horizontalPadding * 2)) /
+                            crossAxisCount,
                         assetPath: 'assets/images/Enfant.png',
                       ),
                       _buildTabletTile(
                         color: _tileYellow,
                         onTap: _openReportsHistory,
-                        size: tileSize,
+                        size: (gridWidth -
+                                (spacing * (crossAxisCount - 1)) -
+                                (horizontalPadding * 2)) /
+                            crossAxisCount,
                         assetPath: 'assets/images/Memo.png',
                       ),
                     ],
                   ),
                 ),
 
-                // Espacement adaptatif en bas (sans section légale)
-                SizedBox(height: screenHeight * 0.12),
+                // Espacement adaptatif en bas
+                SizedBox(height: screenHeight * (isLandscape ? 0.08 : 0.12)),
               ],
             ),
           ),

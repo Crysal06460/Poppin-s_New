@@ -16,7 +16,6 @@ import '../services/photo_cleanup_service.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
-import '../utils/planning_helper.dart';
 import '../utils/child_avatar_color_helper.dart';
 
 class PhotosScreen extends StatefulWidget {
@@ -254,11 +253,6 @@ class _PhotosScreenState extends State<PhotosScreen>
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
-      final today = DateTime.now();
-      final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
-      final capitalizedWeekday = todayWeekday[0].toUpperCase() +
-          todayWeekday.substring(1).toLowerCase();
-
       setState(() {
         structureName = structureContext.structureName;
       });
@@ -352,41 +346,40 @@ class _PhotosScreenState extends State<PhotosScreen>
         );
       }
 
-      // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
-      enfants = [];
-      for (var child in filteredChildren) {
-        final isScheduledToday =
-            PlanningHelper.isScheduledForDate(child, today);
-        final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
-        if (isScheduledToday || isDelegatedToday) {
-          final String assignedEmail =
-              ChildAvatarColorHelper.normalizeEmail(
-                  child['assignedMemberEmail']);
-          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
-            isMamStructure: useMamColors,
-            mamAssignments: mamColorAssignments,
-            assignedMemberEmail: assignedEmail,
-            gender: child['gender']?.toString(),
-          );
-          String? photoUrl = child['photoUrl'];
-          // Récupérer l'autorisation photos en supportant plusieurs formats (booléen, texte, numérique)
-          final bool photosAllowed = _normalizePermissionValue(
-            child['authorizations']?['photos'],
-            defaultValue: true,
-          );
-          enfants.add({
-            'id': child['id'],
-            'prenom': child['firstName'],
-            'genre': child['gender'],
-            'photoUrl': photoUrl,
-            'assignedMemberEmail': assignedEmail,
-            'avatarColor': avatarColor,
-            'photosAllowed': photosAllowed,
-            'structureId':
-                structureId, // Ajouter l'ID de structure pour les requêtes futures
-          });
-        }
-      }
+      // Inclure tous les enfants, qu'ils soient prévus ou non aujourd'hui
+      enfants = filteredChildren.map<Map<String, dynamic>>((child) {
+        final String assignedEmail =
+            ChildAvatarColorHelper.normalizeEmail(child['assignedMemberEmail']);
+        final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+          isMamStructure: useMamColors,
+          mamAssignments: mamColorAssignments,
+          assignedMemberEmail: assignedEmail,
+          gender: child['gender']?.toString(),
+        );
+        String? photoUrl = child['photoUrl'];
+        final bool photosAllowed = _normalizePermissionValue(
+          child['authorizations']?['photos'],
+          defaultValue: true,
+        );
+        return {
+          'id': child['id'],
+          'prenom': child['firstName'],
+          'genre': child['gender'],
+          'photoUrl': photoUrl,
+          'assignedMemberEmail': assignedEmail,
+          'avatarColor': avatarColor,
+          'photosAllowed': photosAllowed,
+          'structureId': structureId,
+        };
+      }).toList();
+
+      // Tri alphabétique par prénom pour un affichage cohérent
+      enfants.sort((a, b) {
+        final String nameA = (a['prenom'] ?? '').toString().toLowerCase();
+        final String nameB = (b['prenom'] ?? '').toString().toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+
       setState(() => isLoading = false);
     } catch (e) {
       print("Erreur lors du chargement des enfants: $e");
@@ -1767,56 +1760,7 @@ class _PhotosScreenState extends State<PhotosScreen>
     });
   }
 
-  Future<bool> _isChildArrivedToday(String structureId, String childId) async {
-    try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final doc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .collection('horaires')
-          .doc(dateKey)
-          .get();
-      if (!doc.exists) return false;
-      final data = doc.data() as Map<String, dynamic>?;
-      if (data == null || !data.containsKey(childId)) return false;
-      final ch = data[childId] as Map<String, dynamic>?;
-      if (ch == null) return false;
-      if (ch['actionType'] == 'absent') return false;
-      if (ch['segments'] is List) {
-        for (final seg in (ch['segments'] as List)) {
-          final arr = seg['arrivee'];
-          if (arr != null && arr.toString().isNotEmpty) return true;
-        }
-      }
-      final arr = ch['arrivee'];
-      if (arr != null && arr.toString().isNotEmpty) return true;
-      return false;
-    } catch (e) {
-      print('Erreur vérification arrivée (photos): $e');
-      return false;
-    }
-  }
-
-  Future<void> _guardAddMedia(String structureId, String childId) async {
-    final arrived = await _isChildArrivedToday(structureId, childId);
-    if (!arrived) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text('Arrivée requise'),
-          content: Text(
-              "Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une photo."),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
+  void _guardAddMedia(String structureId, String childId) {
     _showAddMediaPopup(childId);
   }
 
@@ -2251,9 +2195,8 @@ class _PhotosScreenState extends State<PhotosScreen>
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
     String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -2774,7 +2717,7 @@ class _PhotosScreenState extends State<PhotosScreen>
 
       // Définir la plage de dates pour le jour sélectionné
       final startOfDay = DateTime(date.year, date.month, date.day);
-      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
+      final startOfNextDay = startOfDay.add(Duration(days: 1));
 
       // MODIFICATION: Récupérer d'abord tous les enfants et appliquer le même filtre que _loadEnfantsDuJour
       final snapshot = await FirebaseFirestore.instance
@@ -2823,7 +2766,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             .doc(enfant['id'])
             .collection('medias')
             .where('date', isGreaterThanOrEqualTo: startOfDay)
-            .where('date', isLessThan: endOfDay.add(Duration(days: 1)))
+            .where('date', isLessThan: startOfNextDay)
             .orderBy('date', descending: true)
             .get();
 
@@ -3078,13 +3021,26 @@ class _PhotosScreenState extends State<PhotosScreen>
 
 // Nouvelle méthode pour construire la mise en page en grille pour iPad
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.2,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -3096,9 +3052,8 @@ class _PhotosScreenState extends State<PhotosScreen>
   Widget _buildEnfantCardForTablet(BuildContext context, int index) {
     final enfant = enfants[index];
     final String genre = enfant['genre']?.toString() ?? '';
-    final Color avatarColor =
-        (enfant['avatarColor'] as Color?) ??
-            ChildAvatarColorHelper.defaultColorForGender(genre);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
 
     return Container(
       decoration: BoxDecoration(
@@ -3170,7 +3125,15 @@ class _PhotosScreenState extends State<PhotosScreen>
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87, // 🆕 NOIR
+                      shadows: [
+                        // 🆕 Ombre blanche pour lisibilité
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 3,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ],
                     ),
                   ),
                 ),

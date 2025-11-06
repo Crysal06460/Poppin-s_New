@@ -89,8 +89,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       return '';
     }
     final dateTime = timestamp.toDate();
-    final datePart =
-        DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(dateTime);
+    final datePart = DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(dateTime);
     final timePart = DateFormat('HH:mm', 'fr_FR').format(dateTime);
     return '$datePart à $timePart';
   }
@@ -132,9 +131,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       allChildren = allChildren
           .map((child) => {
                 ...child,
-                'assignedMemberEmail':
-                    ChildAvatarColorHelper.normalizeEmail(
-                        child['assignedMemberEmail'])
+                'assignedMemberEmail': ChildAvatarColorHelper.normalizeEmail(
+                    child['assignedMemberEmail'])
               })
           .toList();
 
@@ -1507,21 +1505,60 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                               builder: (context, snapshot) {
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    // 🆕 Ligne 1 : "Discussion"
                                     Text(
-                                      snapshot.data ??
-                                          "Discussion avec les parents",
+                                      "Discussion",
                                       style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: isTabletDevice ? 22 : 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                        shadows: [
+                                          Shadow(
+                                            offset: Offset(0, 1),
+                                            blurRadius: 3,
+                                            color:
+                                                Colors.white.withOpacity(0.8),
+                                          ),
+                                        ],
                                       ),
                                     ),
+                                    // 🆕 Ligne 2 : "avec [noms]"
+                                    Text(
+                                      snapshot.hasData
+                                          ? "avec ${snapshot.data}"
+                                          : "avec les parents",
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                        shadows: [
+                                          Shadow(
+                                            offset: Offset(0, 1),
+                                            blurRadius: 3,
+                                            color:
+                                                Colors.white.withOpacity(0.8),
+                                          ),
+                                        ],
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    SizedBox(height: 4),
                                     Text(
                                       "Enfant : ${enfant['prenom']}",
                                       style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: isTabletDevice ? 16 : 14,
+                                        fontSize: 14,
+                                        color: Colors.black87,
+                                        shadows: [
+                                          Shadow(
+                                            offset: Offset(0, 1),
+                                            blurRadius: 3,
+                                            color:
+                                                Colors.white.withOpacity(0.8),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -2092,9 +2129,8 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                               width: 72,
                               height: 72,
                               fit: BoxFit.cover,
-                              errorBuilder:
-                                  (context, error, stackTrace) =>
-                                      _buildInitialsFallback(
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildInitialsFallback(
                                 enfant['prenom'],
                               ),
                             ),
@@ -2395,15 +2431,27 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     );
   }
 
-// Nouvelle méthode pour construire la mise en page en grille pour iPad
   Widget _buildTabletLayout() {
+    final Size screenSize = MediaQuery.of(context).size;
+    final bool isLandscape = screenSize.width > screenSize.height;
+
+    // 🆕 4 colonnes en paysage pour beaucoup d'enfants
+    final int crossAxisCount = isLandscape ? 4 : 2;
+
+    // Ratio adapté pour 4 colonnes
+    final double childAspectRatio = isLandscape ? 1.0 : 1.2;
+
+    final double spacing = isLandscape ? 12.0 : 20.0;
+    final double padding = isLandscape ? 16.0 : 16.0;
+
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(padding),
+      physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.5,
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
       ),
       itemCount: enfants.length,
       itemBuilder: (context, index) =>
@@ -2508,7 +2556,14 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: Colors.black87, // 🆕 NOIR
+                                    shadows: [
+                                      Shadow(
+                                        offset: Offset(0, 1),
+                                        blurRadius: 3,
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                    ],
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -2518,7 +2573,14 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                   "Enfant : ${enfant['prenom']}",
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.white70,
+                                    color: Colors.black87, // 🆕 NOIR
+                                    shadows: [
+                                      Shadow(
+                                        offset: Offset(0, 1),
+                                        blurRadius: 3,
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
