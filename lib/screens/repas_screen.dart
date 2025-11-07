@@ -10,6 +10,7 @@ import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
 import '../utils/child_avatar_color_helper.dart';
+import '../utils/absence_helper.dart';
 
 class RepasScreen extends StatefulWidget {
   const RepasScreen({Key? key}) : super(key: key);
@@ -306,10 +307,16 @@ class _RepasScreenState extends State<RepasScreen> {
       print(
           "🔍 DIAGNOSTIC REPAS - Nombre total d'enfants: ${allChildren.length}, Nombre filtrés: ${filteredChildren.length}");
 
+      final Set<String> absentChildIds =
+          await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui,
       // et inclure ceux délégués aujourd'hui même si le planning n'est pas présent
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
+        if (absentChildIds.contains(child['id'])) {
+          continue;
+        }
         final isScheduledToday =
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);

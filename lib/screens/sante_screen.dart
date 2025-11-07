@@ -13,6 +13,7 @@ import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
 import '../theme/app_colors.dart';
 import '../utils/child_avatar_color_helper.dart';
+import '../utils/absence_helper.dart';
 
 class SanteScreen extends StatefulWidget {
   const SanteScreen({Key? key}) : super(key: key);
@@ -258,9 +259,15 @@ class _SanteScreenState extends State<SanteScreen> {
         );
       }
 
+      final Set<String> absentChildIds =
+          await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
+        if (absentChildIds.contains(child['id'])) {
+          continue;
+        }
         final isScheduledToday =
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);

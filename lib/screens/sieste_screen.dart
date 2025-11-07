@@ -11,6 +11,7 @@ import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
 import '../utils/child_avatar_color_helper.dart';
+import '../utils/absence_helper.dart';
 
 class SiesteScreen extends StatefulWidget {
   const SiesteScreen({Key? key}) : super(key: key);
@@ -556,9 +557,15 @@ class _SiesteScreenState extends State<SiesteScreen> {
         );
       }
 
+      final Set<String> absentChildIds =
+          await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
+        if (absentChildIds.contains(child['id'])) {
+          continue;
+        }
         final isScheduledToday =
             PlanningHelper.isScheduledForDate(child, today);
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);

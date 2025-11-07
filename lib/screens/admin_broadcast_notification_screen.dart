@@ -12,6 +12,11 @@ class AdminBroadcastNotificationScreen extends StatefulWidget {
       _AdminBroadcastNotificationScreenState();
 }
 
+const Set<String> _notificationAdminEmails = {
+  'cbeylet06@gmail.com',
+  'chrisgugu1101@gmail.com',
+};
+
 class _AdminBroadcastNotificationScreenState
     extends State<AdminBroadcastNotificationScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -47,7 +52,7 @@ class _AdminBroadcastNotificationScreenState
       }
 
       final email = currentUser.email?.toLowerCase().trim();
-      if (email == 'cbeylet06@gmail.com') {
+      if (email != null && _notificationAdminEmails.contains(email)) {
         setState(() {
           _isAuthorized = true;
           _isAuthorizing = false;

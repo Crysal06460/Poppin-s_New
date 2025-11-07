@@ -34,9 +34,14 @@ import 'package:xml/xml.dart' as xml;
 import '../theme/app_colors.dart';
 import '../services/structure_notification_service.dart';
 import 'admin_broadcast_notification_screen.dart';
+import 'admin_subscription_dashboard_screen.dart';
 
 // Dans la classe _DashboardScreenState
 int _abacusClickCount = 0;
+const Set<String> _dashboardAdminEmails = {
+  'cbeylet06@gmail.com',
+  'chrisgugu1101@gmail.com',
+};
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -89,6 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _latestStructureNotificationId;
   bool _hasUnreadStructureNotification = false;
   bool _showNotificationAdminButton = false;
+  bool _showSubscriptionAdminButton = false;
 
   static const int _rssMaxItems = 1;
   static const Duration _rssRefreshCooldown = Duration(minutes: 15);
@@ -3931,9 +3937,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _structureId = structureId;
       _listenToStructureNotifications(structureId);
 
+      final String normalizedEmail = userEmail.toLowerCase().trim();
+      final bool isDashboardAdmin =
+          _dashboardAdminEmails.contains(normalizedEmail);
       final bool canBroadcastNotifications =
-          userEmail == 'cbeylet06@gmail.com' ||
+          isDashboardAdmin ||
               structureId == 'e5udQot4UtYxsrOoqaHZ2n4VEkk1';
+      final bool canViewSubscriptionStats = isDashboardAdmin;
 
       final dynamic showNewsRaw = structureData['showDashboardNews'];
       final bool hasNewsPreference = showNewsRaw is bool;
@@ -3987,6 +3997,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
         isLoading = false;
         _showNotificationAdminButton = canBroadcastNotifications;
+        _showSubscriptionAdminButton = canViewSubscriptionStats;
       });
 
       if (newRss.isNotEmpty && showNewsPreference) {
@@ -4175,6 +4186,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openSubscriptionAdminPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AdminSubscriptionDashboardScreen(),
+      ),
+    );
+  }
+
   Widget _buildNotificationAdminButton(bool isTablet) {
     final double fontSize =
         (isTablet ? 14.0 : 12.0) * MediaQuery.of(context).textScaleFactor;
@@ -4189,6 +4208,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       icon: const Icon(Icons.notifications_active),
       label: Text(
         'Publier',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionAdminButton(bool isTablet) {
+    final double fontSize =
+        (isTablet ? 14.0 : 12.0) * MediaQuery.of(context).textScaleFactor;
+    return OutlinedButton.icon(
+      onPressed: _openSubscriptionAdminPage,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withOpacity(0.7)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: const Icon(Icons.insights),
+      label: Text(
+        'Stats',
         style: TextStyle(
           color: Colors.white,
           fontSize: fontSize,
@@ -6891,6 +6933,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             width: screenSize.width * (isTablet ? 0.015 : 0.03),
                           ),
                           _buildNotificationAdminButton(isTablet),
+                        ],
+                        if (_showSubscriptionAdminButton) ...[
+                          SizedBox(
+                            width: screenSize.width * (isTablet ? 0.015 : 0.03),
+                          ),
+                          _buildSubscriptionAdminButton(isTablet),
                         ],
                       ],
                     ),

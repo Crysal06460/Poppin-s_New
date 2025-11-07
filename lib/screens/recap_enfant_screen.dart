@@ -9,6 +9,7 @@ import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
 import '../utils/planning_helper.dart';
 import '../utils/child_avatar_color_helper.dart';
+import '../utils/absence_helper.dart';
 
 class RecapScreen extends StatefulWidget {
   const RecapScreen({Key? key}) : super(key: key);
@@ -192,9 +193,15 @@ class _RecapScreenState extends State<RecapScreen> {
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à: '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
 
+      final Set<String> absentChildIds =
+          await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
+
       // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
       enfants = [];
       for (var child in filteredChildren) {
+        if (absentChildIds.contains(child['id'])) {
+          continue;
+        }
         final bool isPlannedToday =
             PlanningHelper.isScheduledForDate(child, today);
         if (!isPlannedToday) continue;
