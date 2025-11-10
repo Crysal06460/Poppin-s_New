@@ -36,6 +36,7 @@ class _AdminSubscriptionDashboardScreenState
   String? _authorizationError;
   String? _statsError;
   bool _isExporting = false;
+  bool _isExportingRecentExpirations = false;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _structuresSub;
   List<_StructureSubscriptionInfo> _entries = const [];
@@ -154,6 +155,21 @@ class _AdminSubscriptionDashboardScreenState
     }
   }
 
+  Future<void> _handleExportRecentExpiredTrials(
+      BuildContext originContext) async {
+    if (_isExportingRecentExpirations) return;
+    setState(() => _isExportingRecentExpirations = true);
+    try {
+      await _exportTrialsExpiredRecently(originContext);
+    } catch (e) {
+      _showSnackBar('Export impossible : $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingRecentExpirations = false);
+      }
+    }
+  }
+
   Future<void> _exportTrialsEndingSoon(BuildContext originContext) async {
     final List<_StructureSubscriptionInfo> expiringEntries = _entries.where(
       (entry) {
@@ -193,6 +209,55 @@ class _AdminSubscriptionDashboardScreenState
     );
     _showSnackBar(
         '${expiringEntries.length} adresse(s) exportée(s) avec succès.');
+  }
+
+  Future<void> _exportTrialsExpiredRecently(
+      BuildContext originContext) async {
+    final DateTime now = DateTime.now();
+    final DateTime twoDaysAgo = now.subtract(const Duration(days: 2));
+
+    final List<_StructureSubscriptionInfo> recentlyExpiredEntries = _entries
+        .where((entry) {
+          final String email = entry.ownerEmail?.trim() ?? '';
+          if (email.isEmpty) return false;
+          if (!entry.trialStatus.hasStarted || !entry.trialStatus.isExpired) {
+            return false;
+          }
+          final DateTime? trialEnd = entry.trialEnd;
+          if (trialEnd == null) return false;
+          return !trialEnd.isBefore(twoDaysAgo) && !trialEnd.isAfter(now);
+        })
+        .toList();
+
+    if (recentlyExpiredEntries.isEmpty) {
+      _showSnackBar('Aucun essai expiré sur les 2 derniers jours.');
+      return;
+    }
+
+    final String content = recentlyExpiredEntries
+        .map((entry) => entry.ownerEmail!.trim())
+        .join('\n');
+
+    final Directory tempDir = await getTemporaryDirectory();
+    final String filePath =
+        '${tempDir.path}/emails_essais_expire_recent_${DateTime.now().millisecondsSinceEpoch}.txt';
+    final File file = File(filePath);
+    await file.writeAsString(content);
+
+    final RenderBox? renderBox =
+        originContext.findRenderObject() as RenderBox?;
+    final Rect? origin = renderBox != null
+        ? renderBox.localToGlobal(Offset.zero) & renderBox.size
+        : null;
+
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Essais expirés à relancer (dernières 48h).',
+      subject: 'Essais expirés Poppin\'s',
+      sharePositionOrigin: origin,
+    );
+    _showSnackBar(
+        '${recentlyExpiredEntries.length} adresse(s) exportée(s) avec succès.');
   }
 
   @override
@@ -439,24 +504,52 @@ class _AdminSubscriptionDashboardScreenState
 
   Widget _buildExportButton() {
     return Center(
-      child: Builder(builder: (buttonContext) {
-        return ElevatedButton.icon(
-          onPressed: _isExporting
-              ? null
-              : () => _handleExportEndingTrials(buttonContext),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blueGrey.shade700,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          ),
-          icon: Icon(_isExporting ? Icons.hourglass_top : Icons.download),
-          label: Text(
-            _isExporting
-                ? 'Export en cours...'
-                : 'Exporter les emails (J-2 / J-1)',
-          ),
-        );
-      }),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Builder(builder: (buttonContext) {
+            return ElevatedButton.icon(
+              onPressed: _isExporting
+                  ? null
+                  : () => _handleExportEndingTrials(buttonContext),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey.shade700,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              ),
+              icon: Icon(_isExporting ? Icons.hourglass_top : Icons.download),
+              label: Text(
+                _isExporting
+                    ? 'Export en cours...'
+                    : 'Exporter les emails (J-2 / J-1)',
+              ),
+            );
+          }),
+          const SizedBox(height: 10),
+          Builder(builder: (buttonContext) {
+            return ElevatedButton.icon(
+              onPressed: _isExportingRecentExpirations
+                  ? null
+                  : () => _handleExportRecentExpiredTrials(buttonContext),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange.shade600,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              ),
+              icon: Icon(_isExportingRecentExpirations
+                  ? Icons.hourglass_top
+                  : Icons.history),
+              label: Text(
+                _isExportingRecentExpirations
+                    ? 'Export en cours...'
+                    : 'Emails essais expirés (48h)',
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 

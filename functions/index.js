@@ -1,6 +1,6 @@
 const {onDocumentCreated, onDocumentWritten} = require('firebase-functions/v2/firestore');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
-const {onCall, HttpsError} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
+const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue, Timestamp} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
@@ -2160,3 +2160,317 @@ function resolveStructureAssistant(structureDoc, structureData = {}) {
         name: displayName || email,
     };
 }
+
+// ===== FONCTION PONCTUELLE : BACKFILL DES SUBSCRIPTIONS =====
+/**
+ * ATTENTION : Cette fonction est à déclencher UNE SEULE FOIS
+ * Elle corrige les données de subscription manquantes dans les structures
+ * Après utilisation, supprimer cette fonction pour éviter toute exécution accidentelle
+ */
+exports.backfillSubscriptions = onRequest({
+    region: 'europe-west1',
+    cors: true
+}, async (request, response) => {
+    try {
+        console.log("🚀 Début du backfill des subscriptions...");
+
+        // 1. Récupérer toutes les structures avec subscriptionActive = true
+        const structuresSnapshot = await db
+            .collection("structures")
+            .where("subscriptionActive", "==", true)
+            .get();
+
+        console.log(`📊 ${structuresSnapshot.size} structures actives trouvées`);
+
+        let updated = 0;
+        let skipped = 0;
+        let errors = 0;
+        const details = [];
+
+        // 2. Pour chaque structure
+        for (const structureDoc of structuresSnapshot.docs) {
+            const structureId = structureDoc.id;
+            const structureData = structureDoc.data();
+
+            try {
+                // Vérifier si le backfill est déjà fait
+                if (
+                    structureData.subscriptionStatus === "active" &&
+                    structureData.subscriptionPrice &&
+                    structureData.subscriptionPlatform
+                ) {
+                    console.log(`⏭️  Structure ${structureId} déjà à jour`);
+                    skipped++;
+                    details.push({
+                        structureId,
+                        status: 'skipped',
+                        reason: 'already_complete'
+                    });
+                    continue;
+                }
+
+                // 3. Récupérer la dernière subscription de cette structure
+                const subscriptionSnapshot = await db
+                    .collection("subscriptions")
+                    .where("structureId", "==", structureId)
+                    .orderBy("createdAt", "desc")
+                    .limit(1)
+                    .get();
+
+                if (subscriptionSnapshot.empty) {
+                    console.log(`⚠️  Pas de subscription trouvée pour ${structureId}`);
+                    skipped++;
+                    details.push({
+                        structureId,
+                        status: 'skipped',
+                        reason: 'no_subscription_found'
+                    });
+                    continue;
+                }
+
+                const subscriptionData = subscriptionSnapshot.docs[0].data();
+
+                // 4. Préparer les données de mise à jour
+                const updateData = {
+                    subscriptionStatus: "active",
+                    subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                };
+
+                // Ajouter le prix si disponible
+                if (subscriptionData.price) {
+                    updateData.subscriptionPrice = subscriptionData.price;
+                }
+
+                // Ajouter la plateforme si disponible
+                if (subscriptionData.platform) {
+                    updateData.subscriptionPlatform = subscriptionData.platform;
+                }
+
+                // Ajouter la source si pas déjà présente
+                if (!structureData.subscriptionSource) {
+                    updateData.subscriptionSource = "backfill_correction";
+                }
+
+                // Mettre à jour trialStatus si nécessaire
+                if (!structureData.trialStatus || structureData.trialStatus === "active") {
+                    updateData.trialStatus = "converted";
+                }
+
+                // 5. Mettre à jour la structure
+                await structureDoc.ref.update(updateData);
+
+                console.log(`✅ Structure ${structureId} mise à jour`, updateData);
+                updated++;
+                details.push({
+                    structureId,
+                    status: 'updated',
+                    updatedFields: Object.keys(updateData)
+                });
+            } catch (error) {
+                console.error(`❌ Erreur pour structure ${structureId}:`, error);
+                errors++;
+                details.push({
+                    structureId,
+                    status: 'error',
+                    error: error.message
+                });
+            }
+        }
+
+        // 6. Résumé
+        const summary = {
+            success: true,
+            totalStructures: structuresSnapshot.size,
+            updated: updated,
+            skipped: skipped,
+            errors: errors,
+            message: "Backfill terminé avec succès",
+            timestamp: new Date().toISOString(),
+            details: details
+        };
+
+        console.log("🎉 Backfill terminé:", summary);
+        response.status(200).json(summary);
+    } catch (error) {
+        console.error("💥 Erreur globale:", error);
+        response.status(500).json({
+            success: false,
+            error: error.message || "Erreur inconnue",
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
+ * CORRECTION - Réparer les subscriptionStatus
+ * Différencier les trials des abonnements actifs
+ */
+exports.fixSubscriptionStatusV2 = onRequest({
+    region: 'europe-west1'
+}, async (request, response) => {
+    try {
+        console.log("🔧 Début de la correction V2 des subscriptionStatus...");
+
+        const structuresSnapshot = await db
+            .collection("structures")
+            .where("subscriptionActive", "==", true)
+            .get();
+
+        console.log(`📊 ${structuresSnapshot.size} structures actives trouvées`);
+
+        let fixedToActive = 0;
+        let keptAsTrial = 0;
+        let alreadyCorrect = 0;
+        let errors = 0;
+        const details = [];
+
+        for (const structureDoc of structuresSnapshot.docs) {
+            const structureId = structureDoc.id;
+            const structureData = structureDoc.data();
+
+            try {
+                const subscriptionSnapshot = await db
+                    .collection("subscriptions")
+                    .where("structureId", "==", structureId)
+                    .orderBy("createdAt", "desc")
+                    .limit(1)
+                    .get();
+
+                if (subscriptionSnapshot.empty) {
+                    console.log(`⚠️ Pas de subscription pour ${structureId}`);
+                    details.push({
+                        structureId,
+                        status: 'skipped',
+                        reason: 'no_subscription_found'
+                    });
+                    continue;
+                }
+
+                const subscriptionData = subscriptionSnapshot.docs[0].data();
+                const currentStatus = structureData.subscriptionStatus;
+
+                // NOUVELLE LOGIQUE CORRIGÉE
+                let correctStatus;
+
+                // 1. Si platform ou source = "firebase_trial" → C'EST UN TRIAL
+                if (
+                    subscriptionData.platform === "firebase_trial" ||
+                    subscriptionData.source === "firebase_trial"
+                ) {
+                    correctStatus = "trial";
+                }
+                // 2. Si status = "active" ET platform = "ios" ou "android" → C'EST UN ABONNÉ PAYANT
+                else if (
+                    subscriptionData.status === "active" &&
+                    (subscriptionData.platform === "ios" || subscriptionData.platform === "android")
+                ) {
+                    correctStatus = "active";
+                }
+                // 3. Si status = "trial" → C'EST UN TRIAL
+                else if (subscriptionData.status === "trial") {
+                    correctStatus = "trial";
+                }
+                // 4. Par défaut, on regarde isTrialPeriod (cas de fallback)
+                else if (subscriptionData.isTrialPeriod === true) {
+                    correctStatus = "trial";
+                }
+                // 5. Sinon, on considère comme actif
+                else {
+                    correctStatus = "active";
+                }
+
+                // Mettre à jour si nécessaire
+                if (currentStatus !== correctStatus) {
+                    await structureDoc.ref.update({
+                        subscriptionStatus: correctStatus,
+                        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                    });
+
+                    if (correctStatus === "active") {
+                        console.log(`✅ ${structureId}: CORRIGÉ de "${currentStatus}" vers "active"`);
+                        fixedToActive++;
+                        details.push({
+                            structureId,
+                            status: 'fixed_to_active',
+                            previousStatus: currentStatus,
+                            subscriptionPlatform: subscriptionData.platform
+                        });
+                    } else {
+                        console.log(`✅ ${structureId}: CORRIGÉ vers "trial"`);
+                        keptAsTrial++;
+                        details.push({
+                            structureId,
+                            status: 'kept_as_trial',
+                            previousStatus: currentStatus
+                        });
+                    }
+                } else {
+                    console.log(`⏭️  ${structureId}: déjà correct (${correctStatus})`);
+                    alreadyCorrect++;
+                    details.push({
+                        structureId,
+                        status: 'already_correct',
+                        subscriptionStatus: correctStatus
+                    });
+                }
+            } catch (error) {
+                console.error(`❌ Erreur pour ${structureId}:`, error);
+                errors++;
+                details.push({
+                    structureId,
+                    status: 'error',
+                    error: error.message
+                });
+            }
+        }
+
+        const summary = {
+            success: true,
+            totalStructures: structuresSnapshot.size,
+            fixedToActive: fixedToActive,
+            keptAsTrial: keptAsTrial,
+            alreadyCorrect: alreadyCorrect,
+            errors: errors,
+            message: "Correction V2 terminée",
+            timestamp: new Date().toISOString(),
+            details: details
+        };
+
+        console.log("🎉 Correction V2 terminée:", summary);
+        response.status(200).json(summary);
+    } catch (error) {
+        console.error("💥 Erreur globale:", error);
+        response.status(500).json({
+            success: false,
+            error: error.message || "Erreur inconnue",
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+exports.deactivateExpiredTrials = onSchedule("every 24 hours", async () => {
+  const now = admin.firestore.Timestamp.now();
+  console.log("🚀 Début du nettoyage des trials expirés à", now.toDate());
+
+  try {
+    const trialsSnapshot = await db
+      .collection("subscriptions")
+      .where("status", "==", "trial")
+      .where("trialEndsAt", "<=", now)
+      .get();
+
+    console.log(`📊 ${trialsSnapshot.size} trials expirés trouvés`);
+
+    for (const doc of trialsSnapshot.docs) {
+      await doc.ref.update({
+        status: "expired",
+        subscriptionActive: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`✅ ${doc.id} passé en expired`);
+    }
+
+    console.log("🎉 Nettoyage des trials expirés terminé !");
+  } catch (error) {
+    console.error("❌ Erreur pendant le nettoyage :", error);
+  }
+});

@@ -168,6 +168,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
         {
           'maxMemberCount': maxAllowed,
           'subscriptionActive': true,
+          'subscriptionStatus': 'active',
           'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),

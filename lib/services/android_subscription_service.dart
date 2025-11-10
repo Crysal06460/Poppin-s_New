@@ -392,6 +392,7 @@ class AndroidSubscriptionService {
         'currency': 'EUR',
         'billingPeriod': 'monthly',
         'platform': 'android',
+        'source': 'google_play',
         'isTrialPeriod': isTrialPurchase,
         'maxMemberCount': maxMemberCount,
         'createdAt': FieldValue.serverTimestamp(),
@@ -435,6 +436,12 @@ class AndroidSubscriptionService {
         'maxMemberCount': maxMemberCount,
         'subscriptionActive': true,
         'subscriptionDocId': docRef.id,
+        'subscriptionStatus': 'active',
+        'subscriptionPlatform': 'android',
+        'subscriptionSource': 'google_play',
+        'trialStatus': 'converted',
+        'currentPriceAmount': priceAmount,
+        'currentPriceDisplay': priceDisplay,
         'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
