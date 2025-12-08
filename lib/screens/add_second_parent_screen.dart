@@ -805,7 +805,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -813,7 +813,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -821,7 +821,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

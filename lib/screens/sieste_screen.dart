@@ -2564,7 +2564,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
             CommonAppBar(
               title: 'Sieste',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Siestes.png',
+              iconPath: 'assets/images/noel/Icone_sieste_noel.png',
               backRoute: '/home',
               primaryColor: primaryColor,
             ),
@@ -2923,7 +2923,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2931,7 +2931,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2939,7 +2939,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2956,7 +2956,7 @@ class _SiesteScreenState extends State<SiesteScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Siestes.png',
+            'assets/images/noel/Icone_sieste_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(

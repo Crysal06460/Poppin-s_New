@@ -70,7 +70,7 @@ exports.sendEmailToParent = onCall({
         // Récupération des infos utilisateur pour signature
         const userRecord = await getAuth().getUser(request.auth.uid);
         const senderName = userRecord.displayName || 'Équipe Poppins';
-        const senderEmail = 'noreply@poppin-s.app'; // Votre email vérifié
+        const senderEmail = 'noreply@poppin-s.fr'; // Votre email vérifié
 
         console.log(`📧 Envoi email de ${senderName} vers ${recipientEmail}`);
 
@@ -629,6 +629,120 @@ exports.onDelegationCreated = onDocumentCreated({
   }
 });
 
+// ===== NOUVELLE FONCTION : Vérifier une invitation par email =====
+exports.lookupInvitationByEmail = onCall({
+    region: 'europe-west1'
+}, async (request) => {
+    const rawEmail = (request.data?.email || '').toString().trim().toLowerCase();
+
+    if (!rawEmail) {
+        throw new HttpsError('invalid-argument', 'Veuillez fournir une adresse email.');
+    }
+
+    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    if (!emailRegex.test(rawEmail)) {
+        throw new HttpsError('invalid-argument', 'Format d\'email invalide.');
+    }
+
+    try {
+        const snapshot = await db
+            .collection('invitations')
+            .where('email', '==', rawEmail)
+            .get();
+
+        if (snapshot.empty) {
+            throw new HttpsError('not-found', 'Aucune invitation trouvée pour cet email.');
+        }
+
+        const docs = snapshot.docs.sort((a, b) => {
+            const extractTs = (doc) => {
+                const value = doc.get('createdAt');
+                if (value instanceof Timestamp) return value;
+                if (value?.toDate) return Timestamp.fromDate(value.toDate());
+                if (value instanceof Date) return Timestamp.fromDate(value);
+                return Timestamp.fromMillis(0);
+            };
+            return extractTs(b).toMillis() - extractTs(a).toMillis();
+        });
+
+        let selectedDoc = docs.find((doc) => {
+            const status = (doc.get('status') || '').toString().toLowerCase().trim();
+            return status === 'active' || status === 'pending';
+        });
+        if (!selectedDoc) {
+            selectedDoc = docs[0];
+        }
+
+        const invitationData = selectedDoc.data();
+        const normalizedStatus = (invitationData.status || '').toString().toLowerCase().trim();
+
+        if (normalizedStatus === 'completed') {
+            throw new HttpsError(
+                'failed-precondition',
+                'Cette invitation a déjà été utilisée. Vous pouvez vous connecter depuis l\'écran de connexion.'
+            );
+        }
+
+        if (['revoked', 'deleted', 'cancelled'].includes(normalizedStatus)) {
+            throw new HttpsError(
+                'failed-precondition',
+                'Cette invitation a été annulée. Demandez une nouvelle invitation à l\'administrateur.'
+            );
+        }
+
+        const expiresValue = invitationData.expiresAt;
+        let expiresDate = null;
+        if (expiresValue instanceof Timestamp) {
+            expiresDate = expiresValue.toDate();
+        } else if (expiresValue instanceof Date) {
+            expiresDate = expiresValue;
+        } else if (expiresValue?.toDate) {
+            expiresDate = expiresValue.toDate();
+        }
+
+        if (expiresDate && expiresDate < new Date()) {
+            throw new HttpsError('failed-precondition', 'Cette invitation a expiré.');
+        }
+
+        const structureId = invitationData.structureId || '';
+        let structureName = invitationData.structureName || 'la structure';
+        if ((!structureName || structureName === '') && structureId) {
+            try {
+                const structureSnap = await db.collection('structures').doc(structureId).get();
+                if (structureSnap.exists) {
+                    structureName = structureSnap.data().structureName || structureName;
+                }
+            } catch (_) {
+                // ignorer et garder le nom par défaut
+            }
+        }
+
+        return {
+            invitationId: selectedDoc.id,
+            email: rawEmail,
+            invitationType: invitationData.type || 'unknown',
+            structureId,
+            structureName,
+            childName: invitationData.childName || '',
+            childId: invitationData.childId || '',
+            assistantFirstName: invitationData.assistantFirstName || '',
+            assistantLastName: invitationData.assistantLastName || '',
+            assistantPhone: invitationData.assistantPhone || '',
+            parentFullName: invitationData.parentFullName || '',
+            status: normalizedStatus,
+        };
+    } catch (error) {
+        console.error('❌ lookupInvitationByEmail error:', error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError(
+            'internal',
+            'Une erreur est survenue lors de la validation de votre invitation.'
+        );
+    }
+});
+
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
 exports.processEmailQueue = onDocumentCreated({
     document: 'emailQueue/{emailId}',
@@ -694,7 +808,7 @@ exports.processEmailQueue = onDocumentCreated({
         // Préparer le message Mailjet
         const mailjetMessage = {
             From: {
-                Email: "noreply@poppin-s.app",
+                Email: "noreply@poppin-s.fr",
                 Name: "Application Poppins"
             },
             To: [
@@ -2447,30 +2561,296 @@ exports.fixSubscriptionStatusV2 = onRequest({
         });
     }
 });
-exports.deactivateExpiredTrials = onSchedule("every 24 hours", async () => {
-  const now = admin.firestore.Timestamp.now();
-  console.log("🚀 Début du nettoyage des trials expirés à", now.toDate());
+const _expiredTrialStatuses = ['trial', 'trialing'];
 
+exports.deactivateExpiredTrials = onSchedule(
+  {schedule: 'every 24 hours', timeZone: 'Europe/Paris'},
+  async () => {
+    const now = Timestamp.now();
+    console.log('🚀 Début du nettoyage des trials expirés à', now.toDate());
+
+    try {
+      const processed = new Set();
+      let updatedCount = 0;
+
+      const queries = [
+        db
+            .collection('structures')
+            .where('subscriptionStatus', 'in', _expiredTrialStatuses)
+            .where('subscriptionTrialEndsAt', '<=', now),
+        db
+            .collection('structures')
+            .where('subscriptionStatus', 'in', _expiredTrialStatuses)
+            .where('trialEndsAt', '<=', now),
+      ];
+
+      for (const query of queries) {
+        const snapshot = await query.get();
+        for (const doc of snapshot.docs) {
+          if (processed.has(doc.id)) continue;
+          processed.add(doc.id);
+
+          const data = doc.data() || {};
+          if (!_isTrialExpired(data, now)) {
+            continue;
+          }
+
+          await _expireStructureAndSubscription(doc.id);
+          updatedCount++;
+          console.log(`✅ ${doc.id} passé en expired (structure + subscription)`);
+        }
+      }
+
+      console.log(`🎉 Nettoyage terminé : ${updatedCount} structure(s) mises à jour.`);
+    } catch (error) {
+      console.error('❌ Erreur pendant le nettoyage des trials expirés:', error);
+    }
+  },
+);
+
+function _isTrialExpired(data, nowTimestamp) {
+  const candidate =
+      data.subscriptionTrialEndsAt ?? data.trialEndsAt ?? data.trialEndsAtIso;
+  if (!candidate) {
+    return false;
+  }
+  const endDate = _toDate(candidate);
+  if (!endDate) {
+    return false;
+  }
+  return endDate.getTime() <= nowTimestamp.toDate().getTime();
+}
+
+function _toDate(value) {
+  if (!value) return null;
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+  if (typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+  if (typeof value === 'number') {
+    return new Date(value);
+  }
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+async function _expireStructureAndSubscription(structureId) {
+  const structureRef = db.collection('structures').doc(structureId);
+  const subscriptionRef = db.collection('subscriptions').doc(structureId);
+  const serverTimestamp = FieldValue.serverTimestamp();
+
+  const batch = db.batch();
+  batch.set(
+    structureRef,
+    {
+      subscriptionStatus: 'expired',
+      subscriptionActive: false,
+      subscriptionUpdatedAt: serverTimestamp,
+      trialStatus: 'expired',
+      trialEndedAt: serverTimestamp,
+    },
+    {merge: true},
+  );
+
+  batch.set(
+    subscriptionRef,
+    {
+      status: 'expired',
+      isTrialPeriod: false,
+      updatedAt: serverTimestamp,
+    },
+    {merge: true},
+  );
+
+  await batch.commit();
+}
+
+const inactiveSubscriptionStatuses = new Set([
+  'expired',
+  'cancelled',
+  'canceled',
+  'inactive',
+  'ended',
+  'terminated',
+  'replaced'
+]);
+
+const activeSubscriptionStatuses = new Set([
+  'active',
+  'purchased',
+  'approved',
+  'succeeded',
+  'renewing',
+  'grace',
+  'grace_period',
+  'in_grace_period'
+]);
+
+async function syncStructureWithSubscription(subscriptionId, subscriptionData, structureId) {
+  if (!structureId) {
+    console.warn('⚠️ Impossible de synchroniser, structureId absent');
+    return false;
+  }
+
+  const status = (subscriptionData.status || '').toString().toLowerCase();
+  const platform = (subscriptionData.platform || '').toString().toLowerCase();
+  const source = (subscriptionData.source || '').toString().toLowerCase();
+  const isTrialDoc =
+    status.includes('trial') ||
+    subscriptionData.isTrialPeriod === true ||
+    platform === 'firebase_trial' ||
+    source === 'firebase_trial';
+  const isInactiveDoc = inactiveSubscriptionStatuses.has(status);
+  const isActiveDoc = activeSubscriptionStatuses.has(status) || (!isTrialDoc && !isInactiveDoc);
+
+  const updates = {
+    subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (isActiveDoc) {
+    updates.subscriptionActive = true;
+    updates.subscriptionStatus = 'active';
+    updates.subscriptionDocId = subscriptionId;
+    updates.subscriptionPlatform = platform || 'unknown';
+    updates.subscriptionSource = source || platform || 'unknown';
+    updates.trialStatus = 'converted';
+  } else if (isTrialDoc) {
+    updates.subscriptionActive = true;
+    updates.subscriptionStatus = 'trial';
+    updates.subscriptionDocId = subscriptionId;
+    updates.subscriptionPlatform = platform || 'firebase_trial';
+    updates.subscriptionSource = source || platform || 'firebase_trial';
+    updates.trialStatus = 'trial';
+  } else if (isInactiveDoc) {
+    updates.subscriptionActive = false;
+    updates.subscriptionStatus = status || 'expired';
+    updates.trialStatus = 'expired';
+  }
+
+  const ensureDateField = (fieldValue) => {
+    if (!fieldValue) return null;
+    if (fieldValue.toDate) {
+      return fieldValue.toDate();
+    }
+    const parsed = new Date(fieldValue);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const expirationDate = ensureDateField(
+    subscriptionData.expirationDate ||
+      subscriptionData.expiresAt ||
+      subscriptionData.subscriptionExpiresAtIso
+  );
+  if (expirationDate) {
+    updates.subscriptionExpiresAt = Timestamp.fromDate(expirationDate);
+    updates.subscriptionExpirationDate = expirationDate.toISOString();
+    updates.subscriptionExpiresAtIso = expirationDate.toISOString();
+  }
+
+  const trialStart = ensureDateField(
+    subscriptionData.trialStartAt ||
+      subscriptionData.trialStartedAt ||
+      subscriptionData.subscriptionTrialStartsAt
+  );
+  if (trialStart) {
+    updates.subscriptionTrialStartsAt = Timestamp.fromDate(trialStart);
+  }
+
+  const trialEnd = ensureDateField(
+    subscriptionData.trialEndsAt ||
+      subscriptionData.subscriptionTrialEndsAt
+  );
+  if (trialEnd) {
+    updates.subscriptionTrialEndsAt = Timestamp.fromDate(trialEnd);
+  }
+
+  if (subscriptionData.maxMemberCount) {
+    updates.maxMemberCount = subscriptionData.maxMemberCount;
+  }
+  if (subscriptionData.memberCount) {
+    updates.memberCount = subscriptionData.memberCount;
+  }
+  if (subscriptionData.priceAmount != null) {
+    updates.currentPriceAmount = subscriptionData.priceAmount;
+  }
+  if (subscriptionData.priceDisplay) {
+    updates.currentPriceDisplay = subscriptionData.priceDisplay;
+  }
+
+  const structureRef = db.collection('structures').doc(structureId);
+  const structureSnap = await structureRef.get();
+  const structureData = structureSnap.exists ? structureSnap.data() : {};
+
+  if (isInactiveDoc && structureData?.subscriptionDocId !== subscriptionId) {
+    console.log('ℹ️ Subscription inactive mais non liée à la structure, on ignore');
+    return false;
+  }
+
+  await structureRef.set(updates, {merge: true});
+  console.log(`✅ Structure ${structureId} synchronisée avec subscription ${subscriptionId}`);
+  return true;
+}
+
+// ==========================================
+// ===== SYNC SUBSCRIPTION → STRUCTURE  =====
+// ==========================================
+exports.syncSubscriptionWithStructure = onDocumentWritten({
+  document: 'subscriptions/{subscriptionId}',
+  region: 'europe-west1'
+}, async (event) => {
+  const beforeData = event.data.before.exists ? event.data.before.data() : null;
+  const afterSnap = event.data.after;
+
+  if (!afterSnap.exists) {
+    console.log('ℹ️ Subscription supprimée, aucune action');
+    return null;
+  }
+
+  const subscriptionId = event.params.subscriptionId;
+  const subscriptionData = afterSnap.data() || {};
+  const structureId = subscriptionData.structureId || beforeData?.structureId;
+
+  await syncStructureWithSubscription(subscriptionId, subscriptionData, structureId);
+  return null;
+});
+
+// ==========================================
+// ===== ON-DEMAND BACKFILL SUBSCRIPTIONS ===
+// ==========================================
+exports.repairSubscriptions = onRequest({
+  region: 'europe-west1'
+}, async (request, response) => {
   try {
-    const trialsSnapshot = await db
-      .collection("subscriptions")
-      .where("status", "==", "trial")
-      .where("trialEndsAt", "<=", now)
-      .get();
-
-    console.log(`📊 ${trialsSnapshot.size} trials expirés trouvés`);
-
-    for (const doc of trialsSnapshot.docs) {
-      await doc.ref.update({
-        status: "expired",
-        subscriptionActive: false,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log(`✅ ${doc.id} passé en expired`);
+    const snapshot = await db.collection('subscriptions').get();
+    let updated = 0;
+    for (const doc of snapshot.docs) {
+      const data = doc.data() || {};
+      const structureId = data.structureId;
+      if (!structureId) {
+        continue;
+      }
+      const applied = await syncStructureWithSubscription(doc.id, data, structureId);
+      if (applied) {
+        updated++;
+      }
     }
 
-    console.log("🎉 Nettoyage des trials expirés terminé !");
+    response.status(200).json({
+      success: true,
+      processed: snapshot.size,
+      updated,
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    console.error("❌ Erreur pendant le nettoyage :", error);
+    console.error('❌ Erreur repairSubscriptions:', error);
+    response.status(500).json({
+      success: false,
+      error: error.message || 'Erreur inconnue'
+    });
   }
 });

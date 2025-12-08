@@ -1603,7 +1603,7 @@ class _RecapScreenState extends State<RecapScreen> {
             CommonAppBar(
               title: 'Récapitulatif',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Recaptitulatif.png',
+              iconPath: 'assets/images/noel/Icone_recap_noel.png',
               primaryColor: primaryBlue,
             ),
 
@@ -1637,7 +1637,7 @@ class _RecapScreenState extends State<RecapScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Recaptitulatif.png',
+            'assets/images/noel/Icone_recap_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -1677,7 +1677,7 @@ class _RecapScreenState extends State<RecapScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1685,7 +1685,7 @@ class _RecapScreenState extends State<RecapScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1693,7 +1693,7 @@ class _RecapScreenState extends State<RecapScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

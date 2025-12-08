@@ -20,9 +20,15 @@ class TransmissionsScreen extends StatefulWidget {
 
 class _TransmissionsScreenState extends State<TransmissionsScreen> {
   List<Map<String, dynamic>> enfants = [];
+  List<Map<String, dynamic>> _allChildren = [];
   bool isLoading = true;
   String structureName = "Chargement...";
+  String _structureId = '';
   int _selectedIndex = 1;
+  bool _isMamStructure = false;
+  String _currentUserEmail = '';
+  Set<String> _delegatedChildIds = {};
+  bool _allowAllChildren = false;
 
   bool isTablet(BuildContext context) {
     return MediaQuery.of(context).size.shortestSide >= 600;
@@ -64,7 +70,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     try {
       final structureContext = await StructureResolver().resolve();
       final String structureId = structureContext.structureId;
-      final String currentUserEmail = structureContext.currentUserEmail;
+      final String currentUserEmail =
+          (structureContext.currentUserEmail ?? '').toLowerCase();
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
@@ -75,6 +82,10 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
       setState(() {
         structureName = structureContext.structureName;
+        _isMamStructure = structureType == 'mam';
+        _currentUserEmail = currentUserEmail;
+        _structureId = structureId;
+        _allowAllChildren = allowAllChildren;
       });
 
       // Récupérer tous les enfants de la structure
@@ -85,8 +96,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
           .get();
 
       // Liste complète de tous les enfants
-      List<Map<String, dynamic>> allChildren =
-          snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+      List<Map<String, dynamic>> allChildren = snapshot.docs
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+                'structureId': structureId,
+              })
+          .toList();
 
       // Appliquer le filtrage selon le type de structure (MAM ou AssistanteMaternelle)
       List<Map<String, dynamic>> filteredChildren = [];
@@ -196,16 +212,35 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
             'photoUrl': photoUrl,
             'assignedMemberEmail': assignedEmail,
             'avatarColor': avatarColor,
-            'structureId':
-                structureId, // Ajouter l'ID de structure pour les requêtes futures
+              'structureId':
+                  structureId, // Ajouter l'ID de structure pour les requêtes futures
           });
         }
       }
-      setState(() => isLoading = false);
+      setState(() {
+        isLoading = false;
+        _delegatedChildIds = delegatedTodayChildIds;
+        _allChildren = allChildren;
+      });
     } catch (e) {
       print("Erreur lors du chargement des enfants: $e");
       setState(() => isLoading = false);
     }
+  }
+
+  List<Map<String, dynamic>> _resolveBulkTransmissionTargets() {
+    final base = _allChildren.isNotEmpty ? _allChildren : enfants;
+    if (!_isMamStructure || _allowAllChildren) {
+      return List<Map<String, dynamic>>.from(base);
+    }
+
+    return base.where((child) {
+      final assignedEmail =
+          (child['assignedMemberEmail'] ?? '').toString().toLowerCase();
+      final bool isAssigned = assignedEmail == _currentUserEmail;
+      final bool isDelegated = _delegatedChildIds.contains(child['id']);
+      return isAssigned || isDelegated;
+    }).toList();
   }
 
   IconData _getCategoryIcon(String category) {
@@ -261,26 +296,30 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                         size: 28,
                       ),
                       SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Transmission de ${transmissionData['heure']}",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Transmission de ${transmissionData['heure']}",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Text(
-                            DateFormat('dd MMMM yyyy', 'fr_FR')
-                                .format(transmissionData['date'].toDate()),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withOpacity(0.9),
+                            Text(
+                              DateFormat('dd MMMM yyyy', 'fr_FR')
+                                  .format(transmissionData['date'].toDate()),
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -322,6 +361,46 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                             color: Colors.black87,
                             height: 1.4,
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _showEditTransmissionPopup(transmissionData);
+                        },
+                        icon: Icon(Icons.edit, color: primaryColor),
+                        label: Text(
+                          'Modifier',
+                          style: TextStyle(color: primaryColor),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: primaryColor),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _confirmDeleteTransmission(transmissionData);
+                        },
+                        icon: Icon(Icons.delete, color: Colors.red),
+                        label: Text(
+                          'Supprimer',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                         ),
                       ),
                     ],
@@ -541,6 +620,243 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
+  void _showEditTransmissionPopup(Map<String, dynamic> transmissionData) {
+    final TextEditingController controller = TextEditingController(
+      text: transmissionData['content'] ?? '',
+    );
+    String localCategory =
+        (transmissionData['category'] ?? _selectedCategory).toString();
+    String? errorMessage;
+    final String childId = (transmissionData['childId'] ?? '').toString();
+    final String transmissionId = (transmissionData['id'] ?? '').toString();
+    final String structureId = (transmissionData['structureId'] ??
+            FirebaseAuth.instance.currentUser?.uid)
+        .toString();
+
+    if (childId.isEmpty ||
+        transmissionId.isEmpty ||
+        structureId.isEmpty ||
+        structureId == 'null') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Impossible de retrouver la transmission'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Modifier la transmission",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        "Catégorie",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButton<String>(
+                          value: localCategory,
+                          isExpanded: true,
+                          underline: Container(),
+                          items: _transmissionCategories.map((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            setState(() {
+                              localCategory = newValue!;
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      TextField(
+                        controller: controller,
+                        decoration: InputDecoration(
+                          labelText: "Contenu",
+                          labelStyle:
+                              TextStyle(fontSize: 16, color: Colors.grey),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: primaryColor),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                        ),
+                        maxLines: 3,
+                      ),
+                      SizedBox(height: 20),
+                      if (errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Text(
+                              errorMessage!,
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 14,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(
+                              "ANNULER",
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (controller.text.trim().isEmpty) {
+                                setState(() {
+                                  errorMessage = 'Veuillez saisir un contenu';
+                                });
+                                return;
+                              }
+                              Navigator.of(context).pop();
+                              _updateTransmission(
+                                structureId,
+                                childId,
+                                transmissionId,
+                                localCategory,
+                                controller.text.trim(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              "ENREGISTRER",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteTransmission(Map<String, dynamic> transmissionData) {
+    final String childId = (transmissionData['childId'] ?? '').toString();
+    final String transmissionId = (transmissionData['id'] ?? '').toString();
+    final String structureId = (transmissionData['structureId'] ??
+            FirebaseAuth.instance.currentUser?.uid)
+        .toString();
+
+    if (childId.isEmpty ||
+        transmissionId.isEmpty ||
+        structureId.isEmpty ||
+        structureId == 'null') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Impossible de retrouver la transmission'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Supprimer la transmission ?'),
+        content: Text(
+            'Cette action supprimera définitivement la transmission sélectionnée.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteTransmission(structureId, childId, transmissionId);
+            },
+            child: Text(
+              'Supprimer',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
     try {
       final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -626,6 +942,383 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Erreur lors de l\'ajout de la transmission'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateTransmission(
+    String structureId,
+    String childId,
+    String transmissionId,
+    String category,
+    String content,
+  ) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .collection('transmissions')
+          .doc(transmissionId)
+          .update({
+        'category': category,
+        'content': content,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Transmission mise à jour'),
+          backgroundColor: primaryColor,
+        ),
+      );
+    } catch (e) {
+      print("Erreur lors de la mise à jour de la transmission : $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la mise à jour'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteTransmission(
+    String structureId,
+    String childId,
+    String transmissionId,
+  ) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(childId)
+          .collection('transmissions')
+          .doc(transmissionId)
+          .delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Transmission supprimée'),
+          backgroundColor: primaryColor,
+        ),
+      );
+    } catch (e) {
+      print("Erreur lors de la suppression de la transmission : $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la suppression'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleBulkTransmission() async {
+    final targets = _resolveBulkTransmissionTargets();
+    if (targets.isEmpty) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Aucun enfant disponible'),
+          content: Text(
+            "Aucun enfant ne vous est associé pour aujourd'hui.\nImpossible d'envoyer une transmission groupée.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    _showBulkTransmissionPopup(targets);
+  }
+
+  void _showBulkTransmissionPopup(List<Map<String, dynamic>> targets) {
+    _transmissionController.clear();
+    String localCategory = _selectedCategory;
+    String? errorMessage;
+    final Set<String> selectedIds =
+        targets.map((e) => e['id'].toString()).toSet();
+    final sortedTargets = List<Map<String, dynamic>>.from(targets)
+      ..sort((a, b) => (a['firstName'] ?? a['prenom'] ?? '')
+          .toString()
+          .toLowerCase()
+          .compareTo(
+              (b['firstName'] ?? b['prenom'] ?? '').toString().toLowerCase()));
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Transmission groupée (${selectedIds.length}/${sortedTargets.length})",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        _isMamStructure && !_allowAllChildren
+                            ? "Sélectionnez les enfants qui vous sont assignés/délégués."
+                            : "Sélectionnez les enfants de la structure pour cette transmission.",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Container(
+                        height: 240,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListView.builder(
+                          itemCount: sortedTargets.length,
+                          itemBuilder: (context, index) {
+                            final child = sortedTargets[index];
+                            final String id = child['id'].toString();
+                            final String name = (child['firstName'] ??
+                                    child['prenom'] ??
+                                    'Enfant')
+                                .toString();
+                            return CheckboxListTile(
+                              value: selectedIds.contains(id),
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    selectedIds.add(id);
+                                  } else {
+                                    selectedIds.remove(id);
+                                  }
+                                });
+                              },
+                              title: Text(name),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        "Catégorie",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: DropdownButton<String>(
+                          value: localCategory,
+                          isExpanded: true,
+                          underline: Container(),
+                          items: _transmissionCategories.map((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            setState(() {
+                              localCategory = newValue!;
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      TextField(
+                        controller: _transmissionController,
+                        decoration: InputDecoration(
+                          labelText: "Contenu",
+                          labelStyle:
+                              TextStyle(fontSize: 16, color: Colors.grey),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: primaryColor),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                        ),
+                        maxLines: 3,
+                      ),
+                      SizedBox(height: 20),
+                      if (errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Text(
+                              errorMessage!,
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 14,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(
+                              "ANNULER",
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (_transmissionController.text.trim().isEmpty) {
+                                setState(() {
+                                  errorMessage = 'Veuillez saisir un contenu';
+                                });
+                                return;
+                              }
+
+                              if (selectedIds.isEmpty) {
+                                setState(() {
+                                  errorMessage =
+                                      'Veuillez sélectionner au moins un enfant';
+                                });
+                                return;
+                              }
+
+                              _selectedCategory = localCategory;
+                              Navigator.of(context).pop();
+                              _addBulkTransmissionToFirebase(
+                                sortedTargets
+                                    .where((c) => selectedIds
+                                        .contains(c['id'].toString()))
+                                    .toList(),
+                                localCategory,
+                                _transmissionController.text.trim(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              "ENVOYER",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _addBulkTransmissionToFirebase(
+    List<Map<String, dynamic>> targets,
+    String category,
+    String content,
+  ) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final DateTime now = DateTime.now();
+      final String heure = DateFormat('HH:mm').format(now);
+
+      for (final child in targets) {
+        final String childId = child['id'];
+        final String structureId =
+            child['structureId'] ?? FirebaseAuth.instance.currentUser?.uid;
+        final docRef = FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .doc(childId)
+            .collection('transmissions')
+            .doc();
+        batch.set(docRef, {
+          'category': category,
+          'content': content,
+          'date': now,
+          'heure': heure,
+        });
+      }
+
+      await batch.commit();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Transmission envoyée à ${targets.length} enfant(s)'),
+          backgroundColor: primaryColor,
+        ),
+      );
+    } catch (e) {
+      print("Erreur transmission groupée: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'envoi groupé'),
           backgroundColor: Colors.red,
         ),
       );
@@ -821,8 +1514,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     ),
                     Column(
                       children: snapshot.data!.docs.map((doc) {
-                        final transmissionData =
-                            doc.data() as Map<String, dynamic>;
+                        final transmissionData = {
+                          ...doc.data() as Map<String, dynamic>,
+                          'id': doc.id,
+                          'childId': enfant['id'],
+                          'structureId': enfant['structureId'] ??
+                              FirebaseAuth.instance.currentUser?.uid,
+                        };
                         return GestureDetector(
                           onTap: () =>
                               _showTransmissionDetailsPopup(transmissionData),
@@ -910,7 +1608,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Transmission.png',
+            'assets/images/noel/Icone_transmissions_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -933,10 +1631,77 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
+  Widget _buildBulkTransmissionBanner() {
+    final String title = _isMamStructure
+        ? "Transmission à mes parents"
+        : "Transmission à tous les parents";
+    final String subtitle = _isMamStructure
+        ? "Envoyer rapidement une information aux parents des enfants qui vous sont confiés."
+        : "Envoyer en un clic une information aux parents de tous vos enfants.";
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: lightBlue.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: primaryColor,
+              ),
+            ),
+            SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+              ),
+            ),
+            SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _handleBulkTransmission,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: Icon(Icons.campaign, color: Colors.white),
+                label: Text(
+                  "Nouvelle transmission groupée",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Détection de l'iPad
+    // Détection de l'iPad/tablette
     final bool isTabletDevice = isTablet(context);
+    final bool showBulkButton = !isLoading &&
+        enfants.isNotEmpty &&
+        _resolveBulkTransmissionTargets().isNotEmpty;
 
     return SwipeNavigationWrapper(
       child: Scaffold(
@@ -947,9 +1712,11 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
             CommonAppBar(
               title: 'Transmissions',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Transmission.png',
+              iconPath: 'assets/images/noel/Icone_transmissions_noel.png',
               primaryColor: primaryColor,
             ),
+
+            if (showBulkButton) _buildBulkTransmissionBanner(),
 
             // 🔄 GARDÉ IDENTIQUE : tout votre contenu existant
             Expanded(
@@ -967,7 +1734,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                               itemCount: enfants.length,
                               itemBuilder: _buildEnfantCard,
                             ),
-            )
+            ),
           ],
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
@@ -1195,8 +1962,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                           itemCount: snapshot.data!.docs.length,
                           itemBuilder: (context, idx) {
                             final doc = snapshot.data!.docs[idx];
-                            final transmissionData =
-                                doc.data() as Map<String, dynamic>;
+                            final transmissionData = {
+                              ...doc.data() as Map<String, dynamic>,
+                              'id': doc.id,
+                              'childId': enfant['id'],
+                              'structureId': enfant['structureId'] ??
+                                  FirebaseAuth.instance.currentUser?.uid,
+                            };
 
                             return GestureDetector(
                               onTap: () => _showTransmissionDetailsPopup(
@@ -1285,7 +2057,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1293,7 +2065,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1301,7 +2073,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

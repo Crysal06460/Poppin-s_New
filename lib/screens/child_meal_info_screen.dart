@@ -1036,7 +1036,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/Icone_Dashboard.png',
+              'assets/images/noel/Icone_dashboard_noel.png',
               width: 50,
               height: 50,
             ),
@@ -1044,7 +1044,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/maison_icon.png',
+              'assets/images/noel/Icone_home_noel.png',
               width: 50,
               height: 50,
             ),
@@ -1052,7 +1052,7 @@ class _ChildMealInfoScreenState extends State<ChildMealInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/Icone_Echanges.png',
+              'assets/images/noel/Icone_message_noel.png',
               width: 50,
               height: 50,
             ),

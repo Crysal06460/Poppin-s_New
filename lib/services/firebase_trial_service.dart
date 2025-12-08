@@ -17,9 +17,16 @@ class TrialStatus {
   bool get hasStarted => startAt != null && endAt != null;
 
   bool get isActive {
+    final String normalized = status.toLowerCase();
+
+    // Une fois converti en abonnement payant, on considère l'essai comme actif
+    if (normalized == 'converted') {
+      return true;
+    }
+
     if (!hasStarted) return false;
     if (endAt!.isBefore(DateTime.now())) return false;
-    if (status.toLowerCase() != 'trial' && status.toLowerCase() != 'active') {
+    if (normalized != 'trial' && normalized != 'active') {
       return false;
     }
     return true;

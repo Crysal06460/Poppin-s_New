@@ -916,7 +916,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton.icon(
                         onPressed: () {
                           // Navigation vers la page d'inscription
-                          context.push('/register');
+                          context.push('/trial-info');
                         },
                         icon: Icon(
                           Icons.person_add_outlined,

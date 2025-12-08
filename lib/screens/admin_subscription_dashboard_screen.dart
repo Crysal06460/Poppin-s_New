@@ -815,7 +815,8 @@ class _StructureSubscriptionInfo {
   final DateTime? updatedAt;
   final int? memberCount;
 
-  bool get hasActiveTrial => trialStatus.isActive;
+  bool get hasActiveTrial =>
+      trialStatus.isActive && !hasConfirmedSubscription; // avoid counting converted subscriptions as trials
 
   bool get hasExpiredTrial =>
       trialStatus.hasStarted && trialStatus.isExpired && !hasConfirmedSubscription;

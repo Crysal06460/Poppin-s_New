@@ -48,6 +48,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
   bool _showStockBadge = false;
   bool _showMessageBadge = false;
   bool _isUploadingFile = false;
+  String _parentFirstName = '';
+  String _parentLastName = '';
+  String _parentEmail = '';
 
   @override
   void initState() {
@@ -159,6 +162,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
       await _firestore.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
+        'senderEmail': _parentEmail,
+        'senderFirstName': _parentFirstName,
+        'senderLastName': _parentLastName,
         'type': 'file',
         'fileName': fileName,
         'fileUrl': downloadUrl,
@@ -361,11 +367,11 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                 .doc(childId)
                 .get();
 
-            if (childDoc.exists) {
-              final data = childDoc.data()!;
-              childrenData.add({
-                'id': childDoc.id,
-                'firstName': data['firstName'] ?? 'Sans nom',
+          if (childDoc.exists) {
+            final data = childDoc.data()!;
+            childrenData.add({
+              'id': childDoc.id,
+              'firstName': data['firstName'] ?? 'Sans nom',
                 'lastName': data['lastName'] ?? '',
                 'photoUrl': data['photoUrl'],
                 'structureId': structureId,
@@ -376,6 +382,10 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
 
           setState(() {
             _children = childrenData;
+            _parentFirstName =
+                (userData['firstName'] ?? '').toString().trim();
+            _parentLastName = (userData['lastName'] ?? '').toString().trim();
+            _parentEmail = (user.email ?? '').toLowerCase();
 
             // Si un ID d'enfant est spécifié, sélectionner cet enfant
             if (widget.childId != null &&
@@ -436,6 +446,9 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
       await _firestore.collection('exchanges').add({
         'childId': childId,
         'senderId': user.uid,
+        'senderEmail': _parentEmail,
+        'senderFirstName': _parentFirstName,
+        'senderLastName': _parentLastName,
         'content': _messageController.text.trim(),
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'text',
@@ -920,7 +933,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
               items: [
                 BottomNavigationBarItem(
                   icon: Image.asset(
-                    'assets/images/maison_icon.png',
+                    'assets/images/noel/Icone_home_noel.png',
                     width: 60,
                     height: 60,
                   ),
@@ -930,7 +943,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   icon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Echanges.png',
+                        'assets/images/noel/Icone_message_noel.png',
                         width: 60,
                         height: 60,
                       ),
@@ -955,7 +968,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   activeIcon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Echanges.png',
+                        'assets/images/noel/Icone_message_noel.png',
                         width: 60,
                         height: 60,
                       ),
@@ -983,7 +996,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   icon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Stock.png',
+                        'assets/images/noel/Icone_stock_noel.png',
                         width: 60,
                         height: 60,
                       ),
@@ -1008,7 +1021,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   activeIcon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Stock.png',
+                        'assets/images/noel/Icone_stock_noel.png',
                         width: 60,
                         height: 60,
                         color: primaryBlue,

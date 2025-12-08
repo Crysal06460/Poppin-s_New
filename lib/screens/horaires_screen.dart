@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../planning/planning_models.dart';
 import '../utils/planning_helper.dart';
+import '../utils/child_avatar_color_helper.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 
@@ -60,7 +61,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             CommonAppBar(
               title: 'Horaires',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Horaires.png',
+              iconPath: 'assets/images/noel/Icone_horaire_noel.png',
               backRoute: '/home',
               primaryColor: primaryColor,
             ),
@@ -567,6 +568,14 @@ class _HorairesScreenState extends State<HorairesScreen> {
             "👩‍👧‍👦 Assistante Maternelle individuelle: affichage de tous les enfants");
       }
 
+      final bool useMamColors = structureType == 'mam';
+      Map<String, Color> mamColorAssignments = {};
+      if (useMamColors) {
+        mamColorAssignments =
+            ChildAvatarColorHelper.buildMamAssignmentsFromChildren(
+                filteredChildren);
+      }
+
       // Diagnostic des enfants filtrés
       print(
           "🔍 DIAGNOSTIC HORAIRES - Type de structure: $structureType, Utilisateur: $currentUserEmail");
@@ -608,6 +617,15 @@ class _HorairesScreenState extends State<HorairesScreen> {
         final isScheduledToday = plannedSlots.isNotEmpty;
         final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
         if (isScheduledToday || isDelegatedToday) {
+          final String assignedEmail =
+              ChildAvatarColorHelper.normalizeEmail(
+                  child['assignedMemberEmail']);
+          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+            isMamStructure: useMamColors,
+            mamAssignments: mamColorAssignments,
+            assignedMemberEmail: assignedEmail,
+            gender: child['gender']?.toString(),
+          );
           String? photoUrl = child['photoUrl'];
 
           // Pour chaque enfant prévu aujourd'hui, créer une entrée dans la liste
@@ -616,6 +634,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
             'prenom': child['firstName'],
             'genre': child['gender'],
             'photoUrl': photoUrl,
+            'assignedMemberEmail': assignedEmail,
+            'avatarColor': avatarColor,
             'segments':
                 [], // Stockera les statuts des différents segments horaires
             'absent': false,
@@ -1181,8 +1201,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
     // ✅ Calculer les couleurs directement (pas de fonctions locales)
     final cardColor = isAbsent ? Colors.grey.shade200 : Colors.white;
-    final textColor =
-        isAbsent ? Colors.grey : (genre == 'Fille' ? primaryRed : primaryBlue);
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
+    final textColor = isAbsent ? Colors.grey : avatarColor;
 
     return Container(
       decoration: BoxDecoration(
@@ -1198,57 +1219,14 @@ class _HorairesScreenState extends State<HorairesScreen> {
       ),
       child: Column(
         children: [
-          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
-          Expanded(
-            flex: isLandscape ? 35 : 40,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Fond dégradé élégant pour mettre en valeur la photo
-                // 🆕 Fond blanc sobre et net (design 2025)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white, // Fond blanc uni
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                ),
-                // Photo centrée et ENTIÈRE (pas coupée)
-                ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  child: Padding(
-                    padding: EdgeInsets.all(isLandscape ? 8.0 : 12.0),
-                    child: enfant['photoUrl'] != null
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            fit: BoxFit.contain, // ✅ Photo entière
-                            errorBuilder: (context, error, stackTrace) =>
-                                _buildPlaceholder(),
-                          )
-                        : _buildPlaceholder(),
-                  ),
-                ),
-                // Overlay "ABSENT" si nécessaire
-                if (isAbsent)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'ABSENT',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isLandscape ? 18.0 : 22.0,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+          Padding(
+            padding: EdgeInsets.only(
+              top: isLandscape ? 16 : 24,
+              bottom: isLandscape ? 6 : 12,
+            ),
+            child: _buildChildAvatar(
+              enfant,
+              size: isLandscape ? 110 : 120,
             ),
           ),
 
@@ -1647,7 +1625,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1655,7 +1633,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1663,7 +1641,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1680,7 +1658,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Horaires.png',
+            'assets/images/noel/Icone_horaire_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -1736,7 +1714,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
     print(
         "🏗️ DEBUG _buildEnfantCard() pour ${enfant['prenom']}: absent=$isAbsent, multipleSegments=$hasMultipleSegments");
 
-    // Couleurs dynamiques selon le genre (en utilisant les couleurs officielles)
+    final Color avatarColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(genre);
+
     Color getCardColor() {
       if (isAbsent) return Colors.grey.shade200;
       return Colors.white;
@@ -1744,7 +1724,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
     Color getTextColor() {
       if (isAbsent) return Colors.grey;
-      return (genre == 'Fille') ? primaryRed : primaryBlue;
+      return avatarColor;
     }
 
     return Container(
@@ -1761,64 +1741,17 @@ class _HorairesScreenState extends State<HorairesScreen> {
       ),
       child: Column(
         children: [
-          // Photo de l'enfant
-          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
-          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
-          // Photo de l'enfant - ADAPTÉ selon orientation avec photo ENTIÈRE
-          Expanded(
-            flex: isLandscape ? 35 : 40,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Fond dégradé élégant pour mettre en valeur la photo
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white, // Fond blanc uni
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                ),
-                // Photo centrée et ENTIÈRE (pas coupée)
-                ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  child: Padding(
-                    padding: EdgeInsets.all(isLandscape ? 8.0 : 12.0),
-                    child: enfant['photoUrl'] != null
-                        ? Image.network(
-                            enfant['photoUrl'],
-                            fit: BoxFit
-                                .contain, // ✅ CRUCIAL : contain au lieu de cover pour photo entière
-                            errorBuilder: (context, error, stackTrace) =>
-                                _buildPlaceholder(),
-                          )
-                        : _buildPlaceholder(),
-                  ),
-                ),
-                // Overlay "ABSENT" si nécessaire
-                if (isAbsent)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'ABSENT',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isLandscape ? 18.0 : 22.0,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+          Padding(
+            padding: EdgeInsets.only(
+              top: isLandscape ? 16 : 20,
+              bottom: isLandscape ? 6 : 12,
+            ),
+            child: _buildChildAvatar(
+              enfant,
+              size: isLandscape ? 88 : 98,
             ),
           ),
 
-          // Contenu de la carte
           Expanded(
             flex: hasMultipleSegments ? 65 : 55,
             child: Padding(
@@ -1870,13 +1803,74 @@ class _HorairesScreenState extends State<HorairesScreen> {
     );
   }
 
-  Widget _buildPlaceholder() {
+  Widget _buildChildAvatar(Map<String, dynamic> enfant,
+      {double size = 96.0}) {
+    final Color ringColor = (enfant['avatarColor'] as Color?) ??
+        ChildAvatarColorHelper.defaultColorForGender(
+            enfant['genre']?.toString());
+    final String prenom = (enfant['prenom'] ?? '').toString();
+    final dynamic rawPhoto = enfant['photoUrl'];
+    final String photoUrl = rawPhoto is String ? rawPhoto.trim() : '';
+
+    Widget imageWidget;
+    if (photoUrl.isNotEmpty) {
+      imageWidget = Image.network(
+        photoUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            _buildAvatarInitials(prenom, ringColor),
+      );
+    } else {
+      imageWidget = _buildAvatarInitials(prenom, ringColor);
+    }
+
     return Container(
-      color: lightBlue,
-      child: Icon(
-        Icons.person_outline,
-        size: 60,
-        color: primaryColor.withOpacity(0.5),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [
+            ringColor.withOpacity(0.85),
+            ringColor,
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: ringColor.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+          child: ClipOval(
+            child: imageWidget,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarInitials(String prenom, Color color) {
+    final String initial =
+        (prenom.isNotEmpty ? prenom[0] : '?').toUpperCase();
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
       ),
     );
   }

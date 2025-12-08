@@ -94,6 +94,27 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     return '$datePart à $timePart';
   }
 
+  String _resolveSenderName(Map<String, dynamic> messageData) {
+    final String senderType =
+        (messageData['senderType'] ?? '').toString().toLowerCase();
+    if (senderType != 'parent') {
+      return senderType == 'assistante' ? 'Vous' : '';
+    }
+
+    final firstName =
+        (messageData['senderFirstName'] ?? '').toString().trim();
+    final lastName = (messageData['senderLastName'] ?? '').toString().trim();
+    final email = (messageData['senderEmail'] ?? '').toString().trim();
+
+    final fullName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
+    if (fullName.isNotEmpty) return fullName;
+    if (email.isNotEmpty) {
+      final prefix = email.split('@').first;
+      return prefix.isNotEmpty ? prefix : 'Parent';
+    }
+    return 'Parent';
+  }
+
   Future<void> _loadEnfantsDuJour() async {
     setState(() => isLoading = true);
     try {
@@ -1114,6 +1135,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       Map<String, dynamic> messageData, bool isMe, bool isTablet) {
     final timestamp = messageData['timestamp'] as Timestamp?;
     final formattedTimestamp = _formatMessageTimestamp(timestamp);
+    final senderName = _resolveSenderName(messageData);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: isTablet ? 6 : 4),
@@ -1121,6 +1143,19 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         crossAxisAlignment:
             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
+          if (!isMe && senderName.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                  left: isTablet ? 24 : 20, right: isTablet ? 24 : 20),
+              child: Text(
+                senderName,
+                style: TextStyle(
+                  fontSize: isTablet ? 13 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ),
           // Bouton répondre
           TextButton(
             onPressed: () => _replyToMessage(messageData['id']),
@@ -2358,7 +2393,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 100,
             height: 100,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -2403,7 +2438,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
             CommonAppBar(
               title: 'Échanges',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Echanges.png',
+              iconPath: 'assets/images/noel/Icone_message_noel.png',
               primaryColor: primaryBlue,
             ),
 
@@ -2866,7 +2901,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2874,7 +2909,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2882,7 +2917,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

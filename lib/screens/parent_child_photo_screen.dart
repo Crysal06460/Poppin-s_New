@@ -323,7 +323,7 @@ class _ParentChildPhotoScreenState extends State<ParentChildPhotoScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -331,12 +331,12 @@ class _ParentChildPhotoScreenState extends State<ParentChildPhotoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),
           activeIcon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
             color: primaryColor,
@@ -345,12 +345,12 @@ class _ParentChildPhotoScreenState extends State<ParentChildPhotoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Stock.png',
+            'assets/images/noel/Icone_stock_noel.png',
             width: 60,
             height: 60,
           ),
           activeIcon: Image.asset(
-            'assets/images/Icone_Stock.png',
+            'assets/images/noel/Icone_stock_noel.png',
             width: 60,
             height: 60,
             color: primaryColor,

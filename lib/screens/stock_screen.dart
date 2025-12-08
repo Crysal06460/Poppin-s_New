@@ -1208,7 +1208,7 @@ class _StockScreenState extends State<StockScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Stock.png',
+            'assets/images/noel/Icone_stock_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -1234,6 +1234,8 @@ class _StockScreenState extends State<StockScreen> {
   Widget _buildTabletLayout() {
     final Size screenSize = MediaQuery.of(context).size;
     final bool isLandscape = screenSize.width > screenSize.height;
+    final double fabOverlapPadding =
+        MediaQuery.of(context).padding.bottom + 96.0;
 
     // 🆕 4 colonnes en paysage pour beaucoup d'enfants
     final int crossAxisCount = isLandscape ? 4 : 2;
@@ -1245,7 +1247,12 @@ class _StockScreenState extends State<StockScreen> {
     final double padding = isLandscape ? 16.0 : 16.0;
 
     return GridView.builder(
-      padding: EdgeInsets.all(padding),
+      padding: EdgeInsets.fromLTRB(
+        padding,
+        padding,
+        padding,
+        padding + fabOverlapPadding,
+      ),
       physics: const BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
@@ -1499,6 +1506,8 @@ class _StockScreenState extends State<StockScreen> {
   Widget build(BuildContext context) {
     // Détection de l'iPad/tablette
     final bool isTabletDevice = isTablet(context);
+    final double fabOverlapPadding =
+        MediaQuery.of(context).padding.bottom + 96.0;
 
     return SwipeNavigationWrapper(
       child: Scaffold(
@@ -1509,7 +1518,7 @@ class _StockScreenState extends State<StockScreen> {
             CommonAppBar(
               title: 'Stock',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Stock.png',
+              iconPath: 'assets/images/noel/Icone_stock_noel.png',
               primaryColor: primaryColor,
             ),
 
@@ -1526,6 +1535,8 @@ class _StockScreenState extends State<StockScreen> {
                       : isTabletDevice
                           ? _buildTabletLayout() // Layout adapté pour iPad
                           : ListView.builder(
+                              padding:
+                                  EdgeInsets.only(bottom: fabOverlapPadding),
                               itemCount: enfants.length,
                               itemBuilder: _buildEnfantCard,
                             ),
@@ -1560,7 +1571,7 @@ class _StockScreenState extends State<StockScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1568,7 +1579,7 @@ class _StockScreenState extends State<StockScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -1576,7 +1587,7 @@ class _StockScreenState extends State<StockScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

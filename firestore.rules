@@ -6,6 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function canManageParentUsers() {
+      return request.auth != null &&
+        request.auth.token.email is string &&
+        get(/databases/$(database)/documents/users/$(lower(request.auth.token.email))).data.role in ['admin', 'mamMember', 'assistant'];
+    }
+
     /* USERS */
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -19,6 +25,11 @@ service cloud.firestore {
               userId == request.auth.token.email ||
               userId == lower(request.auth.token.email)
             )
+          ) ||
+          (
+            canManageParentUsers() &&
+            request.resource.data.role == 'parent' &&
+            (resource == null || resource.data.role == 'parent')
           )
         );
 
@@ -58,6 +69,19 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.templateData is map;
+    }
+
+    /* INVITATIONS */
+    match /invitations/{invitationId} {
+      allow read: if isSignedIn();
+      allow update, delete: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.email is string &&
+        request.resource.data.structureId is string &&
+        request.resource.data.childId is string &&
+        request.resource.data.status is string &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.expiresAt is timestamp;
     }
 
     /* HORAIRES HISTORY (racine) */

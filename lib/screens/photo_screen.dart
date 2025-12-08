@@ -2430,7 +2430,7 @@ class _PhotosScreenState extends State<PhotosScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Photos.png',
+            'assets/images/noel/Icone_photos_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -2480,7 +2480,7 @@ class _PhotosScreenState extends State<PhotosScreen>
             CommonAppBar(
               title: 'Photos',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Photos.png',
+              iconPath: 'assets/images/noel/Icone_photos_noel.png',
               primaryColor: primaryBlue,
             ),
 
@@ -3349,7 +3349,7 @@ class _PhotosScreenState extends State<PhotosScreen>
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -3357,7 +3357,7 @@ class _PhotosScreenState extends State<PhotosScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -3365,7 +3365,7 @@ class _PhotosScreenState extends State<PhotosScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

@@ -1380,7 +1380,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Actualites.png',
+                        'assets/images/noel/Icone_actualité_noel.png',
                         width: 80,
                         height: 80,
                         errorBuilder: (context, error, stackTrace) => Icon(
@@ -1828,7 +1828,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image.asset(
-                        'assets/images/Icone_Actualites.png',
+                        'assets/images/noel/Icone_actualité_noel.png',
                         width: 80,
                         height: 80,
                         errorBuilder: (context, error, stackTrace) => Icon(
@@ -2440,7 +2440,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
             CommonAppBar(
               title: 'Actualités',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Actualites.png',
+              iconPath: 'assets/images/noel/Icone_actualité_noel.png',
               backRoute: '/home',
               primaryColor: primaryBlue,
             ),
@@ -2529,7 +2529,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2537,7 +2537,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2545,7 +2545,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

@@ -3,7 +3,7 @@ description: "Une application pour la gestion des enfants en crèche."
 
 publish_to: 'none'
 
-version: 2.0.13
+version: 3.0.0+2039
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -101,31 +101,31 @@ flutter:
     - assets/images/biberon.png
     - assets/images/no_activities.png
     - assets/images/logo.png
-    - assets/images/Icone_Activites.png
-    - assets/images/Icone_Actualites.png
     - assets/images/Icone_Ajout_Enfant.png
-    - assets/images/Icone_Changes.png
-    - assets/images/Icone_Dashboard.png
-    - assets/images/Icone_Echanges.png
     - assets/images/Icone_Enfant_Present.png
-    - assets/images/Icone_Horaires.png
-    - assets/images/Icone_Photos.png
-    - assets/images/Icone_Recaptitulatif.png
-    - assets/images/Icone_Repas.png
-    - assets/images/Icone_Sante.png
-    - assets/images/Icone_Siestes.png
-    - assets/images/Icone_Stock.png
-    - assets/images/Icone_Transmission.png
     - assets/images/invitation.png
-    - assets/images/maison_icon.png
     - assets/images/Icone_Structure.png
     - assets/images/parapluie.png
     - assets/images/gateau-danniversaire.png
     - assets/images/app_icon.png
     - assets/images/app_icon_fore.png
     - assets/images/Icone_historique.png
-    - assets/images/Administration.png
-    - assets/images/Enfant.png
-    - assets/images/Fonctionnement.png
-    - assets/images/Memo.png
-    - assets/images/Icone_Agenda.png
+    - assets/images/noel/Icone_activité_noel.png
+    - assets/images/noel/Icone_actualité_noel.png
+    - assets/images/noel/Icone_agenda_noel.png
+    - assets/images/noel/Icone_administration_noel.png
+    - assets/images/noel/Icone_change_noel.png
+    - assets/images/noel/Icone_dashboard_noel.png
+    - assets/images/noel/Icone_enfant_noel.png
+    - assets/images/noel/Icone_fonctionnement_noel.png
+    - assets/images/noel/Icone_home_noel.png
+    - assets/images/noel/Icone_horaire_noel.png
+    - assets/images/noel/Icone_memo_noel.png
+    - assets/images/noel/Icone_message_noel.png
+    - assets/images/noel/Icone_photos_noel.png
+    - assets/images/noel/Icone_recap_noel.png
+    - assets/images/noel/Icone_repas_noel.png
+    - assets/images/noel/Icone_sante_noel.png
+    - assets/images/noel/Icone_sieste_noel.png
+    - assets/images/noel/Icone_stock_noel.png
+    - assets/images/noel/Icone_transmissions_noel.png

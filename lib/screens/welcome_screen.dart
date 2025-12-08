@@ -132,7 +132,7 @@ class WelcomeScreen extends StatelessWidget {
                           context,
                           text: "Créer un compte",
                           icon: Icons.person_add_outlined,
-                          onPressed: () => context.push('/register'),
+                          onPressed: () => context.push('/trial-info'),
                           color: primaryYellow,
                           isPrimary: true,
                           width: buttonWidth,

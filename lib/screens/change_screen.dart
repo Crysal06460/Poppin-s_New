@@ -2231,7 +2231,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
             CommonAppBar(
               title: 'Change',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_Changes.png',
+              iconPath: 'assets/images/noel/Icone_change_noel.png',
               primaryColor: primaryBlue,
             ),
 
@@ -2597,7 +2597,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/Icone_Changes.png',
+            'assets/images/noel/Icone_change_noel.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -2637,7 +2637,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Dashboard.png',
+            'assets/images/noel/Icone_dashboard_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2645,7 +2645,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/maison_icon.png',
+            'assets/images/noel/Icone_home_noel.png',
             width: 60,
             height: 60,
           ),
@@ -2653,7 +2653,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/Icone_Echanges.png',
+            'assets/images/noel/Icone_message_noel.png',
             width: 60,
             height: 60,
           ),

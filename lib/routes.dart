@@ -56,6 +56,7 @@ import 'package:poppins_app/screens/register_screen.dart';
 import 'package:poppins_app/screens/pricing_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
+import 'package:poppins_app/screens/trial_pricing_info_screen.dart';
 
 // Nouveaux imports pour le système d'authentification
 import 'package:poppins_app/screens/welcome_screen.dart';
@@ -269,6 +270,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/trial-info',
+      builder: (context, state) => const TrialPricingInfoScreen(),
     ),
     GoRoute(
       path: '/freezer-temperature',
@@ -874,6 +879,7 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
     '/welcome',
     '/quick-login',
     '/login',
+    '/trial-info',
     '/register',
     '/signup',
     '/invitation-code',

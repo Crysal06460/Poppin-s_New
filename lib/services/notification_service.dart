@@ -41,10 +41,13 @@ class NotificationService {
   static bool _syncInProgress = false;
   static const String _persistedNotificationsKey =
       'notification_service.pending_info_notifications';
+  static const String _deliveredNotificationIdsKey =
+      'notification_service.delivered_info_ids';
   static bool _restoringPersistedNotifications = false;
   static final Set<String> _processedNotificationIds = <String>{};
   static final List<String> _processedNotificationIdOrder = <String>[];
   static final Set<String> _queuedNotificationIds = <String>{};
+  static bool _deliveredIdsLoaded = false;
 
   /// Initialise le service de notifications
   static Future<void> initialize() async {
@@ -58,6 +61,7 @@ class NotificationService {
 
       // 2. Configuration Firebase commune
       await _initializeFirebase();
+      await _loadDeliveredNotificationHistory();
       await _maybeRestorePersistedNotifications();
 
       _isInitialized = true;
@@ -892,6 +896,51 @@ class NotificationService {
     return candidate;
   }
 
+  static Future<void> _loadDeliveredNotificationHistory() async {
+    if (_deliveredIdsLoaded) {
+      return;
+    }
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final List<String> storedIds =
+          prefs.getStringList(_deliveredNotificationIdsKey) ?? <String>[];
+      for (final rawId in storedIds) {
+        final id = rawId.trim();
+        if (id.isEmpty) continue;
+        _processedNotificationIds.add(id);
+        _processedNotificationIdOrder.add(id);
+      }
+      // Garder la même taille max que la mémoire
+      const int maxHistory = 120;
+      if (_processedNotificationIdOrder.length > maxHistory) {
+        _processedNotificationIdOrder.removeRange(
+            0, _processedNotificationIdOrder.length - maxHistory);
+        _processedNotificationIds
+          ..clear()
+          ..addAll(_processedNotificationIdOrder);
+      }
+      _deliveredIdsLoaded = true;
+      print(
+          '📦 Historique de notifications livrées chargé (${_processedNotificationIdOrder.length})');
+    } catch (e) {
+      print(
+          '⚠️ Impossible de charger l\'historique des notifications livrées: $e');
+    }
+  }
+
+  static Future<void> _persistDeliveredNotificationHistory() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _deliveredNotificationIdsKey,
+        List<String>.from(_processedNotificationIdOrder),
+      );
+    } catch (e) {
+      print(
+          '⚠️ Impossible de persister l\'historique des notifications livrées: $e');
+    }
+  }
+
   static void _markNotificationAsDelivered(String id) {
     if (id.isEmpty) {
       return;
@@ -906,6 +955,8 @@ class NotificationService {
       final String oldest = _processedNotificationIdOrder.removeAt(0);
       _processedNotificationIds.remove(oldest);
     }
+    // Persister pour éviter les doublons multiplateformes et multi-lancements
+    unawaited(_persistDeliveredNotificationHistory());
   }
 
   static void showPendingNotificationWhenReady() {

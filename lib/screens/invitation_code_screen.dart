@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class InvitationCodeScreen extends StatefulWidget {
   const InvitationCodeScreen({Key? key}) : super(key: key);
@@ -568,111 +568,44 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
     });
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('invitations')
-          .where('email', isEqualTo: email)
-          .get();
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('lookupInvitationByEmail');
+      final response = await callable.call({'email': email});
+      final Map<String, dynamic> invitationData =
+          Map<String, dynamic>.from(response.data as Map);
 
-      if (snapshot.docs.isEmpty) {
-        setState(() {
-          errorMessage = "Aucune invitation trouvée pour cet email";
-          isLoading = false;
-        });
-        return;
-      }
+      final String invitationType =
+          (invitationData['invitationType'] ?? 'unknown').toString();
+      final String structureId =
+          (invitationData['structureId'] ?? '').toString();
+      final String structureName =
+          (invitationData['structureName'] ?? 'la structure').toString();
 
-      // Trier par date de création (la plus récente d'abord)
-      final docs =
-          List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(snapshot.docs);
+      setState(() {
+        isLoading = false;
+      });
 
-      Timestamp _extractTimestamp(Map<String, dynamic> data) {
-        final value = data['createdAt'];
-        if (value is Timestamp) return value;
-        if (value is DateTime) {
-          return Timestamp.fromDate(value);
-        }
-        return Timestamp.fromMillisecondsSinceEpoch(0);
-      }
+      if (!mounted) return;
 
-      docs.sort((a, b) =>
-          _extractTimestamp(b.data()).compareTo(_extractTimestamp(a.data())));
-
-      QueryDocumentSnapshot<Map<String, dynamic>>? selectedDoc;
-      for (final doc in docs) {
-        final status =
-            (doc.data()['status'] ?? '').toString().toLowerCase().trim();
-        if (status == 'active' || status == 'pending') {
-          selectedDoc = doc;
-          break;
-        }
-      }
-
-      selectedDoc ??= docs.first;
-
-      final invitationData = selectedDoc.data();
-      final String status =
-          (invitationData['status'] ?? '').toString().toLowerCase().trim();
-
-      if (status == 'completed') {
-        setState(() {
-          errorMessage =
-              "Cette invitation a déjà été utilisée. Vous pouvez vous connecter depuis l'écran de connexion.";
-          isLoading = false;
-        });
-        return;
-      }
-
-      if (status == 'revoked' || status == 'deleted' || status == 'cancelled') {
-        setState(() {
-          errorMessage =
-              "Cette invitation a été annulée. Demandez une nouvelle invitation à l'administrateur.";
-          isLoading = false;
-        });
-        return;
-      }
-
-      final String invitationType = invitationData['type'] ?? 'unknown';
-      final String structureId = invitationData['structureId'] ?? '';
-
-      // Vérifier si l'invitation est valide
-      final DateTime expirationDate =
-          invitationData['expiresAt']?.toDate() ?? DateTime.now();
-      if (expirationDate.isBefore(DateTime.now())) {
-        setState(() {
-          errorMessage = "Cette invitation a expiré";
-          isLoading = false;
-        });
-        return;
-      }
-
-      // Vérifier le type d'invitation et rediriger
       if (invitationType == 'mamMember') {
-        // Invitation pour un membre MAM
-        final String structureName = await _getStructureName(structureId);
-
         context.go('/invitation-validated', extra: {
           'invitationType': invitationType,
           'email': email,
           'structureId': structureId,
           'structureName': structureName,
         });
+        return;
       } else if (invitationType == 'parent') {
-        // Invitation pour un parent
-        final String structureName = await _getStructureName(structureId);
-        final String childName = invitationData['childName'] ?? 'votre enfant';
-        final String childId = invitationData['childId'] ?? '';
-
         context.go('/invitation-validated', extra: {
           'invitationType': invitationType,
           'email': email,
           'structureId': structureId,
           'structureName': structureName,
-          'childName': childName,
-          'childId': childId,
+          'childName': invitationData['childName'] ?? 'votre enfant',
+          'childId': invitationData['childId'] ?? '',
         });
+        return;
       } else if (invitationType == 'assistant') {
-        final String structureName = await _getStructureName(structureId);
-
         context.go('/invitation-validated', extra: {
           'invitationType': invitationType,
           'email': email,
@@ -683,36 +616,23 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
           'assistantPhone': invitationData['assistantPhone'] ?? '',
           'parentFullName': invitationData['parentFullName'] ?? '',
         });
+        return;
       } else {
         setState(() {
           errorMessage = "Type d'invitation inconnu";
-          isLoading = false;
         });
       }
+    } on FirebaseFunctionsException catch (e) {
+      setState(() {
+        errorMessage = e.message ?? "Une erreur est survenue lors de la validation";
+        isLoading = false;
+      });
     } catch (e) {
       print("Erreur lors de la validation de l'email: $e");
       setState(() {
         errorMessage = "Une erreur est survenue lors de la validation";
         isLoading = false;
       });
-    }
-  }
-
-  Future<String> _getStructureName(String structureId) async {
-    try {
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureDoc.exists) {
-        final data = structureDoc.data();
-        return data?['structureName'] ?? 'la structure';
-      }
-
-      return 'la structure';
-    } catch (e) {
-      return 'la structure';
     }
   }
 }
