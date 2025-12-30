@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
+import '../services/emergency_sheet_service.dart'; // Ajout import
+
 
 class ChildProfileDetailsScreen extends StatefulWidget {
   final String childId;
@@ -60,6 +62,9 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   List<Map<String, dynamic>> _activePrescriptions = [];
   List<Map<String, dynamic>> _prescriptionHistory = [];
   List<Map<String, dynamic>> _vaccinationDocuments = [];
+  
+  String _currentAssMatName = ""; // Nom de l'assmat pour la fiche d'urgence
+
 
   // Définition des couleurs de la palette
   static const Color primaryColor = Color(0xFF3D9DF2); // Bleu #3D9DF2
@@ -75,8 +80,71 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   void initState() {
     super.initState();
     _canEditChild = widget.allowEditing && !widget.parentMode;
+    _canEditChild = widget.allowEditing && !widget.parentMode;
     _loadChildProfile();
+    _loadCurrentAssMatName(); // Chargement du nom
   }
+
+  String _structureName = "";
+  bool _isMAM = false; 
+
+  // ... (rest of imports/variables)
+
+  Future<void> _loadCurrentAssMatName() async {
+     try {
+       // 1. Récupérer le nom de l'AssMat (current user)
+       final user = FirebaseAuth.instance.currentUser;
+       if (user != null) {
+         final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.email).get();
+         if (userDoc.exists) {
+           final data = userDoc.data()!;
+           setState(() {
+             _currentAssMatName = "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim();
+           });
+         }
+       }
+       
+       // 2. Récupérer les infos de la structure (MAM ou pas)
+       if (widget.structureId.isNotEmpty) {
+         final structureDoc = await FirebaseFirestore.instance.collection('structures').doc(widget.structureId).get();
+         if (structureDoc.exists) {
+           final sData = structureDoc.data()!;
+           setState(() {
+             _structureName = (sData['structureName'] ?? sData['name'] ?? '').toString();
+             
+             final type = (sData['structureType'] ?? sData['type'] ?? '').toString();
+             // La capture montre "MAM" en majuscule, on gère les deux cas + la recherche dans le nom
+             _isMAM = type.toUpperCase() == 'MAM' || _structureName.toUpperCase().contains('MAM');
+           });
+         }
+       }
+
+     } catch (e) {
+       print("Erreur chargement infos AssMat/Structure: $e");
+     }
+  }
+
+  Future<void> _generateEmergencySheet() async {
+    if (_currentAssMatName.isEmpty) {
+      // Tenter de recharger ou demander
+      await _loadCurrentAssMatName();
+    }
+    
+    final parent1 = childData['parent1'] ?? {};
+    final parent2 = childData['parent2'] ?? {};
+    
+    await EmergencySheetService.generateAndPrint(
+      assMatName: _currentAssMatName.isNotEmpty ? _currentAssMatName : "Nom - Prénom",
+      childFirstName: childData['firstName'] ?? '',
+      childLastName: childData['lastName'] ?? '',
+      childPhotoUrl: childData['photoUrl'],
+      parent1Phone: parent1['phone']?.toString() ?? '',
+      parent2Phone: parent2['phone']?.toString() ?? '',
+      isMAM: _isMAM,
+      mamName: _structureName,
+    );
+  }
+
 
   bool _ensureEditingAllowed({String? customMessage}) {
     if (!_isReadOnly) {
@@ -2941,6 +3009,23 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    // Bouton fiche urgence
+                    Container(
+                      margin: EdgeInsets.only(left: 8),
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: InkWell(
+                        onTap: () => _generateEmergencySheet(),
+                        child: Icon(
+                          Icons.assignment_ind_outlined,
+                          color: Colors.white,
+                          size: 24,
                         ),
                       ),
                     ),

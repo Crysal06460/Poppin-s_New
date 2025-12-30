@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import '../utils/structure_context.dart';
 
 class ParentInfoScreen extends StatefulWidget {
   final String childId;
@@ -104,62 +105,19 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
 
   Future<void> _loadStructureInfo() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoadingStructure = false);
-        return;
-      }
+      final structureContext = await StructureResolver().resolve();
+      final structureId = structureContext.structureId;
+      final structureData = structureContext.structureData;
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
+      setState(() {
+        structureName = structureContext.structureName;
+        isLoadingStructure = false;
+      });
 
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Parent Info: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
-
-      // Récupération des informations de la structure avec l'ID correct
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureDoc.exists) {
-        final data = structureDoc.data() as Map<String, dynamic>;
-        setState(() {
-          structureName = data['structureName'] ?? 'Structure inconnue';
-          isLoadingStructure = false;
-        });
-
-        await _prefillParentOne(
-          structureId: structureId,
-          structureData: data,
-        );
-      } else {
-        setState(() {
-          structureName = 'Structure inconnue';
-          isLoadingStructure = false;
-        });
-        await _prefillParentOne(
-          structureId: structureId,
-          structureData: const {},
-        );
-      }
+      await _prefillParentOne(
+        structureId: structureId,
+        structureData: structureData,
+      );
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
       setState(() {
@@ -198,10 +156,11 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
 
         if (userDoc.exists) {
           final data = userDoc.data() ?? {};
-          if (data['role'] == 'mamMember' &&
-              data['structureId'] != null &&
+          // CORRECTION: Toujours utiliser le structureId lié s'il existe
+          if (data['structureId'] != null &&
               (data['structureId'] as String).isNotEmpty) {
             targetStructureId = data['structureId'];
+             print("✅ Parent Info (Prefill): Utilisation du structureId lié: $targetStructureId");
           }
         }
       }
@@ -634,22 +593,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
-
-      // Vérifier si utilisateur MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      final structureId = (await StructureResolver().resolve()).structureId;
 
       // Supprimer complètement l'enfant de Firebase
       await FirebaseFirestore.instance
@@ -967,26 +911,7 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
         return;
       }
 
-      // Vérifier d'abord si l'utilisateur est un membre MAM
-      final userEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final structureId = (await StructureResolver().resolve()).structureId;
 
       print(
           "✅ Sauvegarde des informations du parent avec l'email: $normalizedEmail");

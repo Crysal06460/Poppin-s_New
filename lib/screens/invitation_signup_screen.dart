@@ -40,12 +40,39 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
   static const Color lightBlue = Color(0xFFDFE9F2); // #DFE9F2
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
+  // State variables for existing user check
+  bool _isExistingUser = false;
+  bool _checkingUser = true;
+
   @override
   void initState() {
     super.initState();
     _extractInvitationData();
+    _checkUserExists();
     // Écouter les changements du mot de passe pour la validation en temps réel
     passwordController.addListener(_validatePassword);
+  }
+
+  Future<void> _checkUserExists() async {
+    if (email.isEmpty) {
+      setState(() => _checkingUser = false);
+      return;
+    }
+    try {
+      final methods =
+          await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
+      if (methods.isNotEmpty) {
+        setState(() {
+          _isExistingUser = true;
+          _checkingUser = false;
+        });
+      } else {
+        setState(() => _checkingUser = false);
+      }
+    } catch (e) {
+      print("Erreur check user: $e");
+      setState(() => _checkingUser = false);
+    }
   }
 
   @override
@@ -88,7 +115,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          "Finaliser l'inscription",
+          _isExistingUser ? "Connexion" : "Finaliser l'inscription",
           style: TextStyle(
             color: primaryBlue,
             fontWeight: FontWeight.bold,
@@ -134,9 +161,11 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
             const SizedBox(height: 20),
 
             Text(
-              invitationType == 'mamMember'
-                  ? "Rejoindre en tant que membre"
-                  : "Rejoindre en tant que parent",
+              _isExistingUser
+                  ? "Rejoindre la structure"
+                  : (invitationType == 'mamMember'
+                      ? "Rejoindre en tant que membre"
+                      : "Rejoindre en tant que parent"),
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -160,41 +189,48 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
 
             const SizedBox(height: 30),
 
-            // Container informatif
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: lightBlue,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryBlue.withOpacity(0.3)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, color: primaryBlue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "Création de votre compte",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: primaryBlue,
+            if (_checkingUser)
+               const Center(child: CircularProgressIndicator())
+            else ...[
+              // Container informatif
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: lightBlue,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: primaryBlue.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: primaryBlue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _isExistingUser
+                                ? "Compte existant détecté"
+                                : "Création de votre compte",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: primaryBlue,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
-                    style: TextStyle(fontSize: 14, color: Colors.black87),
-                  ),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _isExistingUser
+                          ? "Une adresse email existe déjà. Veuillez saisir votre mot de passe pour vous connecter et rejoindre la structure."
+                          : "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
+                      style: TextStyle(fontSize: 14, color: Colors.black87),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 30),
 
             // Affichage de l'email (non modifiable)
             Container(
@@ -228,8 +264,12 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
               obscureText: !_showPassword,
               decoration: InputDecoration(
                 labelText: "Mot de passe",
-                hintText: "Créez un mot de passe",
-                helperText: "Min. 6 caractères, 1 majuscule, 1 chiffre",
+                hintText: _isExistingUser
+                    ? "Votre mot de passe actuel"
+                    : "Créez un mot de passe",
+                helperText: _isExistingUser
+                    ? null
+                    : "Min. 6 caractères, 1 majuscule, 1 chiffre",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -247,24 +287,27 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            _buildPasswordValidationIndicators(accentColor),
+            if (!_isExistingUser) ...[
+              const SizedBox(height: 8),
+              _buildPasswordValidationIndicators(accentColor),
+            ],
 
             const SizedBox(height: 20),
 
-            // Confirmation du mot de passe
-            TextField(
-              controller: confirmPasswordController,
-              obscureText: !_showPassword,
-              decoration: InputDecoration(
-                labelText: "Confirmer le mot de passe",
-                hintText: "Confirmez votre mot de passe",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+            // Confirmation du mot de passe (HIDE IF EXISTING USER)
+            if (!_isExistingUser)
+              TextField(
+                controller: confirmPasswordController,
+                obscureText: !_showPassword,
+                decoration: InputDecoration(
+                  labelText: "Confirmer le mot de passe",
+                  hintText: "Confirmez votre mot de passe",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  prefixIcon: Icon(Icons.lock_outline, color: accentColor),
                 ),
-                prefixIcon: Icon(Icons.lock_outline, color: accentColor),
               ),
-            ),
 
             // Affichage des erreurs
             if (errorMessage.isNotEmpty)
@@ -301,7 +344,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
             SizedBox(
               height: 54,
               child: ElevatedButton(
-                onPressed: isLoading ? null : _createAccount,
+                onPressed: isLoading ? null : _submitForm,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: accentColor,
                   foregroundColor: Colors.white,
@@ -318,8 +361,10 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text(
-                        "CRÉER MON COMPTE",
+                    : Text(
+                        _isExistingUser
+                            ? "SE CONNECTER ET REJOINDRE"
+                            : "CRÉER MON COMPTE",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -327,6 +372,9 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       ),
               ),
             ),
+
+            // Close logic block
+            ],
 
             const SizedBox(height: 20),
 
@@ -477,9 +525,11 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
 
                   // Titre principal
                   Text(
-                    invitationType == 'mamMember'
-                        ? "Rejoindre en tant que membre"
-                        : "Rejoindre en tant que parent",
+                    _isExistingUser
+                        ? "Connexion requise"
+                        : (invitationType == 'mamMember'
+                            ? "Rejoindre en tant que membre"
+                            : "Rejoindre en tant que parent"),
                     style: TextStyle(
                       fontSize: maxWidth * 0.03,
                       fontWeight: FontWeight.bold,
@@ -548,31 +598,35 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                             ),
                             SizedBox(width: maxWidth * 0.02),
                             Expanded(
-                              child: Text(
-                                "Création de votre compte",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryBlue,
-                                  fontSize: maxWidth * 0.02,
+                                child: Text(
+                                  _isExistingUser
+                                      ? "Compte existant détecté"
+                                      : "Création de votre compte",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryBlue,
+                                    fontSize: maxWidth * 0.02,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: maxHeight * 0.015),
-                        // Description
-                        Text(
-                          "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
-                          style: TextStyle(
-                            fontSize: maxWidth * 0.018,
-                            color: Colors.black87,
-                            height: 1.4,
+                            ],
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                          SizedBox(height: maxHeight * 0.015),
+                          // Description
+                          Text(
+                            _isExistingUser
+                                ? "Une adresse email existe déjà. Veuillez saisir votre mot de passe pour vous connecter et rejoindre la structure."
+                                : "Pour finaliser votre inscription, veuillez créer un mot de passe sécurisé pour votre compte.",
+                            style: TextStyle(
+                              fontSize: maxWidth * 0.018,
+                              color: Colors.black87,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
                   SizedBox(height: maxHeight * 0.04),
 
@@ -632,8 +686,12 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       style: TextStyle(fontSize: maxWidth * 0.019),
                       decoration: InputDecoration(
                         labelText: "Mot de passe",
-                        hintText: "Créez un mot de passe",
-                        helperText: "Min. 6 caractères, 1 majuscule, 1 chiffre",
+                        hintText: _isExistingUser
+                            ? "Votre mot de passe actuel"
+                            : "Créez un mot de passe",
+                        helperText: _isExistingUser
+                            ? null
+                            : "Min. 6 caractères, 1 majuscule, 1 chiffre",
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: maxWidth * 0.025,
                           vertical: maxHeight * 0.02,
@@ -692,57 +750,59 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                     ),
                   ),
                   SizedBox(height: maxHeight * 0.015),
-                  _buildTabletPasswordValidationIndicators(
-                      maxWidth, maxHeight, accentColor),
+                  if (!_isExistingUser)
+                    _buildTabletPasswordValidationIndicators(
+                        maxWidth, maxHeight, accentColor),
 
                   SizedBox(height: maxHeight * 0.025),
 
-                  // Confirmation du mot de passe adaptatif
-                  Container(
-                    width: double.infinity,
-                    child: TextField(
-                      controller: confirmPasswordController,
-                      obscureText: !_showPassword,
-                      style: TextStyle(fontSize: maxWidth * 0.019),
-                      decoration: InputDecoration(
-                        labelText: "Confirmer le mot de passe",
-                        hintText: "Confirmez votre mot de passe",
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: maxWidth * 0.025,
-                          vertical: maxHeight * 0.02,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide:
-                              BorderSide(color: accentColor, width: 2.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                              color: Colors.grey.shade300, width: 1.5),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        prefixIcon: Padding(
-                          padding: EdgeInsets.all(maxWidth * 0.015),
-                          child: Icon(Icons.lock_outline,
-                              color: accentColor, size: maxWidth * 0.02),
-                        ),
-                        labelStyle: TextStyle(
-                          color: accentColor,
-                          fontSize: maxWidth * 0.018,
-                        ),
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: maxWidth * 0.018,
+                  // Confirmation du mot de passe adaptatif (HIDE IF EXISTING)
+                  if (!_isExistingUser)
+                    Container(
+                      width: double.infinity,
+                      child: TextField(
+                        controller: confirmPasswordController,
+                        obscureText: !_showPassword,
+                        style: TextStyle(fontSize: maxWidth * 0.019),
+                        decoration: InputDecoration(
+                          labelText: "Confirmer le mot de passe",
+                          hintText: "Confirmez votre mot de passe",
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: maxWidth * 0.025,
+                            vertical: maxHeight * 0.02,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide:
+                                BorderSide(color: accentColor, width: 2.5),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                                color: Colors.grey.shade300, width: 1.5),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          prefixIcon: Padding(
+                            padding: EdgeInsets.all(maxWidth * 0.015),
+                            child: Icon(Icons.lock_outline,
+                                color: accentColor, size: maxWidth * 0.02),
+                          ),
+                          labelStyle: TextStyle(
+                            color: accentColor,
+                            fontSize: maxWidth * 0.018,
+                          ),
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: maxWidth * 0.018,
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
                   // Affichage des erreurs adaptatif
                   if (errorMessage.isNotEmpty)
@@ -810,7 +870,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       ],
                     ),
                     child: ElevatedButton(
-                      onPressed: isLoading ? null : _createAccount,
+                      onPressed: isLoading ? null : _submitForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accentColor,
                         foregroundColor: Colors.white,
@@ -830,7 +890,9 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                               ),
                             )
                           : Text(
-                              "CRÉER MON COMPTE",
+                              _isExistingUser
+                                  ? "SE CONNECTER ET REJOINDRE"
+                                  : "CRÉER MON COMPTE",
                               style: TextStyle(
                                 fontSize: maxWidth * 0.021,
                                 fontWeight: FontWeight.bold,
@@ -939,29 +1001,29 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
     );
   }
 
-  Future<void> _createAccount() async {
-    // Validation de base
-    if (passwordController.text.isEmpty ||
-        confirmPasswordController.text.isEmpty) {
-      setState(() {
-        errorMessage = "Veuillez remplir tous les champs";
-      });
+  Future<void> _submitForm() async {
+    // Basic validation
+    if (passwordController.text.isEmpty) {
+      setState(() => errorMessage = "Veuillez entrer le mot de passe");
       return;
     }
 
-    if (passwordController.text != confirmPasswordController.text) {
-      setState(() {
-        errorMessage = "Les mots de passe ne correspondent pas";
-      });
-      return;
-    }
-
-    if (!hasMinLength || !hasUppercase || !hasDigit) {
-      setState(() {
-        errorMessage =
-            "Le mot de passe doit contenir au moins 6 caractères, une majuscule et un chiffre";
-      });
-      return;
+    if (!_isExistingUser) {
+      if (confirmPasswordController.text.isEmpty) {
+        setState(() => errorMessage = "Veuillez confirmer le mot de passe");
+        return;
+      }
+      if (passwordController.text != confirmPasswordController.text) {
+        setState(() => errorMessage = "Les mots de passe ne correspondent pas");
+        return;
+      }
+      if (!hasMinLength || !hasUppercase || !hasDigit) {
+        setState(() {
+          errorMessage =
+              "Le mot de passe doit respecter les critères de sécurité";
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -970,35 +1032,77 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
     });
 
     try {
-      // Vérifier si un compte avec cet email existe déjà
-      try {
-        final methods =
-            await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
-        if (methods.isNotEmpty) {
-          // Un compte avec cet email existe déjà, on tente une connexion
-          setState(() {
-            errorMessage =
-                "Un compte existe déjà avec cet email. Vous pouvez vous connecter depuis l'écran de connexion.";
-            isLoading = false;
-          });
-          return;
+      UserCredential? userCredential;
+
+      if (_isExistingUser) {
+        // LOGIN
+        try {
+          userCredential =
+              await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email,
+            password: passwordController.text.trim(),
+          );
+        } catch (e) {
+          throw e; // Handled in catch block
         }
-      } catch (e) {
-        // Ignorer l'erreur et continuer avec la création du compte
-        print("Erreur lors de la vérification de l'email: $e");
+      } else {
+        // CREATE
+        try {
+          // Double check existance to be safe
+          final methods =
+              await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
+          if (methods.isNotEmpty) {
+            setState(() {
+              _isExistingUser = true;
+              errorMessage =
+                  "Un compte existe déjà. Veuillez vous connecter avec votre mot de passe actuel.";
+              isLoading = false;
+            });
+            return;
+          }
+
+          userCredential =
+              await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: email,
+            password: passwordController.text.trim(),
+          );
+        } catch (e) {
+          throw e;
+        }
       }
 
-      // Créer l'utilisateur dans Firebase Auth
-      final userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: passwordController.text.trim(),
-      );
+      // Success -> Link Data
+      if (userCredential != null && userCredential.user != null) {
+        await _linkUserToInvitation(userCredential.user!.uid);
+      }
+    } catch (e) {
+      print("Erreur auth: $e");
+      setState(() {
+        if (e is FirebaseAuthException) {
+          if (e.code == 'wrong-password') {
+            errorMessage = "Mot de passe incorrect";
+          } else if (e.code == 'user-not-found') {
+            // Should not happen if logic is correct
+            errorMessage = "Utilisateur non trouvé";
+          } else if (e.code == 'email-already-in-use') {
+            errorMessage = "Cet email est déjà utilisé";
+          } else {
+            errorMessage = "Erreur: ${e.message}";
+          }
+        } else {
+          errorMessage = "Une erreur est survenue (${e.toString()})";
+        }
+        isLoading = false;
+      });
+    }
+  }
 
-      final invitationInfo = widget.invitationInfo;
+  Future<void> _linkUserToInvitation(String uid) async {
+    final invitationInfo = widget.invitationInfo;
 
-      if (invitationType == 'mamMember') {
-        // Créer le document utilisateur pour un membre MAM
+    try {
+       if (invitationType == 'mamMember') {
+        // Créer/Merge le document utilisateur pour un membre MAM
         await FirebaseFirestore.instance
             .collection('users')
             .doc(email.toLowerCase())
@@ -1008,9 +1112,9 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           'structureId': structureId,
           'structureName': structureName,
           'isFirstLogin': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'firebaseUid': userCredential.user?.uid,
-        });
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          'firebaseUid': uid,
+        }, SetOptions(merge: true));
 
         // Redirection vers l'interface MAM
         if (mounted) context.go('/home');
@@ -1034,8 +1138,8 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           'phone': assistantPhone,
           'invitedByParent': true,
           'isFirstLogin': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'firebaseUid': userCredential.user?.uid,
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          'firebaseUid': uid,
         }, SetOptions(merge: true));
 
         await FirebaseFirestore.instance
@@ -1047,7 +1151,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           'assistantLastName': assistantLastName,
           'assistantPhone': assistantPhone,
           'assistantInvitationStatus': 'completed',
-          'assistantLinkedUserId': userCredential.user?.uid,
+          'assistantLinkedUserId': uid,
           'assistantLinkedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
 
@@ -1062,93 +1166,71 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           'email': email.toLowerCase(),
           'phone': assistantPhone,
           'status': 'active',
-          'linkedUserId': userCredential.user?.uid,
+          'linkedUserId': uid,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
 
         if (mounted) context.go('/home');
       } else if (invitationType == 'parent') {
         // Ajouter un log pour déboguer
-        print("⭐ Création du compte parent avec childId: $childId");
+        print("⭐ Linking compte parent avec childId: $childId");
 
-        // Créer le document utilisateur pour un parent
+        // Créer/Merge le document utilisateur pour un parent
         await FirebaseFirestore.instance
             .collection('users')
             .doc(email.toLowerCase())
             .set({
           'email': email.toLowerCase(),
           'role': 'parent',
-          'childId': childId,
+          'childId': childId, // Keep for legacy/single child refs
           'childName': childName,
           'structureId': structureId,
           'structureName': structureName,
           'isFirstLogin': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'firebaseUid': userCredential.user?.uid,
-          // S'assurer que l'enfant est dans la liste des enfants
-          'children': [childId],
-        });
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          'firebaseUid': uid,
+          // Ajouter l'enfant à la liste
+          'children': FieldValue.arrayUnion([childId]),
+        }, SetOptions(merge: true));
 
-        print("✅ Compte parent créé avec succès");
-        print("📱 Tentative de redirection vers /parent/home");
+        print("✅ Compte parent lié avec succès");
+
+        // Update Invitation Status
+        try {
+          final invitationsQuery = await FirebaseFirestore.instance
+              .collection('invitations')
+              .where('email', isEqualTo: email)
+              .where('structureId', isEqualTo: structureId)
+              .get();
+
+          if (invitationsQuery.docs.isNotEmpty) {
+            await FirebaseFirestore.instance
+                .collection('invitations')
+                .doc(invitationsQuery.docs.first.id)
+                .update({'status': 'completed'});
+          }
+        } catch (e) {
+          print("Erreur update invitation: $e");
+        }
 
         // Ajouter un délai pour s'assurer que Firestore a bien été mis à jour
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 500));
 
         // Redirection vers l'interface parent
         if (mounted) {
-          try {
-            context.go('/parent/home');
-            print("✅ Redirection vers /parent/home réussie");
-          } catch (e) {
-            print("❌ Erreur lors de la redirection: $e");
-          }
+          context.go('/parent/home');
         }
-      }
-
-      // Mettre à jour l'invitation après utilisation
-      try {
-        final invitationsQuery = await FirebaseFirestore.instance
-            .collection('invitations')
-            .where('email', isEqualTo: email)
-            .where('structureId', isEqualTo: structureId)
-            .get();
-
-        if (invitationsQuery.docs.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('invitations')
-              .doc(invitationsQuery.docs.first.id)
-              .update({'status': 'completed'});
-
-          print("✅ Invitation marquée comme complétée");
-        }
-      } catch (e) {
-        print("Erreur lors de la mise à jour de l'invitation: $e");
-        // Ne pas bloquer le processus si la mise à jour échoue
       }
     } catch (e) {
-      print("Erreur lors de la création du compte: $e");
-      setState(() {
-        if (e is FirebaseAuthException) {
-          switch (e.code) {
-            case 'email-already-in-use':
-              errorMessage = "Cette adresse e-mail est déjà utilisée";
-              break;
-            case 'invalid-email':
-              errorMessage = "Format d'e-mail invalide";
-              break;
-            case 'weak-password':
-              errorMessage = "Le mot de passe est trop faible";
-              break;
-            default:
-              errorMessage = "Erreur: ${e.message}";
-          }
-        } else {
-          errorMessage =
-              "Une erreur est survenue lors de la création du compte";
-        }
-        isLoading = false;
-      });
+       print("Erreur linking: $e");
+       setState(() {
+         errorMessage = "Erreur lors de la configuration du compte: $e";
+         isLoading = false;
+       });
     }
   }
+
+  // Deprecated/Removed method stub to ensure old calls (if any) are caught
+  // (In reality we replaced the entire block so this is just comments)
+
 }

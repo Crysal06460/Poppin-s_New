@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import '../utils/structure_context.dart';
 
 class ParentSecondAddressScreen extends StatefulWidget {
   final String childId;
@@ -52,47 +53,11 @@ class _ParentSecondAddressScreenState extends State<ParentSecondAddressScreen> {
 
   Future<void> _loadStructureInfo() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => isLoadingStructure = false);
-        return;
-      }
-
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-          print(
-              "🔄 Parent Second Address: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
-
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureDoc.exists) {
-        final data = structureDoc.data() as Map<String, dynamic>;
-        setState(() {
-          structureName = data['structureName'] ?? 'Structure inconnue';
-          isLoadingStructure = false;
-        });
-      } else {
-        setState(() {
-          structureName = 'Structure inconnue';
-          isLoadingStructure = false;
-        });
-      }
+      final structureContext = await StructureResolver().resolve();
+      setState(() {
+        structureName = structureContext.structureName;
+        isLoadingStructure = false;
+      });
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
       setState(() {
@@ -185,23 +150,7 @@ class _ParentSecondAddressScreenState extends State<ParentSecondAddressScreen> {
     }
 
     try {
-      final userEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userEmail)
-          .get();
-
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-          print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final structureId = (await StructureResolver().resolve()).structureId;
 
       Map<String, dynamic> updateData = {};
 
@@ -512,21 +461,7 @@ class _ParentSecondAddressScreenState extends State<ParentSecondAddressScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      final structureId = (await StructureResolver().resolve()).structureId;
 
       await FirebaseFirestore.instance
           .collection('structures')

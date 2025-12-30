@@ -312,15 +312,15 @@ class UnifiedSubscriptionService {
 
   /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois
   String _getPriceFromProductId(String productId) {
-    if (productId.contains('assistante_maternelle')) return '6,99 € / mois';
+    if (productId.contains('assistante_maternelle')) return '3,99 € / mois';
     if (productId.contains('mam_2') || productId.contains('mam2')) {
-      return '19,99 € / mois';
+      return '9,99 € / mois';
     }
     if (productId.contains('mam_3') || productId.contains('mam3')) {
-      return '19,99 € / mois';
+      return '9,99 € / mois';
     }
     if (productId.contains('mam_4') || productId.contains('mam4')) {
-      return '24,99 € / mois';
+      return '14,99 € / mois';
     }
     return 'Prix inconnu';
   }

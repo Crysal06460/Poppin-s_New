@@ -1,0 +1,382 @@
+
+> lint
+> eslint .
+
+
+/Users/chrismac/poppins/functions-new/index.js
+    4:8   error  There should be no space after '{'              object-curly-spacing
+    4:18  error  There should be no space before '}'             object-curly-spacing
+    5:8   error  There should be no space after '{'              object-curly-spacing
+    5:21  error  There should be no space before '}'             object-curly-spacing
+   28:1   error  Expected indentation of 4 spaces but found 2    indent
+   29:1   error  Expected indentation of 6 spaces but found 4    indent
+   30:1   error  Expected indentation of 6 spaces but found 4    indent
+   31:1   error  Expected indentation of 6 spaces but found 4    indent
+   32:1   error  Expected indentation of 6 spaces but found 4    indent
+   33:1   error  Expected indentation of 6 spaces but found 4    indent
+   34:1   error  Expected indentation of 6 spaces but found 4    indent
+   35:1   error  Expected indentation of 4 spaces but found 2    indent
+   36:1   error  Expected indentation of 4 spaces but found 2    indent
+   37:1   error  Expected indentation of 6 spaces but found 4    indent
+   38:1   error  Expected indentation of 8 spaces but found 6    indent
+   38:14  error  There should be no space after '{'              object-curly-spacing
+   38:29  error  There should be no space before '}'             object-curly-spacing
+   39:1   error  Expected indentation of 8 spaces but found 6    indent
+   40:1   error  Expected indentation of 10 spaces but found 8   indent
+   41:1   error  Expected indentation of 8 spaces but found 6    indent
+   43:1   error  Expected indentation of 8 spaces but found 6    indent
+   44:1   error  Expected indentation of 10 spaces but found 8   indent
+   45:1   error  Expected indentation of 10 spaces but found 8   indent
+   46:1   error  Expected indentation of 10 spaces but found 8   indent
+   46:23  error  There should be no space after '{'              object-curly-spacing
+   46:51  error  There should be no space before '}'             object-curly-spacing
+   47:1   error  Expected indentation of 10 spaces but found 8   indent
+   49:1   error  Expected indentation of 10 spaces but found 8   indent
+   50:1   error  Expected indentation of 8 spaces but found 6    indent
+   52:1   error  Expected indentation of 8 spaces but found 6    indent
+   52:24  error  There should be no space after '{'              object-curly-spacing
+   52:41  error  There should be no space before '}'             object-curly-spacing
+   53:1   error  Expected indentation of 6 spaces but found 4    indent
+   54:1   error  Expected indentation of 8 spaces but found 6    indent
+   55:1   error  Expected indentation of 8 spaces but found 6    indent
+   56:1   error  Expected indentation of 6 spaces but found 4    indent
+   57:1   error  Expected indentation of 4 spaces but found 2    indent
+   61:1   error  Expected indentation of 4 spaces but found 2    indent
+   62:1   error  Expected indentation of 6 spaces but found 4    indent
+   63:1   error  Expected indentation of 6 spaces but found 4    indent
+   64:1   error  Expected indentation of 6 spaces but found 4    indent
+   65:1   error  Expected indentation of 4 spaces but found 2    indent
+   66:1   error  Expected indentation of 4 spaces but found 2    indent
+   67:1   error  Expected indentation of 6 spaces but found 4    indent
+   68:1   error  Expected indentation of 8 spaces but found 6    indent
+   68:14  error  There should be no space after '{'              object-curly-spacing
+   68:24  error  There should be no space before '}'             object-curly-spacing
+   69:1   error  Expected indentation of 8 spaces but found 6    indent
+   70:1   error  Expected indentation of 10 spaces but found 8   indent
+   71:1   error  Expected indentation of 8 spaces but found 6    indent
+   73:1   error  Expected indentation of 8 spaces but found 6    indent
+   74:1   error  Expected indentation of 12 spaces but found 8   indent
+   75:1   error  Expected indentation of 12 spaces but found 8   indent
+   75:10  error  There should be no space after '{'              object-curly-spacing
+   75:33  error  There should be no space before '}'             object-curly-spacing
+   76:1   error  Expected indentation of 8 spaces but found 6    indent
+   78:1   error  Expected indentation of 8 spaces but found 6    indent
+   80:1   error  Expected indentation of 8 spaces but found 6    indent
+   83:1   error  Expected indentation of 8 spaces but found 6    indent
+   84:1   error  Expected indentation of 8 spaces but found 6    indent
+   85:1   error  Expected indentation of 10 spaces but found 8   indent
+   86:1   error  Expected indentation of 8 spaces but found 6    indent
+   88:1   error  Expected indentation of 8 spaces but found 6    indent
+   88:24  error  There should be no space after '{'              object-curly-spacing
+   88:38  error  There should be no space before '}'             object-curly-spacing
+   89:1   error  Expected indentation of 6 spaces but found 4    indent
+   90:1   error  Expected indentation of 8 spaces but found 6    indent
+   91:1   error  Expected indentation of 8 spaces but found 6    indent
+   92:1   error  Expected indentation of 6 spaces but found 4    indent
+   93:1   error  Expected indentation of 4 spaces but found 2    indent
+   97:1   error  Expected indentation of 4 spaces but found 2    indent
+   98:1   error  Expected indentation of 6 spaces but found 4    indent
+   99:1   error  Expected indentation of 6 spaces but found 4    indent
+  100:1   error  Expected indentation of 6 spaces but found 4    indent
+  101:1   error  Expected indentation of 4 spaces but found 2    indent
+  102:1   error  Expected indentation of 4 spaces but found 2    indent
+  103:1   error  Expected indentation of 6 spaces but found 4    indent
+  104:1   error  Expected indentation of 8 spaces but found 6    indent
+  104:14  error  There should be no space after '{'              object-curly-spacing
+  104:24  error  There should be no space before '}'             object-curly-spacing
+  105:1   error  Expected indentation of 8 spaces but found 6    indent
+  106:1   error  Expected indentation of 10 spaces but found 8   indent
+  107:1   error  Expected indentation of 8 spaces but found 6    indent
+  109:1   error  Expected indentation of 8 spaces but found 6    indent
+  110:1   error  Expected indentation of 12 spaces but found 8   indent
+  111:1   error  Expected indentation of 8 spaces but found 6    indent
+  113:1   error  Expected indentation of 8 spaces but found 6    indent
+  115:1   error  Expected indentation of 8 spaces but found 6    indent
+  116:1   error  Expected indentation of 10 spaces but found 8   indent
+  117:1   error  Expected indentation of 10 spaces but found 8   indent
+  118:1   error  Expected indentation of 8 spaces but found 6    indent
+  120:1   error  Expected indentation of 8 spaces but found 6    indent
+  120:24  error  There should be no space after '{'              object-curly-spacing
+  120:47  error  There should be no space before '}'             object-curly-spacing
+  121:1   error  Expected indentation of 6 spaces but found 4    indent
+  122:1   error  Expected indentation of 8 spaces but found 6    indent
+  123:1   error  Expected indentation of 8 spaces but found 6    indent
+  124:1   error  Expected indentation of 6 spaces but found 4    indent
+  125:1   error  Expected indentation of 4 spaces but found 2    indent
+  129:1   error  Expected indentation of 4 spaces but found 2    indent
+  129:4   error  There should be no space after '{'              object-curly-spacing
+  129:33  error  There should be no space before '}'             object-curly-spacing
+  130:1   error  Expected indentation of 4 spaces but found 2    indent
+  131:1   error  Expected indentation of 8 spaces but found 4    indent
+  132:1   error  Expected indentation of 8 spaces but found 4    indent
+  132:12  error  There should be no space after '{'              object-curly-spacing
+  132:72  error  There should be no space before '}'             object-curly-spacing
+  136:1   error  Expected indentation of 4 spaces but found 2    indent
+  136:4   error  There should be no space after '{'              object-curly-spacing
+  136:56  error  There should be no space before '}'             object-curly-spacing
+  137:1   error  Expected indentation of 4 spaces but found 2    indent
+  138:1   error  Expected indentation of 6 spaces but found 4    indent
+  139:1   error  Expected indentation of 6 spaces but found 4    indent
+  141:1   error  Expected indentation of 6 spaces but found 4    indent
+  142:1   error  Expected indentation of 6 spaces but found 4    indent
+  143:1   error  Expected indentation of 8 spaces but found 6    indent
+  144:1   error  Expected indentation of 12 spaces but found 8   indent
+  145:1   error  Expected indentation of 12 spaces but found 8   indent
+  146:1   error  Expected indentation of 12 spaces but found 8   indent
+  147:1   error  Expected indentation of 8 spaces but found 6    indent
+  148:1   error  Expected indentation of 6 spaces but found 4    indent
+  149:1   error  Expected indentation of 8 spaces but found 6    indent
+  150:1   error  Expected indentation of 8 spaces but found 6    indent
+  151:1   error  Expected indentation of 6 spaces but found 4    indent
+  153:1   error  Expected indentation of 6 spaces but found 4    indent
+  154:1   error  Expected indentation of 8 spaces but found 6    indent
+  155:1   error  Expected indentation of 8 spaces but found 6    indent
+  156:1   error  Expected indentation of 8 spaces but found 6    indent
+  157:1   error  Expected indentation of 6 spaces but found 4    indent
+  159:1   error  Expected indentation of 6 spaces but found 4    indent
+  160:1   error  Expected indentation of 8 spaces but found 6    indent
+  161:1   error  Expected indentation of 8 spaces but found 6    indent
+  162:1   error  Expected indentation of 8 spaces but found 6    indent
+  163:1   error  Expected indentation of 8 spaces but found 6    indent
+  164:1   error  Expected indentation of 8 spaces but found 6    indent
+  165:1   error  Expected indentation of 8 spaces but found 6    indent
+  167:1   error  Expected indentation of 8 spaces but found 6    indent
+  168:1   error  Expected indentation of 8 spaces but found 6    indent
+  169:1   error  Expected indentation of 8 spaces but found 6    indent
+  171:1   error  Expected indentation of 8 spaces but found 6    indent
+  172:1   error  Expected indentation of 8 spaces but found 6    indent
+  173:1   error  Expected indentation of 10 spaces but found 8   indent
+  174:1   error  Expected indentation of 8 spaces but found 6    indent
+  176:1   error  Expected indentation of 8 spaces but found 6    indent
+  177:1   error  Expected indentation of 8 spaces but found 6    indent
+  178:1   error  Expected indentation of 10 spaces but found 8   indent
+  179:1   error  Expected indentation of 8 spaces but found 6    indent
+  181:1   error  Expected indentation of 8 spaces but found 6    indent
+  182:1   error  Expected indentation of 8 spaces but found 6    indent
+  183:1   error  Expected indentation of 10 spaces but found 8   indent
+  184:1   error  Expected indentation of 8 spaces but found 6    indent
+  186:1   error  Expected indentation of 8 spaces but found 6    indent
+  188:1   error  Expected indentation of 8 spaces but found 6    indent
+  189:1   error  Expected indentation of 8 spaces but found 6    indent
+  190:1   error  Expected indentation of 10 spaces but found 8   indent
+  191:1   error  Expected indentation of 8 spaces but found 6    indent
+  192:1   error  Expected indentation of 10 spaces but found 8   indent
+  193:1   error  Expected indentation of 8 spaces but found 6    indent
+  195:1   error  Expected indentation of 8 spaces but found 6    indent
+  196:1   error  Expected indentation of 8 spaces but found 6    indent
+  197:1   error  Expected indentation of 10 spaces but found 8   indent
+  198:1   error  Expected indentation of 8 spaces but found 6    indent
+  199:1   error  Expected indentation of 10 spaces but found 8   indent
+  200:1   error  Expected indentation of 8 spaces but found 6    indent
+  201:1   error  Expected indentation of 8 spaces but found 6    indent
+  203:1   error  Expected indentation of 8 spaces but found 6    indent
+  204:1   error  Expected indentation of 10 spaces but found 8   indent
+  205:1   error  Expected indentation of 12 spaces but found 10  indent
+  206:1   error  Expected indentation of 12 spaces but found 10  indent
+  207:1   error  Expected indentation of 14 spaces but found 12  indent
+  208:1   error  Expected indentation of 12 spaces but found 10  indent
+  209:1   error  Expected indentation of 10 spaces but found 8   indent
+  210:1   error  Expected indentation of 8 spaces but found 6    indent
+  211:1   error  Expected indentation of 10 spaces but found 8   indent
+  212:1   error  Expected indentation of 8 spaces but found 6    indent
+  214:1   error  Expected indentation of 8 spaces but found 6    indent
+  215:1   error  Expected indentation of 10 spaces but found 8   indent
+  216:1   error  Expected indentation of 12 spaces but found 10  indent
+  217:1   error  Expected indentation of 12 spaces but found 10  indent
+  218:1   error  Expected indentation of 12 spaces but found 10  indent
+  219:1   error  Expected indentation of 12 spaces but found 10  indent
+  220:1   error  Expected indentation of 12 spaces but found 10  indent
+  221:1   error  Expected indentation of 12 spaces but found 10  indent
+  222:1   error  Expected indentation of 10 spaces but found 8   indent
+  224:1   error  Expected indentation of 10 spaces but found 8   indent
+  225:1   error  Expected indentation of 12 spaces but found 10  indent
+  226:1   error  Expected indentation of 10 spaces but found 8   indent
+  228:1   error  Expected indentation of 10 spaces but found 8   indent
+  229:1   error  Expected indentation of 14 spaces but found 10  indent
+  230:1   error  Expected indentation of 14 spaces but found 10  indent
+  230:12  error  There should be no space after '{'              object-curly-spacing
+  230:24  error  There should be no space before '}'             object-curly-spacing
+  231:1   error  Expected indentation of 10 spaces but found 8   indent
+  233:1   error  Expected indentation of 10 spaces but found 8   indent
+  234:1   error  Expected indentation of 10 spaces but found 8   indent
+  235:1   error  Expected indentation of 12 spaces but found 10  indent
+  236:1   error  Expected indentation of 16 spaces but found 12  indent
+  237:1   error  Expected indentation of 16 spaces but found 12  indent
+  238:1   error  Expected indentation of 16 spaces but found 12  indent
+  239:1   error  Expected indentation of 16 spaces but found 12  indent
+  240:1   error  Expected indentation of 12 spaces but found 10  indent
+  241:1   error  Expected indentation of 14 spaces but found 12  indent
+  242:1   error  Expected indentation of 12 spaces but found 10  indent
+  243:1   error  Expected indentation of 10 spaces but found 8   indent
+  245:1   error  Expected indentation of 10 spaces but found 8   indent
+  246:1   error  Expected indentation of 12 spaces but found 10  indent
+  247:1   error  Expected indentation of 16 spaces but found 12  indent
+  248:1   error  Expected indentation of 16 spaces but found 12  indent
+  249:1   error  Expected indentation of 16 spaces but found 12  indent
+  250:1   error  Expected indentation of 16 spaces but found 12  indent
+  251:1   error  Expected indentation of 16 spaces but found 12  indent
+  252:1   error  Expected indentation of 12 spaces but found 10  indent
+  253:1   error  Expected indentation of 14 spaces but found 12  indent
+  254:1   error  Expected indentation of 12 spaces but found 10  indent
+  255:1   error  Expected indentation of 14 spaces but found 12  indent
+  256:1   error  Expected indentation of 18 spaces but found 14  indent
+  257:1   error  Expected indentation of 18 spaces but found 14  indent
+  258:1   error  Expected indentation of 18 spaces but found 14  indent
+  259:1   error  Expected indentation of 18 spaces but found 14  indent
+  260:1   error  Expected indentation of 18 spaces but found 14  indent
+  261:1   error  Expected indentation of 14 spaces but found 12  indent
+  262:1   error  Expected indentation of 16 spaces but found 14  indent
+  263:1   error  Expected indentation of 14 spaces but found 12  indent
+  264:1   error  Expected indentation of 12 spaces but found 10  indent
+  265:1   error  Expected indentation of 10 spaces but found 8   indent
+  267:1   error  Expected indentation of 10 spaces but found 8   indent
+  268:1   error  Expected indentation of 12 spaces but found 10  indent
+  269:1   error  Expected indentation of 16 spaces but found 12  indent
+  270:1   error  Expected indentation of 16 spaces but found 12  indent
+  271:1   error  Expected indentation of 16 spaces but found 12  indent
+  272:1   error  Expected indentation of 16 spaces but found 12  indent
+  273:1   error  Expected indentation of 16 spaces but found 12  indent
+  274:1   error  Expected indentation of 12 spaces but found 10  indent
+  275:1   error  Expected indentation of 14 spaces but found 12  indent
+  276:1   error  Expected indentation of 12 spaces but found 10  indent
+  277:1   error  Expected indentation of 10 spaces but found 8   indent
+  279:1   error  Expected indentation of 10 spaces but found 8   indent
+  280:1   error  Expected indentation of 12 spaces but found 10  indent
+  281:1   error  Expected indentation of 12 spaces but found 10  indent
+  282:1   error  Expected indentation of 12 spaces but found 10  indent
+  283:1   error  Expected indentation of 14 spaces but found 12  indent
+  284:1   error  Expected indentation of 12 spaces but found 10  indent
+  285:1   error  Expected indentation of 14 spaces but found 12  indent
+  286:1   error  Expected indentation of 12 spaces but found 10  indent
+  288:1   error  Expected indentation of 12 spaces but found 10  indent
+  289:1   error  Expected indentation of 16 spaces but found 12  indent
+  290:1   error  Expected indentation of 18 spaces but found 14  indent
+  291:1   error  Expected indentation of 18 spaces but found 14  indent
+  292:1   error  Expected indentation of 18 spaces but found 14  indent
+  293:1   error  Expected indentation of 18 spaces but found 14  indent
+  294:1   error  Expected indentation of 18 spaces but found 14  indent
+  295:1   error  Expected indentation of 18 spaces but found 14  indent
+  296:1   error  Expected indentation of 18 spaces but found 14  indent
+  297:1   error  Expected indentation of 18 spaces but found 14  indent
+  298:1   error  Expected indentation of 18 spaces but found 14  indent
+  299:1   error  Expected indentation of 18 spaces but found 14  indent
+  300:1   error  Expected indentation of 18 spaces but found 14  indent
+  301:1   error  Expected indentation of 16 spaces but found 12  indent
+  302:1   error  Expected indentation of 16 spaces but found 12  indent
+  302:14  error  There should be no space after '{'              object-curly-spacing
+  302:26  error  There should be no space before '}'             object-curly-spacing
+  303:1   error  Expected indentation of 12 spaces but found 10  indent
+  305:1   error  Expected indentation of 12 spaces but found 10  indent
+  306:1   error  Expected indentation of 14 spaces but found 12  indent
+  307:1   error  Expected indentation of 18 spaces but found 14  indent
+  308:1   error  Expected indentation of 18 spaces but found 14  indent
+  309:1   error  Expected indentation of 18 spaces but found 14  indent
+  310:1   error  Expected indentation of 18 spaces but found 14  indent
+  311:1   error  Expected indentation of 22 spaces but found 16  indent
+  311:18  error  There should be no space after '{'              object-curly-spacing
+  311:47  error  There should be no space before '}'             object-curly-spacing
+  312:1   error  Expected indentation of 22 spaces but found 16  indent
+  312:18  error  There should be no space after '{'              object-curly-spacing
+  312:30  error  There should be no space before '}'             object-curly-spacing
+  313:1   error  Expected indentation of 18 spaces but found 14  indent
+  314:1   error  Expected indentation of 12 spaces but found 10  indent
+  315:1   error  Expected indentation of 10 spaces but found 8   indent
+  316:1   error  Expected indentation of 8 spaces but found 6    indent
+  317:1   error  Expected indentation of 10 spaces but found 8   indent
+  318:1   error  Expected indentation of 8 spaces but found 6    indent
+  319:1   error  Expected indentation of 6 spaces but found 4    indent
+  321:1   error  Expected indentation of 6 spaces but found 4    indent
+  321:22  error  There should be no space after '{'              object-curly-spacing
+  321:37  error  There should be no space before '}'             object-curly-spacing
+  322:1   error  Expected indentation of 4 spaces but found 2    indent
+  326:1   error  Expected indentation of 4 spaces but found 2    indent
+  327:1   error  Expected indentation of 6 spaces but found 4    indent
+  328:1   error  Expected indentation of 6 spaces but found 4    indent
+  329:1   error  Expected indentation of 6 spaces but found 4    indent
+  330:1   error  Expected indentation of 4 spaces but found 2    indent
+  331:1   error  Expected indentation of 4 spaces but found 2    indent
+  332:1   error  Expected indentation of 6 spaces but found 4    indent
+  333:1   error  Expected indentation of 6 spaces but found 4    indent
+  334:1   error  Expected indentation of 6 spaces but found 4    indent
+  335:1   error  Expected indentation of 6 spaces but found 4    indent
+  337:1   error  Expected indentation of 6 spaces but found 4    indent
+  338:1   error  Expected indentation of 8 spaces but found 6    indent
+  339:1   error  Expected indentation of 8 spaces but found 6    indent
+  341:1   error  Expected indentation of 8 spaces but found 6    indent
+  343:1   error  Expected indentation of 8 spaces but found 6    indent
+  345:1   error  Expected indentation of 10 spaces but found 8   indent
+  347:1   error  Expected indentation of 10 spaces but found 8   indent
+  348:1   error  Expected indentation of 10 spaces but found 8   indent
+  349:1   error  Expected indentation of 10 spaces but found 8   indent
+  350:1   error  Expected indentation of 10 spaces but found 8   indent
+  352:1   error  Expected indentation of 10 spaces but found 8   indent
+  353:1   error  Expected indentation of 10 spaces but found 8   indent
+  354:1   error  Expected indentation of 10 spaces but found 8   indent
+  356:1   error  Expected indentation of 10 spaces but found 8   indent
+  357:1   error  Expected indentation of 10 spaces but found 8   indent
+  358:1   error  Expected indentation of 12 spaces but found 10  indent
+  359:1   error  Expected indentation of 10 spaces but found 8   indent
+  361:1   error  Expected indentation of 10 spaces but found 8   indent
+  362:1   error  Expected indentation of 10 spaces but found 8   indent
+  363:1   error  Expected indentation of 12 spaces but found 10  indent
+  365:1   error  Expected indentation of 10 spaces but found 8   indent
+  367:1   error  Expected indentation of 10 spaces but found 8   indent
+  368:1   error  Expected indentation of 10 spaces but found 8   indent
+  369:1   error  Expected indentation of 12 spaces but found 10  indent
+  370:1   error  Expected indentation of 10 spaces but found 8   indent
+  372:1   error  Expected indentation of 10 spaces but found 8   indent
+  375:1   error  Expected indentation of 10 spaces but found 8   indent
+  376:1   error  Expected indentation of 10 spaces but found 8   indent
+  377:1   error  Expected indentation of 12 spaces but found 10  indent
+  378:1   error  Expected indentation of 10 spaces but found 8   indent
+  379:1   error  Expected indentation of 12 spaces but found 10  indent
+  380:1   error  Expected indentation of 10 spaces but found 8   indent
+  382:1   error  Expected indentation of 10 spaces but found 8   indent
+  383:1   error  Expected indentation of 10 spaces but found 8   indent
+  384:1   error  Expected indentation of 14 spaces but found 10  indent
+  385:1   error  Expected indentation of 16 spaces but found 12  indent
+  386:1   error  Expected indentation of 16 spaces but found 12  indent
+  387:1   error  Expected indentation of 16 spaces but found 12  indent
+  388:1   error  Expected indentation of 16 spaces but found 12  indent
+  389:1   error  Expected indentation of 16 spaces but found 12  indent
+  390:1   error  Expected indentation of 16 spaces but found 12  indent
+  391:1   error  Expected indentation of 16 spaces but found 12  indent
+  392:1   error  Expected indentation of 16 spaces but found 12  indent
+  393:1   error  Expected indentation of 14 spaces but found 10  indent
+  394:1   error  Expected indentation of 14 spaces but found 10  indent
+  394:12  error  There should be no space after '{'              object-curly-spacing
+  394:24  error  There should be no space before '}'             object-curly-spacing
+  395:1   error  Expected indentation of 10 spaces but found 8   indent
+  397:1   error  Expected indentation of 10 spaces but found 8   indent
+  398:1   error  Expected indentation of 10 spaces but found 8   indent
+  399:1   error  Expected indentation of 14 spaces but found 10  indent
+  400:1   error  Expected indentation of 16 spaces but found 12  indent
+  401:1   error  Expected indentation of 16 spaces but found 12  indent
+  402:1   error  Expected indentation of 16 spaces but found 12  indent
+  403:1   error  Expected indentation of 16 spaces but found 12  indent
+  404:1   error  Expected indentation of 16 spaces but found 12  indent
+  405:1   error  Expected indentation of 16 spaces but found 12  indent
+  406:1   error  Expected indentation of 16 spaces but found 12  indent
+  407:1   error  Expected indentation of 14 spaces but found 10  indent
+  408:1   error  Expected indentation of 14 spaces but found 10  indent
+  408:12  error  There should be no space after '{'              object-curly-spacing
+  408:24  error  There should be no space before '}'             object-curly-spacing
+  409:1   error  Expected indentation of 10 spaces but found 8   indent
+  411:1   error  Expected indentation of 10 spaces but found 8   indent
+  412:1   error  Expected indentation of 10 spaces but found 8   indent
+  413:1   error  Expected indentation of 8 spaces but found 6    indent
+  414:1   error  Expected indentation of 10 spaces but found 8   indent
+  415:1   error  Expected indentation of 10 spaces but found 8   indent
+  416:1   error  Expected indentation of 8 spaces but found 6    indent
+  417:1   error  Expected indentation of 6 spaces but found 4    indent
+  419:1   error  Expected indentation of 6 spaces but found 4    indent
+  421:1   error  Expected indentation of 6 spaces but found 4    indent
+  422:1   error  Expected indentation of 8 spaces but found 6    indent
+  423:1   error  Expected indentation of 8 spaces but found 6    indent
+  424:1   error  Expected indentation of 8 spaces but found 6    indent
+  425:1   error  Expected indentation of 6 spaces but found 4    indent
+  426:1   error  Expected indentation of 4 spaces but found 2    indent
+
+✖ 372 problems (372 errors, 0 warnings)
+  372 errors and 0 warnings potentially fixable with the `--fix` option.
+

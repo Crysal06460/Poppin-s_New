@@ -236,7 +236,7 @@ final GoRouter router = GoRouter(
     ),
 
     // Conserver l'ancienne route pour compatibilité
-    GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+    // GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
 
     // Nouvelles routes pour le système d'authentification
@@ -267,14 +267,18 @@ final GoRouter router = GoRouter(
     ),
 
     // Routes existantes
+    /*
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterScreen(),
     ),
+    */
+    /*
     GoRoute(
       path: '/trial-info',
       builder: (context, state) => const TrialPricingInfoScreen(),
     ),
+    */
     GoRoute(
       path: '/freezer-temperature',
       builder: (context, state) => const FreezerTemperatureScreen(),
@@ -283,15 +287,18 @@ final GoRouter router = GoRouter(
       path: '/account-deletion',
       builder: (context, state) => const AccountDeletionScreen(),
     ),
+    /*
     GoRoute(
       path: '/subscription-confirmed',
       builder: (context, state) => SubscriptionConfirmedScreen(
         structureInfo: state.extra as Map<String, dynamic>? ?? {},
       ),
     ),
+    */
     GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
 
     // Ajout de la route pour l'écran de tarification
+    /*
     GoRoute(
       path: '/pricing',
       builder: (context, state) {
@@ -312,11 +319,15 @@ final GoRouter router = GoRouter(
         );
       },
     ),
+    */
 
+    /*
     GoRoute(
       path: '/structure-details',
       builder: (context, state) => const StructureDetailsScreen(),
     ),
+    */
+    /*
     GoRoute(
       path: '/structure-confirmation',
       builder: (context, state) {
@@ -330,6 +341,8 @@ final GoRouter router = GoRouter(
         return StructureConfirmationScreen(structureType: structureType);
       },
     ),
+    */
+    /*
     GoRoute(
       path: '/subscription',
       builder: (context, state) {
@@ -337,6 +350,8 @@ final GoRouter router = GoRouter(
         return SubscriptionScreen(structureType: structureType);
       },
     ),
+    */
+    /*
     GoRoute(
       path: '/congratulations',
       builder: (context, state) {
@@ -358,6 +373,7 @@ final GoRouter router = GoRouter(
         );
       },
     ),
+    */
     GoRoute(
       path: '/structure-info',
       builder: (context, state) {
@@ -517,29 +533,57 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/child-pickup-auth',
       builder: (context, state) {
-        final String? childId = state.extra as String?;
-        if (childId == null || childId.isEmpty) {
+        Map<String, dynamic> extraData = {};
+        if (state.extra is Map<String, dynamic>) {
+          extraData = state.extra as Map<String, dynamic>;
+        } else if (state.extra is String) {
+          extraData = {'childId': state.extra as String};
+        }
+
+        final String childId = extraData['childId'] ?? '';
+        final String structureId = extraData['structureId'] ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '';
+
+        if (childId.isEmpty) {
           print("⚠️ Erreur : Aucun ID d'enfant fourni pour child-pickup-auth");
           return const Scaffold(
             body: Center(child: Text("Erreur : ID d'enfant manquant")),
           );
         }
         print("✅ Chargement child-pickup-auth avec childId: $childId");
-        return ChildPickupAuthScreen(childId: childId);
+        return ChildPickupAuthScreen(
+          childId: childId,
+          structureId: structureId,
+        );
       },
     ),
     GoRoute(
       path: '/child-meal-info',
       builder: (context, state) {
-        final String? childId = state.extra as String?;
-        if (childId == null || childId.isEmpty) {
+        Map<String, dynamic> extraData = {};
+        if (state.extra is Map<String, dynamic>) {
+          extraData = state.extra as Map<String, dynamic>;
+        } else if (state.extra is String) {
+          extraData = {'childId': state.extra as String};
+        }
+
+        final String childId = extraData['childId'] ?? '';
+        final String structureId = extraData['structureId'] ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '';
+
+        if (childId.isEmpty) {
           print("⚠️ Erreur : Aucun ID d'enfant fourni pour child-meal-info");
           return const Scaffold(
             body: Center(child: Text("Erreur : ID d'enfant manquant")),
           );
         }
         print("✅ Chargement child-meal-info avec childId: $childId");
-        return ChildMealInfoScreen(childId: childId);
+        return ChildMealInfoScreen(
+          childId: childId,
+          structureId: structureId,
+        );
       },
     ),
     GoRoute(path: '/horaires', builder: (context, state) => HorairesScreen()),
@@ -621,8 +665,19 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/child-financial-info',
       builder: (context, state) {
-        final String? childId = state.extra as String?;
-        if (childId == null || childId.isEmpty) {
+        Map<String, dynamic> extraData = {};
+        if (state.extra is Map<String, dynamic>) {
+          extraData = state.extra as Map<String, dynamic>;
+        } else if (state.extra is String) {
+          extraData = {'childId': state.extra as String};
+        }
+
+        final String childId = extraData['childId'] ?? '';
+        final String structureId = extraData['structureId'] ??
+            FirebaseAuth.instance.currentUser?.uid ??
+            '';
+
+        if (childId.isEmpty) {
           print(
             "⚠️ Erreur : Aucun ID d'enfant fourni pour child-financial-info",
           );
@@ -631,7 +686,10 @@ final GoRouter router = GoRouter(
           );
         }
         print("✅ Chargement child-financial-info avec childId: $childId");
-        return ChildFinancialInfoScreen(childId: childId);
+        return ChildFinancialInfoScreen(
+          childId: childId,
+          structureId: structureId,
+        );
       },
     ),
     GoRoute(

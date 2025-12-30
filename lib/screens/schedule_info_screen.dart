@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../planning/planning_models.dart';
 import '../planning/planning_repository.dart';
+import '../utils/structure_context.dart';
 import '../widgets/planning/planning_editor.dart';
 
 class ScheduleInfoScreen extends StatefulWidget {
@@ -101,21 +102,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
     if (user == null) {
       throw StateError('Aucun utilisateur connecté.');
     }
-
-    var structureId = user.uid;
-    final email = user.email?.toLowerCase();
-    if (email != null && email.isNotEmpty) {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(email).get();
-      final data = doc.data();
-      if (data != null &&
-          data['role'] == 'mamMember' &&
-          data['structureId'] is String &&
-          (data['structureId'] as String).isNotEmpty) {
-        structureId = data['structureId'];
-      }
-    }
-    return structureId;
+    return (await StructureResolver().resolve()).structureId;
   }
 
   void _handlePlanningChanged(PlanningData planning) {

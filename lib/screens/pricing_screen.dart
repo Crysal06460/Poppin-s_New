@@ -342,12 +342,12 @@ class _PricingScreenState extends State<PricingScreen> {
     String priceDisplay;
 
     if (isAssMat) {
-      priceAmount = 6.99;
-      priceDisplay = '6,99 € / mois';
+      priceAmount = 3.99;
+      priceDisplay = '3,99 € / mois';
     } else {
       final bool isHighTier = memberCount >= 4;
-      priceAmount = isHighTier ? 24.99 : 19.99;
-      priceDisplay = isHighTier ? '24,99 € / mois' : '19,99 € / mois';
+      priceAmount = isHighTier ? 14.99 : 9.99;
+      priceDisplay = isHighTier ? '14,99 € / mois' : '9,99 € / mois';
     }
 
     context.go('/subscription-confirmed', extra: {
@@ -408,9 +408,9 @@ class _PricingScreenState extends State<PricingScreen> {
     final bool isMamType = normalized == 'mam' || normalized.contains('maison');
 
     if (!isMamType) {
-      return '6,99€';
+      return '3,99€';
     }
-    return _selectedMamMembers >= 4 ? '24,99€' : '19,99€';
+    return _selectedMamMembers >= 4 ? '14,99€' : '9,99€';
   }
 
   /// Retourne la description des fonctionnalités
@@ -430,9 +430,9 @@ class _PricingScreenState extends State<PricingScreen> {
   /// Retourne le prix pour un nombre de membres donné
   String _getPriceForMembers(int members) {
     if (members >= 4) {
-      return '24,99€';
+      return '14,99€';
     }
-    return '19,99€';
+    return '9,99€';
   }
 
   @override

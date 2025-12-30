@@ -79,8 +79,59 @@ class StructureResolver {
       }
     }
 
-    final structureDoc =
+    DocumentSnapshot<Map<String, dynamic>> structureDoc =
         await _firestore.collection('structures').doc(structureId).get();
+
+    if (!structureDoc.exists && currentUserEmail.isNotEmpty) {
+      String? fallbackStructureId;
+
+      final emailQuery = await _firestore
+          .collection('structures')
+          .where('email', isEqualTo: currentUserEmail)
+          .limit(1)
+          .get();
+
+      if (emailQuery.docs.isNotEmpty) {
+        fallbackStructureId = emailQuery.docs.first.id;
+      } else {
+        final ownerEmailQuery = await _firestore
+            .collection('structures')
+            .where('ownerEmail', isEqualTo: currentUserEmail)
+            .limit(1)
+            .get();
+
+        if (ownerEmailQuery.docs.isNotEmpty) {
+          fallbackStructureId = ownerEmailQuery.docs.first.id;
+        }
+      }
+
+      if (fallbackStructureId == null) {
+        final ownerUidQuery = await _firestore
+            .collection('structures')
+            .where('ownerUid', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+        if (ownerUidQuery.docs.isNotEmpty) {
+          fallbackStructureId = ownerUidQuery.docs.first.id;
+        }
+      }
+
+      if (fallbackStructureId != null && fallbackStructureId.isNotEmpty) {
+        structureId = fallbackStructureId;
+        structureDoc =
+            await _firestore.collection('structures').doc(structureId).get();
+
+        if (structureDoc.exists) {
+          await _firestore
+              .collection('users')
+              .doc(currentUserEmail)
+              .set({'structureId': structureId}, SetOptions(merge: true));
+          userData = Map<String, dynamic>.from(userData);
+          userData['structureId'] = structureId;
+        }
+      }
+    }
+
     if (!structureDoc.exists) {
       throw StateError('Structure introuvable pour l\'ID $structureId');
     }

@@ -401,9 +401,9 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   // Obtenir le prix pour un nombre donné de membres
   String _getPriceForMembers(int memberCount) {
     if (memberCount <= 3) {
-      return '19,99 € / mois';
+      return '9,99 € / mois';
     }
-    return '24,99 € / mois';
+    return '14,99 € / mois';
   }
 
   Future<String> _getStructureId() async {

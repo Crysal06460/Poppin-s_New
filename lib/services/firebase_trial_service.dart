@@ -299,7 +299,22 @@ class FirebaseTrialService {
     if (user == null) {
       return TrialStatus.empty();
     }
-    return fetchTrialStatus(user.uid);
+    final String structureId = await _resolveStructureIdForCurrentUser(user);
+    return fetchTrialStatus(structureId);
+  }
+
+  static Future<String> _resolveStructureIdForCurrentUser(User user) async {
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? user.uid)
+          .get();
+      final data = doc.data();
+      final String? sid =
+          data != null ? (data['structureId'] as String?)?.trim() : null;
+      if (sid != null && sid.isNotEmpty) return sid;
+    } catch (_) {}
+    return user.uid;
   }
 
   static Future<void> markTrialExpired(String structureId) async {

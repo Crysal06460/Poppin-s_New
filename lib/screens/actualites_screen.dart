@@ -494,6 +494,41 @@ class _ActualitesScreenState extends State<ActualitesScreen>
     Map<String, List<String>> tempMenu = Map.from(menuSemaine);
     Map<String, TextEditingController> controllers = {};
 
+    // Initialiser le cache des menus par semaine avec la semaine actuelle
+    // La clé est la date de début de semaine au format ISO string
+    Map<String, Map<String, String>> menuCache = {};
+    
+    String getWeekKey(DateTime date) {
+      return DateTime(date.year, date.month, date.day).toIso8601String();
+    }
+    
+    // Initialiser le cache avec les données actuelles
+    String currentWeekKey = getWeekKey(currentWeekStart);
+    Map<String, String> currentMenuMap = {};
+    for (var day in tempMenu.keys) {
+      currentMenuMap[day] = tempMenu[day]!.join('\n');
+    }
+    menuCache[currentWeekKey] = currentMenuMap;
+
+    void updateControllersForWeek(DateTime weekStart) {
+      String key = getWeekKey(weekStart);
+      Map<String, String> weekData = menuCache[key] ?? {};
+      
+      for (var day in controllers.keys) {
+         controllers[day]!.text = weekData[day] ?? '';
+      }
+    }
+
+    // Sauvegarder l'état actuel dans le cache avant de changer de semaine
+    void saveCurrentStateToCache(DateTime weekStart) {
+      String key = getWeekKey(weekStart);
+      Map<String, String> data = {};
+      for (var day in controllers.keys) {
+        data[day] = controllers[day]!.text;
+      }
+      menuCache[key] = data;
+    }
+
     for (var day in tempMenu.keys) {
       controllers[day] = TextEditingController(
         text: tempMenu[day]!.join('\n'),
@@ -538,12 +573,14 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                           IconButton(
                             icon:
                                 Icon(Icons.arrow_back_ios, color: primaryBlue),
-                            onPressed: () {
-                              setState(() {
-                                currentWeekStart = currentWeekStart
-                                    .subtract(Duration(days: 7));
-                              });
-                            },
+                              onPressed: () {
+                                setState(() {
+                                  saveCurrentStateToCache(currentWeekStart);
+                                  currentWeekStart = currentWeekStart
+                                      .subtract(Duration(days: 7));
+                                  updateControllersForWeek(currentWeekStart);
+                                });
+                              },
                           ),
                           Text(
                             'Semaine du ${DateFormat('dd/MM').format(currentWeekStart)}',
@@ -659,10 +696,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                                 ),
                                 maxLines: 5,
                                 onChanged: (value) {
-                                  tempMenu['Samedi'] = value
-                                      .split('\n')
-                                      .where((line) => line.trim().isNotEmpty)
-                                      .toList();
+                                   // Pas de mise à jour de tempMenu en temps réel
                                 },
                               ),
                               SizedBox(height: 16),
@@ -689,10 +723,7 @@ class _ActualitesScreenState extends State<ActualitesScreen>
                                 ),
                                 maxLines: 5,
                                 onChanged: (value) {
-                                  tempMenu['Dimanche'] = value
-                                      .split('\n')
-                                      .where((line) => line.trim().isNotEmpty)
-                                      .toList();
+                                  // Pas de mise à jour de tempMenu en temps réel
                                 },
                               ),
                             ],
@@ -718,6 +749,13 @@ class _ActualitesScreenState extends State<ActualitesScreen>
             ),
             ElevatedButton(
               onPressed: () {
+                // Reconstruire tempMenu à partir des contrôleurs actuels (visible à l'écran)
+                for (var day in controllers.keys) {
+                    tempMenu[day] = controllers[day]!.text
+                        .split('\n')
+                        .where((line) => line.trim().isNotEmpty)
+                        .toList();
+                }
                 _saveMenu(tempMenu);
                 Navigator.of(context).pop();
               },

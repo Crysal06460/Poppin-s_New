@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/subscription_service.dart';
 import '../utils/user_role_cache.dart';
+import '../services/firebase_trial_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -141,34 +142,38 @@ class _SplashScreenState extends State<SplashScreen>
       if (user != null) {
         print("✅ Utilisateur connecté: ${user.email}");
 
-        // ✅ AMÉLIORATION : Vérification avec timeout pour éviter les blocages
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.email?.toLowerCase() ?? '')
-              .get()
-              .timeout(Duration(seconds: 3));
+          // ✅ AMÉLIORATION : Vérification avec timeout pour éviter les blocages
+          try {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.email?.toLowerCase() ?? '')
+                .get()
+                .timeout(Duration(seconds: 3));
 
-          final String userRole =
-              (userDoc.data()?['role'] ?? '').toString().toLowerCase();
-          print('🔍 Splash: rôle utilisateur Firestore = ' + userRole);
-          const parentRoles = {'parent', 'parent_employeur', 'parentemployeur'};
+            final String userRole =
+                (userDoc.data()?['role'] ?? '').toString().toLowerCase();
+            print('🔍 Splash: rôle utilisateur Firestore = ' + userRole);
+            const parentRoles = {'parent', 'parent_employeur', 'parentemployeur'};
+            final String structureId =
+                (userDoc.data()?['structureId'] ?? user.uid).toString();
 
-          if (parentRoles.contains(userRole)) {
-            print("✅ Utilisateur parent détecté, redirection vers parent home");
-            UserRoleCache.setRole('parent');
-            if (mounted) context.go('/parent/home');
-            return;
-          }
+            if (parentRoles.contains(userRole)) {
+              print("✅ Utilisateur parent détecté, redirection vers parent home");
+              UserRoleCache.setRole('parent');
+              final bool allowed =
+                  await _ensureActiveAccessOrRedirect(structureId: structureId);
+              if (allowed && mounted) context.go('/parent/home');
+              return;
+            }
 
-          final structureDoc = await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(user.uid)
-              .get()
-              .timeout(
-            Duration(seconds: 5),
-            onTimeout: () {
-              print("⚠️ Timeout vérification structure");
+            final structureDoc = await FirebaseFirestore.instance
+                .collection('structures')
+                .doc(structureId)
+                .get()
+                .timeout(
+              Duration(seconds: 5),
+              onTimeout: () {
+                print("⚠️ Timeout vérification structure");
               throw TimeoutException('Vérification structure lente');
             },
           );
@@ -184,13 +189,21 @@ class _SplashScreenState extends State<SplashScreen>
               print(
                   "✅ Structure parent employeur détectée, redirection vers parent home");
               UserRoleCache.setRole('parent');
-              if (mounted) context.go('/parent/home');
+              final bool allowed = await _ensureActiveAccessOrRedirect(
+                structureId: structureId,
+                structureDoc: structureDoc,
+              );
+              if (allowed && mounted) context.go('/parent/home');
               return;
             }
 
             print("✅ Structure trouvée, redirection vers dashboard");
             UserRoleCache.setRole('structure');
-            if (mounted) context.go('/dashboard');
+            final bool allowed = await _ensureActiveAccessOrRedirect(
+              structureId: structureId,
+              structureDoc: structureDoc,
+            );
+            if (allowed && mounted) context.go('/dashboard');
           } else {
             print("⚠️ Structure non trouvée pour uid: ${user.uid}");
             UserRoleCache.setRole(null);
@@ -213,6 +226,79 @@ class _SplashScreenState extends State<SplashScreen>
         context.go('/');
       }
     }
+  }
+
+  Future<bool> _ensureActiveAccessOrRedirect({
+    String? structureId,
+    DocumentSnapshot<Map<String, dynamic>>? structureDoc,
+  }) async {
+    try {
+      final bool subscribed = await SubscriptionService.isUserSubscribed();
+      final TrialStatus trialStatus =
+          await FirebaseTrialService.fetchTrialStatusForCurrentUser();
+      final bool hasActiveTrial = trialStatus.isActive;
+
+      if (!hasActiveTrial && trialStatus.isExpired) {
+        await FirebaseTrialService.markTrialExpiredForCurrentUser();
+      }
+
+      if (subscribed || hasActiveTrial) {
+        return true;
+      }
+
+      final Map<String, dynamic> extras = _buildPricingExtras(
+        structureId: structureId,
+        structureDoc: structureDoc,
+      );
+
+      if (mounted) {
+        context.go('/pricing', extra: extras);
+      }
+      return false;
+    } catch (e) {
+      print("❌ Erreur vérification accès actif (splash): $e");
+      if (mounted) {
+        context.go(
+          '/pricing',
+          extra: _buildPricingExtras(
+            structureId: structureId,
+            structureDoc: structureDoc,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Map<String, dynamic> _buildPricingExtras({
+    String? structureId,
+    DocumentSnapshot<Map<String, dynamic>>? structureDoc,
+  }) {
+    final Map<String, dynamic> data = structureDoc?.data() ?? {};
+
+    String structureType =
+        (data['structureType'] ?? 'assistante_maternelle').toString();
+    structureType = structureType.toLowerCase().contains('mam')
+        ? 'mam'
+        : 'assistante_maternelle';
+
+    int? memberCount;
+    final dynamic preferredPlan = data['mamPreferredPlan'];
+    final dynamic maxMemberCount = data['maxMemberCount'];
+    final dynamic memberCountRaw = data['memberCount'];
+
+    if (preferredPlan is int && preferredPlan > 0) {
+      memberCount = preferredPlan;
+    } else if (memberCountRaw is int && memberCountRaw > 0) {
+      memberCount = memberCountRaw;
+    } else if (maxMemberCount is int && maxMemberCount > 0) {
+      memberCount = maxMemberCount;
+    }
+
+    return {
+      'structureType': structureType,
+      if (structureType == 'mam' && memberCount != null) 'memberCount': memberCount,
+    };
   }
 
   // ✅ MÉTHODE AMÉLIORÉE : Gestion d'erreur avec retry automatique

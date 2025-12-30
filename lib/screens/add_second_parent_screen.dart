@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import '../utils/structure_context.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -66,56 +67,12 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
 
   Future<void> _loadStructureInfo() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => _isLoadingStructure = false);
-        return;
-      }
-
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Add Second Parent: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
-
-      // Récupération des informations de la structure avec l'ID correct
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      if (structureDoc.exists) {
-        final data = structureDoc.data() as Map<String, dynamic>;
-        if (mounted) {
-          setState(() {
-            _structureName = data['structureName'] ?? 'Structure inconnue';
-            _isLoadingStructure = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _structureName = 'Structure inconnue';
-            _isLoadingStructure = false;
-          });
-        }
+      final structureContext = await StructureResolver().resolve();
+      if (mounted) {
+        setState(() {
+          _structureName = structureContext.structureName;
+          _isLoadingStructure = false;
+        });
       }
     } catch (e) {
       print("Erreur lors du chargement des infos de structure: $e");
@@ -320,21 +277,7 @@ class _AddSecondParentScreenState extends State<AddSecondParentScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      final structureId = (await StructureResolver().resolve()).structureId;
 
       await FirebaseFirestore.instance
           .collection('structures')

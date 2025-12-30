@@ -121,8 +121,18 @@ class _ChildRemovalScreenState extends State<ChildRemovalScreen>
         .doc(structureId)
         .get();
 
+    if (!structureDoc.exists) {
+      throw Exception('Structure introuvable pour l\'ID $structureId');
+    }
+
     final structureData = structureDoc.data()!;
-    final assistanteEmail = structureData['email'] ?? '';
+    final String currentUserEmail =
+        FirebaseAuth.instance.currentUser?.email?.toLowerCase().trim() ?? '';
+    final assistanteEmail = (structureData['email'] ??
+            structureData['ownerEmail'] ??
+            currentUserEmail)
+        .toString()
+        .trim();
     final structureName =
         structureData['nom'] ?? structureData['structureName'] ?? 'Structure';
 

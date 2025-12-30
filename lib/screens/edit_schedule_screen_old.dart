@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import '../utils/structure_context.dart';
 
 class EditScheduleScreen extends StatefulWidget {
   final String childId;
@@ -53,30 +54,9 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
   // Nouvelle méthode pour récupérer l'ID de structure de l'utilisateur connecté
   Future<void> _getUserStructureId() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      // Par défaut, l'ID de structure est l'ID de l'utilisateur
-      structureId = user.uid;
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 EditSchedule: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final structureContext = await StructureResolver().resolve();
+      structureId = structureContext.structureId;
+      print("🔄 EditSchedule: Utilisation de l'ID de structure: $structureId");
     } catch (e) {
       print("Erreur lors de la récupération de l'ID de structure: $e");
     }
@@ -315,7 +295,7 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
         await _getUserStructureId();
         // Si toujours vide, utiliser l'ID utilisateur par défaut
         if (structureId.isEmpty) {
-          structureId = user.uid;
+          structureId = (await StructureResolver().resolve()).structureId;
         }
       }
 

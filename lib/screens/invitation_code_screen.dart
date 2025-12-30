@@ -554,7 +554,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
     }
 
     // Validation simple de format d'email
-    final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
     if (!emailRegExp.hasMatch(email)) {
       setState(() {
         errorMessage = "Format d'email invalide";

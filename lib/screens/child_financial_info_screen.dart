@@ -9,8 +9,13 @@ import 'package:intl/date_symbol_data_local.dart';
 
 class ChildFinancialInfoScreen extends StatefulWidget {
   final String childId;
+  final String structureId;
 
-  const ChildFinancialInfoScreen({Key? key, required this.childId})
+  const ChildFinancialInfoScreen({
+    Key? key,
+    required this.childId,
+    this.structureId = '',
+  })
       : super(key: key);
 
   @override
@@ -42,6 +47,30 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
+  Future<String> _resolveStructureId({User? user}) async {
+    final User? currentUser = user ?? FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return widget.structureId;
+    if (widget.structureId.isNotEmpty) return widget.structureId;
+
+    final String userEmail = currentUser.email?.toLowerCase() ?? '';
+    if (userEmail.isEmpty) return currentUser.uid;
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userEmail)
+        .get();
+
+    if (userDoc.exists) {
+      final userData = userDoc.data() ?? {};
+      if (userData['role'] == 'mamMember' &&
+          userData['structureId'] != null) {
+        return userData['structureId'];
+      }
+    }
+
+    return currentUser.uid;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,90 +95,25 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         return;
       }
 
-      final userEmail = user.email?.toLowerCase() ?? '';
-      print("📧 Email utilisateur: $userEmail");
+      final String structureId = await _resolveStructureId(user: user);
+      print("🏢 Child Financial Info - ID structure: $structureId");
 
-      // Vérifier d'abord si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userEmail)
+      final structureDoc = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
           .get();
 
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        print("👤 Données utilisateur trouvées: $userData");
-
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM
-          final structureId = userData['structureId'];
-          print("🏢 Utilisateur MAM détecté - ID structure: $structureId");
-
-          final structureDoc = await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(structureId)
-              .get();
-
-          if (structureDoc.exists) {
-            final data = structureDoc.data() as Map<String, dynamic>;
-            setState(() {
-              structureName = data['structureName'] ?? 'Structure inconnue';
-              isLoadingStructure = false;
-            });
-            print("🏢 Nom de structure MAM récupéré: $structureName");
-          } else {
-            print("❌ Document structure MAM non trouvé");
-            setState(() {
-              structureName = 'Structure inconnue';
-              isLoadingStructure = false;
-            });
-          }
-        } else {
-          // Utilisateur normal (assistante maternelle individuelle)
-          print("👩‍🍼 Utilisateur assistante maternelle individuelle");
-          final structureDoc = await FirebaseFirestore.instance
-              .collection('structures')
-              .doc(user.uid)
-              .get();
-
-          if (structureDoc.exists) {
-            final data = structureDoc.data() as Map<String, dynamic>;
-            setState(() {
-              structureName = data['structureName'] ?? 'Structure inconnue';
-              isLoadingStructure = false;
-            });
-            print("🏢 Nom de structure individuelle récupéré: $structureName");
-          } else {
-            print("❌ Document structure individuelle non trouvé");
-            setState(() {
-              structureName = 'Structure inconnue';
-              isLoadingStructure = false;
-            });
-          }
-        }
+      if (structureDoc.exists) {
+        final data = structureDoc.data() as Map<String, dynamic>;
+        setState(() {
+          structureName = data['structureName'] ?? 'Structure inconnue';
+          isLoadingStructure = false;
+        });
       } else {
-        print(
-            "❌ Document utilisateur non trouvé, utilisation de l'ID utilisateur par défaut");
-        // Fallback : utiliser l'ID utilisateur comme ID de structure
-        final structureDoc = await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(user.uid)
-            .get();
-
-        if (structureDoc.exists) {
-          final data = structureDoc.data() as Map<String, dynamic>;
-          setState(() {
-            structureName = data['structureName'] ?? 'Structure inconnue';
-            isLoadingStructure = false;
-          });
-          print("🏢 Nom de structure fallback récupéré: $structureName");
-        } else {
-          print("❌ Aucun document structure trouvé");
-          setState(() {
-            structureName = 'Structure inconnue';
-            isLoadingStructure = false;
-          });
-        }
+        setState(() {
+          structureName = 'Structure inconnue';
+          isLoadingStructure = false;
+        });
       }
     } catch (e) {
       print("❌ Erreur lors du chargement des infos de structure: $e");
@@ -1012,25 +976,8 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
     try {
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      // Vérifier d'abord si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final String structureId = await _resolveStructureId(user: user);
+      print("🔄 Utilisation de l'ID de structure: $structureId");
 
       final childRef = FirebaseFirestore.instance
           .collection('structures')
@@ -1086,26 +1033,8 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      // Vérifier d'abord si l'utilisateur est un membre MAM
-      final userEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final String structureId = await _resolveStructureId(user: user);
+      print("🔄 Utilisation de l'ID de structure: $structureId");
 
       // Récupérer les informations de l'enfant et des parents
       final childDoc = await FirebaseFirestore.instance
@@ -1524,7 +1453,10 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
                               print(
                                   "🔄 Retour vers child-meal-info avec childId: ${widget.childId}");
                               context.go('/child-meal-info',
-                                  extra: widget.childId);
+                                  extra: {
+                                    'childId': widget.childId,
+                                    'structureId': widget.structureId,
+                                  });
                             } else {
                               _showError("Erreur : ID d'enfant manquant !");
                             }

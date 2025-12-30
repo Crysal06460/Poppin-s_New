@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
 import '../services/firebase_trial_service.dart';
+import '../utils/structure_context.dart';
 
 class StructureConfirmationScreen extends StatefulWidget {
   final String structureType;
@@ -53,9 +54,10 @@ class _StructureConfirmationScreenState
 
     setState(() => _isLoadingPlan = true);
     try {
+      final context = await StructureResolver().resolve();
       final doc = await FirebaseFirestore.instance
           .collection('structures')
-          .doc(user.uid)
+          .doc(context.structureId)
           .get();
 
       if (doc.exists) {
@@ -360,8 +362,33 @@ class _StructureConfirmationScreenState
         return;
       }
 
+      // 🔍 AUDIT: Utilisation de StructureResolver pour récupérer le bon ID
+      final structureContext = await StructureResolver().resolve();
+      final String realStructureId = structureContext.structureId;
+      final String? userRole = structureContext.userRole;
+      final String normalizedRole = (userRole ?? '').toLowerCase().trim();
+
+      // Sécurité: Empêcher les membres invités de modifier la structure
+      // Si l'ID de structure est différent de l'UID (donc lié) ET que le rôle n'est pas Admin/Propriétaire
+      // Note: Pour l'instant on suppose que 'mamMember' est restreint.
+      bool isRestrictedMember = false;
+      if (realStructureId != user.uid) {
+         if (normalizedRole == 'mammember' || normalizedRole == 'assistant') {
+            isRestrictedMember = true;
+         }
+      }
+
+      if (isRestrictedMember) {
+         if (mounted) Navigator.of(context).pop();
+         ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('⚠️ Seul le gestionnaire peut modifier la structure.')),
+         );
+         context.go('/home');
+         return;
+      }
+
       final docRef =
-          FirebaseFirestore.instance.collection('structures').doc(user.uid);
+          FirebaseFirestore.instance.collection('structures').doc(realStructureId);
       final docSnapshot = await docRef.get();
 
       final int resolvedMembers = _resolvedMamMemberCount();
@@ -389,8 +416,8 @@ class _StructureConfirmationScreenState
       }
 
       await FirebaseTrialService.ensureTrialForStructure(
-        structureId: user.uid,
-        ownerEmail: user.email,
+        structureId: realStructureId,
+        ownerEmail: user.email!,
         structureType: _formattedType,
         mamMemberCount: _isMam ? resolvedMembers : null,
       );
@@ -409,7 +436,7 @@ class _StructureConfirmationScreenState
       Future.delayed(const Duration(milliseconds: 600), () {
         context.go('/structure-info', extra: {
           'structureType': _formattedType,
-          'structureId': user.uid,
+          'structureId': realStructureId,
           if (_isMam) 'mamMembersCount': resolvedMembers,
         });
       });

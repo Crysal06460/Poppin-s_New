@@ -48,6 +48,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   int _selectedIndex = 2;
   String? selectedParentForMessage;
   Map<String, List<Map<String, dynamic>>> parentsCache = {};
+  final Map<String, String> _senderNameCache = {}; // Cache pour les noms des expéditeurs
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -94,24 +95,72 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     return '$datePart à $timePart';
   }
 
-  String _resolveSenderName(Map<String, dynamic> messageData) {
+  Future<String> _resolveSenderNameAsync(Map<String, dynamic> messageData) async {
     final String senderType =
         (messageData['senderType'] ?? '').toString().toLowerCase();
+    
+    // Si c'est l'assistante (Vous), on ne retourne rien (le nom n'est pas affiché ou géré ailleurs)
+    // Mais selon la logique existante ligne 101, ça retournait "Vous". 
+    // Cependant, le widget _buildMessage n'affiche le nom que si !isMe.
+    // Donc si isMe est true, ce retour est ignoré.
+    // Si isMe est false mais senderType est assistante (ex: autre assistant MAM ?), on verra.
     if (senderType != 'parent') {
-      return senderType == 'assistante' ? 'Vous' : '';
+      return ''; 
     }
 
-    final firstName =
-        (messageData['senderFirstName'] ?? '').toString().trim();
-    final lastName = (messageData['senderLastName'] ?? '').toString().trim();
-    final email = (messageData['senderEmail'] ?? '').toString().trim();
-
-    final fullName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
-    if (fullName.isNotEmpty) return fullName;
-    if (email.isNotEmpty) {
-      final prefix = email.split('@').first;
-      return prefix.isNotEmpty ? prefix : 'Parent';
+    // 1. Essayer de récupérer depuis les données du message (nouveaux messages)
+    final firstName = (messageData['senderFirstName'] ?? '').toString().trim();
+    if (firstName.isNotEmpty) {
+      return firstName;
     }
+    
+    // 2. Vérifier le cache
+    final senderId = messageData['senderId'] as String?;
+    if (senderId == null || senderId.isEmpty) {
+      return 'Parent';
+    }
+    
+    if (_senderNameCache.containsKey(senderId)) {
+      return _senderNameCache[senderId]!;
+    }
+
+    // 3. Récupérer depuis Firestore (anciens messages)
+    try {
+      // D'abord chercher par uid
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('uid', isEqualTo: senderId)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isNotEmpty) {
+        final userData = userQuery.docs.first.data();
+        // Essayer firstName puis prenom puis displayName
+        final name = (userData['firstName'] ?? 
+                     userData['prenom'] ?? 
+                     userData['displayName'] ?? 
+                     'Parent').toString();
+        _senderNameCache[senderId] = name;
+        return name;
+      } 
+      
+      // Fallback: chercher par ID de document si senderId est un email (ancien code possible)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(senderId)
+          .get();
+          
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        final name = (userData['firstName'] ?? 'Parent').toString();
+        _senderNameCache[senderId] = name;
+        return name;
+      }
+
+    } catch (e) {
+      print('Erreur récupération nom parent: $e');
+    }
+
     return 'Parent';
   }
 
@@ -934,19 +983,19 @@ class _ExchangesScreenState extends State<ExchangesScreen>
 
       if (parentsNames.isEmpty) {
         print("⚠️ Aucun prénom valide trouvé");
-        return "Discussion avec les parents";
+        return "les parents";
       } else if (parentsNames.length == 1) {
-        final result = "Discussion avec ${parentsNames[0]}";
+        final result = parentsNames[0];
         print("✅ Résultat final (1 parent): $result");
         return result;
       } else {
-        final result = "Discussion avec ${parentsNames.join(' et ')}";
+        final result = parentsNames.join(' et ');
         print("✅ Résultat final (${parentsNames.length} parents): $result");
         return result;
       }
     } catch (e) {
       print('❌ Erreur récupération noms parents: $e');
-      return "Discussion avec les parents";
+      return "les parents";
     }
   }
 
@@ -1135,7 +1184,6 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       Map<String, dynamic> messageData, bool isMe, bool isTablet) {
     final timestamp = messageData['timestamp'] as Timestamp?;
     final formattedTimestamp = _formatMessageTimestamp(timestamp);
-    final senderName = _resolveSenderName(messageData);
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: isTablet ? 6 : 4),
@@ -1143,17 +1191,26 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         crossAxisAlignment:
             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          if (!isMe && senderName.isNotEmpty)
+          if (!isMe)
             Padding(
               padding: EdgeInsets.only(
                   left: isTablet ? 24 : 20, right: isTablet ? 24 : 20),
-              child: Text(
-                senderName,
-                style: TextStyle(
-                  fontSize: isTablet ? 13 : 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade800,
-                ),
+              child: FutureBuilder<String>(
+                future: _resolveSenderNameAsync(messageData),
+                initialData: (messageData['senderFirstName'] ?? '').toString().trim(),
+                builder: (context, snapshot) {
+                  final name = snapshot.data ?? '';
+                  if (name.isEmpty) return SizedBox.shrink();
+                  
+                  return Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: isTablet ? 13 : 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  );
+                },
               ),
             ),
           // Bouton répondre
@@ -2250,7 +2307,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                         enfant['id'], enfant['structureId'] ?? ''),
                     builder: (context, snapshot) {
                       return Text(
-                        snapshot.data ?? "Discussion avec les parents",
+                        "Discussion avec ${snapshot.data ?? "les parents"}",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

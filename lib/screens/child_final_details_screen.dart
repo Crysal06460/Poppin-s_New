@@ -101,19 +101,9 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
           .doc(currentUserEmail)
           .get();
 
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Child Final Details: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      // Utiliser directement l'ID de structure passé en paramètre
+      String structureId = widget.structureId;
+      print("✅ Child Final Details (Load): Utilisation du widget.structureId: $structureId");
 
       // Récupération des informations de la structure avec l'ID correct
       final structureDoc = await FirebaseFirestore.instance
@@ -150,20 +140,9 @@ class _ChildFinalDetailsScreenState extends State<ChildFinalDetailsScreen> {
       if (user == null) return;
 
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      // Utiliser directement l'ID de structure passé en paramètre
+      String structureId = widget.structureId;
+      print("✅ Child Final Details (Cleanup): Utilisation du widget.structureId: $structureId");
 
       await FirebaseFirestore.instance
           .collection('structures')

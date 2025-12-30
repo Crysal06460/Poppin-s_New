@@ -47,12 +47,12 @@ class _SubscriptionConfirmedScreenState
     final bool isMam = normalized == 'mam' || normalized.contains('maison');
     if (isMam) {
       if (memberCount <= 3) {
-        return '19,99 € / mois';
+        return '9,99 € / mois';
       }
-      return '24,99 € / mois';
+      return '14,99 € / mois';
     }
 
-    return '6,99 € / mois';
+    return '3,99 € / mois';
   }
 
   @override

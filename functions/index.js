@@ -1,13 +1,16 @@
-const {onDocumentCreated, onDocumentWritten} = require('firebase-functions/v2/firestore');
-const {onSchedule} = require('firebase-functions/v2/scheduler');
-const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
-const {initializeApp} = require('firebase-admin/app');
-const {getFirestore, FieldValue, Timestamp} = require('firebase-admin/firestore');
-const {getMessaging} = require('firebase-admin/messaging');
-const {getAuth} = require('firebase-admin/auth'); // AJOUT pour l'authentification
+const { setGlobalOptions } = require('firebase-functions/v2');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https'); // AJOUT pour la nouvelle fonction
+const { defineSecret } = require('firebase-functions/params');
+const { initializeApp } = require('firebase-admin/app');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getMessaging } = require('firebase-admin/messaging');
+const { getAuth } = require('firebase-admin/auth'); // AJOUT pour l'authentification
 
+const Stripe = require('stripe');
 const PDFDocument = require('pdfkit');
-const {DateTime} = require('luxon');
+const { DateTime } = require('luxon');
 
 // ===== IMPORTS POUR LES EMAILS AVEC MAILJET =====
 const Mailjet = require('node-mailjet');
@@ -23,8 +26,212 @@ const messaging = getMessaging();
 
 // ===== CONFIGURATION MAILJET =====
 const mailjet = Mailjet.apiConnect(
-  '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
-  '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
+    '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
+    '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
+);
+
+const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
+let stripeClient;
+function getStripe() {
+    if (!stripeClient) {
+        stripeClient = new Stripe(STRIPE_SECRET_KEY.value());
+    }
+    return stripeClient;
+}
+
+// Limiter l'empreinte CPU globale (évite de saturer le quota Cloud Run)
+setGlobalOptions({
+    cpu: 0.08,
+    maxInstances: 1,
+    concurrency: 1,
+});
+
+// Finaliser un signup Stripe (création user + structure)
+// Finaliser un signup Stripe (création user + structure)
+exports.finalizeStripeSignup = onRequest(
+    {
+        region: 'europe-west1',
+        cors: true, // autorise les appels navigateur
+        secrets: [STRIPE_SECRET_KEY],
+    },
+    async (req, res) => {
+        try {
+            const {
+                sessionId,
+                firstName,
+                lastName,
+                phone,
+                address,
+                postalCode,
+                city,
+                structureName,
+                password,
+                email,
+            } = req.body;
+
+            if (!sessionId || !password || !firstName || !lastName) {
+                return res.status(400).json({ error: 'Données manquantes' });
+            }
+
+            const session = await getStripe().checkout.sessions.retrieve(
+                sessionId,
+                { expand: ['line_items'] },
+            );
+
+            const accountEmail = session.customer_email || email;
+
+            if (!session || !accountEmail) {
+                return res.status(400).json({
+                    error: 'Session Stripe invalide (email manquant)',
+                    details: 'L\'email n\'a pas été trouvé ni dans la session Stripe ni dans le formulaire.'
+                });
+            }
+
+            const emailFinal = accountEmail;
+            const priceId = session.line_items.data[0].price.id;
+
+            // Déterminer le type de structure et les limites
+            let structureType = 'AssistanteMaternelle';
+            let maxMemberCount = 1; // Assmat seule = 1 membre
+
+            if (priceId === 'price_1SfkUILID2pA5i1C75uu1TCH') {
+                // MAM 2 et 3 membres
+                structureType = 'MAM';
+                maxMemberCount = 3;
+            } else if (priceId === 'price_1SfkWULID2pA5i1CmSdrRF0c') {
+                // MAM 4 membres et + (Illimité)
+                structureType = 'MAM';
+                maxMemberCount = 50;
+            }
+
+            // 1. Créer ou Récupérer l'utilisateur Auth
+            let userRecord;
+            try {
+                userRecord = await getAuth().createUser({
+                    email: emailFinal,
+                    password,
+                    displayName: `${firstName} ${lastName}`,
+                });
+            } catch (error) {
+                if (error.code === 'auth/email-already-exists') {
+                    console.log('⚠️ Utilisateur déjà existant (auth), récupération du profil...');
+                    userRecord = await getAuth().getUserByEmail(emailFinal);
+                } else {
+                    throw error;
+                }
+            }
+
+            // 2. Créer le document Utilisateur (CRITIQUE pour l'app)
+            await db.collection('users').doc(emailFinal.toLowerCase()).set({
+                email: emailFinal,
+                role: 'structure', // ou 'assistante_maternelle' selon votre nomenclature précise
+                structureId: userRecord.uid,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            // 3. Créer la Structure avec l'ID utilisateur (CRITIQUE pour l'app)
+            const structureRef = db.collection('structures').doc(userRecord.uid);
+            await structureRef.set({
+                // Champs principaux
+                structureType,
+                structureName: structureName || null,
+
+                // Champs Address / Info
+                address: address || null,
+                postalCode: postalCode || null,
+                city: city || null,
+                phone: phone || null,
+
+                // Champs Owner (requis par l'app)
+                ownerUid: userRecord.uid,
+                ownerEmail: emailFinal,
+                ownerFirstName: firstName, // Nouveau (requis)
+                ownerLastName: lastName,   // Nouveau (requis)
+
+                // Champs Miroir (requis par l'app pour affichage)
+                email: emailFinal,
+                firstName: firstName,
+                lastName: lastName,
+
+                // Gestion Membres & Abonnement
+                memberCount: 1, // Init à 1 (le propriétaire)
+                maxMemberCount: maxMemberCount,
+
+                subscriptionPlatform: 'stripe', // Nouveau
+                subscriptionSource: 'stripe',
+                subscriptionStatus: 'trial',
+                subscriptionActive: true,
+
+                // Champs Trial requis par FirebaseTrialService
+                trialStatus: 'trial',
+                trialDurationDays: 7,
+                trialStartAt: FieldValue.serverTimestamp(),
+                trialEndsAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+                subscriptionTrialStartsAt: FieldValue.serverTimestamp(),
+                subscriptionTrialEndsAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+
+            // 4. Ajouter le membre Owner
+            await structureRef.collection('members').doc('member_1').set({
+                uid: userRecord.uid,
+                email: emailFinal,
+                firstName,
+                lastName,
+                phone: phone || null,
+                role: 'owner',
+                isFounder: true,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            // 5. [AJOUT CRITIQUE] Lier l'abonnement Stripe et créer le doc subscriptions
+            if (session.subscription) {
+                const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+                console.log(`🔗 Liaison de l'abonnement Stripe ${subId} à la structure ${userRecord.uid}`);
+
+                // Récupérer les détails de l'abonnement pour avoir les dates précises
+                const subscription = await getStripe().subscriptions.retrieve(subId);
+
+                // Mettre à jour les métadonnées Stripe (CRITIQUE pour que le webhook fonctionne ensuite)
+                await getStripe().subscriptions.update(subId, {
+                    metadata: {
+                        structureId: userRecord.uid,
+                        email: emailFinal,
+                        source: 'web_signup'
+                    }
+                });
+
+                // Créer le document dans la collection 'subscriptions' (comme l'ancienne méthode)
+                await db.collection('subscriptions').doc(subId).set({
+                    structureId: userRecord.uid,
+                    structureType,
+                    status: subscription.status,
+                    platform: 'stripe',
+                    source: 'web',
+                    planId: priceId,
+                    email: emailFinal,
+                    trialEndsAt: subscription.trial_end ? Timestamp.fromMillis(subscription.trial_end * 1000) : null,
+                    trialStartedAt: subscription.trial_start ? Timestamp.fromMillis(subscription.trial_start * 1000) : null,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                // Mettre à jour la structure avec l'ID de l'abonnement (CRITIQUE pour l'app)
+                await structureRef.update({
+                    subscriptionDocId: subId,
+                    stripeSubscriptionId: subId,
+                    subscriptionStatus: subscription.status,
+                });
+            }
+
+            return res.json({ success: true });
+        } catch (error) {
+            console.error('finalizeStripeSignup error:', error);
+            return res.status(500).json({ error: error.message });
+        }
+    },
 );
 
 // ===== NOUVELLE FONCTION : Envoyer un email depuis l'app =====
@@ -32,7 +239,7 @@ exports.sendEmailToParent = onCall({
     region: 'europe-west1' // Même région que vos autres fonctions
 }, async (request) => {
     console.log('📧 NOUVEAU: sendEmailToParent appelée');
-    
+
     // Vérification authentification
     if (!request.auth) {
         console.error('❌ Utilisateur non authentifié');
@@ -83,7 +290,7 @@ exports.sendEmailToParent = onCall({
             childName: childName || '',
             sentFromApp: sendFromApp || false,
             templateType: templateType || 'custom',
-            timestamp: new Date().toLocaleString('fr-FR', { 
+            timestamp: new Date().toLocaleString('fr-FR', {
                 timeZone: 'Europe/Paris',
                 year: 'numeric',
                 month: 'long',
@@ -151,7 +358,7 @@ exports.sendEmailToParent = onCall({
 
     } catch (error) {
         console.error('❌ Erreur envoi email:', error);
-        
+
         // Sauvegarde de l'erreur dans l'historique
         try {
             const userRecord = await getAuth().getUser(request.auth.uid);
@@ -179,7 +386,11 @@ exports.sendEmailToParent = onCall({
 });
 
 exports.purgeIncompleteAccount = onCall({
-    region: 'europe-west1'
+    region: 'europe-west1',
+    memory: '128MiB',
+    cpu: 0.08,
+    maxInstances: 1,
+    minInstances: 0,
 }, async (request) => {
     const rawEmail = request.data?.email;
     if (!rawEmail || typeof rawEmail !== 'string') {
@@ -195,7 +406,7 @@ exports.purgeIncompleteAccount = onCall({
     } catch (error) {
         if (error.code === 'auth/user-not-found') {
             console.log(`ℹ️ Aucun utilisateur Firebase Auth pour ${email}`);
-            return {purged: false, reason: 'user-not-found'};
+            return { purged: false, reason: 'user-not-found' };
         }
         console.error('❌ Erreur récupération utilisateur pour purge:', error);
         throw new HttpsError('internal', 'auth-lookup-failed');
@@ -246,7 +457,7 @@ exports.purgeIncompleteAccount = onCall({
         throw new HttpsError('internal', 'auth-delete-failed');
     }
 
-    return {purged: true};
+    return { purged: true };
 });
 
 async function collectBlockingReasons(uid, structureSnapshot) {
@@ -453,180 +664,181 @@ function generateEmailHtml(content) {
 
 // ======= DÉLÉGATIONS MAM =======
 exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) => {
-  if (!request.auth) {
-    throw new Error('unauthenticated');
-  }
-  const { delegationId } = request.data || {};
-  if (!delegationId) throw new Error('invalid-argument');
+    if (!request.auth) {
+        throw new Error('unauthenticated');
+    }
+    const { delegationId } = request.data || {};
+    if (!delegationId) throw new Error('invalid-argument');
 
-  const delSnap = await db.collectionGroup('delegations').where('__name__', '==', delegationId).get();
-  // collectionGroup on __name__ doesn't work; fetch needs structureId. Fallback: client provides structureId in doc path.
-  // Simpler: try common path from request.data.structureId if provided
-  let delegationDoc = null;
-  if (delSnap && delSnap.docs && delSnap.docs.length > 0) {
-    delegationDoc = delSnap.docs[0];
-  } else if (request.data.structureId) {
-    delegationDoc = await db
-      .collection('structures')
-      .doc(request.data.structureId)
-      .collection('delegations')
-      .doc(delegationId)
-      .get();
-  } else {
-    throw new Error('invalid-argument');
-  }
+    const delSnap = await db.collectionGroup('delegations').where('__name__', '==', delegationId).get();
+    // collectionGroup on __name__ doesn't work; fetch needs structureId. Fallback: client provides structureId in doc path.
+    // Simpler: try common path from request.data.structureId if provided
+    let delegationDoc = null;
+    if (delSnap && delSnap.docs && delSnap.docs.length > 0) {
+        delegationDoc = delSnap.docs[0];
+    } else if (request.data.structureId) {
+        delegationDoc = await db
+            .collection('structures')
+            .doc(request.data.structureId)
+            .collection('delegations')
+            .doc(delegationId)
+            .get();
+    } else {
+        throw new Error('invalid-argument');
+    }
 
-  if (!delegationDoc.exists) throw new Error('not-found');
-  const d = delegationDoc.data();
-  if (d.status !== 'proposed') return { success: false, message: 'Already processed' };
-  // Vérifier que l'appelant correspond bien au membre délégué
-  const userRec = await getAuth().getUser(request.auth.uid);
-  const email = (userRec.email || '').toLowerCase();
-  let allowed = false;
-  if (d.amDelegateId === request.auth.uid) allowed = true; // compat
-  if (!allowed && email) {
-    const memSnap = await db.collection('structures').doc(d.structureId).collection('members')
-      .where('email', '==', email).limit(5).get();
-    memSnap.forEach(m => { if (m.id === d.amDelegateId) allowed = true; });
-  }
-  if (!allowed) throw new Error('permission-denied');
+    if (!delegationDoc.exists) throw new Error('not-found');
+    const d = delegationDoc.data();
+    if (d.status !== 'proposed') return { success: false, message: 'Already processed' };
+    // Vérifier que l'appelant correspond bien au membre délégué
+    const userRec = await getAuth().getUser(request.auth.uid);
+    const email = (userRec.email || '').toLowerCase();
+    let allowed = false;
+    if (d.amDelegateId === request.auth.uid) allowed = true; // compat
+    if (!allowed && email) {
+        const memSnap = await db.collection('structures').doc(d.structureId).collection('members')
+            .where('email', '==', email).limit(5).get();
+        memSnap.forEach(m => { if (m.id === d.amDelegateId) allowed = true; });
+    }
+    if (!allowed) throw new Error('permission-denied');
 
-  const structureId = d.structureId;
-  const date = d.date.toDate ? d.date.toDate() : new Date(d.date);
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  // Map weekday: JS 0=Sun..6=Sat => Flutter 1=Mon..7=Sun
-  const jsDay = start.getDay();
-  const jourSemaine = jsDay === 0 ? 7 : jsDay; // 1..7
+    const structureId = d.structureId;
+    const date = d.date.toDate ? d.date.toDate() : new Date(d.date);
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    // Map weekday: JS 0=Sun..6=Sat => Flutter 1=Mon..7=Sun
+    const jsDay = start.getDay();
+    const jourSemaine = jsDay === 0 ? 7 : jsDay; // 1..7
 
-  // Compter enfants pour l'AM déléguée ce jour
-  const gardesRef = db.collection('structures').doc(structureId).collection('gardes');
-  const recSnap = await gardesRef
-    .where('recurrent', '==', true)
-    .where('jourSemaine', '==', jourSemaine)
-    .where('membreId', '==', d.amDelegateId)
-    .get();
-  const excSnap = await gardesRef
-    .where('recurrent', '==', false)
-    .where('membreId', '==', d.amDelegateId)
-    .where('dateException', '>=', start)
-    .where('dateException', '<', end)
-    .get();
+    // Compter enfants pour l'AM déléguée ce jour
+    const gardesRef = db.collection('structures').doc(structureId).collection('gardes');
+    const recSnap = await gardesRef
+        .where('recurrent', '==', true)
+        .where('jourSemaine', '==', jourSemaine)
+        .where('membreId', '==', d.amDelegateId)
+        .get();
+    const excSnap = await gardesRef
+        .where('recurrent', '==', false)
+        .where('membreId', '==', d.amDelegateId)
+        .where('dateException', '>=', start)
+        .where('dateException', '<', end)
+        .get();
 
-  const enfantSet = new Set();
-  recSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
-  excSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
+    const enfantSet = new Set();
+    recSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
+    excSnap.forEach((doc) => enfantSet.add(doc.data().enfantId));
 
-  // Ajouter délégations acceptées existantes de ce jour
-  const acceptedSnap = await db
-    .collection('structures')
-    .doc(structureId)
-    .collection('delegations')
-    .where('status', '==', 'accepted')
-    .where('amDelegateId', '==', d.amDelegateId)
-    .where('date', '>=', start)
-    .where('date', '<', end)
-    .get();
-  acceptedSnap.forEach((doc) => enfantSet.add(doc.data().childId));
+    // Ajouter délégations acceptées existantes de ce jour
+    const acceptedSnap = await db
+        .collection('structures')
+        .doc(structureId)
+        .collection('delegations')
+        .where('status', '==', 'accepted')
+        .where('amDelegateId', '==', d.amDelegateId)
+        .where('date', '>=', start)
+        .where('date', '<', end)
+        .get();
+    acceptedSnap.forEach((doc) => enfantSet.add(doc.data().childId));
 
-  // Si l'enfant à déléguer est déjà dans le set, ne pas compter deux fois
-  const currentCount = enfantSet.has(d.childId) ? enfantSet.size : enfantSet.size + 1;
-  if (currentCount > 4) {
-    return { success: false, message: 'capacity-exceeded' };
-  }
+    // Si l'enfant à déléguer est déjà dans le set, ne pas compter deux fois
+    const currentCount = enfantSet.has(d.childId) ? enfantSet.size : enfantSet.size + 1;
+    if (currentCount > 4) {
+        return { success: false, message: 'capacity-exceeded' };
+    }
 
-  await delegationDoc.ref.update({
-    status: 'accepted',
-    acceptedBy: request.auth.uid,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  return { success: true };
+    await delegationDoc.ref.update({
+        status: 'accepted',
+        acceptedBy: request.auth.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { success: true };
 });
 
 exports.declineDelegation = onCall({ region: 'europe-west1' }, async (request) => {
-  if (!request.auth) throw new Error('unauthenticated');
-  const { delegationId, structureId } = request.data || {};
-  if (!delegationId || !structureId) throw new Error('invalid-argument');
-  const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error('not-found');
-  const d = snap.data();
-  const userRec = await getAuth().getUser(request.auth.uid);
-  const email = (userRec.email || '').toLowerCase();
-  let allowed = [d.createdBy].includes(request.auth.uid) || [d.amDelegateId, d.amOriginId].includes(request.auth.uid);
-  if (!allowed && email) {
-    const memSnap = await db.collection('structures').doc(structureId).collection('members')
-      .where('email', '==', email).limit(10).get();
-    const ids = memSnap.docs.map(d => d.id);
-    if (ids.includes(d.amDelegateId) || ids.includes(d.amOriginId)) allowed = true;
-  }
-  if (!allowed) throw new Error('permission-denied');
-  await ref.update({ status: 'declined', updatedAt: FieldValue.serverTimestamp() });
-  return { success: true };
+    if (!request.auth) throw new Error('unauthenticated');
+    const { delegationId, structureId } = request.data || {};
+    if (!delegationId || !structureId) throw new Error('invalid-argument');
+    const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('not-found');
+    const d = snap.data();
+    const userRec = await getAuth().getUser(request.auth.uid);
+    const email = (userRec.email || '').toLowerCase();
+    let allowed = [d.createdBy].includes(request.auth.uid) || [d.amDelegateId, d.amOriginId].includes(request.auth.uid);
+    if (!allowed && email) {
+        const memSnap = await db.collection('structures').doc(structureId).collection('members')
+            .where('email', '==', email).limit(10).get();
+        const ids = memSnap.docs.map(d => d.id);
+        if (ids.includes(d.amDelegateId) || ids.includes(d.amOriginId)) allowed = true;
+    }
+    if (!allowed) throw new Error('permission-denied');
+    await ref.update({ status: 'declined', updatedAt: FieldValue.serverTimestamp() });
+    return { success: true };
 });
 
 exports.cancelDelegation = onCall({ region: 'europe-west1' }, async (request) => {
-  if (!request.auth) throw new Error('unauthenticated');
-  const { delegationId, structureId } = request.data || {};
-  if (!delegationId || !structureId) throw new Error('invalid-argument');
-  const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new Error('not-found');
-  const d = snap.data();
-  const userRec = await getAuth().getUser(request.auth.uid);
-  const email = (userRec.email || '').toLowerCase();
-  let allowed = [d.createdBy, d.amOriginId].includes(request.auth.uid);
-  if (!allowed && email) {
-    const memSnap = await db.collection('structures').doc(structureId).collection('members')
-      .where('email', '==', email).limit(10).get();
-    const ids = memSnap.docs.map(d => d.id);
-    if (ids.includes(d.amOriginId)) allowed = true;
-  }
-  if (!allowed) throw new Error('permission-denied');
-  await ref.update({ status: 'canceled', updatedAt: FieldValue.serverTimestamp() });
-  return { success: true };
+    if (!request.auth) throw new Error('unauthenticated');
+    const { delegationId, structureId } = request.data || {};
+    if (!delegationId || !structureId) throw new Error('invalid-argument');
+    const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('not-found');
+    const d = snap.data();
+    const userRec = await getAuth().getUser(request.auth.uid);
+    const email = (userRec.email || '').toLowerCase();
+    let allowed = [d.createdBy, d.amOriginId].includes(request.auth.uid);
+    if (!allowed && email) {
+        const memSnap = await db.collection('structures').doc(structureId).collection('members')
+            .where('email', '==', email).limit(10).get();
+        const ids = memSnap.docs.map(d => d.id);
+        if (ids.includes(d.amOriginId)) allowed = true;
+    }
+    if (!allowed) throw new Error('permission-denied');
+    await ref.update({ status: 'canceled', updatedAt: FieldValue.serverTimestamp() });
+    return { success: true };
 });
 
 // 🔔 Notifier le membre destinataire lors d'une nouvelle délégation proposée
 exports.onDelegationCreated = onDocumentCreated({
-  document: 'structures/{structureId}/delegations/{delegationId}',
-  region: 'europe-west1'
+    document: 'structures/{structureId}/delegations/{delegationId}',
+    region: 'europe-west1',
+    cpu: 0.08,
 }, async (event) => {
-  try {
-    const data = event.data.data();
-    if (!data || data.status !== 'proposed') return;
-    const structureId = event.params.structureId;
-
-    // Récupérer l'email du membre délégué
-    const delegateMemberRef = db.collection('structures').doc(structureId).collection('members').doc(data.amDelegateId);
-    const delegateMemberSnap = await delegateMemberRef.get();
-    if (!delegateMemberSnap.exists) return;
-    const delegateEmail = (delegateMemberSnap.data().email || '').toLowerCase();
-    if (!delegateEmail) return;
-
-    // Récupérer le prénom de l'enfant pour le message
-    let childName = 'un enfant';
     try {
-      const childSnap = await db.collection('structures').doc(structureId).collection('children').doc(data.childId).get();
-      if (childSnap.exists) {
-        const cd = childSnap.data();
-        childName = `${cd.firstName || ''} ${cd.lastName || ''}`.trim() || childName;
-      }
-    } catch (_) {}
+        const data = event.data.data();
+        if (!data || data.status !== 'proposed') return;
+        const structureId = event.params.structureId;
 
-    const title = 'Nouvelle délégation à traiter';
-    const body = `Vous avez une demande de délégation pour ${childName}`;
-    await createNotificationDoc(db, {
-      recipientUserId: delegateEmail,
-      title,
-      body,
-      childId: data.childId,
-      messageId: event.params.delegationId,
-      senderType: 'assistante'
-    });
-  } catch (e) {
-    console.error('❌ Erreur onDelegationCreated:', e);
-  }
+        // Récupérer l'email du membre délégué
+        const delegateMemberRef = db.collection('structures').doc(structureId).collection('members').doc(data.amDelegateId);
+        const delegateMemberSnap = await delegateMemberRef.get();
+        if (!delegateMemberSnap.exists) return;
+        const delegateEmail = (delegateMemberSnap.data().email || '').toLowerCase();
+        if (!delegateEmail) return;
+
+        // Récupérer le prénom de l'enfant pour le message
+        let childName = 'un enfant';
+        try {
+            const childSnap = await db.collection('structures').doc(structureId).collection('children').doc(data.childId).get();
+            if (childSnap.exists) {
+                const cd = childSnap.data();
+                childName = `${cd.firstName || ''} ${cd.lastName || ''}`.trim() || childName;
+            }
+        } catch (_) { }
+
+        const title = 'Nouvelle délégation à traiter';
+        const body = `Vous avez une demande de délégation pour ${childName}`;
+        await createNotificationDoc(db, {
+            recipientUserId: delegateEmail,
+            title,
+            body,
+            childId: data.childId,
+            messageId: event.params.delegationId,
+            senderType: 'assistante'
+        });
+    } catch (e) {
+        console.error('❌ Erreur onDelegationCreated:', e);
+    }
 });
 
 // ===== NOUVELLE FONCTION : Vérifier une invitation par email =====
@@ -750,16 +962,16 @@ exports.processEmailQueue = onDocumentCreated({
 }, async (event) => {
     const emailData = event.data.data();
     const emailId = event.params.emailId;
-    
+
     console.log(`📧 Traitement de l'email ${emailId}:`, JSON.stringify(emailData, null, 2));
-    
+
     try {
         // Vérifier que le statut est bien 'pending'
         if (emailData.status !== 'pending') {
             console.log(`📧 Email ${emailId} ignoré - statut: ${emailData.status}`);
             return null;
         }
-        
+
         // Vérifier si toutes les données nécessaires sont présentes
         if (!emailData.to || !emailData.templateData) {
             console.error('❌ Données d\'email insuffisantes:', emailData);
@@ -770,16 +982,16 @@ exports.processEmailQueue = onDocumentCreated({
             });
             return null;
         }
-        
+
         // Marquer comme 'processing'
         await event.data.ref.update({
             status: 'processing',
             processingStartedAt: FieldValue.serverTimestamp()
         });
-        
+
         console.log(`📧 Début traitement email pour: ${emailData.to}`);
         console.log(`📧 Template demandé: ${emailData.template}`);
-        
+
         // Charger et compiler le template d'email
         let templatePath = 'templates/parent-invitation.html'; // Template par défaut
         if (emailData.template && typeof emailData.template === 'string') {
@@ -798,13 +1010,13 @@ exports.processEmailQueue = onDocumentCreated({
         console.log(`📄 Chargement du template: ${templatePath}`);
         const templateSource = fs.readFileSync(path.join(__dirname, templatePath), 'utf8');
         console.log('✅ Template chargé avec succès');
-        
+
         const compiledTemplate = handlebars.compile(templateSource);
-        
+
         // Générer le contenu HTML avec les données du template
         const htmlContent = compiledTemplate(emailData.templateData);
         console.log('✅ Template compilé avec succès');
-        
+
         // Préparer le message Mailjet
         const mailjetMessage = {
             From: {
@@ -819,7 +1031,7 @@ exports.processEmailQueue = onDocumentCreated({
             Subject: emailData.subject || 'Invitation à l\'application Poppins',
             HTMLPart: htmlContent
         };
-        
+
         // Ajouter la pièce jointe PDF si elle existe
         if (emailData.pdfAttachment && emailData.pdfFilename) {
             console.log(`📎 Ajout pièce jointe PDF: ${emailData.pdfFilename}`);
@@ -831,19 +1043,19 @@ exports.processEmailQueue = onDocumentCreated({
                 }
             ];
         }
-        
+
         // Envoyer l'email via Mailjet
         console.log(`📧 Envoi email vers: ${emailData.to} via Mailjet...`);
-        
+
         const request = mailjet.post('send', { version: 'v3.1' }).request({
             Messages: [mailjetMessage]
         });
-        
+
         const result = await request;
-        
+
         console.log(`✅ Email ${emailId} envoyé avec succès via Mailjet`);
         console.log('📊 Réponse Mailjet:', JSON.stringify(result.body, null, 2));
-        
+
         // Marquer comme 'sent'
         await event.data.ref.update({
             status: 'sent',
@@ -851,18 +1063,18 @@ exports.processEmailQueue = onDocumentCreated({
             messageId: result.body?.Messages?.[0]?.MessageID || 'unknown',
             mailjetResponse: result.body
         });
-        
+
         console.log(`✅ Email ${emailId} marqué comme envoyé dans Firestore`);
-        
+
     } catch (error) {
         console.error(`❌ Erreur lors de l'envoi de l'email ${emailId}:`, error);
         console.error('❌ Stack trace:', error.stack);
         console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
-        
+
         // Marquer comme 'failed' et incrémenter le retry count
         const retryCount = (emailData.retryCount || 0) + 1;
         const maxRetries = 3;
-        
+
         await event.data.ref.update({
             status: retryCount >= maxRetries ? 'failed' : 'pending',
             retryCount: retryCount,
@@ -870,7 +1082,7 @@ exports.processEmailQueue = onDocumentCreated({
             lastErrorAt: FieldValue.serverTimestamp(),
             errorStack: error.stack
         });
-        
+
         // Si on a atteint le max de tentatives, log l'erreur finale
         if (retryCount >= maxRetries) {
             console.error(`❌ Email ${emailId} définitivement échoué après ${maxRetries} tentatives`);
@@ -878,20 +1090,25 @@ exports.processEmailQueue = onDocumentCreated({
             console.log(`🔄 Email ${emailId} remis en queue - tentative ${retryCount}/${maxRetries}`);
         }
     }
-    
+
     return null;
 });
 
 // ===== NOUVELLE FONCTION : Retry des emails failed =====
 exports.retryFailedEmails = onSchedule({
-    schedule: 'every 2 hours',
-    region: 'europe-west1'
+    schedule: 'every 15 minutes',
+    region: 'us-central1',
+    memory: '128MiB',
+    cpu: 0.08,
+    maxInstances: 1,
+    minInstances: 0,
+    concurrency: 1,
 }, async (event) => {
     try {
         const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        
+
         console.log('🔄 Recherche des emails échoués à retry...');
-        
+
         const failedEmails = await db
             .collection('emailQueue')
             .where('status', '==', 'failed')
@@ -899,14 +1116,14 @@ exports.retryFailedEmails = onSchedule({
             .where('retryCount', '<', 3)
             .limit(10)
             .get();
-        
+
         if (failedEmails.empty) {
             console.log('✅ Aucun email échoué à retry');
             return null;
         }
-        
+
         const batch = db.batch();
-        
+
         failedEmails.docs.forEach(doc => {
             console.log(`🔄 Remise en queue de l'email: ${doc.id}`);
             batch.update(doc.ref, {
@@ -917,14 +1134,14 @@ exports.retryFailedEmails = onSchedule({
                 errorStack: null
             });
         });
-        
+
         await batch.commit();
         console.log(`✅ ${failedEmails.size} emails remis en queue pour retry`);
-        
+
     } catch (error) {
         console.error('❌ Erreur lors du retry des emails:', error);
     }
-    
+
     return null;
 });
 
@@ -940,7 +1157,7 @@ exports.sendNotification = onDocumentCreated({
     try {
         const notification = event.data.data();
         const notificationId = event.params.notificationId;
-        
+
         console.log(`📤 Nouvelle notification à traiter: ${notificationId}`);
         console.log('📋 Données notification:', JSON.stringify(notification, null, 2));
 
@@ -951,7 +1168,7 @@ exports.sendNotification = onDocumentCreated({
         }
 
         const recipientUserId = notification.recipientUserId;
-        
+
         if (!recipientUserId) {
             console.error('❌ recipientUserId manquant');
             await event.data.ref.update({
@@ -963,7 +1180,7 @@ exports.sendNotification = onDocumentCreated({
         }
 
         console.log(`🎯 Recherche utilisateur: ${recipientUserId}`);
-        
+
         // Rechercher l'utilisateur par email (ID du document)
         const userDoc = await db.collection('users').doc(recipientUserId.toLowerCase()).get();
 
@@ -1046,23 +1263,23 @@ exports.sendNotification = onDocumentCreated({
             },
             // 🍎 Configuration spécifique iOS (APNs)
             apns: {
-  headers: {
-    'apns-priority': '10',
-    'apns-push-type': 'alert',
-    'apns-topic': 'com.beylet.poppinsApp', // IMPORTANT: doit correspondre au bundle iOS
-  },
-  payload: {
-    aps: {
-      alert: {
-        title: notification.title || 'Nouveau message',
-        body: notification.body || 'Vous avez reçu un nouveau message',
-      },
-      badge: 1,
-      sound: 'default',
-      'content-available': 1, // Pour background
-    }
-  },
-},
+                headers: {
+                    'apns-priority': '10',
+                    'apns-push-type': 'alert',
+                    'apns-topic': 'com.beylet.poppinsApp', // IMPORTANT: doit correspondre au bundle iOS
+                },
+                payload: {
+                    aps: {
+                        alert: {
+                            title: notification.title || 'Nouveau message',
+                            body: notification.body || 'Vous avez reçu un nouveau message',
+                        },
+                        badge: 1,
+                        sound: 'default',
+                        'content-available': 1, // Pour background
+                    }
+                },
+            },
             // 🤖 Configuration spécifique Android (FCM)
             android: {
                 priority: 'high',
@@ -1102,7 +1319,7 @@ exports.sendNotification = onDocumentCreated({
     } catch (error) {
         console.error('❌ Erreur envoi notification:', error);
         console.error('📋 Stack trace:', error.stack);
-        
+
         // Analyser le type d'erreur
         let errorType = 'unknown';
         if (error.code === 'messaging/invalid-registration-token') {
@@ -1130,11 +1347,11 @@ exports.onNewMessage = onDocumentCreated({
     region: 'europe-west1'
 }, async (event) => {
     console.log('🔥 DEBUT onNewMessage - Nouveau message détecté !');
-    
+
     try {
         const messageData = event.data.data();
         const messageId = event.params.messageId;
-        
+
         console.log(`📋 Message ${messageId}:`, JSON.stringify(messageData, null, 2));
 
         const { childId, senderType, content, targetParent, senderFcmToken } = messageData;
@@ -1154,7 +1371,7 @@ exports.onNewMessage = onDocumentCreated({
             console.log('👪 Message du parent vers assistante');
             title = 'Nouveau message d\'un parent';
             recipientEmail = await getAssistantEmail(childId);
-            
+
         } else if (senderType === 'assistante' || senderType === 'staff') {
             // 👩‍⚕️ MESSAGE ASSISTANTE → PARENT
             console.log('👩‍⚕️ Message de l\'assistante vers parent');
@@ -1229,13 +1446,13 @@ exports.onNewMessage = onDocumentCreated({
 async function getAssistantEmail(childId) {
     try {
         console.log(`🔍 Recherche assistante pour enfant: ${childId}`);
-        
+
         // Chercher dans toutes les structures
         const structuresSnapshot = await db.collection('structures').get();
 
         for (const structureDoc of structuresSnapshot.docs) {
             console.log(`🏢 Vérification structure: ${structureDoc.id}`);
-            
+
             const childDoc = await db
                 .collection('structures')
                 .doc(structureDoc.id)
@@ -1245,7 +1462,7 @@ async function getAssistantEmail(childId) {
 
             if (childDoc.exists) {
                 console.log(`👶 Enfant trouvé dans structure: ${structureDoc.id}`);
-                
+
                 const childData = childDoc.data();
                 const assignedMemberEmail = childData.assignedMemberEmail;
 
@@ -1308,7 +1525,7 @@ async function getAssistantEmail(childId) {
 async function getParentEmail(childId) {
     try {
         console.log(`🔍 Recherche parent pour enfant: ${childId}`);
-        
+
         // Méthode 1: Chercher directement les parents qui ont cet enfant
         const parentQuery = await db
             .collection('users')
@@ -1331,7 +1548,7 @@ async function getParentEmail(childId) {
         // Méthode 2: Chercher dans les documents enfants pour récupérer parentId
         console.log('🔍 Recherche dans les documents enfants...');
         const structuresSnapshot = await db.collection('structures').get();
-        
+
         for (const structureDoc of structuresSnapshot.docs) {
             const childDoc = await db
                 .collection('structures')
@@ -1342,7 +1559,7 @@ async function getParentEmail(childId) {
 
             if (childDoc.exists) {
                 const childData = childDoc.data();
-                
+
                 // Chercher dans parent1 et parent2
                 if (childData.parent1 && childData.parent1.email) {
                     const email = childData.parent1.email.toLowerCase().trim();
@@ -1444,7 +1661,7 @@ exports.testNotification = onCall({
             recipientUserId: userEmail,
             title: '🧪 Test Notification Push',
             body: 'Ceci est un test des notifications push depuis Firebase Functions !',
-            data: { 
+            data: {
                 type: 'test',
                 timestamp: Date.now().toString(),
             },
@@ -1455,8 +1672,8 @@ exports.testNotification = onCall({
 
         const notificationRef = await db.collection('notifications').add(notificationData);
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             message: 'Notification de test créée',
             notificationId: notificationRef.id,
         };
@@ -1473,9 +1690,9 @@ exports.cleanupOldNotifications = onSchedule({
 }, async (event) => {
     try {
         const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 jours
-        
+
         console.log('🗑️ Nettoyage des notifications anciennes...');
-        
+
         const snapshot = await db
             .collection('notifications')
             .where('timestamp', '<', cutoff)
@@ -1488,13 +1705,13 @@ exports.cleanupOldNotifications = onSchedule({
 
         const batch = db.batch();
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        
+
         await batch.commit();
         console.log(`🗑️ ${snapshot.size} anciennes notifications supprimées`);
     } catch (error) {
         console.error('❌ Erreur nettoyage:', error);
     }
-    
+
     return null;
 });
 
@@ -1811,7 +2028,7 @@ async function processMamStructure({
     }
 }
 
-async function collectChildMonthlyData({structureId, childDoc, startDate, endDate}) {
+async function collectChildMonthlyData({ structureId, childDoc, startDate, endDate }) {
     const childData = childDoc.data() || {};
     const childId = childDoc.id;
     const childRef = db.collection('structures').doc(structureId).collection('children').doc(childId);
@@ -1833,7 +2050,7 @@ async function collectChildMonthlyData({structureId, childDoc, startDate, endDat
                 if (!eventDate) return;
                 const dateKey = DateTime.fromJSDate(eventDate, { zone: 'Europe/Paris' }).toISODate();
                 const day = ensureDay(days, dateKey);
-                day[collectionName].push({...data});
+                day[collectionName].push({ ...data });
             });
         } catch (error) {
             console.error(`⚠️ Erreur collecte ${collectionName} pour ${childId}:`, error);
@@ -1872,7 +2089,7 @@ async function collectChildMonthlyData({structureId, childDoc, startDate, endDat
         if (!eventDate) return;
         const dateKey = DateTime.fromJSDate(eventDate, { zone: 'Europe/Paris' }).toISODate();
         const day = ensureDay(days, dateKey);
-        day.horaires.push({...data});
+        day.horaires.push({ ...data });
     });
 
     return {
@@ -1922,7 +2139,7 @@ function parseDateString(raw) {
     return null;
 }
 
-async function generateMonthlyPdf({assistant, structureName, period, childrenReports}) {
+async function generateMonthlyPdf({ assistant, structureName, period, childrenReports }) {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const buffers = [];
     return new Promise((resolve, reject) => {
@@ -2186,7 +2403,7 @@ function formatTimeValue(value) {
     return '';
 }
 
-async function enqueueMonthlyEmail({assistant, structureName, period, pdfBuffer, childCount}) {
+async function enqueueMonthlyEmail({ assistant, structureName, period, pdfBuffer, childCount }) {
     const pdfBase64 = pdfBuffer.toString('base64');
     const startLabel = period.start.setLocale('fr').toFormat('dd/MM/yyyy');
     const endLabel = period.end.minus({ days: 1 }).setLocale('fr').toFormat('dd/MM/yyyy');
@@ -2564,293 +2781,672 @@ exports.fixSubscriptionStatusV2 = onRequest({
 const _expiredTrialStatuses = ['trial', 'trialing'];
 
 exports.deactivateExpiredTrials = onSchedule(
-  {schedule: 'every 24 hours', timeZone: 'Europe/Paris'},
-  async () => {
-    const now = Timestamp.now();
-    console.log('🚀 Début du nettoyage des trials expirés à', now.toDate());
+    { schedule: 'every 24 hours', timeZone: 'Europe/Paris' },
+    async () => {
+        const now = Timestamp.now();
+        console.log('🚀 Début du nettoyage des trials expirés à', now.toDate());
 
-    try {
-      const processed = new Set();
-      let updatedCount = 0;
+        try {
+            const processed = new Set();
+            let updatedCount = 0;
 
-      const queries = [
-        db
-            .collection('structures')
-            .where('subscriptionStatus', 'in', _expiredTrialStatuses)
-            .where('subscriptionTrialEndsAt', '<=', now),
-        db
-            .collection('structures')
-            .where('subscriptionStatus', 'in', _expiredTrialStatuses)
-            .where('trialEndsAt', '<=', now),
-      ];
+            const queries = [
+                db
+                    .collection('structures')
+                    .where('subscriptionStatus', 'in', _expiredTrialStatuses)
+                    .where('subscriptionTrialEndsAt', '<=', now),
+                db
+                    .collection('structures')
+                    .where('subscriptionStatus', 'in', _expiredTrialStatuses)
+                    .where('trialEndsAt', '<=', now),
+            ];
 
-      for (const query of queries) {
-        const snapshot = await query.get();
-        for (const doc of snapshot.docs) {
-          if (processed.has(doc.id)) continue;
-          processed.add(doc.id);
+            for (const query of queries) {
+                const snapshot = await query.get();
+                for (const doc of snapshot.docs) {
+                    if (processed.has(doc.id)) continue;
+                    processed.add(doc.id);
 
-          const data = doc.data() || {};
-          if (!_isTrialExpired(data, now)) {
-            continue;
-          }
+                    const data = doc.data() || {};
+                    if (!_isTrialExpired(data, now)) {
+                        continue;
+                    }
 
-          await _expireStructureAndSubscription(doc.id);
-          updatedCount++;
-          console.log(`✅ ${doc.id} passé en expired (structure + subscription)`);
+                    await _expireStructureAndSubscription(doc.id);
+                    updatedCount++;
+                    console.log(`✅ ${doc.id} passé en expired (structure + subscription)`);
+                }
+            }
+
+            console.log(`🎉 Nettoyage terminé : ${updatedCount} structure(s) mises à jour.`);
+        } catch (error) {
+            console.error('❌ Erreur pendant le nettoyage des trials expirés:', error);
         }
-      }
-
-      console.log(`🎉 Nettoyage terminé : ${updatedCount} structure(s) mises à jour.`);
-    } catch (error) {
-      console.error('❌ Erreur pendant le nettoyage des trials expirés:', error);
-    }
-  },
+    },
 );
 
 function _isTrialExpired(data, nowTimestamp) {
-  const candidate =
-      data.subscriptionTrialEndsAt ?? data.trialEndsAt ?? data.trialEndsAtIso;
-  if (!candidate) {
-    return false;
-  }
-  const endDate = _toDate(candidate);
-  if (!endDate) {
-    return false;
-  }
-  return endDate.getTime() <= nowTimestamp.toDate().getTime();
+    const candidate =
+        data.subscriptionTrialEndsAt ?? data.trialEndsAt ?? data.trialEndsAtIso;
+    if (!candidate) {
+        return false;
+    }
+    const endDate = _toDate(candidate);
+    if (!endDate) {
+        return false;
+    }
+    return endDate.getTime() <= nowTimestamp.toDate().getTime();
 }
 
 function _toDate(value) {
-  if (!value) return null;
-  if (value instanceof Timestamp) {
-    return value.toDate();
-  }
-  if (typeof value.toDate === 'function') {
-    return value.toDate();
-  }
-  if (typeof value === 'number') {
-    return new Date(value);
-  }
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  }
-  return null;
+    if (!value) return null;
+    if (value instanceof Timestamp) {
+        return value.toDate();
+    }
+    if (typeof value.toDate === 'function') {
+        return value.toDate();
+    }
+    if (typeof value === 'number') {
+        return new Date(value);
+    }
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
 }
 
 async function _expireStructureAndSubscription(structureId) {
-  const structureRef = db.collection('structures').doc(structureId);
-  const subscriptionRef = db.collection('subscriptions').doc(structureId);
-  const serverTimestamp = FieldValue.serverTimestamp();
+    const structureRef = db.collection('structures').doc(structureId);
+    const subscriptionRef = db.collection('subscriptions').doc(structureId);
+    const serverTimestamp = FieldValue.serverTimestamp();
 
-  const batch = db.batch();
-  batch.set(
-    structureRef,
-    {
-      subscriptionStatus: 'expired',
-      subscriptionActive: false,
-      subscriptionUpdatedAt: serverTimestamp,
-      trialStatus: 'expired',
-      trialEndedAt: serverTimestamp,
-    },
-    {merge: true},
-  );
+    const batch = db.batch();
+    batch.set(
+        structureRef,
+        {
+            subscriptionStatus: 'expired',
+            subscriptionActive: false,
+            subscriptionUpdatedAt: serverTimestamp,
+            trialStatus: 'expired',
+            trialEndedAt: serverTimestamp,
+        },
+        { merge: true },
+    );
 
-  batch.set(
-    subscriptionRef,
-    {
-      status: 'expired',
-      isTrialPeriod: false,
-      updatedAt: serverTimestamp,
-    },
-    {merge: true},
-  );
+    batch.set(
+        subscriptionRef,
+        {
+            status: 'expired',
+            isTrialPeriod: false,
+            updatedAt: serverTimestamp,
+        },
+        { merge: true },
+    );
 
-  await batch.commit();
+    await batch.commit();
 }
 
 const inactiveSubscriptionStatuses = new Set([
-  'expired',
-  'cancelled',
-  'canceled',
-  'inactive',
-  'ended',
-  'terminated',
-  'replaced'
+    'expired',
+    'cancelled',
+    'canceled',
+    'inactive',
+    'ended',
+    'terminated',
+    'replaced'
 ]);
 
 const activeSubscriptionStatuses = new Set([
-  'active',
-  'purchased',
-  'approved',
-  'succeeded',
-  'renewing',
-  'grace',
-  'grace_period',
-  'in_grace_period'
+    'active',
+    'purchased',
+    'approved',
+    'succeeded',
+    'renewing',
+    'grace',
+    'grace_period',
+    'in_grace_period'
 ]);
 
 async function syncStructureWithSubscription(subscriptionId, subscriptionData, structureId) {
-  if (!structureId) {
-    console.warn('⚠️ Impossible de synchroniser, structureId absent');
-    return false;
-  }
-
-  const status = (subscriptionData.status || '').toString().toLowerCase();
-  const platform = (subscriptionData.platform || '').toString().toLowerCase();
-  const source = (subscriptionData.source || '').toString().toLowerCase();
-  const isTrialDoc =
-    status.includes('trial') ||
-    subscriptionData.isTrialPeriod === true ||
-    platform === 'firebase_trial' ||
-    source === 'firebase_trial';
-  const isInactiveDoc = inactiveSubscriptionStatuses.has(status);
-  const isActiveDoc = activeSubscriptionStatuses.has(status) || (!isTrialDoc && !isInactiveDoc);
-
-  const updates = {
-    subscriptionUpdatedAt: FieldValue.serverTimestamp(),
-  };
-
-  if (isActiveDoc) {
-    updates.subscriptionActive = true;
-    updates.subscriptionStatus = 'active';
-    updates.subscriptionDocId = subscriptionId;
-    updates.subscriptionPlatform = platform || 'unknown';
-    updates.subscriptionSource = source || platform || 'unknown';
-    updates.trialStatus = 'converted';
-  } else if (isTrialDoc) {
-    updates.subscriptionActive = true;
-    updates.subscriptionStatus = 'trial';
-    updates.subscriptionDocId = subscriptionId;
-    updates.subscriptionPlatform = platform || 'firebase_trial';
-    updates.subscriptionSource = source || platform || 'firebase_trial';
-    updates.trialStatus = 'trial';
-  } else if (isInactiveDoc) {
-    updates.subscriptionActive = false;
-    updates.subscriptionStatus = status || 'expired';
-    updates.trialStatus = 'expired';
-  }
-
-  const ensureDateField = (fieldValue) => {
-    if (!fieldValue) return null;
-    if (fieldValue.toDate) {
-      return fieldValue.toDate();
+    if (!structureId) {
+        console.warn('⚠️ Impossible de synchroniser, structureId absent');
+        return false;
     }
-    const parsed = new Date(fieldValue);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  };
 
-  const expirationDate = ensureDateField(
-    subscriptionData.expirationDate ||
-      subscriptionData.expiresAt ||
-      subscriptionData.subscriptionExpiresAtIso
-  );
-  if (expirationDate) {
-    updates.subscriptionExpiresAt = Timestamp.fromDate(expirationDate);
-    updates.subscriptionExpirationDate = expirationDate.toISOString();
-    updates.subscriptionExpiresAtIso = expirationDate.toISOString();
-  }
+    const status = (subscriptionData.status || '').toString().toLowerCase();
+    const platform = (subscriptionData.platform || '').toString().toLowerCase();
+    const source = (subscriptionData.source || '').toString().toLowerCase();
+    const isTrialDoc =
+        status.includes('trial') ||
+        subscriptionData.isTrialPeriod === true ||
+        platform === 'firebase_trial' ||
+        source === 'firebase_trial';
+    const isInactiveDoc = inactiveSubscriptionStatuses.has(status);
+    const isActiveDoc = activeSubscriptionStatuses.has(status) || (!isTrialDoc && !isInactiveDoc);
 
-  const trialStart = ensureDateField(
-    subscriptionData.trialStartAt ||
-      subscriptionData.trialStartedAt ||
-      subscriptionData.subscriptionTrialStartsAt
-  );
-  if (trialStart) {
-    updates.subscriptionTrialStartsAt = Timestamp.fromDate(trialStart);
-  }
+    const updates = {
+        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+    };
 
-  const trialEnd = ensureDateField(
-    subscriptionData.trialEndsAt ||
-      subscriptionData.subscriptionTrialEndsAt
-  );
-  if (trialEnd) {
-    updates.subscriptionTrialEndsAt = Timestamp.fromDate(trialEnd);
-  }
+    if (isActiveDoc) {
+        updates.subscriptionActive = true;
+        updates.subscriptionStatus = 'active';
+        updates.subscriptionDocId = subscriptionId;
+        updates.subscriptionPlatform = platform || 'unknown';
+        updates.subscriptionSource = source || platform || 'unknown';
+        updates.trialStatus = 'converted';
+    } else if (isTrialDoc) {
+        updates.subscriptionActive = true;
+        updates.subscriptionStatus = 'trial';
+        updates.subscriptionDocId = subscriptionId;
+        updates.subscriptionPlatform = platform || 'firebase_trial';
+        updates.subscriptionSource = source || platform || 'firebase_trial';
+        updates.trialStatus = 'trial';
+    } else if (isInactiveDoc) {
+        updates.subscriptionActive = false;
+        updates.subscriptionStatus = status || 'expired';
+        updates.trialStatus = 'expired';
+    }
 
-  if (subscriptionData.maxMemberCount) {
-    updates.maxMemberCount = subscriptionData.maxMemberCount;
-  }
-  if (subscriptionData.memberCount) {
-    updates.memberCount = subscriptionData.memberCount;
-  }
-  if (subscriptionData.priceAmount != null) {
-    updates.currentPriceAmount = subscriptionData.priceAmount;
-  }
-  if (subscriptionData.priceDisplay) {
-    updates.currentPriceDisplay = subscriptionData.priceDisplay;
-  }
+    const ensureDateField = (fieldValue) => {
+        if (!fieldValue) return null;
+        if (fieldValue.toDate) {
+            return fieldValue.toDate();
+        }
+        const parsed = new Date(fieldValue);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    };
 
-  const structureRef = db.collection('structures').doc(structureId);
-  const structureSnap = await structureRef.get();
-  const structureData = structureSnap.exists ? structureSnap.data() : {};
+    const expirationDate = ensureDateField(
+        subscriptionData.expirationDate ||
+        subscriptionData.expiresAt ||
+        subscriptionData.subscriptionExpiresAtIso
+    );
+    if (expirationDate) {
+        updates.subscriptionExpiresAt = Timestamp.fromDate(expirationDate);
+        updates.subscriptionExpirationDate = expirationDate.toISOString();
+        updates.subscriptionExpiresAtIso = expirationDate.toISOString();
+    }
 
-  if (isInactiveDoc && structureData?.subscriptionDocId !== subscriptionId) {
-    console.log('ℹ️ Subscription inactive mais non liée à la structure, on ignore');
-    return false;
-  }
+    const trialStart = ensureDateField(
+        subscriptionData.trialStartAt ||
+        subscriptionData.trialStartedAt ||
+        subscriptionData.subscriptionTrialStartsAt
+    );
+    if (trialStart) {
+        updates.subscriptionTrialStartsAt = Timestamp.fromDate(trialStart);
+    }
 
-  await structureRef.set(updates, {merge: true});
-  console.log(`✅ Structure ${structureId} synchronisée avec subscription ${subscriptionId}`);
-  return true;
+    const trialEnd = ensureDateField(
+        subscriptionData.trialEndsAt ||
+        subscriptionData.subscriptionTrialEndsAt
+    );
+    if (trialEnd) {
+        updates.subscriptionTrialEndsAt = Timestamp.fromDate(trialEnd);
+    }
+
+    if (subscriptionData.maxMemberCount) {
+        updates.maxMemberCount = subscriptionData.maxMemberCount;
+    }
+    if (subscriptionData.memberCount) {
+        updates.memberCount = subscriptionData.memberCount;
+    }
+    if (subscriptionData.priceAmount != null) {
+        updates.currentPriceAmount = subscriptionData.priceAmount;
+    }
+    if (subscriptionData.priceDisplay) {
+        updates.currentPriceDisplay = subscriptionData.priceDisplay;
+    }
+
+    const structureRef = db.collection('structures').doc(structureId);
+    const structureSnap = await structureRef.get();
+    const structureData = structureSnap.exists ? structureSnap.data() : {};
+
+    if (isInactiveDoc && structureData?.subscriptionDocId !== subscriptionId) {
+        console.log('ℹ️ Subscription inactive mais non liée à la structure, on ignore');
+        return false;
+    }
+
+    await structureRef.set(updates, { merge: true });
+    console.log(`✅ Structure ${structureId} synchronisée avec subscription ${subscriptionId}`);
+    return true;
 }
 
 // ==========================================
 // ===== SYNC SUBSCRIPTION → STRUCTURE  =====
 // ==========================================
 exports.syncSubscriptionWithStructure = onDocumentWritten({
-  document: 'subscriptions/{subscriptionId}',
-  region: 'europe-west1'
+    document: 'subscriptions/{subscriptionId}',
+    region: 'europe-west1'
 }, async (event) => {
-  const beforeData = event.data.before.exists ? event.data.before.data() : null;
-  const afterSnap = event.data.after;
+    const beforeData = event.data.before.exists ? event.data.before.data() : null;
+    const afterSnap = event.data.after;
 
-  if (!afterSnap.exists) {
-    console.log('ℹ️ Subscription supprimée, aucune action');
+    if (!afterSnap.exists) {
+        console.log('ℹ️ Subscription supprimée, aucune action');
+        return null;
+    }
+
+    const subscriptionId = event.params.subscriptionId;
+    const subscriptionData = afterSnap.data() || {};
+    const structureId = subscriptionData.structureId || beforeData?.structureId;
+
+    await syncStructureWithSubscription(subscriptionId, subscriptionData, structureId);
     return null;
-  }
-
-  const subscriptionId = event.params.subscriptionId;
-  const subscriptionData = afterSnap.data() || {};
-  const structureId = subscriptionData.structureId || beforeData?.structureId;
-
-  await syncStructureWithSubscription(subscriptionId, subscriptionData, structureId);
-  return null;
 });
 
 // ==========================================
 // ===== ON-DEMAND BACKFILL SUBSCRIPTIONS ===
 // ==========================================
 exports.repairSubscriptions = onRequest({
-  region: 'europe-west1'
+    region: 'europe-west1'
 }, async (request, response) => {
-  try {
-    const snapshot = await db.collection('subscriptions').get();
-    let updated = 0;
-    for (const doc of snapshot.docs) {
-      const data = doc.data() || {};
-      const structureId = data.structureId;
-      if (!structureId) {
-        continue;
-      }
-      const applied = await syncStructureWithSubscription(doc.id, data, structureId);
-      if (applied) {
-        updated++;
-      }
+    try {
+        const snapshot = await db.collection('subscriptions').get();
+        let updated = 0;
+        for (const doc of snapshot.docs) {
+            const data = doc.data() || {};
+            const structureId = data.structureId;
+            if (!structureId) {
+                continue;
+            }
+            const applied = await syncStructureWithSubscription(doc.id, data, structureId);
+            if (applied) {
+                updated++;
+            }
+        }
+
+        response.status(200).json({
+            success: true,
+            processed: snapshot.size,
+            updated,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Erreur repairSubscriptions:', error);
+        response.status(500).json({
+            success: false,
+            error: error.message || 'Erreur inconnue'
+        });
+    }
+});
+
+// Utilitaire : lookup direct via collection subscriptionTokens/{token}
+async function _findUserDocsByToken(token, platform) {
+    if (!token) return [];
+
+    try {
+        const tokenSnap = await db.collection('subscriptionTokens').doc(token).get();
+        if (tokenSnap.exists) {
+            const tokenData = tokenSnap.data() || {};
+            const docPath = tokenData.userDocPath;
+            const docId = tokenData.userDocId || tokenData.uid;
+            if (docPath) {
+                const directDoc = await db.doc(docPath).get();
+                if (directDoc.exists) return [directDoc];
+            }
+            if (docId) {
+                const directDoc = await db.collection('users').doc(docId).get();
+                if (directDoc.exists) return [directDoc];
+            }
+        }
+    } catch (err) {
+        console.error('⚠️ Lookup token direct échoué', err);
     }
 
-    response.status(200).json({
-      success: true,
-      processed: snapshot.size,
-      updated,
-      timestamp: new Date().toISOString()
+    // Fallback : ancienne requête
+    try {
+        const snapshot = await db
+            .collection('users')
+            .where('subscriptionPlatform', '==', platform)
+            .where(platform === 'android' ? 'purchaseToken' : 'originalTransactionId', '==', token)
+            .get();
+        return snapshot.docs;
+    } catch (err) {
+        console.error('⚠️ Lookup token fallback échoué', err);
+        return [];
+    }
+}
+
+async function _upsertSubscriptionToken({ token, platform, userDocPath, userDocId, productId }) {
+    if (!token || !platform) return;
+    const payload = {
+        uid: userDocId || null,
+        userDocId: userDocId || null,
+        userDocPath: userDocPath || null,
+        platform,
+        productId: productId || null,
+        updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (!payload.createdAt) {
+        payload.createdAt = FieldValue.serverTimestamp();
+    }
+    await db.collection('subscriptionTokens').doc(token).set(payload, { merge: true });
+    console.log('✅ subscriptionTokens upsert', { token, platform, userDocId, userDocPath, productId });
+}
+
+// ============================================
+// ========== WEBHOOKS ABONNEMENTS ============
+// ============================================
+const GOOGLE_NOTIFICATION_TYPES = {
+    SUBSCRIPTION_RECOVERED: 1,
+    SUBSCRIPTION_RENEWED: 2,
+    SUBSCRIPTION_CANCELED: 3,
+    SUBSCRIPTION_PURCHASED: 4,
+    SUBSCRIPTION_ON_HOLD: 5,
+    SUBSCRIPTION_IN_GRACE_PERIOD: 6,
+    SUBSCRIPTION_RESTARTED: 7,
+    SUBSCRIPTION_PRICE_CHANGE_CONFIRMED: 8,
+    SUBSCRIPTION_DEFERRED: 9,
+    SUBSCRIPTION_PAUSED: 10,
+    SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED: 11,
+    SUBSCRIPTION_REVOKED: 12,
+    SUBSCRIPTION_EXPIRED: 13
+};
+
+exports.handleGooglePlayWebhook = onRequest({
+    region: 'europe-west1'
+}, async (req, res) => {
+    if (req.method !== 'POST') {
+        return res.status(405).send('Method Not Allowed');
+    }
+
+    const message = req.body?.message;
+    if (!message?.data) {
+        console.error('No Pub/Sub message found');
+        return res.status(400).send('Bad Request');
+    }
+
+    let data;
+    try {
+        data = JSON.parse(Buffer.from(message.data, 'base64').toString('utf-8'));
+    } catch (error) {
+        console.error('Unable to parse Pub/Sub message', error);
+        return res.status(400).send('Invalid message');
+    }
+
+    console.log('Google Play Notification:', data);
+
+    const notificationType = data.subscriptionNotification?.notificationType;
+    const purchaseToken = data.subscriptionNotification?.purchaseToken;
+    const subscriptionId = data.subscriptionNotification?.subscriptionId;
+
+    if (!purchaseToken) {
+        return res.status(400).send('No purchase token');
+    }
+
+    const userDocs = await _findUserDocsByToken(purchaseToken, 'android');
+
+    if (!userDocs.length) {
+        console.log('No user found with this purchase token');
+        return res.status(200).send('OK - No user found');
+    }
+
+    const updates = {
+        lastWebhookUpdate: FieldValue.serverTimestamp(),
+        lastNotificationType: notificationType,
+        subscriptionId
+    };
+
+    switch (notificationType) {
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_CANCELED:
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRED:
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_REVOKED:
+            updates.subscriptionActive = false;
+            updates.subscriptionCancelDate = FieldValue.serverTimestamp();
+            updates.trialStatus = 'expired';
+            updates.subscriptionStatus = 'canceled';
+            break;
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RENEWED:
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RECOVERED:
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RESTARTED:
+            updates.subscriptionActive = true;
+            updates.lastRenewalDate = FieldValue.serverTimestamp();
+            updates.trialStatus = 'converted';
+            updates.subscriptionStatus = 'active';
+            break;
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_ON_HOLD:
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_PAUSED:
+            updates.subscriptionActive = false;
+            updates.subscriptionStatus = 'paused';
+            break;
+        case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_IN_GRACE_PERIOD:
+            updates.subscriptionStatus = 'grace_period';
+            break;
+    }
+
+    const batch = db.batch();
+    userDocs.forEach((doc) => {
+        batch.update(doc.ref, updates);
     });
-  } catch (error) {
-    console.error('❌ Erreur repairSubscriptions:', error);
-    response.status(500).json({
-      success: false,
-      error: error.message || 'Erreur inconnue'
+    await batch.commit();
+
+    console.log(`Updated ${userDocs.length} user(s) for Google Play notification`, {
+        notificationType,
+        subscriptionId
     });
-  }
+    res.status(200).send('OK');
+});
+
+// ============================================
+// ========== SYNC TOKEN DEPUIS USERS ==========
+// ============================================
+exports.syncSubscriptionTokenFromUser = onDocumentWritten({
+    document: 'users/{userId}',
+    region: 'europe-west1'
+}, async (event) => {
+    const afterSnap = event.data.after;
+    if (!afterSnap.exists) return null;
+
+    const beforeData = event.data.before.exists ? event.data.before.data() : {};
+    const afterData = afterSnap.data() || {};
+
+    const platform = afterData.subscriptionPlatform;
+    if (platform !== 'android' && platform !== 'ios') return null;
+
+    const token = platform === 'android'
+        ? afterData.purchaseToken
+        : afterData.originalTransactionId;
+    if (!token) return null;
+
+    const productId =
+        afterData.subscriptionId ||
+        afterData.productId ||
+        afterData.subscriptionProductId ||
+        null;
+
+    const beforeToken = platform === 'android'
+        ? beforeData.purchaseToken
+        : beforeData.originalTransactionId;
+
+    const beforePlatform = beforeData.subscriptionPlatform;
+    const beforeProduct =
+        beforeData.subscriptionId ||
+        beforeData.productId ||
+        beforeData.subscriptionProductId ||
+        null;
+
+    // Si rien n'a changé, on ne refait pas l'upsert
+    if (beforeToken === token && beforePlatform === platform && beforeProduct === productId) {
+        return null;
+    }
+
+    await _upsertSubscriptionToken({
+        token,
+        platform,
+        userDocId: event.params.userId,
+        userDocPath: afterSnap.ref.path,
+        productId
+    });
+
+    return null;
+});
+
+exports.handleAppStoreWebhook = onRequest({
+    region: 'europe-west1',
+    memory: '128MiB',
+    cpu: 0.08,
+    maxInstances: 1,
+    minInstances: 0,
+    concurrency: 1,
+}, async (req, res) => {
+    if (req.method !== 'POST') {
+        return res.status(405).send('Method Not Allowed');
+    }
+
+    const notification = req.body;
+    console.log('App Store Notification:', JSON.stringify(notification, null, 2));
+
+    const notificationType = notification.notification_type || notification.notificationType;
+    const receiptInfo = Array.isArray(notification.unified_receipt?.latest_receipt_info)
+        ? notification.unified_receipt.latest_receipt_info[0]
+        : null;
+
+    const transactionId = receiptInfo?.transaction_id;
+    const originalTransactionId = receiptInfo?.original_transaction_id || notification.originalTransactionId;
+
+    if (!originalTransactionId) {
+        return res.status(400).send('No transaction ID');
+    }
+
+    const userDocs = await _findUserDocsByToken(originalTransactionId, 'ios');
+
+    if (!userDocs.length) {
+        console.log('No user found with this transaction ID');
+        return res.status(200).send('OK - No user found');
+    }
+
+    const updates = {
+        lastWebhookUpdate: FieldValue.serverTimestamp(),
+        lastNotificationType: notificationType,
+        transactionId,
+        originalTransactionId
+    };
+
+    switch (notificationType) {
+        case 'CANCEL':
+        case 'DID_FAIL_TO_RENEW':
+        case 'EXPIRED':
+            updates.subscriptionActive = false;
+            updates.subscriptionCancelDate = FieldValue.serverTimestamp();
+            updates.trialStatus = 'expired';
+            updates.subscriptionStatus = 'canceled';
+            break;
+        case 'DID_RENEW':
+        case 'INTERACTIVE_RENEWAL':
+            updates.subscriptionActive = true;
+            updates.lastRenewalDate = FieldValue.serverTimestamp();
+            updates.trialStatus = 'converted';
+            updates.subscriptionStatus = 'active';
+            break;
+        case 'DID_CHANGE_RENEWAL_PREF':
+            updates.subscriptionModified = true;
+            break;
+        case 'INITIAL_BUY':
+            updates.subscriptionActive = true;
+            updates.subscriptionStartDate = FieldValue.serverTimestamp();
+            updates.subscriptionStatus = 'active';
+            break;
+    }
+
+    const batch = db.batch();
+    userDocs.forEach((doc) => {
+        batch.update(doc.ref, updates);
+    });
+    await batch.commit();
+
+    console.log(`Updated ${userDocs.length} user(s) for App Store notification`, {
+        notificationType,
+        originalTransactionId
+    });
+    res.status(200).send('OK');
+});
+
+// ============================================
+// ========== NETTOYAGE ABONNEMENTS ===========
+// ============================================
+exports.dailySubscriptionCheck = onSchedule({
+    schedule: 'every 24 hours',
+    timeZone: 'Europe/Paris'
+}, async () => {
+    console.log('Starting daily subscription check...');
+
+    const activeSubscriptions = await db
+        .collection('users')
+        .where('subscriptionActive', '==', true)
+        .get();
+
+    let deactivated = 0;
+    const batch = db.batch();
+
+    activeSubscriptions.forEach((doc) => {
+        const data = doc.data() || {};
+        const lastWebhook = data.lastWebhookUpdate?.toDate
+            ? data.lastWebhookUpdate.toDate()
+            : null;
+
+        if (lastWebhook) {
+            const daysSinceLastWebhook = (Date.now() - lastWebhook.getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceLastWebhook > 35) {
+                batch.update(doc.ref, {
+                    subscriptionActive: false,
+                    trialStatus: 'expired',
+                    deactivationReason: 'no_webhook_update',
+                    deactivatedBy: 'daily_check'
+                });
+                deactivated++;
+            }
+        }
+    });
+
+    if (deactivated > 0) {
+        await batch.commit();
+        console.log(`Deactivated ${deactivated} stale subscriptions`);
+    } else {
+        console.log('No stale subscriptions found');
+    }
+});
+
+exports.cleanupInactiveSubscriptions = onCall({
+    region: 'europe-west1'
+}, async (data, context) => {
+    if (!context.auth || !context.auth.token?.admin) {
+        throw new HttpsError('permission-denied', 'Must be admin');
+    }
+
+    const activeUsers = await db
+        .collection('users')
+        .where('subscriptionActive', '==', true)
+        .get();
+
+    const batch = db.batch();
+    let updated = 0;
+
+    activeUsers.forEach((doc) => {
+        const userData = doc.data() || {};
+        const lastWebhook = userData.lastWebhookUpdate?.toDate
+            ? userData.lastWebhookUpdate.toDate()
+            : null;
+
+        if (!lastWebhook) {
+            const startDate = userData.subscriptionStartDate?.toDate
+                ? userData.subscriptionStartDate.toDate()
+                : null;
+            if (startDate && (Date.now() - startDate.getTime()) > (35 * 24 * 60 * 60 * 1000)) {
+                batch.update(doc.ref, {
+                    subscriptionActive: false,
+                    trialStatus: 'expired',
+                    deactivationReason: 'manual_cleanup'
+                });
+                updated++;
+            }
+        }
+    });
+
+    if (updated > 0) {
+        await batch.commit();
+    }
+
+    return { success: true, deactivated: updated };
 });

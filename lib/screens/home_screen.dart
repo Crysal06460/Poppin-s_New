@@ -882,6 +882,9 @@ class _HomeScreenState extends State<HomeScreen> {
           structureDocId = linkedStructureId;
           print(
               "👩‍⚕️ Utilisateur assistante lié à la structure: $structureDocId");
+        } else if (linkedStructureId.isNotEmpty) {
+          // Cas général: Si un structureId est lié, on l'utilise
+          structureDocId = linkedStructureId;
         }
       }
 
@@ -892,13 +895,54 @@ class _HomeScreenState extends State<HomeScreen> {
           .get();
 
       if (!structureDoc.exists) {
-        print(
-            "⚠️ Structure introuvable ! Redirection vers la page de création de structure");
-        setState(() {
-          isLoading = false;
-        });
-        context.go('/create-structure');
-        return;
+        print("⚠️ Structure introuvable par ID ($structureDocId). Tentative par email...");
+        
+        // Tentative de récupération par email (Self-healing)
+        final emailQuery = await FirebaseFirestore.instance
+          .collection('structures')
+          .where('email', isEqualTo: currentUserEmail)
+          .limit(1)
+          .get();
+
+        if (emailQuery.docs.isNotEmpty) {
+           structureDoc = emailQuery.docs.first;
+           structureDocId = structureDoc.id;
+           print("✅ Structure retrouvée par email: $structureDocId. Réparation du profil utilisateur...");
+           
+           // Réparer le lien dans users
+           await FirebaseFirestore.instance.collection('users').doc(currentUserEmail).set({
+             'structureId': structureDocId,
+             'role': 'structure',
+             'updatedAt': FieldValue.serverTimestamp(),
+           }, SetOptions(merge: true));
+        } else {
+             // 2ème tentative: Check ownerEmail (parfois utilisé par WordPress/Stripe)
+             final ownerEmailQuery = await FirebaseFirestore.instance
+              .collection('structures')
+              .where('ownerEmail', isEqualTo: currentUserEmail)
+              .limit(1)
+              .get();
+
+             if (ownerEmailQuery.docs.isNotEmpty) {
+                 structureDoc = ownerEmailQuery.docs.first;
+                 structureDocId = structureDoc.id;
+                 print("✅ Structure retrouvée par ownerEmail: $structureDocId. Réparation du profil utilisateur...");
+                 
+                 await FirebaseFirestore.instance.collection('users').doc(currentUserEmail).set({
+                   'structureId': structureDocId,
+                   'role': 'structure',
+                   'updatedAt': FieldValue.serverTimestamp(),
+                 }, SetOptions(merge: true));
+             } else {
+                 print(
+                    "⚠️ Structure introuvable définitivement (ni ID, ni email, ni ownerEmail) ! Redirection vers la page de création de structure");
+                setState(() {
+                  isLoading = false;
+                });
+                context.go('/create-structure');
+                return;
+             }
+        }
       }
 
       final Map<String, dynamic> structureData =

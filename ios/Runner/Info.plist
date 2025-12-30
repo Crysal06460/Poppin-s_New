@@ -42,13 +42,7 @@
 	<string>alert</string>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>Cette app utilise des notifications pour vous informer des nouveaux messages.</string>
-	<key>SKStoreKitConfiguration</key>
-	<dict>
-		<key>SKAllowsHandlingOfNonRenewingSubscriptions</key>
-		<true/>
-		<key>SKBundleIdentifier</key>
-		<string>com.beylet.poppinsApp</string>
-	</dict>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

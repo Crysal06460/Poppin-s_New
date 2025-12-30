@@ -1,4 +1,5 @@
 # Fichiers à ignorer
+node_modules/
 /android/app/build/
 /android/app/debug/
 /android/app/profile/
@@ -11,6 +12,7 @@ android/*.hprof
 build/
 .pub/
 
-serviceAccountKey.json
-poppin-s-app-firebase-adminsdk-fbsvc-c97039f864.json
-*.json # Ou plus spécifique : poppin-s-app-firebase-adminsdk-fbsvc-c97039f864.json
+serviceAccountKey
+# Ignore all JSON files to prevent leaking secrets
+*.json
+# Except strictly necessary ones (if any, add negations like !file.json)

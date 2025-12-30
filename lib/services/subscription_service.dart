@@ -403,12 +403,18 @@ class SubscriptionService {
     final TrialStatus effectiveTrialStatus =
         trialStatus ?? TrialStatus.fromSubscriptionDoc(data);
     final String status = (data['status'] ?? '').toString();
+    final bool boolActive = data['subscriptionActive'] == true;
 
     if (_isStatusLikelyActive(status, trialStatus: effectiveTrialStatus)) {
       return true;
     }
 
     if (effectiveTrialStatus.isActive) {
+      return true;
+    }
+
+    // Fallback : certains anciens docs ne renseignent pas status mais marquent subscriptionActive
+    if (boolActive) {
       return true;
     }
 
@@ -501,9 +507,9 @@ class SubscriptionService {
       return false;
     }
 
-    // Statut inconnu : considérer actif pour laisser l'utilisateur accéder
-    print('ℹ️ Statut abonnement inconnu, interprété comme actif: $status');
-    return true;
+    // Statut inconnu : considérer comme inactif pour éviter l'accès non autorisé
+    print('ℹ️ Statut abonnement inconnu, interprété comme inactif: $status');
+    return false;
   }
 
   static bool _isDateStringInFuture(String value) {
@@ -714,8 +720,8 @@ class SubscriptionService {
     // Déterminer le type de structure et nombre de membres selon le produit
     String structureType = 'assistante_maternelle';
     int memberCount = 1;
-    double priceAmount = 6.99;
-    String priceDisplay = '6,99 € / mois';
+    double priceAmount = 3.99;
+    String priceDisplay = '3,99 € / mois';
 
     if (normalizedId.contains('mam')) {
       structureType = 'MAM';
@@ -725,24 +731,24 @@ class SubscriptionService {
           normalizedId == 'mam2' ||
           normalizedId == 'abonement_mam2') {
         memberCount = 2;
-        priceAmount = 19.99;
-        priceDisplay = '19,99 € / mois';
+        priceAmount = 9.99;
+        priceDisplay = '9,99 € / mois';
       } else if (normalizedId.contains('3_members') ||
           normalizedId.contains('mam_3_membres') ||
           normalizedId == 'abonnement_mam3' ||
           normalizedId == 'mam3' ||
           normalizedId == 'abonement_mam3') {
         memberCount = 3;
-        priceAmount = 19.99;
-        priceDisplay = '19,99 € / mois';
+        priceAmount = 9.99;
+        priceDisplay = '9,99 € / mois';
       } else if (normalizedId.contains('4_members') ||
           normalizedId.contains('mam_4_membres') ||
           normalizedId == 'abonnement_mam4' ||
           normalizedId == 'mam4' ||
           normalizedId == 'abonement_mam4') {
         memberCount = 4;
-        priceAmount = 24.99;
-        priceDisplay = '24,99 € / mois';
+        priceAmount = 14.99;
+        priceDisplay = '14,99 € / mois';
       }
     }
 

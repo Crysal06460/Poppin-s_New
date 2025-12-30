@@ -218,8 +218,8 @@ class AndroidSubscriptionService {
         'structureType': 'assistante_maternelle',
         'memberCount': 1,
         'maxMemberCount': 1,
-        'priceAmount': 6.99,
-        'priceDisplay': '6,99 € / mois',
+        'priceAmount': 3.99,
+        'priceDisplay': '3,99 € / mois',
         'productKey': 'ass-mat',
         'isTrialPurchase': false,
       };
@@ -228,8 +228,8 @@ class AndroidSubscriptionService {
         'structureType': 'MAM',
         'memberCount': 2,
         'maxMemberCount': 2,
-        'priceAmount': 19.99,
-        'priceDisplay': '19,99 € / mois',
+        'priceAmount': 9.99,
+        'priceDisplay': '9,99 € / mois',
         'productKey': 'mam-2',
         'isTrialPurchase': false,
       };
@@ -238,8 +238,8 @@ class AndroidSubscriptionService {
         'structureType': 'MAM',
         'memberCount': 3,
         'maxMemberCount': 3,
-        'priceAmount': 19.99,
-        'priceDisplay': '19,99 € / mois',
+        'priceAmount': 9.99,
+        'priceDisplay': '9,99 € / mois',
         'productKey': 'mam-3',
         'isTrialPurchase': false,
       };
@@ -248,8 +248,8 @@ class AndroidSubscriptionService {
         'structureType': 'MAM',
         'memberCount': 4,
         'maxMemberCount': 99,
-        'priceAmount': 24.99,
-        'priceDisplay': '24,99 € / mois',
+        'priceAmount': 14.99,
+        'priceDisplay': '14,99 € / mois',
         'productKey': 'mam-4-plus',
         'isTrialPurchase': false,
       };
@@ -269,11 +269,11 @@ class AndroidSubscriptionService {
     // Par défaut
     print('⚠️ ID produit non reconnu: $productId');
     return {
-      'structureType': 'assistante_maternelle',
-      'memberCount': 1,
-      'maxMemberCount': 1,
-      'priceAmount': 6.99,
-      'priceDisplay': '6,99 € / mois',
+        'structureType': 'assistante_maternelle',
+        'memberCount': 1,
+        'maxMemberCount': 1,
+        'priceAmount': 3.99,
+        'priceDisplay': '3,99 € / mois',
       'productKey': 'ass-mat',
       'isTrialPurchase': false,
     };

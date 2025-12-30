@@ -895,48 +895,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
 
                       // Séparateur
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey)),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text("ou",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: isTablet ? 13 : 14,
-                                )),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey)),
-                        ],
-                      ),
 
-                      const SizedBox(height: 20),
-
-                      // Lien pour créer un compte
-                      TextButton.icon(
-                        onPressed: () {
-                          // Navigation vers la page d'inscription
-                          context.push('/trial-info');
-                        },
-                        icon: Icon(
-                          Icons.person_add_outlined,
-                          color: primaryYellow,
-                          size: isTablet ? 20 : 22,
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isTablet ? 16 : 20,
-                            vertical: isTablet ? 8 : 10,
-                          ),
-                        ),
-                        label: Text(
-                          "Créer un compte",
-                          style: TextStyle(
-                              color: primaryYellow,
-                              fontWeight: FontWeight.bold,
-                              fontSize: fontSize),
-                        ),
-                      ),
                     ],
 
                     SizedBox(height: isTablet ? 20 : 30),

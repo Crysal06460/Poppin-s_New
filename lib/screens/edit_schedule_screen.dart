@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../planning/planning_models.dart';
 import '../planning/planning_repository.dart';
+import '../utils/structure_context.dart';
 import '../widgets/planning/planning_editor.dart';
 
 class EditScheduleScreen extends StatefulWidget {
@@ -59,7 +60,7 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
         return;
       }
 
-      final structureId = await _resolveStructureId(user);
+      final structureId = (await StructureResolver().resolve()).structureId;
       final planning = await _editorController.init(
         structureId: structureId,
         childId: widget.childId,
@@ -81,23 +82,6 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
         _loading = false;
       });
     }
-  }
-
-  Future<String> _resolveStructureId(User user) async {
-    var structureId = user.uid;
-    final email = user.email?.toLowerCase();
-    if (email != null && email.isNotEmpty) {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(email).get();
-      final data = doc.data();
-      if (data != null &&
-          data['role'] == 'mamMember' &&
-          data['structureId'] is String &&
-          (data['structureId'] as String).isNotEmpty) {
-        structureId = data['structureId'];
-      }
-    }
-    return structureId;
   }
 
   void _handlePlanningChanged(PlanningData planning) {

@@ -60,6 +60,24 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
     super.dispose();
   }
 
+  // ✅ Méthode pour formater le numéro de téléphone pour l'affichage
+  String _formatPhoneDisplay(String phone) {
+    // Supprimer tout caractère non numérique
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    
+    // Si la longueur n'est pas paire ou trop courte, retourner tel quel
+    if (digits.length < 2) return phone;
+    
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+        if (i > 0 && i % 2 == 0) {
+            buffer.write(' ');
+        }
+        buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
   Future<void> _loadParentInfo() async {
     try {
       final childDoc = await FirebaseFirestore.instance
@@ -328,7 +346,7 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
                             _buildModernInfoRow(
                               Icons.phone_rounded,
                               "Téléphone",
-                              parent['phone'].toString(),
+                              _formatPhoneDisplay(parent['phone'].toString()),
                               Colors.green,
                               isEditable: true,
                               onEdit: () => _showEditPhoneDialog(parentKey),

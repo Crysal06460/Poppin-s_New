@@ -59,6 +59,30 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
+  Future<String> _resolveStructureId({User? user}) async {
+    final User? currentUser = user ?? FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return widget.structureId;
+    if (widget.structureId.isNotEmpty) return widget.structureId;
+
+    final String userEmail = currentUser.email?.toLowerCase() ?? '';
+    if (userEmail.isEmpty) return currentUser.uid;
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userEmail)
+        .get();
+
+    if (userDoc.exists) {
+      final userData = userDoc.data() ?? {};
+      if (userData['role'] == 'mamMember' &&
+          userData['structureId'] != null) {
+        return userData['structureId'];
+      }
+    }
+
+    return currentUser.uid;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -107,28 +131,9 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
         return;
       }
 
-      // Récupérer l'email de l'utilisateur actuel
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Child Documents: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final String structureId = await _resolveStructureId(user: user);
+      print(
+          "🔄 Child Documents: Utilisation de l'ID de structure: $structureId");
 
       // Récupération des informations de la structure avec l'ID correct
       final structureDoc = await FirebaseFirestore.instance
@@ -442,21 +447,7 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final String currentUserEmail = user.email?.toLowerCase() ?? '';
-      String structureId = user.uid;
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          structureId = userData['structureId'];
-        }
-      }
+      final String structureId = await _resolveStructureId(user: user);
 
       await FirebaseFirestore.instance
           .collection('structures')
@@ -969,28 +960,9 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      // Récupérer l'email de l'utilisateur actuel (crucial pour la traçabilité)
       final String currentUserEmail = user.email?.toLowerCase() ?? '';
-
-      // Vérifier d'abord si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user.uid;
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        if (userData['role'] == 'mamMember' &&
-            userData['structureId'] != null) {
-          // Utiliser l'ID de la structure MAM au lieu de l'ID utilisateur
-          structureId = userData['structureId'];
-          print(
-              "🔄 Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
-        }
-      }
+      final String structureId = await _resolveStructureId(user: user);
+      print("🔄 Utilisation de l'ID de structure: $structureId");
 
       // 1. Upload du document de vaccination
       if (_vaccinFile != null) {
@@ -1084,7 +1056,10 @@ class _ChildDocumentsScreenState extends State<ChildDocumentsScreen> {
       print("Documents sauvegardés avec succès par: $currentUserEmail");
 
       if (mounted) {
-        context.go('/child-pickup-auth', extra: widget.childId);
+        context.go('/child-pickup-auth', extra: {
+          'childId': widget.childId,
+          'structureId': widget.structureId,
+        });
       }
     } catch (e) {
       print("Erreur lors de la sauvegarde des documents: $e");

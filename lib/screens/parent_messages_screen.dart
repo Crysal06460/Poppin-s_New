@@ -367,11 +367,28 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                 .doc(childId)
                 .get();
 
-          if (childDoc.exists) {
-            final data = childDoc.data()!;
-            childrenData.add({
-              'id': childDoc.id,
-              'firstName': data['firstName'] ?? 'Sans nom',
+            if (childDoc.exists) {
+              final data = childDoc.data()!;
+              
+              // Tenter de récupérer les infos parent depuis le document enfant
+              // si elles ne sont pas dans le document user
+              if (_parentFirstName.isEmpty) {
+                final parentEmail = (user.email ?? '').toLowerCase();
+                final p1 = data['parent1'] as Map<String, dynamic>?;
+                final p2 = data['parent2'] as Map<String, dynamic>?;
+                
+                if (p1 != null && (p1['email'] as String?)?.toLowerCase() == parentEmail) {
+                  _parentFirstName = (p1['firstName'] ?? '').toString();
+                  _parentLastName = (p1['lastName'] ?? '').toString();
+                } else if (p2 != null && (p2['email'] as String?)?.toLowerCase() == parentEmail) {
+                   _parentFirstName = (p2['firstName'] ?? '').toString();
+                   _parentLastName = (p2['lastName'] ?? '').toString();
+                }
+              }
+
+              childrenData.add({
+                'id': childDoc.id,
+                'firstName': data['firstName'] ?? 'Sans nom',
                 'lastName': data['lastName'] ?? '',
                 'photoUrl': data['photoUrl'],
                 'structureId': structureId,
@@ -382,9 +399,22 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
 
           setState(() {
             _children = childrenData;
-            _parentFirstName =
-                (userData['firstName'] ?? '').toString().trim();
-            _parentLastName = (userData['lastName'] ?? '').toString().trim();
+            
+            // Initialisation avec les données user, fallback géré dans la boucle
+            final userFirstName = (userData['firstName'] ?? '').toString().trim();
+            final userLastName = (userData['lastName'] ?? '').toString().trim();
+            
+            // Si on a trouvé mieux dans la boucle enfant, on garde ce qu'on a trouvé, 
+            // sinon on prend le user doc (qui peut être vide)
+            if (_parentFirstName.isEmpty) {
+                 _parentFirstName = userFirstName;
+                 _parentLastName = userLastName;
+            } else if (userFirstName.isNotEmpty) {
+                // Si le user doc a des infos, il est prioritaire (cas de mise à jour profil)
+                _parentFirstName = userFirstName;
+                _parentLastName = userLastName;
+            }
+            
             _parentEmail = (user.email ?? '').toLowerCase();
 
             // Si un ID d'enfant est spécifié, sélectionner cet enfant

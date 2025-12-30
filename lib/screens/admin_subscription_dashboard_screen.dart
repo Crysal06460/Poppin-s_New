@@ -24,11 +24,38 @@ const Set<String> _subscriptionAdminEmails = {
   'chrisgugu1101@gmail.com',
 };
 
+const Set<String> _inactiveSubscriptionStatuses = {
+  'canceled',
+  'cancelled',
+  'expired',
+  'revoked',
+  'terminated',
+  'ended',
+  'inactive',
+  'on_hold',
+  'paused',
+  'grace_period_expired',
+};
+
+const Set<String> _activeSubscriptionStatuses = {
+  'active',
+  'approved',
+  'renewed',
+  'renewing',
+  'purchased',
+  'succeeded',
+  'grace',
+  'grace_period',
+  'in_grace_period',
+  'recovered',
+  'restarted',
+};
+
 class _AdminSubscriptionDashboardScreenState
     extends State<AdminSubscriptionDashboardScreen> {
-  static const double _priceAssmat = 6.99;
-  static const double _priceMamSmall = 19.99;
-  static const double _priceMamLarge = 24.99;
+  static const double _priceAssmat = 3.99;
+  static const double _priceMamSmall = 9.99;
+  static const double _priceMamLarge = 14.99;
   static const double _platformFeeRate = 0.15;
   bool _isAuthorizing = true;
   bool _isAuthorized = false;
@@ -822,7 +849,9 @@ class _StructureSubscriptionInfo {
       trialStatus.hasStarted && trialStatus.isExpired && !hasConfirmedSubscription;
 
   bool get hasConfirmedSubscription =>
-      subscriptionActive && !_statusIndicatesTrial(subscriptionStatus);
+      subscriptionActive &&
+      !_statusIndicatesTrial(subscriptionStatus) &&
+      !_statusIndicatesInactive(subscriptionStatus);
 
   DateTime? get trialEnd => trialStatus.endAt;
 
@@ -852,9 +881,10 @@ class _StructureSubscriptionInfo {
     if (_statusIndicatesTrial(subscriptionStatus)) {
       return 'Essai non démarré';
     }
-    return subscriptionStatus.isEmpty
-        ? 'Statut inconnu'
-        : subscriptionStatus;
+    if (_statusIndicatesInactive(subscriptionStatus)) {
+      return 'Abonnement inactif';
+    }
+    return subscriptionStatus.isEmpty ? 'Statut inconnu' : subscriptionStatus;
   }
 
   String get structureTypeLabel {
@@ -913,6 +943,12 @@ class _StructureSubscriptionInfo {
   static bool _statusIndicatesTrial(String status) {
     final normalized = status.toLowerCase();
     return normalized.contains('trial') || normalized == 'essai';
+  }
+
+  static bool _statusIndicatesInactive(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.isEmpty) return false;
+    return _inactiveSubscriptionStatuses.contains(normalized);
   }
 
   static DateTime? _tryParseDate(dynamic value) {

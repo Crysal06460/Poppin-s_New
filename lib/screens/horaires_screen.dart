@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../planning/planning_models.dart';
 import '../utils/planning_helper.dart';
 import '../utils/child_avatar_color_helper.dart';
+import '../utils/structure_context.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 
@@ -26,6 +27,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
   bool isLoading = true;
   String _rebuildKey =
       DateTime.now().millisecondsSinceEpoch.toString(); // NOUVELLE LIGNE
+  StructureContext? _structureContext;
 
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
@@ -356,64 +358,10 @@ class _HorairesScreenState extends State<HorairesScreen> {
     try {
       setState(() => isLoading = true);
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        context.go('/login');
-        return;
-      }
-
-      // Récupérer l'ID de structure en tenant compte des différents rôles (MAM, parent employeur...)
-      final userEmail = user.email?.toLowerCase() ?? '';
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userEmail)
-          .get();
-
-      String structureId =
-          user.uid; // Par défaut, structure propre à l'assistante
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        final String role =
-            (userData['role'] ?? '').toString().toLowerCase().trim();
-        final String linkedStructureId =
-            (userData['structureId'] ?? '').toString().trim();
-
-        if (linkedStructureId.isNotEmpty &&
-            (role == 'mammember' ||
-                role == 'assistantfromparent' ||
-                role == 'assistant')) {
-          structureId = linkedStructureId;
-          print(
-              "📄 Horaires: Utilisateur lié à une structure externe ($role) → $structureId");
-        }
-      }
-
-      // Récupérer les informations de la structure avec l'ID correct
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(
-              structureId) // IMPORTANT: Utiliser structureId au lieu de user.uid
-          .get();
-
-      if (!structureSnapshot.exists) {
-        print(
-            "⚠️ Horaires: structure introuvable pour l'ID $structureId (rôle parent employeur ?)");
-        setState(() {
-          structureName = 'Structure introuvable';
-          isLoading = false;
-        });
-        return;
-      }
-
-      final Map<String, dynamic> structureData =
-          (structureSnapshot.data() as Map<String, dynamic>?) ?? const {};
-      String resolvedName = (structureData['structureName'] ??
-              structureData['ownerFirstName'] ??
-              'Structure inconnue')
-          .toString()
-          .trim();
-      if (resolvedName.isEmpty) {
+      final structureContext = await StructureResolver().resolve();
+      _structureContext = structureContext;
+      String resolvedName = structureContext.structureName;
+      if (resolvedName.trim().isEmpty) {
         resolvedName = 'Structure inconnue';
       }
 
@@ -425,67 +373,28 @@ class _HorairesScreenState extends State<HorairesScreen> {
       await _loadEnfantsDuJour();
     } catch (e) {
       print("Erreur de chargement des données de structure: $e");
-      setState(() => isLoading = false);
+      setState(() {
+        structureName = 'Structure introuvable';
+        isLoading = false;
+      });
     }
   }
 
   Future<void> _loadEnfantsDuJour() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final currentUserEmail = user?.email?.toLowerCase() ?? '';
+      final structureContext =
+          _structureContext ?? await StructureResolver().resolve();
+      _structureContext = structureContext;
+
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
       final today = DateTime.now();
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
 
-      // CORRECTION: Récupérer l'ID de structure en tenant compte des membres MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      String structureId = user?.uid ?? '';
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        final String role =
-            (userData['role'] ?? '').toString().toLowerCase().trim();
-        final String linkedStructureId =
-            (userData['structureId'] ?? '').toString().trim();
-
-        if (linkedStructureId.isNotEmpty &&
-            (role == 'mammember' ||
-                role == 'assistantfromparent' ||
-                role == 'assistant')) {
-          structureId = linkedStructureId;
-          print(
-              "📄 Horaires: Chargement via structure liée ($role) → $structureId");
-        }
-      }
-
-      final structureSnapshot = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(
-              structureId) // IMPORTANT: Utiliser structureId au lieu de user.uid
-          .get();
-
-      final Map<String, dynamic> structureData =
-          (structureSnapshot.data() as Map<String, dynamic>?) ?? const {};
-      final String structureType =
-          (structureData['structureType'] ?? "AssistanteMaternelle")
-              .toString()
-              .trim()
-              .toLowerCase();
-      final dynamic showAllField = structureData['showAllChildrenOnHome'];
-      bool allowAllChildren = true;
-      if (showAllField is bool) {
-        allowAllChildren = showAllField;
-      } else {
-        await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(structureId)
-            .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
-      }
+      final String structureType = structureContext.normalizedStructureType;
+      final bool allowAllChildren = structureContext.showAllChildren;
 
       // Récupérer tous les enfants de la structure avec le bon ID de structure
       final snapshot = await FirebaseFirestore.instance
@@ -735,36 +644,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
   Future<void> _updateHoraires(
       String childId, Map<String, dynamic> horaires) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final currentUserEmail = user?.email?.toLowerCase() ?? '';
+      final structureContext =
+          _structureContext ?? await StructureResolver().resolve();
+      _structureContext = structureContext;
+      final String structureId = structureContext.structureId;
+      final String currentUserEmail = structureContext.currentUserEmail;
       final now = DateTime.now();
       final dateActuelle = DateFormat('yyyy-MM-dd').format(now);
-
-      // CORRECTION: Récupérer le bon ID de structure comme dans _loadStructureData
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      // ID de structure à utiliser (par défaut, utiliser l'ID de l'utilisateur)
-      String structureId = user?.uid ?? '';
-
-      if (userDoc.exists) {
-        final userData = userDoc.data() ?? {};
-        final String role =
-            (userData['role'] ?? '').toString().toLowerCase().trim();
-        final String linkedStructureId =
-            (userData['structureId'] ?? '').toString().trim();
-
-        if (linkedStructureId.isNotEmpty &&
-            (role == 'mammember' ||
-                role == 'assistantfromparent' ||
-                role == 'assistant')) {
-          structureId = linkedStructureId;
-          print(
-              "📄 Horaires: Enregistrement sur la structure liée ($role) → $structureId");
-        }
-      }
 
       final String actionType = (horaires['actionType'] ?? '').toString();
       if (!horaires.containsKey('absent')) {

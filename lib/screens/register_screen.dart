@@ -1264,6 +1264,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required String email,
     DocumentSnapshot<Map<String, dynamic>>? structureSnapshot,
   }) async {
+    // 🔍 AUDIT: Vérifier si l'utilisateur est déjà lié à une structure (ex: invité)
+    String? linkedStructureId;
+    bool isLinkedMember = false;
+    String existingStructureType = 'MAM'; // Valeur par défaut si inconnue
+
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(email).get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final String? sId = userData?['structureId'];
+        if (sId != null && sId.isNotEmpty && sId != user.uid) {
+          linkedStructureId = sId;
+          isLinkedMember = true;
+          print(
+              "🔍 RegisterScreen: Utilisateur déjà lié à la structure $linkedStructureId. Passage du flux de création.");
+          
+          // Tenter de récupérer le type de la structure existante
+          try {
+             final existingStructDoc = await FirebaseFirestore.instance.collection('structures').doc(sId).get();
+             if (existingStructDoc.exists) {
+                existingStructureType = existingStructDoc.data()?['structureType'] ?? 'MAM';
+             }
+          } catch (e) {
+            print("⚠️ Impossible de lire la structure liée: $e");
+          }
+        }
+      }
+    } catch (e) {
+      print("⚠️ Erreur lors de la vérification du profil utilisateur: $e");
+    }
+
+    if (isLinkedMember && linkedStructureId != null) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = "";
+      });
+
+      // Rediriger directement sans créer de nouvelle structure
+      context.go('/congratulations', extra: {
+        'structureType': existingStructureType,
+        'structureId': linkedStructureId,
+        'skipStructureFlow': true,
+      });
+      return;
+    }
+
+    // Comportement standard pour un nouveau créateur de structure
     final String structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
     final DocumentReference<Map<String, dynamic>> structureRef =
         FirebaseFirestore.instance.collection('structures').doc(user.uid);

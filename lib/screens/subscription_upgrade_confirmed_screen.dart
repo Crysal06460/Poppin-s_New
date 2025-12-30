@@ -27,9 +27,9 @@ class SubscriptionUpgradeConfirmedScreen extends StatelessWidget {
       final bool isMam = normalized == 'mam' || normalized.contains('maison');
 
       if (isMam) {
-        return count <= 3 ? '19,99 € / mois' : '24,99 € / mois';
+        return count <= 3 ? '9,99 € / mois' : '14,99 € / mois';
       }
-      return '6,99 € / mois';
+      return '3,99 € / mois';
     }
 
     String _formatMembersLabel(int count) {

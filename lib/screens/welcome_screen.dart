@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 // 🧪 AJOUT : Import pour le test sandbox
 import '../screens/subscription_test_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({Key? key}) : super(key: key);
@@ -109,34 +110,98 @@ class WelcomeScreen extends StatelessWidget {
 
                         const SizedBox(height: 20),
 
-                        // Séparateur
-                        SizedBox(
+                        // 🆕 SECTION NOUVEAU SUR POPPIN'S
+                        Container(
                           width: buttonWidth,
-                          child: Row(
-                            children: const [
-                              Expanded(child: Divider(color: Colors.grey)),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text("ou",
-                                    style: TextStyle(color: Colors.grey)),
+                          margin: const EdgeInsets.only(top: 20, bottom: 10),
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F7FA), // Gris très léger / bleuté
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFE1E8ED),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                "Nouveau sur Poppin’s ?",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF2C3E50),
+                                  letterSpacing: 0.5,
+                                ),
                               ),
-                              Expanded(child: Divider(color: Colors.grey)),
+                              const SizedBox(height: 12),
+                              Text(
+                                "La création de compte se fait sur notre site internet.\nUne fois inscrit(e), connectez-vous ici.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.5,
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Bouton Site Web
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    final Uri url = Uri.parse('https://www.poppin-s.fr');
+                                    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                                      // Gérer l'erreur si nécessaire, ou juste ne rien faire
+                                      debugPrint('Could not launch \$url');
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                      border: Border.all(
+                                        color: primaryRed.withOpacity(0.2), // Petite touche de rouge Poppin's
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Text(
+                                          "Découvrir Poppin's",
+                                          style: TextStyle(
+                                            color: primaryRed,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 16,
+                                          color: primaryRed,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
 
-                        const SizedBox(height: 20),
 
-                        // Bouton Créer un compte
-                        _buildButton(
-                          context,
-                          text: "Créer un compte",
-                          icon: Icons.person_add_outlined,
-                          onPressed: () => context.push('/trial-info'),
-                          color: primaryYellow,
-                          isPrimary: true,
-                          width: buttonWidth,
-                        ),
 
                         // 🧪 NOUVEAU : Bouton de test sandbox (seulement en mode debug)
                         if (kDebugMode) ...[
@@ -204,7 +269,25 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+
+
+                  const SizedBox(height: 30),
+
+                  // Disclaimer text
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      "🔐 Cette application est accessible aux professionnels/parents disposant d’un compte ou d'une invitation Poppin’s.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: isTablet ? 14 : 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
                 ],
               ),
             ),

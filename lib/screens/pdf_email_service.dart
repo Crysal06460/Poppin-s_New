@@ -409,7 +409,11 @@ class PdfEmailService {
     String structureName = '';
     if (structureDoc.exists) {
       final data = structureDoc.data()!;
-      assmatEmail = data['email'] ?? '';
+      final currentUserEmail =
+          FirebaseAuth.instance.currentUser?.email?.toLowerCase().trim() ?? '';
+      assmatEmail = (data['email'] ?? data['ownerEmail'] ?? currentUserEmail)
+          .toString()
+          .trim();
       structureName = data['structureName'] ?? 'Structure';
     }
 
