@@ -320,6 +320,7 @@ class _RegistrationFormState extends State<_RegistrationForm> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+  List<String> _citySuggestions = [];
 
   @override
   void initState() {
@@ -571,17 +572,32 @@ class _RegistrationFormState extends State<_RegistrationForm> {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         List<dynamic> cities = json.decode(response.body);
-        if (cities.isNotEmpty) {
-           // On prend la première ville par défaut
-           setState(() {
-             _cityController.text = cities.first['nom'];
-           });
-        }
+        final List<String> cityNames = cities.map((c) => c['nom'].toString()).toList();
+        
+        setState(() {
+          _citySuggestions = cityNames;
+          if (cityNames.isNotEmpty) {
+             // Si une seule ville, on la sélectionne d'office
+             if (cityNames.length == 1) {
+               _cityController.text = cityNames.first;
+             } else {
+               // Sinon on vide pour forcer le choix, sauf si la valeur actuelle est déjà dans la liste
+               if (!cityNames.contains(_cityController.text)) {
+                 _cityController.clear();
+               }
+             }
+          } else {
+            _citySuggestions = [];
+          }
+        });
       }
     } catch (e) {
       print("Erreur API Gouv: $e");
     }
   }
+
+  // Helper pour vérifier si la ville saisie est valide
+  bool get _cityNames => _citySuggestions.contains(_cityController.text);
 
   @override
   void dispose() {
@@ -743,7 +759,9 @@ class _RegistrationFormState extends State<_RegistrationForm> {
         'displayName': "$firstName $lastName",
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
-        'zipCode': _zipController.text.trim(),
+        'address': _addressController.text.trim(),
+        'postalCode': _zipController.text.trim(), // CORRECTION: Nom standardisé
+        'zipCode': _zipController.text.trim(), // Legacy support (optionnel)
         'city': _cityController.text.trim(),
         'structureType': finalStructureType,
         'maxMemberCount': finalMaxMembers,
@@ -870,7 +888,73 @@ class _RegistrationFormState extends State<_RegistrationForm> {
                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(5)]
              )),
              const SizedBox(width: 12),
-             Expanded(child: _buildTextField("Ville", _cityController)),
+             Expanded(
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   // Champ Ville custom avec PopupMenu
+                   GestureDetector(
+                     onTap: () {
+                       if (_citySuggestions.length > 1) {
+                         // Afficher le popup menu
+                         final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                         final offset = renderBox.localToGlobal(Offset.zero);
+                         showMenu(
+                           context: context,
+                           position: RelativeRect.fromLTRB(
+                             offset.dx + renderBox.size.width / 2, // Position approx
+                             offset.dy + renderBox.size.height,
+                             offset.dx + renderBox.size.width,
+                             offset.dy,
+                           ),
+                           items: _citySuggestions.map((String city) {
+                             return PopupMenuItem<String>(
+                               value: city,
+                               child: Text(city),
+                             );
+                           }).toList(),
+                         ).then((value) {
+                           if (value != null) {
+                             setState(() {
+                               _cityController.text = value;
+                             });
+                           }
+                         });
+                       }
+                     },
+                     child: AbsorbPointer(
+                       absorbing: _citySuggestions.length > 1,
+                       child: TextFormField(
+                         controller: _cityController,
+                         validator: (val) {
+                           if (val == null || val.isEmpty) return "Requis";
+                           return null;
+                         },
+                         decoration: InputDecoration(
+                           labelText: "Ville",
+                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                           suffixIcon: _citySuggestions.length > 1
+                               ? PopupMenuButton<String>(
+                                   icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF3D9DF2)),
+                                   onSelected: (String value) {
+                                     setState(() {
+                                       _cityController.text = value;
+                                     });
+                                   },
+                                   itemBuilder: (BuildContext context) {
+                                     return _citySuggestions.map<PopupMenuItem<String>>((String value) {
+                                       return PopupMenuItem(value: value, child: Text(value));
+                                     }).toList();
+                                   },
+                                 )
+                               : null,
+                         ),
+                       ),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
           ]),
           
           const SizedBox(height: 16),

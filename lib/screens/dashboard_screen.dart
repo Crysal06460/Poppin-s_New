@@ -1355,7 +1355,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   print("🛡️ Dashboard: FORCE MAM 50 (ID reconnu: $productId)");
               } else if (mamSmallPriceIds.contains(productId)) {
                   isMam = true;
-                   if (productId == 'price_1sflcbppvdnoe6wk9jqndswp' || productId.contains('mam_2') || productId.contains('mam2')) {
+                   // CORRECTION: price_1sflcbppvdnoe6wk9jqndswp est le forfait 3 membres !
+                   if (productId == 'price_1sflcbppvdnoe6wk9jqndswp') {
+                      overrideMaxMembers = 3;
+                   } else if (productId.contains('mam_2') || productId.contains('mam2')) {
                       overrideMaxMembers = 2;
                    } else {
                       overrideMaxMembers = 3;

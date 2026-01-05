@@ -117,7 +117,8 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
           _emailController.text = data['email'] ?? '';
           _addressController.text = data['address'] ?? '';
           _cityController.text = data['city'] ?? '';
-          _postalCodeController.text = data['postalCode'] ?? '';
+          // FIX: Fallback sur 'zipCode' si 'postalCode' est vide
+          _postalCodeController.text = data['postalCode'] ?? data['zipCode'] ?? '';
           _logoUrl = data['logoUrl'];
           if (userRole == 'assistantfromparent') {
             _pageTitle = 'Modifier ses coordonnées';

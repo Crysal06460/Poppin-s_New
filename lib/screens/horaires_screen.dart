@@ -664,7 +664,6 @@ class _HorairesScreenState extends State<HorairesScreen> {
       horaires['date'] = dateActuelle;
       horaires['userEmail'] = currentUserEmail; // Ajouté pour traçabilité
 
-      // CORRECTION: Utiliser structureId au lieu de user?.uid
       await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId) // IMPORTANT: Utiliser structureId!

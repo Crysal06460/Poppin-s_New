@@ -2846,7 +2846,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
           .doc(dayKey)
           .snapshots()
           .listen((doc) {
-        print("⏱️ Document horaires reçu: ${doc.exists}");
+        // print("⏱️ Document horaires reçu: ${doc.exists}");
         _processHoursDocSnapshot(doc, childId);
         _updateTimelineEvents();
       }, onError: (error) {
@@ -3327,6 +3327,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
 
         // Si absent: ne rien afficher
         if (childData['absent'] == true) {
+          print("  ℹ️ Child is marked absent");
           _hourDocEvents = [];
           _updateHourEvents();
           return;

@@ -1024,8 +1024,10 @@ class _HomeScreenState extends State<HomeScreen> {
               explicitIdMatch = true;
             } else if (mamSmallPriceIds.contains(productId)) {
               correctedType = 'MAM';
-              // Spécifique MAM 2
-              if (productId == 'price_1sflcbppvdnoe6wk9jqndswp' || productId.contains('mam_2') || productId.contains('mam2')) {
+              // CORRECTION: price_1sflcbppvdnoe6wk9jqndswp est le forfait 3 membres !
+              if (productId == 'price_1sflcbppvdnoe6wk9jqndswp') {
+                 correctedMax = 3;
+              } else if (productId.contains('mam_2') || productId.contains('mam2')) {
                  correctedMax = 2;
               } else {
                  correctedMax = 3;
