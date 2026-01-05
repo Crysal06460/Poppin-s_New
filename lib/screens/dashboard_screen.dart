@@ -1324,8 +1324,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Vérifier le type de structure
         String structureType = data['structureType'] ?? 'AssistanteMaternelle';
         bool isMam = structureType == 'MAM';
+        int? overrideMaxMembers;
 
-        print("Type de structure trouvé: $structureType, isMAM = $isMam");
+        // 🛡️ SÉCURITÉ ANTI-WEBHOOK : On vérifie l'ID produit directement
+        try {
+           final subQuery = await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: structureId)
+              .limit(1)
+              .get();
+           
+           if (subQuery.docs.isNotEmpty) {
+               final subData = subQuery.docs.first.data();
+               final String productId = (subData['productId'] ?? subData['planId'] ?? '').toString().toLowerCase();
+               
+               // Exactement les mêmes sets que HomeScreen
+               const Set<String> mamSmallPriceIds = {
+                'price_1sfkuilid2pa5i1c75uu1tch',
+                'price_1sflcbppvdnoe6wk9jqndswp', 
+              };
+              const Set<String> mamLargePriceIds = {
+                'price_1sfkwulid2pa5i1cmsdrrf0c',
+                'price_1sflcjpgpvnoe6wkfd6blign',
+                'price_1sflcjppvdnoe6wkfd6blign', // MAM 4+
+              };
+              
+              if (mamLargePriceIds.contains(productId)) {
+                  isMam = true;
+                  overrideMaxMembers = 50;
+                  print("🛡️ Dashboard: FORCE MAM 50 (ID reconnu: $productId)");
+              } else if (mamSmallPriceIds.contains(productId)) {
+                  isMam = true;
+                   if (productId == 'price_1sflcbppvdnoe6wk9jqndswp' || productId.contains('mam_2') || productId.contains('mam2')) {
+                      overrideMaxMembers = 2;
+                   } else {
+                      overrideMaxMembers = 3;
+                   }
+                  print("🛡️ Dashboard: FORCE MAM $overrideMaxMembers (ID reconnu: $productId)");
+              } else if (productId.contains('assistante_maternelle') || productId.contains('assmat')) {
+                   // Si l'ID est Assmat, mais la DB dit MAM, on devrait pê forcer Assmat ?
+                   // Mais ici le problème c'est l'inverse (DB dit Assmat alors que c'est MAM).
+              }
+           }
+        } catch (e) {
+            print("Erreur check ID dashboard: $e");
+        }
+
+        print("Type de structure trouvé (DB): $structureType, isMAM (Final): $isMam");
 
         if (isMam) {
           // ✅ CORRECTION : MAM minimum 2 membres
@@ -1333,7 +1378,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           int currentMembers = 1;
           bool? structureHasFreezer;
 
-          if (data.containsKey('maxMemberCount')) {
+          if (overrideMaxMembers != null) {
+              maxMembers = overrideMaxMembers;
+          } else if (data.containsKey('maxMemberCount')) {
             maxMembers = data['maxMemberCount'] ?? 2;
             // ✅ S'assurer que c'est au minimum 2 pour une MAM
             if (maxMembers < 2) {

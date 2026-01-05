@@ -74,6 +74,14 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- ✅ DEEP LINK: poppins:// -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="poppins" />
+            </intent-filter>
         </activity>
 
         <!-- ✅ VERSION D'EMBEDDING FLUTTER (V2) -->

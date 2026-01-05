@@ -31,6 +31,7 @@ const mailjet = Mailjet.apiConnect(
 );
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
+const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 let stripeClient;
 function getStripe() {
     if (!stripeClient) {
@@ -69,8 +70,8 @@ exports.finalizeStripeSignup = onRequest(
                 email,
             } = req.body;
 
-            if (!sessionId || !password || !firstName || !lastName) {
-                return res.status(400).json({ error: 'Données manquantes' });
+            if (!sessionId) {
+                return res.status(400).json({ error: 'SessionId manquant' });
             }
 
             const session = await getStripe().checkout.sessions.retrieve(
@@ -94,7 +95,7 @@ exports.finalizeStripeSignup = onRequest(
             let structureType = 'AssistanteMaternelle';
             let maxMemberCount = 1; // Assmat seule = 1 membre
 
-            if (priceId === 'price_1SfkUILID2pA5i1C75uu1TCH') {
+            if (priceId === 'price_1SfkUILID2pA5i1C75uu1TCH' || priceId === 'price_1SflCBPpvDnoE6wk9jqNDsWP') {
                 // MAM 2 et 3 membres
                 structureType = 'MAM';
                 maxMemberCount = 3;
@@ -109,7 +110,7 @@ exports.finalizeStripeSignup = onRequest(
             try {
                 userRecord = await getAuth().createUser({
                     email: emailFinal,
-                    password,
+                    password: password || undefined,
                     displayName: `${firstName} ${lastName}`,
                 });
             } catch (error) {
@@ -121,80 +122,78 @@ exports.finalizeStripeSignup = onRequest(
                 }
             }
 
-            // 2. Créer le document Utilisateur (CRITIQUE pour l'app)
+            // 2. Créer ou Mettre à jour le document Utilisateur
             await db.collection('users').doc(emailFinal.toLowerCase()).set({
                 email: emailFinal,
-                role: 'structure', // ou 'assistante_maternelle' selon votre nomenclature précise
+                role: 'structure',
                 structureId: userRecord.uid,
-                createdAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
 
-            // 3. Créer la Structure avec l'ID utilisateur (CRITIQUE pour l'app)
+            // 3. Gérer la Structure
             const structureRef = db.collection('structures').doc(userRecord.uid);
-            await structureRef.set({
-                // Champs principaux
-                structureType,
-                structureName: structureName || null,
+            const structureDoc = await structureRef.get();
 
-                // Champs Address / Info
-                address: address || null,
-                postalCode: postalCode || null,
-                city: city || null,
-                phone: phone || null,
+            if (structureDoc.exists) {
+                console.log(`ℹ️ Structure existante pour ${userRecord.uid}, mise à jour de l'abonnement uniquement.`);
+                // CAS MIGRATION / RÉABONNEMENT
+                await structureRef.update({
+                    subscriptionPlatform: 'stripe',
+                    subscriptionSource: 'stripe',
+                    subscriptionStatus: 'active',
+                    subscriptionActive: true,
+                    maxMemberCount: maxMemberCount,
+                    subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                    ...(firstName ? { ownerFirstName: firstName } : {}),
+                    ...(lastName ? { ownerLastName: lastName } : {}),
+                });
+            } else {
+                console.log(`✨ Nouvelle structure pour ${userRecord.uid}, création complète.`);
+                // CAS CRÉATION INITIALE
+                await structureRef.set({
+                    structureType,
+                    structureName: structureName || null,
+                    address: address || null,
+                    postalCode: postalCode || null,
+                    city: city || null,
+                    phone: phone || null,
+                    ownerUid: userRecord.uid,
+                    ownerEmail: emailFinal,
+                    ownerFirstName: firstName,
+                    ownerLastName: lastName,
+                    email: emailFinal,
+                    firstName: firstName,
+                    lastName: lastName,
+                    memberCount: 1,
+                    maxMemberCount: maxMemberCount,
+                    subscriptionPlatform: 'stripe',
+                    subscriptionSource: 'stripe',
+                    subscriptionStatus: 'active',
+                    subscriptionActive: true,
+                    trialStatus: 'converted',
+                    createdAt: FieldValue.serverTimestamp(),
+                });
 
-                // Champs Owner (requis par l'app)
-                ownerUid: userRecord.uid,
-                ownerEmail: emailFinal,
-                ownerFirstName: firstName, // Nouveau (requis)
-                ownerLastName: lastName,   // Nouveau (requis)
+                // 4. Ajouter le membre Owner (seulement si nouvelle structure)
+                await structureRef.collection('members').doc('member_1').set({
+                    uid: userRecord.uid,
+                    email: emailFinal,
+                    firstName,
+                    lastName,
+                    phone: phone || null,
+                    role: 'owner',
+                    isFounder: true,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+            }
 
-                // Champs Miroir (requis par l'app pour affichage)
-                email: emailFinal,
-                firstName: firstName,
-                lastName: lastName,
-
-                // Gestion Membres & Abonnement
-                memberCount: 1, // Init à 1 (le propriétaire)
-                maxMemberCount: maxMemberCount,
-
-                subscriptionPlatform: 'stripe', // Nouveau
-                subscriptionSource: 'stripe',
-                subscriptionStatus: 'trial',
-                subscriptionActive: true,
-
-                // Champs Trial requis par FirebaseTrialService
-                trialStatus: 'trial',
-                trialDurationDays: 7,
-                trialStartAt: FieldValue.serverTimestamp(),
-                trialEndsAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-                subscriptionTrialStartsAt: FieldValue.serverTimestamp(),
-                subscriptionTrialEndsAt: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
-
-                createdAt: FieldValue.serverTimestamp(),
-            });
-
-
-            // 4. Ajouter le membre Owner
-            await structureRef.collection('members').doc('member_1').set({
-                uid: userRecord.uid,
-                email: emailFinal,
-                firstName,
-                lastName,
-                phone: phone || null,
-                role: 'owner',
-                isFounder: true,
-                createdAt: FieldValue.serverTimestamp(),
-            });
-
-            // 5. [AJOUT CRITIQUE] Lier l'abonnement Stripe et créer le doc subscriptions
+            // 5. Lier l'abonnement Stripe
             if (session.subscription) {
                 const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
                 console.log(`🔗 Liaison de l'abonnement Stripe ${subId} à la structure ${userRecord.uid}`);
 
-                // Récupérer les détails de l'abonnement pour avoir les dates précises
                 const subscription = await getStripe().subscriptions.retrieve(subId);
 
-                // Mettre à jour les métadonnées Stripe (CRITIQUE pour que le webhook fonctionne ensuite)
                 await getStripe().subscriptions.update(subId, {
                     metadata: {
                         structureId: userRecord.uid,
@@ -203,7 +202,6 @@ exports.finalizeStripeSignup = onRequest(
                     }
                 });
 
-                // Créer le document dans la collection 'subscriptions' (comme l'ancienne méthode)
                 await db.collection('subscriptions').doc(subId).set({
                     structureId: userRecord.uid,
                     structureType,
@@ -216,21 +214,239 @@ exports.finalizeStripeSignup = onRequest(
                     trialStartedAt: subscription.trial_start ? Timestamp.fromMillis(subscription.trial_start * 1000) : null,
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
-                });
+                }, { merge: true });
 
-                // Mettre à jour la structure avec l'ID de l'abonnement (CRITIQUE pour l'app)
                 await structureRef.update({
                     subscriptionDocId: subId,
                     stripeSubscriptionId: subId,
                     subscriptionStatus: subscription.status,
+                    subscriptionPlatform: 'stripe',
                 });
             }
 
-            return res.json({ success: true });
+            // 6. ENVOI EMAIL BIENVENUE + PASSWORD RESET (Uniquement pour les nouvelles structures)
+            if (!structureDoc.exists) {
+                try {
+                    console.log(`📧 Génération lien mot de passe pour ${emailFinal}...`);
+                    const actionLink = await getAuth().generatePasswordResetLink(emailFinal);
+
+                    const welcomeHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <style>
+                            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; background-color: #f8f9fa; padding: 20px; }
+                            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                            .header { background: linear-gradient(135deg, #3D9DF2 0%, #05C7F2 100%); color: white; padding: 30px; text-align: center; }
+                            .content { padding: 30px; line-height: 1.6; }
+                            .btn { display: inline-block; background-color: #3D9DF2; color: white; padding: 12px 24px; border-radius: 25px; text-decoration: none; font-weight: bold; margin-top: 20px; }
+                            .footer { background: #f1f3f4; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>Bienvenue sur Poppin's ! ☂️</h1>
+                            </div>
+                            <div class="content">
+                                <h2>Bonjour ${firstName},</h2>
+                                <p>Votre compte a été créé avec succès suite à votre abonnement.</p>
+                                <p>Pour finaliser votre inscription et accéder à votre espace, veuillez définir votre mot de passe en cliquant sur le bouton ci-dessous :</p>
+                                <center>
+                                    <a href="${actionLink}" class="btn">Créer mon mot de passe</a>
+                                </center>
+                                <p style="margin-top: 30px; font-size: 14px; color: #666;">Ce lien est unique et sécurisé. Une fois votre mot de passe créé, revenez sur l'application pour vous connecter.</p>
+                            </div>
+                            <div class="footer">
+                                <p>À très vite sur Poppin's !</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    `;
+
+                    await mailjet.post('send', { version: 'v3.1' }).request({
+                        Messages: [{
+                            From: { Email: "noreply@poppin-s.fr", Name: "Équipe Poppins" },
+                            To: [{ Email: emailFinal, Name: `${firstName} ${lastName}` }],
+                            Subject: "Bienvenue sur Poppin's - Créez votre mot de passe",
+                            HTMLPart: welcomeHtml
+                        }]
+                    });
+                    console.log('✅ Email de bienvenue envoyé.');
+                } catch (emailError) {
+                    console.error('❌ Erreur envoi email bienvenue:', emailError);
+                    // On ne bloque pas le retour success car le compte est déjà créé
+                }
+            }
+
+            return res.json({ success: true, isMigration: structureDoc.exists });
         } catch (error) {
             console.error('finalizeStripeSignup error:', error);
             return res.status(500).json({ error: error.message });
         }
+    },
+);
+
+// 7. Récupérer les infos de la session Checkout (pour le Frontend)
+exports.getCheckoutInfo = onCall({
+    region: 'europe-west1',
+}, async (request) => {
+    try {
+        const sessionId = request.data.sessionId;
+        if (!sessionId) {
+            throw new HttpsError('invalid-argument', 'sessionId manquant');
+        }
+
+        const session = await getStripe().checkout.sessions.retrieve(
+            sessionId,
+            { expand: ['line_items'] },
+        );
+
+        const lineItems = (session.line_items && session.line_items.data) || [];
+        const priceId = lineItems[0] && lineItems[0].price && lineItems[0].price.id;
+
+        console.log(`🔍 getCheckoutInfo: Session=${sessionId} -> Price=${priceId}`);
+
+        let structureType = 'AssistanteMaternelle';
+
+        // Vérification des IDs de plan MAM
+        if (priceId === 'price_1SfkUILID2pA5i1C75uu1TCH' || priceId === 'price_1SflCBPpvDnoE6wk9jqNDsWP') {
+            structureType = 'MAM';
+        } else if (priceId === 'price_1SfkWULID2pA5i1CmSdrRF0c' || priceId === 'price_1SflCjPpvDnoE6wkfD6BliGn') {
+            structureType = 'MAM';
+        }
+
+        return { structureType };
+    } catch (error) {
+        console.error("getCheckoutInfo error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+// ===== WEBHOOK STRIPE : Gérer les événements Stripe (Souscriptions) =====
+exports.stripeWebhook = onRequest(
+    {
+        secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+        region: 'europe-west1'
+    },
+    async (req, res) => {
+        const sig = req.headers["stripe-signature"];
+        const webhookSecret = STRIPE_WEBHOOK_SECRET.value();
+
+        let event;
+        try {
+            event = getStripe().webhooks.constructEvent(
+                req.rawBody,
+                sig,
+                webhookSecret,
+            );
+        } catch (err) {
+            console.error("Webhook signature verification failed:", err.message);
+            return res.status(400).send(`Webhook Error: ${err.message}`);
+        }
+
+        const subEvents = [
+            "customer.subscription.created",
+            "customer.subscription.updated",
+            "customer.subscription.deleted",
+        ];
+
+        if (subEvents.includes(event.type)) {
+            const sub = event.data.object;
+            const subId = sub.id;
+            const status = sub.status;
+            const trialEnd = sub.trial_end;
+            const trialStart = sub.trial_start || sub.start_date;
+            const periodEnd = sub.current_period_end;
+
+            // Extraire le Plan ID (Price ID)
+            const priceId = sub.items?.data?.[0]?.price?.id || sub.plan?.id;
+            const priceAmount = sub.items?.data?.[0]?.price?.unit_amount;
+
+            console.log(`🔔 Event ${event.type} pour sub ${subId} (Plan: ${priceId}, Status: ${status})`);
+
+            const trialEndsAtMs = trialEnd ? trialEnd * 1000 : null;
+            const trialStartsAtMs = trialStart ? trialStart * 1000 : null;
+            const expiresAtMs = periodEnd ? periodEnd * 1000 : null;
+
+            let trialEndsAt = null;
+            if (trialEndsAtMs != null) {
+                trialEndsAt = Timestamp.fromMillis(trialEndsAtMs);
+            }
+
+            let trialStartsAt = null;
+            if (trialStartsAtMs != null) {
+                trialStartsAt = Timestamp.fromMillis(trialStartsAtMs);
+            }
+
+            let expiresAt = null;
+            if (expiresAtMs != null) {
+                expiresAt = Timestamp.fromMillis(expiresAtMs);
+            }
+
+            const subscriptionActive = status === "active" || status === "trialing";
+
+            let structureId = "";
+            if (sub.metadata && sub.metadata.structureId) {
+                structureId = sub.metadata.structureId;
+            } else if (sub.metadata && sub.metadata.structure_id) {
+                structureId = sub.metadata.structure_id;
+            }
+
+            let customerEmail = "";
+            if (sub.customer_email) {
+                customerEmail = sub.customer_email;
+            } else if (sub.metadata && sub.metadata.email) {
+                customerEmail = sub.metadata.email;
+            }
+            if (customerEmail) {
+                customerEmail = customerEmail.toLowerCase();
+            }
+
+            try {
+                if (!customerEmail && sub.customer) {
+                    const customer = await getStripe().customers.retrieve(sub.customer);
+                    if (customer && customer.email) {
+                        customerEmail = customer.email.toLowerCase();
+                    }
+                }
+            } catch (err) {
+                console.error("Erreur récupération customer Stripe :", err);
+            }
+
+            try {
+                const subscriptionUpdate = {
+                    status,
+                    trialEndsAt,
+                    trialStartedAt: trialStartsAt,
+                    expiresAt,
+                    platform: "stripe",
+                    source: "stripe",
+                    email: customerEmail,
+                    stripeCustomerId: sub.customer,
+                    planId: priceId, // IMPORTANT: Sauvegarder le planId
+                    priceAmount: priceAmount,
+                    updatedAt: FieldValue.serverTimestamp(),
+                };
+
+                if (structureId) {
+                    subscriptionUpdate.structureId = structureId;
+                }
+
+                await db.collection("subscriptions").doc(subId).set(
+                    subscriptionUpdate,
+                    { merge: true },
+                );
+                console.log(`✅ Subscription ${subId} updated in Firestore.`);
+
+            } catch (err) {
+                console.error("Erreur mise à jour Stripe webhook :", err);
+            }
+        }
+
+        return res.json({ received: true });
     },
 );
 
@@ -3012,6 +3228,98 @@ async function syncStructureWithSubscription(subscriptionId, subscriptionData, s
     console.log(`✅ Structure ${structureId} synchronisée avec subscription ${subscriptionId}`);
     return true;
 }
+
+// ==========================================
+// ===== ON STRUCTURE CREATED (LINK SUB) ====
+// ==========================================
+exports.onStructureCreated = onDocumentCreated({
+    document: 'structures/{structureId}',
+    region: 'europe-west1'
+}, async (event) => {
+    try {
+        const snapshot = event.data;
+        if (!snapshot) return null; // suppression
+
+        const structureId = event.params.structureId;
+        const structureData = snapshot.data();
+        const email = structureData.ownerEmail || structureData.email;
+
+        if (!email) {
+            console.log(`ℹ️ Structure ${structureId} sans email, skip linking.`);
+            return null;
+        }
+
+        // 1. Chercher une souscription existante avec cet email
+        console.log(`🔍 Recherche souscription pour email: "${email}" (Structure: ${structureId})`);
+
+        let subQuery;
+        try {
+            subQuery = await db.collection('subscriptions')
+                .where('email', '==', email)
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+        } catch (queryErr) {
+            console.warn(`⚠️ Erreur index/query pour ${email}, retry sans tri:`, queryErr.message);
+            // Fallback sans tri si index manquant
+            subQuery = await db.collection('subscriptions')
+                .where('email', '==', email)
+                .limit(1)
+                .get();
+        }
+
+        if (subQuery.empty) {
+            console.log(`ℹ️ Aucune souscription trouvée pour "${email}". Fin.`);
+            return null;
+        }
+
+        const subDoc = subQuery.docs[0];
+        const subData = subDoc.data();
+        const subId = subDoc.id;
+
+        const priceId = subData.planId;
+        console.log(`✅ Souscription trouvée: ${subId} (Plan: ${priceId}) pour ${email}`);
+
+        // 2. Déterminer les règles du plan (Assmat vs MAM)
+        let structureType = 'AssistanteMaternelle'; // Correction finale : CamelCase requis
+        let maxMemberCount = 1;
+
+        if (priceId === 'price_1SfkUILID2pA5i1C75uu1TCH' || priceId === 'price_1SflCBPpvDnoE6wk9jqNDsWP') {
+            // MAM 2-3
+            structureType = 'MAM'; // Correction : Uppercase requis
+            maxMemberCount = 3;
+        } else if (priceId === 'price_1SfkWULID2pA5i1CmSdrRF0c' || priceId === 'price_1SflCjPpvDnoE6wkfD6BliGn') {
+            // MAM 4+
+            structureType = 'MAM'; // Correction : Uppercase requis
+            maxMemberCount = 50;
+        }
+        console.log(`📝 Application règles: Price=${priceId} -> Type=${structureType}, Max=${maxMemberCount}`);
+
+        // 3. Mettre à jour la souscription avec le structureId
+        await subDoc.ref.set({
+            structureId: structureId,
+            structureType: structureType,
+            maxMemberCount: maxMemberCount,
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // 4. Mettre à jour la structure
+        await snapshot.ref.set({
+            structureType: structureType, // Force la correction
+            maxMemberCount: maxMemberCount,
+            subscriptionDocId: subId,
+            stripeSubscriptionId: subId,
+            subscriptionStatus: subData.status || 'active',
+            subscriptionPlatform: 'stripe',
+            subscriptionActive: true,
+        }, { merge: true });
+
+        console.log(`🎉 SUCCÈS: Structure ${structureId} corrigée en ${structureType} (Max: ${maxMemberCount})`);
+    } catch (err) {
+        console.error("❌ CRASH onStructureCreated:", err);
+    }
+    return null;
+});
 
 // ==========================================
 // ===== SYNC SUBSCRIPTION → STRUCTURE  =====

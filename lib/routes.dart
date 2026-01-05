@@ -327,7 +327,6 @@ final GoRouter router = GoRouter(
       builder: (context, state) => const StructureDetailsScreen(),
     ),
     */
-    /*
     GoRoute(
       path: '/structure-confirmation',
       builder: (context, state) {
@@ -341,7 +340,6 @@ final GoRouter router = GoRouter(
         return StructureConfirmationScreen(structureType: structureType);
       },
     ),
-    */
     /*
     GoRoute(
       path: '/subscription',
@@ -351,7 +349,6 @@ final GoRouter router = GoRouter(
       },
     ),
     */
-    /*
     GoRoute(
       path: '/congratulations',
       builder: (context, state) {
@@ -366,6 +363,9 @@ final GoRouter router = GoRouter(
           }
         } else if (extra is String && extra.isNotEmpty) {
           structureType = extra;
+        } else if (state.uri.queryParameters.containsKey('structureType')) {
+          // Fallback pour Deep Link
+          structureType = state.uri.queryParameters['structureType']!;
         }
         return CongratulationsScreen(
           structureType: structureType,
@@ -373,7 +373,6 @@ final GoRouter router = GoRouter(
         );
       },
     ),
-    */
     GoRoute(
       path: '/structure-info',
       builder: (context, state) {
@@ -931,6 +930,17 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
 
   final String path = state.matchedLocation;
 
+  // 🚀 FIX DEEP LINK : Gérer le cas où "congratulations" est le HOST et non le PATH
+  // Exemple: poppins://congratulations?structureType=MAM -> host="congratulations", path=""
+  if (state.uri.scheme == 'poppins' && state.uri.host == 'congratulations') {
+    print("🚀 Deep link detected (host): forcing path to /congratulations");
+    final Map<String, String> queryParams =
+        Map<String, String>.from(state.uri.queryParameters);
+    queryParams.remove('structureType');
+    final String cleanedQuery = Uri(queryParameters: queryParams).query;
+    return '/congratulations${cleanedQuery.isNotEmpty ? '?$cleanedQuery' : ''}';
+  }
+
   // Routes qui ne nécessitent AUCUNE vérification
   final List<String> absolutelyPublicRoutes = [
     '/', // AuthCheckScreen
@@ -948,6 +958,7 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
     '/structure-confirmation',
     '/subscription-confirmed',
     '/splash',
+    '/congratulations', // Route publique pour le retour de paiement
   ];
 
   // Si c'est une route absolument publique, laisser passer

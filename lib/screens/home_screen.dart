@@ -945,8 +945,159 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      final Map<String, dynamic> structureData =
-          (structureDoc.data() as Map<String, dynamic>?) ?? const {};
+      final Map<String, dynamic> structureData = Map<String, dynamic>.from(
+          (structureDoc.data() as Map<String, dynamic>?) ?? const {});
+
+      final String ownerEmail =
+          (structureData['ownerEmail'] ?? structureData['email'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+      final bool isStructureOwner =
+          ownerEmail.isNotEmpty && ownerEmail == currentUserEmail;
+
+      if (isStructureOwner) {
+        try {
+          Map<String, dynamic>? subscriptionData;
+          final subQueryByStructure = await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: structureDocId)
+              .limit(1)
+              .get();
+          if (subQueryByStructure.docs.isNotEmpty) {
+            subscriptionData = subQueryByStructure.docs.first.data();
+          }
+          if ((subscriptionData == null || subscriptionData.isEmpty) &&
+              currentUserEmail.isNotEmpty) {
+            final subQueryByEmail = await FirebaseFirestore.instance
+                .collection('subscriptions')
+                .where('email', isEqualTo: currentUserEmail)
+                .limit(1)
+                .get();
+            if (subQueryByEmail.docs.isNotEmpty) {
+              subscriptionData = subQueryByEmail.docs.first.data();
+            }
+          }
+
+          if (subscriptionData != null && subscriptionData.isNotEmpty) {
+            final String subTypeRaw =
+                (subscriptionData['structureType'] ?? '')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
+            final dynamic subMaxRaw =
+                subscriptionData['maxMemberCount'] ??
+                    subscriptionData['memberCount'];
+            int? subMax;
+            if (subMaxRaw is int) {
+              subMax = subMaxRaw;
+            } else if (subMaxRaw is num) {
+              subMax = subMaxRaw.toInt();
+            } else if (subMaxRaw is String) {
+              subMax = int.tryParse(subMaxRaw);
+            }
+
+            final String productId = (subscriptionData['productId'] ?? subscriptionData['planId'] ?? '').toString().toLowerCase();
+
+            // SSETS D'IDs STRICTS (Identiques à CongratulationsScreen)
+             const Set<String> mamSmallPriceIds = {
+              'price_1sfkuilid2pa5i1c75uu1tch',
+              'price_1sflcbppvdnoe6wk9jqndswp',
+            };
+            const Set<String> mamLargePriceIds = {
+              'price_1sfkwulid2pa5i1cmsdrrf0c',
+              'price_1sflcjpgpvnoe6wkfd6blign',
+              'price_1sflcjppvdnoe6wkfd6blign', // MAM 4+
+            };
+            const Set<String> assmatPriceIds = {
+              'price_1sfl7jppvdnoe6wk7rnj6pm3', // Assmat
+            };
+
+            String? correctedType;
+            int? correctedMax;
+            bool explicitIdMatch = false;
+
+            // 1. DÉTECTION PAR ID STRICT
+            if (mamLargePriceIds.contains(productId)) {
+              correctedType = 'MAM';
+              correctedMax = 50;
+              explicitIdMatch = true;
+            } else if (mamSmallPriceIds.contains(productId)) {
+              correctedType = 'MAM';
+              // Spécifique MAM 2
+              if (productId == 'price_1sflcbppvdnoe6wk9jqndswp' || productId.contains('mam_2') || productId.contains('mam2')) {
+                 correctedMax = 2;
+              } else {
+                 correctedMax = 3;
+              }
+              explicitIdMatch = true;
+            } else if (assmatPriceIds.contains(productId)) {
+               correctedType = 'AssistanteMaternelle';
+               correctedMax = 1;
+               explicitIdMatch = true;
+            }
+
+            // 2. FALLBACK METADATA (Seulement si ID inconnu)
+            if (!explicitIdMatch) {
+                final bool subSaysAssmat = subTypeRaw.contains('assistante') ||
+                    subTypeRaw.contains('assmat') ||
+                    subMax == 1;
+                final bool subSaysMam =
+                    subTypeRaw.contains('mam') || (subMax != null && subMax > 1);
+
+                if (subSaysAssmat) {
+                  correctedType = 'AssistanteMaternelle';
+                  correctedMax = 1;
+                } else if (subSaysMam) {
+                  correctedType = 'MAM';
+                  correctedMax = subMax ?? 3;
+                }
+            }
+
+            if (correctedType != null) {
+              final String currentTypeRaw =
+                  (structureData['structureType'] ?? '')
+                      .toString()
+                      .trim()
+                      .toLowerCase();
+              final dynamic currentMaxRaw = structureData['maxMemberCount'];
+              int? currentMax;
+              if (currentMaxRaw is int) {
+                currentMax = currentMaxRaw;
+              } else if (currentMaxRaw is num) {
+                currentMax = currentMaxRaw.toInt();
+              } else if (currentMaxRaw is String) {
+                currentMax = int.tryParse(currentMaxRaw);
+              }
+
+              final bool typeMismatch =
+                  correctedType.toLowerCase() != currentTypeRaw;
+              final bool maxMismatch =
+                  correctedMax != null && correctedMax != currentMax;
+
+              if (typeMismatch || maxMismatch) {
+                await FirebaseFirestore.instance
+                    .collection('structures')
+                    .doc(structureDocId)
+                    .set({
+                  'structureType': correctedType,
+                  if (correctedMax != null) 'maxMemberCount': correctedMax,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true));
+
+                structureData['structureType'] = correctedType;
+                if (correctedMax != null) {
+                  structureData['maxMemberCount'] = correctedMax;
+                }
+                print(
+                    "🔧 Correction structure depuis abonnement: type=$correctedType, max=$correctedMax");
+              }
+            }
+          }
+        } catch (e) {
+          print("⚠️ Erreur correction structure via abonnement: $e");
+        }
+      }
 
       String fetchedStructureName = (structureData['structureName'] ??
               structureData['ownerFirstName'] ??
@@ -981,7 +1132,80 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final String normalizedStructureType =
           fetchedStructureTypeRaw.trim().toLowerCase();
-      final bool isMamStructure = normalizedStructureType.contains('mam');
+      
+      
+      // FIX: Check limits to confirm MAM status
+      // If maxMemberCount is explicitly 1 OR NULL (missing), treat as Assmat to avoid false positives
+      // Real MAMs should have this field populated/fixed by backend.
+      final dynamic rawMax = structureData['maxMemberCount'];
+      int? maxMembers;
+      if (rawMax is int) maxMembers = rawMax;
+      else if (rawMax is num) maxMembers = rawMax.toInt(); // Handle double (1.0)
+      
+      print("🔍 DIAGNOSTIC STRUCTURE:");
+      print("   -> Raw Type: '$fetchedStructureTypeRaw'");
+      print("   -> Normalized: '$normalizedStructureType'");
+      print("   -> MaxMembers Raw: $rawMax (${rawMax.runtimeType})");
+      print("   -> MaxMembers Parsed: $maxMembers");
+
+      // FIX: Detection plus stricte pour éviter les faux positifs
+      // 🚀 LOGIQUE STRICTE DEMANDÉE PAR UTILISATEUR
+      // 1. Détection de base sur le nom
+      bool isMamStructure = normalizedStructureType.contains('mam') ||
+          normalizedStructureType.contains('maison d') ||
+          normalizedStructureType.contains('regroupement');
+
+      // 1b. Règle dure: si le type est explicitement Assistante Maternelle, ce n'est PAS une MAM
+      final bool isAssmatType =
+          normalizedStructureType.contains('assistante') ||
+          normalizedStructureType.contains('assistantematernelle') ||
+          normalizedStructureType.contains('assistante_maternelle');
+
+      // 2. Parsing robuste du maxMemberCount
+      if (rawMax is String) {
+        maxMembers = int.tryParse(rawMax);
+      } else if (rawMax is int) {
+        maxMembers = rawMax;
+      }
+
+      print("   -> isMamStructure (Nom): $isMamStructure");
+      print("   -> MaxMembers Parsed: $maxMembers");
+
+      // 3. REGLE D'OR (Utilisateur) : 
+      // Si maxMemberCount = 1 (ou null/0/inférieur) -> FORCE ASSISTANTE MATERNELLE
+      // Si maxMemberCount > 1 -> FORCE MAM (si le nom l'indique ou par défaut)
+      
+      if (isAssmatType) {
+        isMamStructure = false;
+        print("🛑 FORCE OVERRIDE: structureType Assistante -> isMamStructure = FALSE");
+      } else if (maxMembers != null && maxMembers <= 1) {
+        isMamStructure = false;
+        print(
+            "🛑 FORCE OVERRIDE: maxMemberCount <= 1 -> isMamStructure = FALSE (Mode Assmat)");
+      } else if (maxMembers != null && maxMembers > 1) {
+        // Si on a plus de 1 membre, on considère que c'est une MAM même si le nom est ambigu
+        // SAUF si c'est explicitement marqué "assistante" (cas rare mais possible d'erreur)
+        if (!normalizedStructureType.contains("assistante")) {
+          isMamStructure = true;
+          print(
+              "🛑 FORCE OVERRIDE: maxMemberCount > 1 -> isMamStructure = TRUE (Mode MAM)");
+        }
+      } else {
+        // Cas où maxMembers est null (ex: vieux comptes), on se fie au nom
+        if (normalizedStructureType.contains("assistante")) {
+          isMamStructure = false;
+        }
+      }
+      
+      print("   -> isMamStructure (Final Decision): $isMamStructure");
+
+      // SÉCURITÉ SUPPLÉMENTAIRE: Si le nombre de membres actuel MAX est 1, on force Assmat
+      // (Car une MAM a besoin de pouvoir avoir > 1 membre)
+       if (isMamStructure && maxMembers == 1) {
+          isMamStructure = false;
+          print("🛑 FORCE OVERRIDE: maxMembers == 1 -> FORCE ASSMAT");
+       }
+      print("   -> isMamStructure (Final): $isMamStructure");
 
       int? mamPlan;
       if (isMamStructure) {
@@ -1270,6 +1494,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadTodayAgendaReminders(structureDocId, currentUserEmail);
 
       final bool structureHasAnyChild = allChildren.isNotEmpty;
+      final bool needsChildren = !structureHasAnyChild;
       print(
           "🔍 DIAGNOSTIC - Enfants totaux dans la structure: ${allChildren.length}");
 
@@ -1288,6 +1513,9 @@ class _HomeScreenState extends State<HomeScreen> {
       bool welcomePopupAlreadyShown = prefs.getBool(welcomePopupKey) ?? false;
 
       if (isMamStructure) {
+        // ✅ CORRECTION CRITIQUE : Activer le flux de bienvenue pour le propriétaire
+        allowWelcomeFlow = isMyAccountOwner;
+
         // Pour les MAM: vérifier d'abord s'il y a assez de membres
         final membersSnapshot = await FirebaseFirestore.instance
             .collection('structures')
@@ -1297,10 +1525,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Compter le nombre de membres
         final int memberCount = membersSnapshot.docs.length;
-        final bool needsMoreMembers = memberCount <= 1;
-        final bool needsChildren = !structureHasAnyChild;
-        allowWelcomeFlow =
-            isMyAccountOwner && (needsMoreMembers || needsChildren);
+        // FIX: Dynamically check against maxMemberCount
+        final int limit = maxMembers ?? 1; // Default to 1 (Assmat) if unknown, so we don't show popup aggressively
+        // Si maxMembers est 50, on ne va pas s'attendre à 50 membres.
+        // La règle est: au moins 2 membres pour une MAM.
+        final bool needsMoreMembers = memberCount < 2 && limit > 1; // Only need more members IF limit allows it
 
         final String mamInitialStateKey = 'mam_initial_state_${structureDocId}';
         bool mamInitialStateHandled =
@@ -1369,7 +1598,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       } else {
         // Pour les assistantes maternelles individuelles : vérifier uniquement les enfants
-        final bool needsChildren = !structureHasAnyChild;
         allowWelcomeFlow = isMyAccountOwner && needsChildren;
         final String amInitialStateKey =
             'assistant_initial_state_${structureDocId}';
