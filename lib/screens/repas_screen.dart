@@ -2804,7 +2804,7 @@ class _RepasScreenState extends State<RepasScreen> {
             CommonAppBar(
               title: 'Repas',
               structureName: structureName,
-              iconPath: 'assets/images/noel/Icone_repas_noel.png',
+              iconPath: 'assets/images/Icone_repas.png',
               backRoute: '/home',
               primaryColor: primaryBlue,
             ),
@@ -3276,7 +3276,7 @@ class _RepasScreenState extends State<RepasScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_dashboard_noel.png',
+            'assets/images/Icone_dashboard.png',
             width: 60,
             height: 60,
           ),
@@ -3284,7 +3284,7 @@ class _RepasScreenState extends State<RepasScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_home_noel.png',
+            'assets/images/Icone_home.png',
             width: 60,
             height: 60,
           ),
@@ -3292,7 +3292,7 @@ class _RepasScreenState extends State<RepasScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 60,
             height: 60,
           ),
@@ -3321,7 +3321,7 @@ class _RepasScreenState extends State<RepasScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/noel/Icone_repas_noel.png',
+            'assets/images/Icone_repas.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(

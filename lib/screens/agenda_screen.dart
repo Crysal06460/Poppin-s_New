@@ -514,7 +514,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-              'assets/images/noel/Icone_agenda_noel.png',
+              'assets/images/Icone_agenda.png',
               width: 120,
               height: 120,
               color: _primaryBlue.withOpacity(0.9),
@@ -851,7 +851,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
             CommonAppBar(
               title: 'Agenda',
               structureName: _structureName,
-              iconPath: 'assets/images/noel/Icone_agenda_noel.png',
+              iconPath: 'assets/images/Icone_agenda.png',
               primaryColor: _primaryBlue,
             ),
             Expanded(
@@ -887,7 +887,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
           items: [
             BottomNavigationBarItem(
               icon: Image.asset(
-                'assets/images/noel/Icone_dashboard_noel.png',
+                'assets/images/Icone_dashboard.png',
                 width: isTabletDevice ? 60 : 40,
                 height: isTabletDevice ? 60 : 40,
               ),
@@ -895,7 +895,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
             ),
             BottomNavigationBarItem(
               icon: Image.asset(
-                'assets/images/noel/Icone_home_noel.png',
+                'assets/images/Icone_home.png',
                 width: isTabletDevice ? 60 : 40,
                 height: isTabletDevice ? 60 : 40,
               ),
@@ -903,7 +903,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
             ),
             BottomNavigationBarItem(
               icon: Image.asset(
-                'assets/images/noel/Icone_message_noel.png',
+                'assets/images/Icone_message.png',
                 width: isTabletDevice ? 60 : 40,
                 height: isTabletDevice ? 60 : 40,
               ),

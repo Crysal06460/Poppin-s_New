@@ -1172,26 +1172,37 @@ exports.lookupInvitationByEmail = onCall({
 });
 
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
-exports.processEmailQueue = onDocumentCreated({
+exports.processEmailQueue = onDocumentWritten({
     document: 'emailQueue/{emailId}',
-    region: 'europe-west1' // Même région que vos autres fonctions
+    region: 'europe-west1'
 }, async (event) => {
-    const emailData = event.data.data();
+    // Si le document est supprimé, on ne fait rien
+    if (!event.data.after.exists) {
+        return null;
+    }
+
+    const emailData = event.data.after.data();
+    const previousData = event.data.before.data() || {};
     const emailId = event.params.emailId;
+
+    // Éviter de traiter si le statut n'a pas changé vers 'pending'
+    // ou si c'est une création (previousData vide) et le statut est 'pending'
+    if (emailData.status !== 'pending') {
+        return null;
+    }
+
+    // Si ce n'est pas une création et que le statut n'a pas changé, on ignore
+    if (event.data.before.exists && previousData.status === 'pending') {
+        return null;
+    }
 
     console.log(`📧 Traitement de l'email ${emailId}:`, JSON.stringify(emailData, null, 2));
 
     try {
-        // Vérifier que le statut est bien 'pending'
-        if (emailData.status !== 'pending') {
-            console.log(`📧 Email ${emailId} ignoré - statut: ${emailData.status}`);
-            return null;
-        }
-
         // Vérifier si toutes les données nécessaires sont présentes
         if (!emailData.to || !emailData.templateData) {
             console.error('❌ Données d\'email insuffisantes:', emailData);
-            await event.data.ref.update({
+            await event.data.after.ref.update({
                 status: 'failed',
                 error: 'Données insuffisantes',
                 lastErrorAt: FieldValue.serverTimestamp()
@@ -1200,7 +1211,7 @@ exports.processEmailQueue = onDocumentCreated({
         }
 
         // Marquer comme 'processing'
-        await event.data.ref.update({
+        await event.data.after.ref.update({
             status: 'processing',
             processingStartedAt: FieldValue.serverTimestamp()
         });
@@ -1273,7 +1284,7 @@ exports.processEmailQueue = onDocumentCreated({
         console.log('📊 Réponse Mailjet:', JSON.stringify(result.body, null, 2));
 
         // Marquer comme 'sent'
-        await event.data.ref.update({
+        await event.data.after.ref.update({
             status: 'sent',
             sentAt: FieldValue.serverTimestamp(),
             messageId: result.body?.Messages?.[0]?.MessageID || 'unknown',
@@ -1291,7 +1302,7 @@ exports.processEmailQueue = onDocumentCreated({
         const retryCount = (emailData.retryCount || 0) + 1;
         const maxRetries = 3;
 
-        await event.data.ref.update({
+        await event.data.after.ref.update({
             status: retryCount >= maxRetries ? 'failed' : 'pending',
             retryCount: retryCount,
             lastError: error.message,

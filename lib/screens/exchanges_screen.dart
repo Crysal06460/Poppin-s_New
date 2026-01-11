@@ -2450,7 +2450,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 100,
             height: 100,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -2495,7 +2495,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
             CommonAppBar(
               title: 'Échanges',
               structureName: structureName,
-              iconPath: 'assets/images/noel/Icone_message_noel.png',
+              iconPath: 'assets/images/Icone_message.png',
               primaryColor: primaryBlue,
             ),
 
@@ -2958,7 +2958,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_dashboard_noel.png',
+            'assets/images/Icone_dashboard.png',
             width: 60,
             height: 60,
           ),
@@ -2966,7 +2966,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_home_noel.png',
+            'assets/images/Icone_home.png',
             width: 60,
             height: 60,
           ),
@@ -2974,7 +2974,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 60,
             height: 60,
           ),

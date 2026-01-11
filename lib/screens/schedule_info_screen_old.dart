@@ -1594,7 +1594,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: 60,
               height: 60,
             ),
@@ -1602,12 +1602,12 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_message_noel.png',
+              'assets/images/Icone_message.png',
               width: 60,
               height: 60,
             ),
             activeIcon: Image.asset(
-              'assets/images/noel/Icone_message_noel.png',
+              'assets/images/Icone_message.png',
               width: 60,
               height: 60,
               color: primaryBlue,
@@ -1616,12 +1616,12 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_stock_noel.png',
+              'assets/images/Icone_stock.png',
               width: 60,
               height: 60,
             ),
             activeIcon: Image.asset(
-              'assets/images/noel/Icone_stock_noel.png',
+              'assets/images/Icone_stock.png',
               width: 60,
               height: 60,
               color: primaryBlue,
@@ -1652,7 +1652,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_dashboard_noel.png',
+            'assets/images/Icone_dashboard.png',
             width: 60,
             height: 60,
           ),
@@ -1660,7 +1660,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_home_noel.png',
+            'assets/images/Icone_home.png',
             width: 60,
             height: 60,
           ),
@@ -1668,7 +1668,7 @@ class _ScheduleInfoScreenState extends State<ScheduleInfoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 60,
             height: 60,
           ),

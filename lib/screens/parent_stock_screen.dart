@@ -819,7 +819,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: 60,
               height: 60,
             ),
@@ -829,7 +829,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
             icon: Stack(
               children: [
                 Image.asset(
-                  'assets/images/noel/Icone_message_noel.png',
+                  'assets/images/Icone_message.png',
                   width: 60,
                   height: 60,
                 ),
@@ -854,7 +854,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
             activeIcon: Stack(
               children: [
                 Image.asset(
-                  'assets/images/noel/Icone_message_noel.png',
+                  'assets/images/Icone_message.png',
                   width: 60,
                   height: 60,
                   color: primaryBlue,
@@ -884,7 +884,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
               // ← MODIFIER CETTE PARTIE
               children: [
                 Image.asset(
-                  'assets/images/noel/Icone_stock_noel.png',
+                  'assets/images/Icone_stock.png',
                   width: 60,
                   height: 60,
                 ),
@@ -910,7 +910,7 @@ class _ParentStockScreenState extends State<ParentStockScreen>
               // ← AJOUTER CETTE PARTIE
               children: [
                 Image.asset(
-                  'assets/images/noel/Icone_stock_noel.png',
+                  'assets/images/Icone_stock.png',
                   width: 60,
                   height: 60,
                 ),

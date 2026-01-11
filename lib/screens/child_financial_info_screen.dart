@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'parent_invitation_service.dart';
 
 class ChildFinancialInfoScreen extends StatefulWidget {
   final String childId;
@@ -1048,15 +1049,6 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
       final parent1Data = childData['parent1'] ?? {};
       final parent2Data = childData['parent2'] ?? {};
 
-      // Récupérer les informations de la structure
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .get();
-
-      final structureName =
-          structureDoc.data()?['structureName'] ?? 'Structure d\'accueil';
-
       // Liste des parents à qui envoyer des invitations
       final Map<String, Map<String, dynamic>> parentMap = {};
 
@@ -1096,113 +1088,46 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         return;
       }
 
-      // Définir la date d'expiration (30 jours à partir de maintenant)
-      final DateTime expirationDate = DateTime.now().add(Duration(days: 30));
-
       bool hasSentInvitation = false;
       bool hasLinkedExistingParent = false;
 
-      // Envoyer une invitation à chaque parent ou rattacher l'enfant
+      // Envoyer une invitation à chaque parent
       for (var parentData in parentsToInvite) {
         final String normalizedEmail = parentData['email'];
-        print("🔑 Création d'une invitation pour $normalizedEmail");
-
-        final parentUserRef =
-            FirebaseFirestore.instance.collection('users').doc(normalizedEmail);
-        final parentUserDoc = await parentUserRef.get();
-
-        // Données communes pour le document utilisateur parent
-        final Map<String, dynamic> userData = {
-          'role': 'parent',
-          'email': normalizedEmail,
-          'structureId': structureId,
-          'structureName': structureName,
-          'childId': widget.childId,
-          'childName': childData['firstName'] ?? "Enfant",
-          'children': FieldValue.arrayUnion([widget.childId]),
-          'createdChildren': FieldValue.arrayUnion([widget.childId]),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-
-        if (!parentUserDoc.exists) {
-          userData['createdAt'] = FieldValue.serverTimestamp();
-          userData['isFirstLogin'] = true;
-        }
-
-        await parentUserRef.set(userData, SetOptions(merge: true));
+        final String parentFirstName = parentData['firstName'];
+        final String parentLastName = parentData['lastName'];
+        
+        // Vérifier si le parent existe déjà (pour le message de feedback)
+        final parentUserDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(normalizedEmail)
+            .get();
 
         if (parentUserDoc.exists) {
           hasLinkedExistingParent = true;
-          print(
-              "ℹ️ Parent déjà existant, ajout de l'enfant sans renvoyer d'invitation ($normalizedEmail).");
-          // Passer à l'itération suivante sans renvoyer d'invitation
+          // Si le parent existe déjà, on s'assure qu'il est lié à l'enfant
+          await FirebaseFirestore.instance
+            .collection('users')
+            .doc(normalizedEmail)
+            .update({
+              'children': FieldValue.arrayUnion([widget.childId]),
+              'createdChildren': FieldValue.arrayUnion([widget.childId]),
+            });
+          print("ℹ️ Parent déjà existant, enfant rattaché ($normalizedEmail).");
           continue;
         }
 
-        // 1. Créer l'entrée d'invitation dans Firestore
-        await FirebaseFirestore.instance.collection('invitations').add({
-          'email': normalizedEmail,
-          'type': 'parent',
-          'structureId': structureId,
-          'structureName': structureName,
-          'childId': widget.childId,
-          'childName': childData['firstName'] ?? "Enfant",
-          'createdAt': FieldValue.serverTimestamp(),
-          'expiresAt': Timestamp.fromDate(expirationDate),
-          'status': 'active',
-        });
+        print("🔑 Envoi invitation via service pour $normalizedEmail");
+        
+        // Utiliser le service centralisé pour envoyer l'invitation
+        await ParentInvitationService.sendInvitationToParent(
+          childId: widget.childId,
+          childFirstName: childData['firstName'] ?? "Enfant",
+          parentEmail: normalizedEmail,
+          parentFirstName: parentFirstName,
+          parentLastName: parentLastName,
+        );
 
-        print("✅ Invitation enregistrée dans Firestore pour $normalizedEmail");
-
-        // 2. Créer ou mettre à jour l'utilisateur parent dans Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(normalizedEmail)
-            .set({
-          'role': 'parent',
-          'email': normalizedEmail,
-          'isFirstLogin': true,
-          'childId': widget.childId,
-          'structureId': structureId,
-          'structureName': structureName,
-          'childName': childData['firstName'] ?? "Enfant",
-          'createdAt': FieldValue.serverTimestamp(),
-          'children': [
-            widget.childId
-          ], // S'assurer que l'enfant est dans la liste des enfants
-        });
-
-        print(
-            "✅ Document utilisateur parent créé/mis à jour pour $normalizedEmail");
-
-        // 3. Construire les données du template pour l'email
-        final templateData = {
-          'firstName': parentData['firstName'] ?? '',
-          'lastName': parentData['lastName'] ?? '',
-          'childName': childData['firstName'] ?? '',
-          'childId': widget.childId,
-          'structureName': structureName,
-          'structureId': structureId,
-          'androidLink':
-              'https://play.google.com/store/apps/details?id=com.example.poppins_app',
-          'iosLink': 'https://apps.apple.com/app/id123456789',
-          'email': normalizedEmail,
-          'year': DateTime.now().year.toString(),
-        };
-
-        // 4. Ajouter l'email à la file d'attente d'envoi
-        await FirebaseFirestore.instance.collection('emailQueue').add({
-          'to': normalizedEmail,
-          'template': 'parent-invitation',
-          'subject': "Invitation Poppins - Pour ${childData['firstName']}",
-          'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
-          'priority': 'high',
-          'retryCount': 0,
-          'templateData': templateData
-        });
-
-        print("✅ Invitation envoyée au parent: $normalizedEmail");
         hasSentInvitation = true;
       }
 
@@ -1239,8 +1164,8 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
       print("❌ Erreur lors de l'envoi des invitations: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Erreur lors de l'envoi des invitations aux parents"),
+          SnackBar(
+            content: Text("Erreur lors de l'envoi des invitations: ${e.toString()}"),
             backgroundColor: Colors.red,
           ),
         );
@@ -1385,7 +1310,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_dashboard_noel.png',
+              'assets/images/Icone_dashboard.png',
               width: 50,
               height: 50,
             ),
@@ -1393,7 +1318,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: 50,
               height: 50,
             ),
@@ -1401,7 +1326,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_message_noel.png',
+              'assets/images/Icone_message.png',
               width: 50,
               height: 50,
             ),

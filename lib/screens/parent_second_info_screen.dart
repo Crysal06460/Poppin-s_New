@@ -1309,7 +1309,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_dashboard_noel.png',
+            'assets/images/Icone_dashboard.png',
             width: 60,
             height: 60,
           ),
@@ -1317,7 +1317,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_home_noel.png',
+            'assets/images/Icone_home.png',
             width: 60,
             height: 60,
           ),
@@ -1325,7 +1325,7 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 60,
             height: 60,
           ),

@@ -963,7 +963,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
               items: [
                 BottomNavigationBarItem(
                   icon: Image.asset(
-                    'assets/images/noel/Icone_home_noel.png',
+                    'assets/images/Icone_home.png',
                     width: 60,
                     height: 60,
                   ),
@@ -973,7 +973,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   icon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/noel/Icone_message_noel.png',
+                        'assets/images/Icone_message.png',
                         width: 60,
                         height: 60,
                       ),
@@ -998,7 +998,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   activeIcon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/noel/Icone_message_noel.png',
+                        'assets/images/Icone_message.png',
                         width: 60,
                         height: 60,
                       ),
@@ -1026,7 +1026,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   icon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/noel/Icone_stock_noel.png',
+                        'assets/images/Icone_stock.png',
                         width: 60,
                         height: 60,
                       ),
@@ -1051,7 +1051,7 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   activeIcon: Stack(
                     children: [
                       Image.asset(
-                        'assets/images/noel/Icone_stock_noel.png',
+                        'assets/images/Icone_stock.png',
                         width: 60,
                         height: 60,
                         color: primaryBlue,

@@ -3092,26 +3092,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           children: [
             _quickTile(
-              assetPath: 'assets/images/noel/Icone_administration_noel.png',
+              assetPath: 'assets/images/Icone_administration.png',
               color: _tileBlue,
               onTap: _openMamAdministration,
               size: tileSize,
             ),
             _quickTile(
-              assetPath: 'assets/images/noel/Icone_fonctionnement_noel.png',
+              assetPath: 'assets/images/Icone_fonctionnement.png',
               color: _tileRed,
               onTap: _openDailyOps,
               size: tileSize,
               badgeCount: _getDailyOpsTileBadge(),
             ),
             _quickTile(
-              assetPath: 'assets/images/noel/Icone_enfant_noel.png',
+              assetPath: 'assets/images/Icone_enfant.png',
               color: _tileCyan,
               onTap: _openChildrenParents,
               size: tileSize,
             ),
             _quickTile(
-              assetPath: 'assets/images/noel/Icone_memo_noel.png',
+              assetPath: 'assets/images/Icone_memo.png',
               color: _tileYellow,
               onTap: _openReportsHistory,
               size: tileSize,
@@ -4605,7 +4605,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 (spacing * (crossAxisCount - 1)) -
                                 (horizontalPadding * 2)) /
                             crossAxisCount,
-                        assetPath: 'assets/images/noel/Icone_administration_noel.png',
+                        assetPath: 'assets/images/Icone_administration.png',
                       ),
                       _buildTabletTile(
                         color: _tileRed,
@@ -4614,7 +4614,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 (spacing * (crossAxisCount - 1)) -
                                 (horizontalPadding * 2)) /
                             crossAxisCount,
-                        assetPath: 'assets/images/noel/Icone_fonctionnement_noel.png',
+                        assetPath: 'assets/images/Icone_fonctionnement.png',
                       ),
                       _buildTabletTile(
                         color: _tileCyan,
@@ -4623,7 +4623,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 (spacing * (crossAxisCount - 1)) -
                                 (horizontalPadding * 2)) /
                             crossAxisCount,
-                        assetPath: 'assets/images/noel/Icone_enfant_noel.png',
+                        assetPath: 'assets/images/Icone_enfant.png',
                       ),
                       _buildTabletTile(
                         color: _tileYellow,
@@ -4632,7 +4632,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 (spacing * (crossAxisCount - 1)) -
                                 (horizontalPadding * 2)) /
                             crossAxisCount,
-                        assetPath: 'assets/images/noel/Icone_memo_noel.png',
+                        assetPath: 'assets/images/Icone_memo.png',
                       ),
                     ],
                   ),
@@ -6590,7 +6590,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Row(
                         children: [
                           Image.asset(
-                            'assets/images/noel/Icone_recap_noel.png',
+                            'assets/images/Icone_recap.png',
                             width: 60,
                             height: 60,
                             errorBuilder: (context, error, stackTrace) => Icon(
@@ -7056,7 +7056,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_dashboard_noel.png',
+              'assets/images/Icone_dashboard.png',
               width: screenSize.width * (isTablet ? 0.07 : 0.14),
               height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
@@ -7064,7 +7064,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: screenSize.width * (isTablet ? 0.07 : 0.14),
               height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
@@ -7072,7 +7072,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_message_noel.png',
+              'assets/images/Icone_message.png',
               width: screenSize.width * (isTablet ? 0.07 : 0.14),
               height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),

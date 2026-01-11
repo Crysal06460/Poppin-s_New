@@ -2284,7 +2284,7 @@ class _SanteScreenState extends State<SanteScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/images/noel/Icone_sante_noel.png',
+            'assets/images/Icone_sante.png',
             width: 80,
             height: 80,
             errorBuilder: (context, error, stackTrace) => Icon(
@@ -2322,7 +2322,7 @@ class _SanteScreenState extends State<SanteScreen> {
             CommonAppBar(
               title: 'Santé',
               structureName: structureName,
-              iconPath: 'assets/images/noel/Icone_sante_noel.png',
+              iconPath: 'assets/images/Icone_sante.png',
               backRoute: '/home',
               primaryColor: primaryColor,
             ),
@@ -2726,7 +2726,7 @@ class _SanteScreenState extends State<SanteScreen> {
       items: [
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_dashboard_noel.png',
+            'assets/images/Icone_dashboard.png',
             width: 60,
             height: 60,
           ),
@@ -2734,7 +2734,7 @@ class _SanteScreenState extends State<SanteScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_home_noel.png',
+            'assets/images/Icone_home.png',
             width: 60,
             height: 60,
           ),
@@ -2742,7 +2742,7 @@ class _SanteScreenState extends State<SanteScreen> {
         ),
         BottomNavigationBarItem(
           icon: Image.asset(
-            'assets/images/noel/Icone_message_noel.png',
+            'assets/images/Icone_message.png',
             width: 60,
             height: 60,
           ),

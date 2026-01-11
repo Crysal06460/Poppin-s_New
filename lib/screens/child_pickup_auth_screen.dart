@@ -1453,7 +1453,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_dashboard_noel.png',
+              'assets/images/Icone_dashboard.png',
               width: 50,
               height: 50,
             ),
@@ -1461,7 +1461,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: 50,
               height: 50,
             ),
@@ -1469,7 +1469,7 @@ class _ChildPickupAuthScreenState extends State<ChildPickupAuthScreen> {
           ),
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_message_noel.png',
+              'assets/images/Icone_message.png',
               width: 50,
               height: 50,
             ),

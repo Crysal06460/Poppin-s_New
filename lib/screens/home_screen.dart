@@ -3773,62 +3773,62 @@ class _HomeScreenState extends State<HomeScreen> {
       {
         'route': '/horaires',
         'name': 'Horaires',
-        'imagePath': 'assets/images/noel/Icone_horaire_noel.png'
+        'imagePath': 'assets/images/Icone_horaire.png'
       },
       {
         'route': '/repas',
         'name': 'Repas',
-        'imagePath': 'assets/images/noel/Icone_repas_noel.png'
+        'imagePath': 'assets/images/Icone_repas.png'
       },
       {
         'route': '/activites',
         'name': 'Activités',
-        'imagePath': 'assets/images/noel/Icone_activité_noel.png'
+        'imagePath': 'assets/images/Icone_activité.png'
       },
       {
         'route': '/sieste',
         'name': 'Sieste',
-        'imagePath': 'assets/images/noel/Icone_sieste_noel.png'
+        'imagePath': 'assets/images/Icone_sieste.png'
       },
       {
         'route': '/sante',
         'name': 'Santé',
-        'imagePath': 'assets/images/noel/Icone_sante_noel.png'
+        'imagePath': 'assets/images/Icone_sante.png'
       },
       {
         'route': '/change',
         'name': 'Change',
-        'imagePath': 'assets/images/noel/Icone_change_noel.png'
+        'imagePath': 'assets/images/Icone_change.png'
       },
       {
         'route': '/photos',
         'name': 'Photos',
-        'imagePath': 'assets/images/noel/Icone_photos_noel.png'
+        'imagePath': 'assets/images/Icone_photos.png'
       },
       {
         'route': '/agenda',
         'name': 'Agenda',
-        'imagePath': 'assets/images/noel/Icone_agenda_noel.png'
+        'imagePath': 'assets/images/Icone_agenda.png'
       },
       {
         'route': '/stock',
         'name': 'Stock',
-        'imagePath': 'assets/images/noel/Icone_stock_noel.png'
+        'imagePath': 'assets/images/Icone_stock.png'
       },
       {
         'route': '/recap-enfant',
         'name': 'Recap',
-        'imagePath': 'assets/images/noel/Icone_recap_noel.png'
+        'imagePath': 'assets/images/Icone_recap.png'
       },
       {
         'route': '/actualites',
         'name': 'Actualités',
-        'imagePath': 'assets/images/noel/Icone_actualité_noel.png'
+        'imagePath': 'assets/images/Icone_actualité.png'
       },
       {
         'route': '/transmissions',
         'name': 'Transm.',
-        'imagePath': 'assets/images/noel/Icone_transmissions_noel.png'
+        'imagePath': 'assets/images/Icone_transmissions.png'
       },
     ];
 
@@ -3975,7 +3975,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Premier item - Dashboard
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_dashboard_noel.png',
+              'assets/images/Icone_dashboard.png',
               width: screenSize.width *
                   (isTablet ? 0.07 : 0.14), // Taille relative
               height: screenSize.width * (isTablet ? 0.07 : 0.14),
@@ -3986,7 +3986,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Deuxième item - Home (Maison)
           BottomNavigationBarItem(
             icon: Image.asset(
-              'assets/images/noel/Icone_home_noel.png',
+              'assets/images/Icone_home.png',
               width: screenSize.width * (isTablet ? 0.07 : 0.14),
               height: screenSize.width * (isTablet ? 0.07 : 0.14),
             ),
@@ -4029,7 +4029,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final email = user?.email?.toLowerCase();
 
     Widget baseIcon() => Image.asset(
-          'assets/images/noel/Icone_message_noel.png',
+          'assets/images/Icone_message.png',
           width: size,
           height: size,
         );
