@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 // 🧪 AJOUT : Import pour le test sandbox
 import '../screens/subscription_test_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({Key? key}) : super(key: key);
@@ -40,7 +41,7 @@ class WelcomeScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
 
                   // Titre avec la typographie Disney
                   RichText(
@@ -67,7 +68,7 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
 
                   // Logo parapluie
                   Image.asset(
@@ -77,7 +78,7 @@ class WelcomeScreen extends StatelessWidget {
                     fit: BoxFit.contain,
                   ),
 
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 30),
 
                   // Conteneur pour centrer les boutons sur iPad
                   Container(
@@ -110,18 +111,26 @@ class WelcomeScreen extends StatelessWidget {
 
                         const SizedBox(height: 20),
 
+
                         // 🆕 SECTION NOUVEAU SUR POPPIN'S
                         Container(
                           width: buttonWidth,
                           margin: const EdgeInsets.only(top: 20, bottom: 10),
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF5F7FA), // Gris très léger / bleuté
+                            color: Colors.white, // Fond blanc pour plus de clarté
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: const Color(0xFFE1E8ED),
                               width: 1,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 15,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
                           ),
                           child: Column(
                             children: [
@@ -129,77 +138,118 @@ class WelcomeScreen extends StatelessWidget {
                                 "Nouveau sur Poppin’s ?",
                                 style: TextStyle(
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.bold,
                                   color: Color(0xFF2C3E50),
-                                  letterSpacing: 0.5,
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Text(
-                                "La création de compte se fait sur notre site internet.\nUne fois inscrit(e), connectez-vous ici.",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.5,
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w500,
+                              
+                              // Section Explicative Site Web
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F8FF),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.info_outline, size: 16, color: primaryBlue),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          "Nous rejoindre",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      "Rendez-vous sur notre site internet www.poppin-s.fr pour commencer l'aventure.",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.4,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 16),
+
+                              const SizedBox(height: 20),
                               
-                              // Bouton Site Web
+                              // Bouton Visiter le site
                               Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   onTap: () async {
                                     final Uri url = Uri.parse('https://www.poppin-s.fr');
                                     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                                      // Gérer l'erreur si nécessaire, ou juste ne rien faire
-                                      debugPrint('Could not launch \$url');
+                                      debugPrint('Could not launch $url');
                                     }
                                   },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
+                                      border: Border.all(color: primaryRed),
                                       borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                      border: Border.all(
-                                        color: primaryRed.withOpacity(0.2), // Petite touche de rouge Poppin's
+                                    ),
+                                    child: const Text(
+                                      "Visiter le site web",
+                                      style: TextStyle(
+                                        color: primaryRed,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Text(
-                                          "Découvrir Poppin's",
-                                          style: TextStyle(
-                                            color: primaryRed,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 16,
-                                          color: primaryRed,
-                                        ),
-                                      ],
-                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 12),
+                              
+                              // Section Rattrapage
+                              const Text(
+                                "Déjà inscrit sur le site web ?",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: Color(0xFF2C3E50),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              
+                              // Bouton Finaliser compte
+                              TextButton(
+                                onPressed: () => _showValidationDialog(context),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  foregroundColor: primaryBlue,
+                                  backgroundColor: const Color(0xFFF5F8FF),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text(
+                                  "Finaliser ma création de compte",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    decoration: TextDecoration.none, // Pas de soulignement, style bouton
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         ),
+
 
 
 
@@ -359,6 +409,114 @@ class WelcomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),
             ),
+    );
+  }
+
+  void _showValidationDialog(BuildContext context) {
+    final TextEditingController emailController = TextEditingController();
+    bool isLoading = false;
+    String? error;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+            title: const Text("Compléter mon inscription"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Veuillez entrer l'adresse email utilisée lors de votre souscription sur notre site.",
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: "Email",
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    errorText: error,
+                  ),
+                ),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Annuler"),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        final email = emailController.text.trim();
+                        if (email.isEmpty) {
+                          setState(() => error = "Veuillez entrer un email");
+                          return;
+                        }
+
+                        setState(() {
+                          isLoading = true;
+                          error = null;
+                        });
+
+                        try {
+                          final result = await FirebaseFunctions.instanceFor(
+                                  region: 'europe-west1')
+                              .httpsCallable('checkStripeSubscription')
+                              .call({'email': email});
+
+                          final data = result.data as Map<dynamic, dynamic>;
+                          final bool accountExists = data['accountExists'] == true;
+                          final bool hasActiveSubscription = data['hasActiveSubscription'] == true;
+                          final String? structureType = data['structureType'] as String?;
+
+                          if (accountExists) {
+                            setState(() {
+                              error = "Un compte existe déjà avec cet email. Veuillez vous connecter.";
+                              isLoading = false;
+                            });
+                          } else if (hasActiveSubscription) {
+                            if (context.mounted) {
+                              Navigator.pop(context); // Fermer dialog
+                              // Redirection vers CongratulationsScreen avec le bon type
+                              context.go('/congratulations', extra: {
+                                'structureType': structureType ?? 'assistante_maternelle',
+                                'email': email,
+                              });
+                            }
+                          } else {
+                            setState(() {
+                              error = "Aucun abonnement actif trouvé pour cet email.";
+                              isLoading = false;
+                            });
+                          }
+                        } catch (e) {
+                          setState(() {
+                            error = "Une erreur est survenue. Veuillez réessayer.";
+                            isLoading = false;
+                          });
+                          debugPrint("Error checking subscription: $e");
+                        }
+                      },
+                child: const Text("Vérifier"),
+              ),
+            ],
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          );
+        });
+      },
     );
   }
 }

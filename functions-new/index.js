@@ -2,7 +2,7 @@
 const admin = require("firebase-admin");
 const Stripe = require("stripe");
 
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore"); // AJOUT
 const { defineSecret } = require("firebase-functions/params");
 
@@ -49,6 +49,7 @@ exports.createCheckoutSession = onRequest(
         subscription_data: {
           trial_period_days: 7,
         },
+        allow_promotion_codes: true,
         success_url:
           "https://www.poppin-s.fr/completer_profil/?session_id={CHECKOUT_SESSION_ID}",
         cancel_url: "https://www.poppin-s.fr/abonnement-annule",
@@ -62,17 +63,17 @@ exports.createCheckoutSession = onRequest(
   },
 );
 
-exports.getCheckoutInfo = onRequest(
+exports.getCheckoutInfo = onCall(
   {
     region: "europe-west1",
     cors: true,
     secrets: [STRIPE_SECRET_KEY],
   },
-  async (req, res) => {
+  async (request) => {
     try {
-      const { sessionId } = req.body;
+      const { sessionId } = request.data;
       if (!sessionId) {
-        return res.status(400).send("sessionId manquant");
+        throw new admin.functions.https.HttpsError("invalid-argument", "sessionId manquant");
       }
 
       const session = await getStripe().checkout.sessions.retrieve(
@@ -90,10 +91,10 @@ exports.getCheckoutInfo = onRequest(
         structureType = "MAM";
       }
 
-      return res.json({ structureType });
+      return { structureType };
     } catch (error) {
       console.error("getCheckoutInfo error:", error);
-      return res.status(500).send(error.message);
+      throw new admin.functions.https.HttpsError("internal", error.message);
     }
   },
 );
@@ -135,6 +136,90 @@ exports.createWebUser = onRequest(
   async (req, res) => res
     .status(410)
     .json({ error: "createWebUser deprecated, use finalizeStripeSignup" }),
+);
+
+exports.checkStripeSubscription = onCall(
+  {
+    region: "europe-west1",
+    cors: true,
+    secrets: [STRIPE_SECRET_KEY],
+  },
+  async (request) => {
+    try {
+      const { email } = request.data;
+      if (!email) {
+        throw new admin.functions.https.HttpsError("invalid-argument", "Email manquant");
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const db = admin.firestore();
+
+      // 1. Vérifier si un compte existe déjà dans Firebase Auth ou Firestore (Structure)
+      // On vérifie d'abord les structures car c'est le plus important
+      const structuresSnapshot = await db.collection("structures")
+        .where("email", "==", normalizedEmail)
+        .limit(1)
+        .get();
+
+      if (!structuresSnapshot.empty) {
+        // Un compte existe déjà !
+        return {
+          accountExists: true,
+          hasActiveSubscription: false // On met false pour empêcher la redirection vers register si le compte existe déjà
+        };
+      }
+
+      // 2. Rechercher les clients Stripe par email
+      const customers = await getStripe().customers.list({
+        email: normalizedEmail,
+        limit: 5,
+        expand: ['data.subscriptions'],
+      });
+
+      let hasActiveSubscription = false;
+      let subscriptionData = null;
+
+      // 3. Parcourir les clients et leurs souscriptions
+      for (const customer of customers.data) {
+        if (customer.subscriptions && customer.subscriptions.data.length > 0) {
+          for (const sub of customer.subscriptions.data) {
+            if (sub.status === 'active' || sub.status === 'trialing') {
+              hasActiveSubscription = true;
+              subscriptionData = sub;
+              break;
+            }
+          }
+        }
+        if (hasActiveSubscription) break;
+      }
+
+      if (hasActiveSubscription && subscriptionData) {
+        // 4. Déterminer le type de structure via le Price ID
+        const lineItems = subscriptionData.items.data;
+        const priceId = lineItems[0] && lineItems[0].price && lineItems[0].price.id;
+
+        let structureType = "assistante_maternelle"; // Par défaut (minuscules pour cohérence app)
+        if (priceId === PRICE_MAM_2_3 || priceId === PRICE_MAM_4_PLUS) {
+          structureType = "mam";
+        }
+
+        return {
+          accountExists: false,
+          hasActiveSubscription: true,
+          structureType: structureType
+        };
+      }
+
+      return {
+        accountExists: false,
+        hasActiveSubscription: false
+      };
+
+    } catch (error) {
+      console.error("checkStripeSubscription error:", error);
+      throw new admin.functions.https.HttpsError("internal", error.message);
+    }
+  },
 );
 
 exports.stripeWebhook = onRequest(

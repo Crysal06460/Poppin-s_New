@@ -32,6 +32,7 @@ class _MonthlyReportGenerateScreenState
   late Map<String, dynamic> childData = {};
   late Map<String, dynamic> reportData = {};
   late List<Map<String, dynamic>> dailyRecords = [];
+  Map<String, String> mealsByDate = {}; // Carte pour stocker les repas par date (yyyy-MM-dd -> "Midi, Goûter")
   Uint8List? pdfBytes;
 
   @override
@@ -177,6 +178,8 @@ class _MonthlyReportGenerateScreenState
       childData = updatedChildDoc.data() ?? {};
 
       // Préparer les données pour le rapport
+      // D'abord charger les repas
+      await _fetchMealsForMonth();
       await _prepareReportData();
 
       // Générer le PDF
@@ -190,6 +193,74 @@ class _MonthlyReportGenerateScreenState
         SnackBar(content: Text('Erreur: ${e.toString()}')),
       );
       setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _fetchMealsForMonth() async {
+    try {
+      if (structureId.isEmpty) return;
+
+      final int year = widget.reportParams['year'];
+      final int month = widget.reportParams['month'];
+      final DateTime firstDay = DateTime(year, month, 1);
+      final DateTime lastDay = DateTime(year, month + 1, 0, 23, 59, 59);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(structureId)
+          .collection('children')
+          .doc(widget.reportParams['childId'])
+          .collection('repas')
+          .where('date', isGreaterThanOrEqualTo: firstDay)
+          .where('date', isLessThanOrEqualTo: lastDay)
+          .orderBy('date') // Trier par date pour l'ordre chronologique
+          .get();
+
+      Map<String, List<String>> tempMeals = {};
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data['date'] == null) continue;
+
+        final DateTime date = (data['date'] as Timestamp).toDate();
+        final String dateKey = DateFormat('yyyy-MM-dd').format(date);
+
+        String mealLabel = '';
+        // Priorité : moment explicite, sinon déduction
+        if (data['moment'] != null && data['moment'].toString().isNotEmpty) {
+          mealLabel = data['moment'].toString();
+        } else if (data['gouter'] == true) {
+          mealLabel = 'Goûter';
+        } else if (data['typeAlimentation'] != null) {
+          final type = data['typeAlimentation'].toString();
+          if (type == 'Biberon') mealLabel = 'Biberon';
+          else if (type == 'Allaitement') mealLabel = 'Allaitement';
+          else mealLabel = 'Repas'; // Fallback
+        } else {
+          mealLabel = 'Repas';
+        }
+
+        if (!tempMeals.containsKey(dateKey)) {
+          tempMeals[dateKey] = [];
+        }
+        // Éviter les doublons exacts si possible, sinon on ajoute
+        if (!tempMeals[dateKey]!.contains(mealLabel)) {
+          tempMeals[dateKey]!.add(mealLabel);
+        }
+      }
+
+      // Convertir en String "Midi, Goûter"
+      mealsByDate = {};
+      tempMeals.forEach((key, value) {
+        // Trier pour avoir un ordre logique (Petit déj, Midi, Goûter, Soir) si nécessaire
+        // Ici on laisse l'ordre d'insertion (qui suit l'heure si documents bien faits) ou on pourrait trier
+        mealsByDate[key] = value.join(', ');
+      });
+
+      print("🍽️ Repas chargés pour le mois : ${mealsByDate.length} jours avec repas");
+
+    } catch (e) {
+      print("Erreur lors du chargement des repas: $e");
     }
   }
 
@@ -489,6 +560,9 @@ class _MonthlyReportGenerateScreenState
         print('Erreur calcul heures prévues: $e');
       }
 
+      // Récupérer les repas pour ce jour
+      String mealsForDay = mealsByDate[dateKey] ?? '';
+
       // Ajouter l'enregistrement: présent avec heures, ou absent clairement indiqué
       if (isPresent) {
         records.add({
@@ -497,6 +571,7 @@ class _MonthlyReportGenerateScreenState
           'arrivalTime': arrivalTime,
           'departureTime': departureTime,
           'realHours': realHours,
+          'meals': mealsForDay, // Ajout des repas
           'status': 'Présent',
         });
       } else if (isAbsent) {
@@ -506,6 +581,7 @@ class _MonthlyReportGenerateScreenState
           'arrivalTime': '',
           'departureTime': '',
           'realHours': 'ABSENT',
+          'meals': '', // Pas de repas si absent (logiquement)
           'status': 'ABSENT',
         });
         totalAbsences += 1;
@@ -634,6 +710,7 @@ class _MonthlyReportGenerateScreenState
                       _buildTableCell('Statut', fontBold, isBold: true),
                       _buildTableCell('Arrivée', fontBold, isBold: true),
                       _buildTableCell('Départ', fontBold, isBold: true),
+                      _buildTableCell('Repas', fontBold, isBold: true), // Nouvelle colonne
                       _buildTableCell('Heures', fontBold, isBold: true),
                     ],
                   ),
@@ -646,6 +723,7 @@ class _MonthlyReportGenerateScreenState
                             _buildTableCell((record['status'] ?? '') as String, font),
                             _buildTableCell((record['arrivalTime'] ?? '') as String, font),
                             _buildTableCell((record['departureTime'] ?? '') as String, font),
+                            _buildTableCell((record['meals'] ?? '') as String, font, alignment: pw.Alignment.centerLeft), // Données repas
                             _buildTableCell((record['realHours'] ?? '') as String, font),
                           ]))
                       .toList(),
@@ -659,6 +737,8 @@ class _MonthlyReportGenerateScreenState
                           'Absences: ${reportData['totalAbsences']}', font,
                           isBold: true),
                       _buildTableCell('', font),
+                      _buildTableCell('', font),
+                      _buildTableCell('', font), // Cellule vide pour alignement colonne Repas
                       _buildTableCell(
                           '${reportData['totalHours'].toStringAsFixed(2)}h',
                           fontBold,

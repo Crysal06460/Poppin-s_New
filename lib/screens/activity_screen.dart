@@ -1701,7 +1701,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         localParticipationLevel,
                                         (value) {
                                           setState(() {
-                                            localParticipationLevel = value;
+                                            localParticipationLevel = localParticipationLevel == value ? '' : value;
                                           });
                                         },
                                         isTabletDevice,
@@ -1713,7 +1713,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         localParticipationLevel,
                                         (value) {
                                           setState(() {
-                                            localParticipationLevel = value;
+                                            localParticipationLevel = localParticipationLevel == value ? '' : value;
                                           });
                                         },
                                         isTabletDevice,
@@ -1725,7 +1725,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         localParticipationLevel,
                                         (value) {
                                           setState(() {
-                                            localParticipationLevel = value;
+                                            localParticipationLevel = localParticipationLevel == value ? '' : value;
                                           });
                                         },
                                         isTabletDevice,
@@ -1737,7 +1737,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                         localParticipationLevel,
                                         (value) {
                                           setState(() {
-                                            localParticipationLevel = value;
+                                            localParticipationLevel = localParticipationLevel == value ? '' : value;
                                           });
                                         },
                                         isTabletDevice,
@@ -2266,7 +2266,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   'Pas participé',
                                   localParticipation,
                                   (value) => setState(
-                                      () => localParticipation = value),
+                                      () => localParticipation = localParticipation == value ? '' : value),
                                   isTabletDevice,
                                   Icons.sentiment_very_dissatisfied,
                                   primaryRed,
@@ -2275,7 +2275,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   'Peu participé',
                                   localParticipation,
                                   (value) => setState(
-                                      () => localParticipation = value),
+                                      () => localParticipation = localParticipation == value ? '' : value),
                                   isTabletDevice,
                                   Icons.sentiment_dissatisfied,
                                   Colors.amber,
@@ -2284,7 +2284,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   'Bien participé',
                                   localParticipation,
                                   (value) => setState(
-                                      () => localParticipation = value),
+                                      () => localParticipation = localParticipation == value ? '' : value),
                                   isTabletDevice,
                                   Icons.sentiment_satisfied,
                                   Colors.lime,
@@ -2293,7 +2293,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   'Très bien participé',
                                   localParticipation,
                                   (value) => setState(
-                                      () => localParticipation = value),
+                                      () => localParticipation = localParticipation == value ? '' : value),
                                   isTabletDevice,
                                   Icons.sentiment_very_satisfied,
                                   Colors.green,

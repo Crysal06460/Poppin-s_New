@@ -33,7 +33,9 @@ class _PurgeResult {
 }
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  final String? prefilledEmail;
+
+  const RegisterScreen({Key? key, this.prefilledEmail}) : super(key: key);
 
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
@@ -47,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   static const Color brightCyan = Color(0xFF05C7F2); // #05C7F2
   static const Color primaryYellow = Color(0xFFF2B705); // #F2B705
 
-  final TextEditingController emailController = TextEditingController();
+  late TextEditingController emailController;
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
@@ -66,6 +68,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
+    emailController = TextEditingController(text: widget.prefilledEmail);
     // Écouter les changements du mot de passe pour la validation en temps réel
     passwordController.addListener(_validatePassword);
   }
@@ -1314,7 +1317,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     // Comportement standard pour un nouveau créateur de structure
-    final String structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
+    
+    // 1. Vérifier d'abord s'il existe une souscription payante
+    final subscriptionResult = await FirebaseTrialService.verifySubscription(
+        email: email, 
+        uid: user.uid
+    );
+
+    final String structureType;
+    int? maxMemberCount;
+
+     if (subscriptionResult.isValid) {
+        structureType = subscriptionResult.structureType!;
+        maxMemberCount = subscriptionResult.maxMemberCount;
+        print("✅ Création structure basée sur abonnement: $structureType ($maxMemberCount membres)");
+     } else {
+        structureType = isMAMCheck ? 'MAM' : 'assistante_maternelle';
+     }
+
     final DocumentReference<Map<String, dynamic>> structureRef =
         FirebaseFirestore.instance.collection('structures').doc(user.uid);
 
@@ -1328,6 +1348,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'ownerEmail': email,
       'structureType': structureType,
     };
+    
+    if (maxMemberCount != null) {
+        structureData['maxMemberCount'] = maxMemberCount;
+    }
 
     if (shouldSetCreatedAt) {
       structureData['createdAt'] = FieldValue.serverTimestamp();
@@ -1339,6 +1363,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       structureId: user.uid,
       ownerEmail: email,
       structureType: structureType,
+      mamMemberCount: maxMemberCount,
     );
 
     if (!mounted) return;

@@ -5,15 +5,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import '../services/firebase_trial_service.dart';
 
 class CongratulationsScreen extends StatefulWidget {
   final String structureType;
   final bool skipStructureFlow;
+  final String? prefilledEmail;
 
   const CongratulationsScreen({
     Key? key,
     required this.structureType,
     this.skipStructureFlow = false,
+    this.prefilledEmail,
   }) : super(key: key);
 
   @override
@@ -114,7 +117,10 @@ class _CongratulationsScreenState extends State<CongratulationsScreen> {
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: _RegistrationForm(structureType: widget.structureType),
+            child: _RegistrationForm(
+              structureType: widget.structureType,
+              prefilledEmail: widget.prefilledEmail,
+            ),
           ),
         ),
       );
@@ -297,7 +303,8 @@ class _CongratulationsScreenState extends State<CongratulationsScreen> {
 
 class _RegistrationForm extends StatefulWidget {
   final String structureType;
-  const _RegistrationForm({required this.structureType});
+  final String? prefilledEmail;
+  const _RegistrationForm({required this.structureType, this.prefilledEmail});
 
   @override
   State<_RegistrationForm> createState() => _RegistrationFormState();
@@ -325,6 +332,9 @@ class _RegistrationFormState extends State<_RegistrationForm> {
   @override
   void initState() {
     super.initState();
+    if (widget.prefilledEmail != null) {
+      _emailController.text = widget.prefilledEmail!;
+    }
     // Ecouter le code postal pour l'autocomplétion
     _zipController.addListener(_onZipChanged);
     
@@ -337,225 +347,12 @@ class _RegistrationFormState extends State<_RegistrationForm> {
   int? _verifiedMaxMembers;
 
   Future<void> _verifySubscription({String? email, String? uid}) async {
-    try {
-      final String? resolvedUid =
-          uid ?? FirebaseAuth.instance.currentUser?.uid;
-      final String? resolvedEmail =
-          email?.trim().toLowerCase();
-
-      final List<Map<String, dynamic>> candidates = [];
-
-      if (resolvedUid != null && resolvedUid.isNotEmpty) {
-        try {
-          final subDoc = await FirebaseFirestore.instance
-              .collection('subscriptions')
-              .doc(resolvedUid)
-              .get();
-          final docData = subDoc.data();
-          if (docData != null && docData.isNotEmpty) {
-            candidates.add(docData);
-          }
-        } catch (_) {}
-      }
-
-      if (resolvedUid != null && resolvedUid.isNotEmpty) {
-        try {
-          final subQuery = await FirebaseFirestore.instance
-              .collection('subscriptions')
-              .where('structureId', isEqualTo: resolvedUid)
-              .limit(1)
-              .get();
-          if (subQuery.docs.isNotEmpty) {
-            candidates.add(subQuery.docs.first.data());
-          }
-        } catch (_) {}
-      }
-
-      if (resolvedEmail != null && resolvedEmail.isNotEmpty) {
-        try {
-          final subQuery = await FirebaseFirestore.instance
-              .collection('subscriptions')
-              .where('email', isEqualTo: resolvedEmail)
-              .limit(1)
-              .get();
-          if (subQuery.docs.isNotEmpty) {
-            candidates.add(subQuery.docs.first.data());
-          }
-        } catch (_) {}
-      }
-
-      if (candidates.isEmpty) {
-        print("🔍 Debug Subscription: Aucune donnée candidate trouvée.");
-        return;
-      }
-
-      const Set<String> mamSmallPriceIds = {
-        'price_1sfkuilid2pa5i1c75uu1tch',
-        'price_1sflcbppvdnoe6wk9jqndswp',
-      };
-      const Set<String> mamLargePriceIds = {
-        'price_1sfkwulid2pa5i1cmsdrrf0c',
-        'price_1sflcjpgpvnoe6wkfd6blign',
-        'price_1sflcjppvdnoe6wkfd6blign', // User Provided (MAM 4)
-      };
-      const Set<String> assmatPriceIds = {
-        'price_1sfl7jppvdnoe6wk7rnj6pm3', // User Provided (Assmat)
-      };
-      Map<String, dynamic>? best;
-      int bestScore = -1;
-
-      print("🔍 Debug Subscription: ${candidates.length} candidat(s). Analyse...");
-
-      for (final data in candidates) {
-        final String rawStructureType =
-            (data['structureType'] ?? '').toString().toLowerCase();
-        final String productId =
-            (data['productId'] ?? data['planId'] ?? '')
-                .toString()
-                .toLowerCase();
-        final dynamic maxMembersRaw =
-            data['maxMemberCount'] ?? data['memberCount'];
-        int? maxMembers;
-        if (maxMembersRaw is int) {
-          maxMembers = maxMembersRaw;
-        } else if (maxMembersRaw is num) {
-          maxMembers = maxMembersRaw.toInt();
-        } else if (maxMembersRaw is String) {
-          maxMembers = int.tryParse(maxMembersRaw);
-        }
-
-        print("   -> Candidat: ID=$productId, Type=$rawStructureType, Members=$maxMembers");
-
-        int score = 0;
-        if (mamLargePriceIds.contains(productId) ||
-            mamSmallPriceIds.contains(productId) ||
-            productId.contains('mam')) {
-          score += 4;
-        }
-        if (assmatPriceIds.contains(productId) ||
-            productId.contains('assistante_maternelle') ||
-            productId.contains('assmat') ||
-            productId == 'abonnement_assmat') {
-          score += 3;
-        }
-        if (maxMembers != null && maxMembers > 1) {
-          score += 2;
-        }
-        if (rawStructureType.contains('mam')) {
-          score += 2;
-        }
-        if (rawStructureType.contains('assistante') ||
-            rawStructureType.contains('assmat')) {
-          score += 1;
-        }
-
-        print("      -> Score: $score");
-
-        if (score > bestScore) {
-          bestScore = score;
-          best = data;
-        }
-      }
-
-      if (best == null) {
-        print("🔍 Debug Subscription: Aucun meilleur candidat retenu.");
-        return;
-      }
-
-      final String rawStructureType =
-          (best['structureType'] ?? '').toString().toLowerCase();
-      final String productId =
-          (best['productId'] ?? best['planId'] ?? '')
-              .toString()
-              .toLowerCase();
-      final dynamic maxMembersRaw =
-          best['maxMemberCount'] ?? best['memberCount'];
-      int? maxMembers;
-      if (maxMembersRaw is int) {
-        maxMembers = maxMembersRaw;
-      } else if (maxMembersRaw is num) {
-        maxMembers = maxMembersRaw.toInt();
-      } else if (maxMembersRaw is String) {
-        maxMembers = int.tryParse(maxMembersRaw);
-      }
-
-      bool explicitIdMatch = false;
-
-      if (mamLargePriceIds.contains(productId)) {
-        _verifiedStructureType = 'MAM';
-        _verifiedMaxMembers = 50;
-        explicitIdMatch = true;
-      } else if (mamSmallPriceIds.contains(productId)) {
-        _verifiedStructureType = 'MAM';
-        _verifiedMaxMembers = 3; // Par défaut pour small IDs (sera ajusté si MAM 2 spécifique)
-        explicitIdMatch = true;
-      } else if (productId.contains('mam')) {
-        _verifiedStructureType = 'MAM';
-        // Pas explicit match pur (c'est un contains), donc on laissera le maxMembers du doc si dispo
-      } else if (assmatPriceIds.contains(productId) || 
-          productId.contains('assistante_maternelle') ||
-          productId.contains('assmat') ||
-          productId == 'abonnement_assmat') {
-        _verifiedStructureType = 'assistante_maternelle';
-        _verifiedMaxMembers = 1;
-        explicitIdMatch = true;
-      } else if (maxMembers != null && maxMembers > 1) {
-        _verifiedStructureType = 'MAM';
-      } else if (rawStructureType.contains('mam')) {
-        _verifiedStructureType = 'MAM';
-      } else if (rawStructureType.contains('assistante') ||
-          rawStructureType.contains('assmat')) {
-        _verifiedStructureType = 'assistante_maternelle';
-      }
-
-      // AJUSTEMENT DES MEMBRES
-      // Si on a identifié formellement l'ID, on garde notre valeur forcée (ex: 50 ou 1)
-      // Sauf si c'est un "Small MAM" où on veut distinguer MAM 2 vs MAM 3 si le doc le précise
-      if (explicitIdMatch) {
-         // Cas spécial: Si c'est un ID MAM Small
-         if (mamSmallPriceIds.contains(productId)) {
-             // 1. Check ID exact communiqué par le user pour MAM 2
-             if (productId == 'price_1sflcbppvdnoe6wk9jqndswp') {
-                 _verifiedMaxMembers = 2;
-             } 
-             // 2. Check pattern string
-             else if (productId.contains('mam_2') || productId.contains('mam2')) {
-                _verifiedMaxMembers = 2;
-             } 
-             // 3. Sinon confiance à la DB (si > 1) ou default 3
-             else if (maxMembers != null && maxMembers > 1) {
-                _verifiedMaxMembers = maxMembers; 
-             } else {
-                _verifiedMaxMembers = 3;
-             }
-         }
-         // Sinon (MAM Large ou Assmat), on ne touche à rien, on garde 50 ou 1.
-      } 
-      // Si pas de match ID formel, on prend la valeur du doc
-      else if (maxMembers != null) {
-        _verifiedMaxMembers = maxMembers;
-      } 
-      // Fallbacks génériques
-      else if (_verifiedStructureType == 'MAM') {
-        if (productId.contains('mam_2') || productId.contains('mam2')) {
-          _verifiedMaxMembers = 2;
-        } else if (productId.contains('mam_3') || productId.contains('mam3')) {
-          _verifiedMaxMembers = 3;
-        } else if (productId.contains('mam_4') || productId.contains('mam4')) {
-          _verifiedMaxMembers = 50;
-        } else {
-          _verifiedMaxMembers = 3;
-        }
-      } else if (_verifiedStructureType == 'assistante_maternelle') {
-        _verifiedMaxMembers = 1;
-      }
-
-      if (_verifiedStructureType != null) {
-        print(
-            "🔒 Abonnement confirmé: $_verifiedStructureType ($_verifiedMaxMembers membres).");
-      }
-    } catch (e) {
-      print("⚠️ Erreur vérification abonnement: $e");
+    final result = await FirebaseTrialService.verifySubscription(email: email, uid: uid);
+    
+    if (result.isValid) {
+      _verifiedStructureType = result.structureType;
+      _verifiedMaxMembers = result.maxMemberCount;
+      print("🔒 Abonnement confirmé via Service: $_verifiedStructureType ($_verifiedMaxMembers membres).");
     }
   }
 

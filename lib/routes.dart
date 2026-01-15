@@ -267,12 +267,16 @@ final GoRouter router = GoRouter(
     ),
 
     // Routes existantes
-    /*
     GoRoute(
       path: '/register',
-      builder: (context, state) => const RegisterScreen(),
+      builder: (context, state) {
+        String? prefilledEmail;
+        if (state.extra is Map<String, dynamic>) {
+          prefilledEmail = (state.extra as Map<String, dynamic>)['email'] as String?;
+        }
+        return RegisterScreen(prefilledEmail: prefilledEmail);
+      },
     ),
-    */
     /*
     GoRoute(
       path: '/trial-info',
@@ -355,12 +359,15 @@ final GoRouter router = GoRouter(
         final dynamic extra = state.extra;
         String structureType = "Structure inconnue";
         bool skipStructureFlow = false;
+        String? prefilledEmail;
+        
         if (extra is Map<String, dynamic>) {
           structureType = (extra['structureType'] ?? structureType).toString();
           final dynamic skipValue = extra['skipStructureFlow'];
           if (skipValue is bool) {
             skipStructureFlow = skipValue;
           }
+          prefilledEmail = extra['email'] as String?;
         } else if (extra is String && extra.isNotEmpty) {
           structureType = extra;
         } else if (state.uri.queryParameters.containsKey('structureType')) {
@@ -370,6 +377,7 @@ final GoRouter router = GoRouter(
         return CongratulationsScreen(
           structureType: structureType,
           skipStructureFlow: skipStructureFlow,
+          prefilledEmail: prefilledEmail,
         );
       },
     ),

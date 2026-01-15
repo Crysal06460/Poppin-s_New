@@ -56,6 +56,7 @@ class _SanteScreenState extends State<SanteScreen> {
     "Température",
     "Poids",
     "Médicaments",
+    "Autre", // Ajout de l'option Autre
   ];
 
   final List<String> medicationTypes = ["Suppositoire", "Suspension", "Autre"];
@@ -84,6 +85,8 @@ class _SanteScreenState extends State<SanteScreen> {
         return Icons.monitor_weight;
       case 'médicaments':
         return Icons.medication;
+      case 'autre': // Icône pour Autre
+        return Icons.note_alt_outlined;
       default:
         return Icons.healing;
     }
@@ -1357,6 +1360,17 @@ class _SanteScreenState extends State<SanteScreen> {
                                       return;
                                     }
 
+                                    if (localCareType == 'Autre' &&
+                                        _observationsController.text
+                                            .trim()
+                                            .isEmpty) {
+                                      setState(() {
+                                        errorMessage =
+                                            'Veuillez saisir une observation';
+                                      });
+                                      return;
+                                    }
+
                                     setState(() {
                                       errorMessage = null;
                                     });
@@ -1830,6 +1844,19 @@ class _SanteScreenState extends State<SanteScreen> {
                                             );
                                             return;
                                           }
+                                        }
+
+                                        if (localType == 'Autre' &&
+                                            obsCtrl.text.trim().isEmpty) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Veuillez saisir une observation'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                          return;
                                         }
                                         Map<String, dynamic> update = {
                                           'heure': localTime.isNotEmpty

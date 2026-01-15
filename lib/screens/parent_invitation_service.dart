@@ -14,6 +14,7 @@ class ParentInvitationService {
     required String parentEmail,
     required String parentFirstName,
     required String parentLastName,
+    required String structureId,
   }) async {
     try {
       // Vérifier que l'utilisateur est connecté
@@ -25,7 +26,7 @@ class ParentInvitationService {
       // Récupérer les détails de la structure
       final structureDoc = await _firestore
           .collection('structures')
-          .doc(currentUser.uid)
+          .doc(structureId)
           .get();
       
       if (!structureDoc.exists) {
@@ -40,7 +41,7 @@ class ParentInvitationService {
       await _firestore.collection('invitations').add({
         'email': normalizedEmail,
         'type': 'parent',
-        'structureId': currentUser.uid,
+        'structureId': structureId,
         'structureName': structureName,
         'childId': childId,
         'childName': childFirstName,
@@ -66,7 +67,7 @@ class ParentInvitationService {
           'childName': childFirstName,
           'childId': childId,
           'structureName': structureName,
-          'structureId': currentUser.uid,
+          'structureId': structureId,
           'androidLink': 'https://play.google.com/store/apps/details?id=com.example.poppins_app',
           'iosLink': 'https://apps.apple.com/app/id123456789',
           'year': DateTime.now().year.toString()

@@ -1,6 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+class SubscriptionVerificationResult {
+  final String? structureType;
+  final int? maxMemberCount;
+  final String? subscriptionId;
+  final Map<String, dynamic>? rawData;
+
+  SubscriptionVerificationResult({
+    this.structureType,
+    this.maxMemberCount,
+    this.subscriptionId,
+    this.rawData,
+  });
+
+  bool get isValid => structureType != null;
+}
+
 class TrialStatus {
   TrialStatus({
     required this.status,
@@ -354,5 +370,224 @@ class FirebaseTrialService {
       return;
     }
     await markTrialExpired(user.uid);
+  }
+
+  static Future<SubscriptionVerificationResult> verifySubscription({String? email, String? uid}) async {
+    try {
+      final String? resolvedUid = uid ?? FirebaseAuth.instance.currentUser?.uid;
+      final String? resolvedEmail = email?.trim().toLowerCase();
+
+      final List<Map<String, dynamic>> candidates = [];
+
+      if (resolvedUid != null && resolvedUid.isNotEmpty) {
+        try {
+          final subDoc = await _firestore
+              .collection('subscriptions')
+              .doc(resolvedUid)
+              .get();
+          final docData = subDoc.data();
+          if (docData != null && docData.isNotEmpty) {
+            candidates.add(docData);
+          }
+        } catch (_) {}
+      }
+
+      if (resolvedUid != null && resolvedUid.isNotEmpty) {
+        try {
+          final subQuery = await _firestore
+              .collection('subscriptions')
+              .where('structureId', isEqualTo: resolvedUid)
+              .limit(1)
+              .get();
+          if (subQuery.docs.isNotEmpty) {
+            candidates.add(subQuery.docs.first.data());
+          }
+        } catch (_) {}
+      }
+
+      if (resolvedEmail != null && resolvedEmail.isNotEmpty) {
+        try {
+          final subQuery = await _firestore
+              .collection('subscriptions')
+              .where('email', isEqualTo: resolvedEmail)
+              .limit(1)
+              .get();
+          if (subQuery.docs.isNotEmpty) {
+            candidates.add(subQuery.docs.first.data());
+          }
+        } catch (_) {}
+      }
+
+      if (candidates.isEmpty) {
+        print("🔍 Debug Subscription: Aucune donnée candidate trouvée.");
+        return SubscriptionVerificationResult();
+      }
+
+      const Set<String> mamSmallPriceIds = {
+        'price_1sfkuilid2pa5i1c75uu1tch',
+        'price_1sflcbppvdnoe6wk9jqndswp',
+      };
+      const Set<String> mamLargePriceIds = {
+        'price_1sfkwulid2pa5i1cmsdrrf0c',
+        'price_1sflcjpgpvnoe6wkfd6blign',
+        'price_1sflcjppvdnoe6wkfd6blign', // User Provided (MAM 4)
+      };
+      const Set<String> assmatPriceIds = {
+        'price_1sfl7jppvdnoe6wk7rnj6pm3', // User Provided (Assmat)
+      };
+      
+      Map<String, dynamic>? best;
+      int bestScore = -1;
+
+      print("🔍 Debug Subscription: ${candidates.length} candidat(s). Analyse...");
+
+      for (final data in candidates) {
+        final String rawStructureType =
+            (data['structureType'] ?? '').toString().toLowerCase();
+        final String productId =
+            (data['productId'] ?? data['planId'] ?? '')
+                .toString()
+                .toLowerCase();
+        final dynamic maxMembersRaw =
+            data['maxMemberCount'] ?? data['memberCount'];
+        int? maxMembers;
+        if (maxMembersRaw is int) {
+          maxMembers = maxMembersRaw;
+        } else if (maxMembersRaw is num) {
+          maxMembers = maxMembersRaw.toInt();
+        } else if (maxMembersRaw is String) {
+          maxMembers = int.tryParse(maxMembersRaw);
+        }
+
+        int score = 0;
+        if (mamLargePriceIds.contains(productId) ||
+            mamSmallPriceIds.contains(productId) ||
+            productId.contains('mam')) {
+          score += 4;
+        }
+        if (assmatPriceIds.contains(productId) ||
+            productId.contains('assistante_maternelle') ||
+            productId.contains('assmat') ||
+            productId == 'abonnement_assmat') {
+          score += 3;
+        }
+        if (maxMembers != null && maxMembers > 1) {
+          score += 2;
+        }
+        if (rawStructureType.contains('mam')) {
+          score += 2;
+        }
+        if (rawStructureType.contains('assistante') ||
+            rawStructureType.contains('assmat')) {
+          score += 1;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = data;
+        }
+      }
+
+      if (best == null) {
+        print("🔍 Debug Subscription: Aucun meilleur candidat retenu.");
+        return SubscriptionVerificationResult();
+      }
+
+      String? verifiedStructureType;
+      int? verifiedMaxMembers;
+
+      final String rawStructureType =
+          (best['structureType'] ?? '').toString().toLowerCase();
+      final String productId =
+          (best['productId'] ?? best['planId'] ?? '')
+              .toString()
+              .toLowerCase();
+      final dynamic maxMembersRaw =
+          best['maxMemberCount'] ?? best['memberCount'];
+      int? maxMembers;
+      if (maxMembersRaw is int) {
+        maxMembers = maxMembersRaw;
+      } else if (maxMembersRaw is num) {
+        maxMembers = maxMembersRaw.toInt();
+      } else if (maxMembersRaw is String) {
+        maxMembers = int.tryParse(maxMembersRaw);
+      }
+
+      bool explicitIdMatch = false;
+
+      if (mamLargePriceIds.contains(productId)) {
+        verifiedStructureType = 'MAM';
+        verifiedMaxMembers = 50;
+        explicitIdMatch = true;
+      } else if (mamSmallPriceIds.contains(productId)) {
+        verifiedStructureType = 'MAM';
+        verifiedMaxMembers = 3; 
+        explicitIdMatch = true;
+      } else if (productId.contains('mam')) {
+        verifiedStructureType = 'MAM';
+      } else if (assmatPriceIds.contains(productId) || 
+          productId.contains('assistante_maternelle') ||
+          productId.contains('assmat') ||
+          productId == 'abonnement_assmat') {
+        verifiedStructureType = 'assistante_maternelle';
+        verifiedMaxMembers = 1;
+        explicitIdMatch = true;
+      } else if (maxMembers != null && maxMembers > 1) {
+        verifiedStructureType = 'MAM';
+      } else if (rawStructureType.contains('mam')) {
+        verifiedStructureType = 'MAM';
+      } else if (rawStructureType.contains('assistante') ||
+          rawStructureType.contains('assmat')) {
+        verifiedStructureType = 'assistante_maternelle';
+      }
+
+      // AJUSTEMENT DES MEMBRES
+      if (explicitIdMatch) {
+         if (mamSmallPriceIds.contains(productId)) {
+             if (productId == 'price_1sflcbppvdnoe6wk9jqndswp') {
+                 verifiedMaxMembers = 2;
+             } 
+             else if (productId.contains('mam_2') || productId.contains('mam2')) {
+                verifiedMaxMembers = 2;
+             } 
+             else if (maxMembers != null && maxMembers > 1) {
+                verifiedMaxMembers = maxMembers; 
+             } else {
+                verifiedMaxMembers = 3;
+             }
+         }
+      } 
+      else if (maxMembers != null) {
+        verifiedMaxMembers = maxMembers;
+      } 
+      else if (verifiedStructureType == 'MAM') {
+        if (productId.contains('mam_2') || productId.contains('mam2')) {
+          verifiedMaxMembers = 2;
+        } else if (productId.contains('mam_3') || productId.contains('mam3')) {
+          verifiedMaxMembers = 3;
+        } else if (productId.contains('mam_4') || productId.contains('mam4')) {
+          verifiedMaxMembers = 50;
+        } else {
+          verifiedMaxMembers = 3;
+        }
+      } else if (verifiedStructureType == 'assistante_maternelle') {
+        verifiedMaxMembers = 1;
+      }
+
+      if (verifiedStructureType != null) {
+        print(
+            "🔒 Abonnement confirmé service: $verifiedStructureType ($verifiedMaxMembers membres).");
+      }
+
+      return SubscriptionVerificationResult(
+        structureType: verifiedStructureType,
+        maxMemberCount: verifiedMaxMembers,
+        rawData: best,
+      );
+
+    } catch (e) {
+      print("⚠️ Erreur vérification abonnement service: $e");
+      return SubscriptionVerificationResult();
+    }
   }
 }

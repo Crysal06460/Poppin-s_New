@@ -1126,6 +1126,7 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
           parentEmail: normalizedEmail,
           parentFirstName: parentFirstName,
           parentLastName: parentLastName,
+          structureId: structureId,
         );
 
         hasSentInvitation = true;

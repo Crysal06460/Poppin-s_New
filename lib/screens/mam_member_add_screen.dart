@@ -208,6 +208,7 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
         'structureId': structureId,
         'isMAMMember': true,
         'userType': 'mam_member',
+        'isFirstLogin': true, // Essential for SignupScreen flow
         'createdAt': FieldValue.serverTimestamp(),
       });
 
