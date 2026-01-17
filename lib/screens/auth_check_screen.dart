@@ -264,7 +264,9 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
     DocumentSnapshot<Map<String, dynamic>>? structureDoc,
   }) async {
     try {
-      final bool subscribed = await SubscriptionService.isUserSubscribed();
+      final bool subscribed = await SubscriptionService.isUserSubscribed(
+        structureId: structureId,
+      );
       final TrialStatus trialStatus =
           await FirebaseTrialService.fetchTrialStatusForCurrentUser();
       final bool hasActiveTrial = trialStatus.isActive;

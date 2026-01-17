@@ -82,7 +82,7 @@ class SubscriptionService {
   }
 
   // 🆕 MÉTHODE PRINCIPALE : Vérifier le statut d'abonnement (ROBUSTE)
-  static Future<bool> isUserSubscribed() async {
+  static Future<bool> isUserSubscribed({String? structureId}) async {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return false;
@@ -95,189 +95,67 @@ class SubscriptionService {
       print('🔍 Vérification abonnement pour: ${user.uid}');
 
       // Résoudre le bon structureId (MAM vs utilisateur solo)
-      final String structureId = await _getCurrentStructureId(user);
-      print('🔎 structureId résolu: $structureId');
+      // Si structureId est fourni, on l'utilise, sinon on le cherche
+      final String resolvedStructureId =
+          structureId ?? await _getCurrentStructureId(user);
+      print('🔎 structureId résolu: $resolvedStructureId');
 
-      // 1. PRIORITÉ 1 : Vérifier dans Firestore (fiable et rapide)
-      final subscriptionQuery = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .where('structureId', isEqualTo: structureId)
-          .get();
-
-      if (subscriptionQuery.docs.isNotEmpty) {
-        QueryDocumentSnapshot<Map<String, dynamic>>? activeDoc;
-        bool shouldMarkTrialExpired = false;
-
-        for (final doc in subscriptionQuery.docs) {
-          final Map<String, dynamic> data = doc.data();
-          final TrialStatus trialStatus = TrialStatus.fromSubscriptionDoc(data);
-
-          if (_isSubscriptionDocActive(data, trialStatus: trialStatus)) {
-            activeDoc = doc;
-            break;
-          }
-
-          final String statusValue =
-              (data['status'] ?? '').toString().toLowerCase();
-          final bool isTrialStatus =
-              statusValue.contains('trial') || data['isTrialPeriod'] == true;
-
-          if (isTrialStatus && trialStatus.isExpired) {
-            shouldMarkTrialExpired = true;
-          }
-        }
-
-        if (activeDoc != null) {
-          print('✅ Abonnement actif trouvé dans Firestore (${activeDoc.id})');
-          return true;
-        }
-
-        if (shouldMarkTrialExpired) {
-          print(
-              '⏰ Essai Firebase expiré détecté via collection subscriptions.');
-          await FirebaseTrialService.markTrialExpired(structureId);
-        }
-
-        for (final doc in subscriptionQuery.docs) {
-          final rawStatus = (doc.data()['status'] ?? '').toString();
-          print(
-              'ℹ️ Abonnement ignoré (${doc.id}) - statut: ${rawStatus.isEmpty ? 'inconnu' : rawStatus}');
-        }
-      }
-
-      // ✅ FALLBACK STRUCTURE: vérifier si un abonnement est relié via la fiche structure
+      // 1. PRIORITÉ ABSOLUE : Vérifier la fiche structure (Stripe)
+      // Si la structure dit "ACTIVE/PURCHASED", c'est GAGNÉ. On ignore le reste.
       try {
         final structureSnapshot = await FirebaseFirestore.instance
             .collection('structures')
-            .doc(structureId)
+            .doc(resolvedStructureId)
             .get();
 
         if (structureSnapshot.exists) {
-          final Map<String, dynamic> structureData =
-              structureSnapshot.data() ?? <String, dynamic>{};
-          final TrialStatus structureTrial =
-              TrialStatus.fromStructureData(structureData);
-          final String structureStatus =
-              (structureData['subscriptionStatus'] ?? '').toString();
-
-          if (structureTrial.isActive) {
-            print('✅ Abonnement actif via structure (essai Firebase actif)');
-            return true;
-          }
-
-          final bool structureStatusIndicatesTrial =
-              structureStatus.toLowerCase().contains('trial');
-          if (structureTrial.isExpired && structureStatusIndicatesTrial) {
-            print('⏰ Essai Firebase expiré détecté via structure.');
-            await FirebaseTrialService.markTrialExpired(structureId);
-          }
-
-          final String? subscriptionDocId =
-              (structureData['subscriptionDocId'] ?? '').toString();
-
-          if (subscriptionDocId != null && subscriptionDocId.isNotEmpty) {
-            final linkedSubscription = await FirebaseFirestore.instance
-                .collection('subscriptions')
-                .doc(subscriptionDocId)
-                .get();
-
-            if (linkedSubscription.exists) {
-              final linkedData = linkedSubscription.data() ?? {};
-              final TrialStatus linkedTrialStatus =
-                  TrialStatus.fromSubscriptionDoc(linkedData);
-
-              if (_isSubscriptionDocActive(linkedData,
-                  trialStatus: linkedTrialStatus)) {
-                print('✅ Abonnement actif via doc lié: $subscriptionDocId');
-                return true;
-              }
-            }
-          }
-
-          if (structureData['subscriptionActive'] == true &&
-              !structureStatusIndicatesTrial) {
-            final Timestamp? subscriptionUpdatedAt =
-                structureData['subscriptionUpdatedAt'];
-            if (subscriptionUpdatedAt is Timestamp) {
-              final Duration sinceUpdate =
-                  DateTime.now().difference(subscriptionUpdatedAt.toDate());
-              if (sinceUpdate.inDays <= 45) {
-                print('✅ Abonnement actif via structure (flag récent)');
-                return true;
-              }
-            } else {
-              print('✅ Abonnement actif via structure (flag booléen)');
-              return true;
-            }
-          }
-
-          if (structureStatus.isNotEmpty &&
-              _isStatusLikelyActive(structureStatus,
-                  trialStatus: structureTrial)) {
+          final data = structureSnapshot.data() ?? {};
+          if (_isSubscriptionDocActive(data)) {
             print(
-                '✅ Abonnement actif via structure (subscriptionStatus=$structureStatus)');
+                '✅ Abonnement structure ACTIF (Stripe). Accès validé immédiatement.');
+
+            // 🧹 NETTOYAGE SILENCIEUX EN ARRIÈRE-PLAN
+            // Si on a trouvé un "faux positif" ailleurs (ex: un vieux fichier subscription "expired"),
+            // on lance un nettoyage pour éviter que ça ne pollue les futures lectures.
+            _backgroundCleanup(resolvedStructureId);
+
             return true;
           }
-
-          final Timestamp? structureExpiresAt =
-              structureData['subscriptionExpiresAt'];
-          if (structureExpiresAt is Timestamp &&
-              DateTime.now().isBefore(structureExpiresAt.toDate())) {
-            print('✅ Abonnement actif via structure (subscriptionExpiresAt)');
-            return true;
-          }
-
-          final dynamic rawStructureExpiry =
-              structureData['subscriptionExpirationDate'];
-          if (rawStructureExpiry != null) {
-            final String structureExpiryStr = rawStructureExpiry.toString();
-            if (_isDateStringInFuture(structureExpiryStr)) {
-              print(
-                  '✅ Abonnement actif via structure (subscriptionExpirationDate)');
-              return true;
-            }
-          }
-
-          final dynamic rawStructureExpiresIso =
-              structureData['subscriptionExpiresAtIso'];
-          if (rawStructureExpiresIso is String &&
-              _isDateStringInFuture(rawStructureExpiresIso)) {
-            print(
-                '✅ Abonnement actif via structure (subscriptionExpiresAtIso)');
-            return true;
-          }
-
-          final dynamic rawStripeStatus = structureData['stripeStatus'];
-          if (rawStripeStatus is String &&
-              _isStatusLikelyActive(rawStripeStatus,
-                  trialStatus: structureTrial)) {
-            print(
-                '✅ Abonnement actif via structure (stripeStatus=$rawStripeStatus)');
-            return true;
-          }
-
-          print(
-              'ℹ️ Aucun abonnement actif via structure, champs disponibles: ${structureData.keys.toList()}');
         }
-      } catch (structureCheckError) {
-        print(
-            '⚠️ Erreur lors de la vérification structure: $structureCheckError');
+      } catch (e) {
+        print("⚠️ Erreur lecture structure: $e");
       }
 
-      // 2. PRIORITÉ 2 : Si pas dans Firestore, essayer Google Play (avec timeout)
-      print('⚠️ Pas d\'abonnement Firestore, vérification Google Play...');
+      // 2. SI ET SEULEMENT SI la structure n'est pas active, on regarde les abonnements mobiles (Apple/Google/Docs)
+      final subscriptionQuery = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: resolvedStructureId)
+          .get();
 
+      if (subscriptionQuery.docs.isNotEmpty) {
+        // ... Logique existante pour les abonnements mobiles ...
+        // On ne garde que la logique "Si un document est actif, c'est bon".
+        for (final doc in subscriptionQuery.docs) {
+          if (_isSubscriptionDocActive(doc.data())) {
+            print('✅ Abonnement mobile trouvé et actif.');
+            return true;
+          }
+        }
+      }
+
+      // 3. Fallback Google Play habituel
+      print('⚠️ Aucun abonnement connu, vérification Fallback Google Play...');
       try {
         final bool hasActive =
             await _checkGooglePlaySubscription().timeout(Duration(seconds: 3));
 
         if (hasActive) {
-          print('✅ Abonnement trouvé via Google Play');
+          print('✅ Subscription found via Google Play');
+          // On pourrait envisager de créer le doc ici pour "fixer" l'état
           return true;
         }
       } catch (e) {
-        print('⚠️ Erreur/timeout Google Play: $e');
-        // Continue vers fallback
+        print('⚠️ Google Play error/timeout: $e');
       }
 
       // 3. FALLBACK SÉCURISÉ : Vérifier si utilisateur était récemment actif
@@ -302,24 +180,27 @@ class SubscriptionService {
       print('❌ Aucun abonnement valide trouvé');
       return false;
     } catch (e) {
-      print('❌ Erreur vérification abonnement: $e');
-
-      // FALLBACK FINAL : En cas d'erreur critique, permettre accès limité
-      // Mais seulement pour les utilisateurs qui ont des données récentes
-      try {
-        final User? user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final hasRecentData = await _hasRecentUserData(user.uid);
-          if (hasRecentData) {
-            print('🛡️ Fallback : accès temporaire pour utilisateur existant');
-            return true;
-          }
-        }
-      } catch (fallbackError) {
-        print('❌ Erreur fallback: $fallbackError');
-      }
-
+      print('❌ Erreur générale vérification abonnement: $e');
       return false;
+    }
+  }
+
+  /// Nettoie les vieux documents contradictoires si la structure est officielle
+  static Future<void> _backgroundCleanup(String structureId) async {
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .where('structureId', isEqualTo: structureId)
+          .where('status', isEqualTo: 'expired')
+          .get();
+
+      for (final doc in query.docs) {
+        print(
+            '🧹 NETTOYAGE : Suppression du vieux document expiré ${doc.id} car la structure est active.');
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      print('⚠️ Erreur nettoyage background: $e');
     }
   }
 
