@@ -2,7 +2,7 @@
 const admin = require("firebase-admin");
 const Stripe = require("stripe");
 
-const { onRequest, onCall } = require("firebase-functions/v2/https");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore"); // AJOUT
 const { defineSecret } = require("firebase-functions/params");
 
@@ -594,4 +594,111 @@ exports.onStructureCreated = onDocumentCreated(
       console.log(`No orphan subscription found for ${email}.`);
     }
   },
+);
+
+exports.updateUserEmail = onCall(
+  {
+    region: "europe-west1",
+    cors: true,
+    secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+    memory: "512MiB",
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new admin.functions.https.HttpsError(
+        "unauthenticated",
+        "L'utilisateur doit être authentifié.",
+      );
+    }
+
+    const oldEmail = request.auth.token.email;
+    const { newEmail } = request.data;
+
+    if (!newEmail || !oldEmail) {
+      throw new admin.functions.https.HttpsError(
+        "invalid-argument",
+        "Email manquant.",
+      );
+    }
+
+    const normalizedNewEmail = newEmail.trim().toLowerCase();
+    const normalizedOldEmail = oldEmail.trim().toLowerCase();
+
+    if (normalizedOldEmail === normalizedNewEmail) {
+      return { success: true, message: "Aucun changement nécessaire." };
+    }
+
+    const db = admin.firestore();
+
+    try {
+      // 1. Vérif collision Auth
+      try {
+        await admin.auth().getUserByEmail(normalizedNewEmail);
+        throw new admin.functions.https.HttpsError(
+          "already-exists",
+          "Cette adresse email est déjà utilisée.",
+        );
+      } catch (error) {
+        if (error.code !== 'auth/user-not-found') throw error;
+      }
+
+      // 2. Mise à jour Auth
+      await admin.auth().updateUser(request.auth.uid, {
+        email: normalizedNewEmail,
+        emailVerified: false,
+      });
+
+      console.log(`[EmailMigration] Auth updated: ${normalizedOldEmail} -> ${normalizedNewEmail}`);
+
+      // 3. Migration Firestore (Batch)
+      const batch = db.batch();
+
+      // A. Migration User Doc
+      const oldUserRef = db.collection("users").doc(normalizedOldEmail);
+      const newUserRef = db.collection("users").doc(normalizedNewEmail);
+      const oldUserDoc = await oldUserRef.get();
+
+      if (oldUserDoc.exists) {
+        batch.set(newUserRef, {
+          ...oldUserDoc.data(),
+          email: normalizedNewEmail,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          previousEmail: normalizedOldEmail,
+        });
+        batch.delete(oldUserRef);
+      }
+
+      // B. Structures (Owner & Contact)
+      const structuresOwner = await db.collection("structures").where("ownerEmail", "==", normalizedOldEmail).get();
+      structuresOwner.docs.forEach(doc => batch.update(doc.ref, { ownerEmail: normalizedNewEmail }));
+
+      const structuresContact = await db.collection("structures").where("email", "==", normalizedOldEmail).get();
+      structuresContact.docs.forEach(doc => batch.update(doc.ref, { email: normalizedNewEmail }));
+
+      // C. Members
+      const members = await db.collectionGroup("members").where("email", "==", normalizedOldEmail).get();
+      members.docs.forEach(doc => batch.update(doc.ref, { email: normalizedNewEmail }));
+
+      // D. Children (Parent Email)
+      const children = await db.collectionGroup("children").where("parentEmail", "==", normalizedOldEmail).get();
+      children.docs.forEach(doc => batch.update(doc.ref, { parentEmail: normalizedNewEmail }));
+
+      // E. Subscriptions
+      const subscriptions = await db.collection("subscriptions").where("email", "==", normalizedOldEmail).get();
+      subscriptions.docs.forEach(doc => batch.update(doc.ref, { email: normalizedNewEmail }));
+
+      // F. Invitations
+      const invitations = await db.collection("invitations").where("email", "==", normalizedOldEmail).get();
+      invitations.docs.forEach(doc => batch.update(doc.ref, { email: normalizedNewEmail }));
+
+      await batch.commit();
+
+      return { success: true };
+
+    } catch (error) {
+      console.error("[EmailMigration] Error:", error);
+      throw new HttpsError("internal", error.message);
+    }
+  }
 );

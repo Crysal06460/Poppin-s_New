@@ -50,6 +50,7 @@ import 'package:poppins_app/screens/test_data_generator.dart';
 import 'package:poppins_app/screens/parent_home_screen.dart';
 import 'package:poppins_app/screens/parent_messages_screen.dart';
 import 'package:poppins_app/screens/parent_stock_screen.dart';
+import 'package:poppins_app/screens/parent_settings_screen.dart';
 import 'package:poppins_app/screens/parent_child_photo_screen.dart';
 import 'package:poppins_app/screens/add-mam-members.dart';
 import 'package:poppins_app/screens/register_screen.dart';
@@ -842,6 +843,10 @@ final GoRouter router = GoRouter(
         key: ValueKey('parent-stocks'), // Clé unique différente
         child: ParentStockScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/parent/settings',
+      builder: (context, state) => const ParentSettingsScreen(),
     ),
     GoRoute(
       path: '/add-mam-members',

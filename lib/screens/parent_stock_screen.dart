@@ -823,6 +823,11 @@ class _ParentStockScreenState extends State<ParentStockScreen>
               width: 60,
               height: 60,
             ),
+            activeIcon: Image.asset(
+              'assets/images/Icone_home.png',
+              width: 60,
+              height: 60,
+            ),
             label: "Accueil",
           ),
           BottomNavigationBarItem(
@@ -857,7 +862,6 @@ class _ParentStockScreenState extends State<ParentStockScreen>
                   'assets/images/Icone_message.png',
                   width: 60,
                   height: 60,
-                  color: primaryBlue,
                 ),
                 if (_showMessageBadge)
                   Positioned(
@@ -881,7 +885,6 @@ class _ParentStockScreenState extends State<ParentStockScreen>
           ),
           BottomNavigationBarItem(
             icon: Stack(
-              // ← MODIFIER CETTE PARTIE
               children: [
                 Image.asset(
                   'assets/images/Icone_stock.png',
@@ -907,7 +910,6 @@ class _ParentStockScreenState extends State<ParentStockScreen>
               ],
             ),
             activeIcon: Stack(
-              // ← AJOUTER CETTE PARTIE
               children: [
                 Image.asset(
                   'assets/images/Icone_stock.png',
@@ -933,6 +935,19 @@ class _ParentStockScreenState extends State<ParentStockScreen>
               ],
             ),
             label: "Stocks",
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            label: "Paramètres",
           ),
         ],
       ),

@@ -910,7 +910,7 @@ class _MonthlyReportGenerateScreenState
   }
 
   // Méthode pour partager le PDF
-  Future<void> _sharePdf() async {
+  Future<void> _sharePdf(Rect? shareOrigin) async {
     try {
       if (pdfBytes == null) return;
 
@@ -922,12 +922,13 @@ class _MonthlyReportGenerateScreenState
       // Écrire le PDF dans un fichier temporaire
       await file.writeAsBytes(pdfBytes!);
 
-      // Partager le fichier
+      // Partager le fichier avec l'origine spécifiée (crucial pour iPad)
       await Share.shareXFiles(
         [XFile(file.path)],
         subject: 'Rapport mensuel - ${reportData['month']}',
         text:
             'Rapport mensuel pour ${reportData['childName']} - ${reportData['month']}',
+        sharePositionOrigin: shareOrigin,
       );
     } catch (e) {
       print('Erreur lors du partage du PDF: $e');
@@ -981,9 +982,22 @@ class _MonthlyReportGenerateScreenState
                     }
                   : null,
             ),
-            IconButton(
-              icon: const Icon(Icons.share, color: Colors.white),
-              onPressed: pdfBytes != null ? _sharePdf : null,
+            Builder(
+              builder: (context) {
+                return IconButton(
+                  icon: const Icon(Icons.share, color: Colors.white),
+                  onPressed: pdfBytes != null
+                      ? () {
+                          // Obtenir la position pour l'iPad
+                          final box = context.findRenderObject() as RenderBox?;
+                          final Rect? shareOrigin = box != null
+                              ? box.localToGlobal(Offset.zero) & box.size
+                              : null;
+                          _sharePdf(shareOrigin);
+                        }
+                      : null,
+                );
+              },
             ),
           ],
         ),

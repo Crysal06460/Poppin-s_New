@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'package:cloud_functions/cloud_functions.dart'; // AJOUT
 
 class StructureManagementScreen extends StatefulWidget {
   const StructureManagementScreen({Key? key}) : super(key: key);
@@ -254,6 +255,204 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
         }
         _citySuggestions = [];
       });
+    }
+  }
+
+
+
+  // --- LOGIQUE CHANGEMENT EMAIL ---
+
+  Future<void> _showEmailChangeDialog() async {
+    final TextEditingController newEmailController = TextEditingController();
+    final TextEditingController passwordController = TextEditingController();
+    final _dialogFormKey = GlobalKey<FormState>();
+    bool _isDialogLoading = false;
+    String? _dialogError;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Icon(Icons.lock_person, color: primaryColor),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Changer mon email de connexion",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: _dialogFormKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                "Cette action modifiera votre identifiant de connexion pour l'application.",
+                                style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      TextFormField(
+                        controller: newEmailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          labelText: "Nouvel email",
+                          prefixIcon: Icon(Icons.alternate_email, color: primaryColor),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return "Email requis";
+                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                            return "Email invalide";
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: "Mot de passe actuel",
+                          prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          helperText: "Nécessaire pour confirmer votre identité",
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return "Mot de passe requis";
+                          return null;
+                        },
+                      ),
+                      if (_dialogError != null) ...[
+                        SizedBox(height: 16),
+                        Text(
+                          _dialogError!,
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: _isDialogLoading ? null : () => Navigator.of(context).pop(),
+                  child: Text("Annuler", style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: _isDialogLoading
+                      ? null
+                      : () async {
+                          if (_dialogFormKey.currentState!.validate()) {
+                            setState(() {
+                              _isDialogLoading = true;
+                              _dialogError = null;
+                            });
+
+                            final success = await _changeEmail(
+                              newEmailController.text.trim(),
+                              passwordController.text,
+                              (error) => setState(() => _dialogError = error),
+                            );
+
+                            setState(() => _isDialogLoading = false);
+
+                            if (success && mounted) {
+                              Navigator.of(context).pop();
+                              // Déconnexion forcée pour sécurité
+                              await FirebaseAuth.instance.signOut();
+                              context.go('/login');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("Email modifié avec succès. Veuillez vous reconnecter."),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _isDialogLoading
+                      ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text("Valider", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<bool> _changeEmail(
+    String newEmail, 
+    String password, 
+    Function(String) onError
+  ) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("Utilisateur non connecté");
+      
+      if (user.email == newEmail) {
+        onError("Le nouvel email doit être différent de l'actuel.");
+        return false;
+      }
+
+      // 1. Ré-authentification
+      final cred = EmailAuthProvider.credential(email: user.email!, password: password);
+      await user.reauthenticateWithCredential(cred);
+
+      // 2. Appel Cloud Function
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('updateUserEmail'); // Nom de la fonction
+
+      await callable.call({
+        'newEmail': newEmail,
+        'password': password, // Optionnel selon la CF, mais envoyé au cas où
+      });
+
+      return true;
+
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        onError("Mot de passe incorrect.");
+      } else {
+        onError("Erreur d'authentification: ${e.message}");
+      }
+      return false;
+    } on FirebaseFunctionsException catch (e) {
+      onError("${e.message}");
+      return false;
+    } catch (e) {
+      onError("Une erreur est survenue: $e");
+      return false;
     }
   }
 
@@ -646,6 +845,31 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                                   }
                                   return null;
                                 },
+                              ),
+                              
+                              // Bouton Changer Email (Tablet)
+                              Padding(
+                                padding: EdgeInsets.only(top: 8, bottom: maxHeight * 0.025),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: _showEmailChangeDialog,
+                                    icon: Icon(Icons.lock_reset, size: maxWidth * 0.015, color: primaryColor),
+                                    label: Text(
+                                      "Changer mon email de connexion",
+                                      style: TextStyle(
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: maxWidth * 0.014
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      backgroundColor: primaryColor.withOpacity(0.05),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ),
                               ),
 
                               SizedBox(height: maxHeight * 0.025),
@@ -1157,6 +1381,26 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                 }
                 return null;
               },
+            ),
+            
+            // Bouton Changer Email (Phone)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _showEmailChangeDialog,
+                icon: Icon(Icons.lock_reset, size: 18, color: primaryColor),
+                label: Text(
+                  "Changer mon email de connexion",
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                ),
+              ),
             ),
             SizedBox(height: 20),
 

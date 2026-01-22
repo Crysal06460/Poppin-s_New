@@ -498,6 +498,13 @@ class NotificationService {
       return;
     }
 
+    // ANDROID : Vérifier les doublons
+    final String msgId = message.messageId ?? '';
+    if (msgId.isNotEmpty && _processedNotificationIds.contains(msgId)) {
+      print('🔕 Notification foreground ignorée (déjà traitée): $msgId');
+      return;
+    }
+
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'messages_channel',
@@ -533,6 +540,11 @@ class NotificationService {
       notificationDetails,
       payload: jsonEncode(payloadData),
     );
+
+    // Marquer comme traité pour éviter redite
+    if (msgId.isNotEmpty) {
+      _markNotificationAsDelivered(msgId);
+    }
   }
 
   /// Gérer les clics sur notifications

@@ -4766,6 +4766,9 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
             });
             NotificationService.clearBadge();
             context.go('/parent/stocks');
+          } else if (index == 3) {
+            // Vers les paramètres
+            context.go('/parent/settings');
           }
         },
         backgroundColor: Colors.white,
@@ -4783,6 +4786,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
         items: [
           BottomNavigationBarItem(
             icon: Image.asset(
+              'assets/images/Icone_home.png',
+              width: 60,
+              height: 60,
+            ),
+            activeIcon: Image.asset(
               'assets/images/Icone_home.png',
               width: 60,
               height: 60,
@@ -4821,7 +4829,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                   'assets/images/Icone_message.png',
                   width: 60,
                   height: 60,
-                  color: primaryBlue,
                 ),
                 if (_showMessageBadge)
                   Positioned(
@@ -4875,7 +4882,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                   'assets/images/Icone_stock.png',
                   width: 60,
                   height: 60,
-                  color: primaryBlue,
                 ),
                 if (_showStockBadge)
                   Positioned(
@@ -4896,6 +4902,19 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
               ],
             ),
             label: "Stocks",
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            label: "Paramètres",
           ),
         ],
       ),

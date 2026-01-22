@@ -947,136 +947,155 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                   FocusScope.of(context).unfocus();
                   // Vers les stocks - réinitialiser le badge
                   StockBadgeUtil.resetBadge();
-                  context.go('/parent/stocks');
-                }
-              },
-              backgroundColor: Colors.white,
-              selectedItemColor: primaryBlue,
-              unselectedItemColor: Colors
-                  .black87, // Utiliser la même couleur que dans home_screen
-              elevation: 8,
-              showSelectedLabels: true,
-              showUnselectedLabels: true,
-              selectedLabelStyle:
-                  TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              unselectedLabelStyle: TextStyle(fontSize: 12),
-              items: [
-                BottomNavigationBarItem(
-                  icon: Image.asset(
-                    'assets/images/Icone_home.png',
-                    width: 60,
-                    height: 60,
-                  ),
-                  label: "Accueil",
+            context.go('/parent/stocks');
+          } else if (index == 3) {
+            // Vers les paramètres
+            context.go('/parent/settings');
+          }
+        },
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryBlue,
+        unselectedItemColor: Colors.black87,
+        elevation: 8,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedLabelStyle:
+            TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle: TextStyle(fontSize: 12, color: Colors.black87),
+        items: [
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone_home.png',
+              width: 60,
+              height: 60,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone_home.png',
+              width: 60,
+              height: 60,
+            ),
+            label: "Accueil",
+          ),
+          BottomNavigationBarItem(
+            icon: Stack(
+              children: [
+                Image.asset(
+                  'assets/images/Icone_message.png',
+                  width: 60,
+                  height: 60,
                 ),
-                BottomNavigationBarItem(
-                  icon: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/Icone_message.png',
-                        width: 60,
-                        height: 60,
+                if (_showMessageBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
                       ),
-                      if (_showMessageBadge)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: BoxConstraints(
-                              minWidth: 14,
-                              minHeight: 14,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  activeIcon: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/Icone_message.png',
-                        width: 60,
-                        height: 60,
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
                       ),
-                      if (_showMessageBadge)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: BoxConstraints(
-                              minWidth: 14,
-                              minHeight: 14,
-                            ),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
-                  label: "Messages",
-                ),
-                BottomNavigationBarItem(
-                  icon: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/Icone_stock.png',
-                        width: 60,
-                        height: 60,
-                      ),
-                      if (_showStockBadge)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: BoxConstraints(
-                              minWidth: 14,
-                              minHeight: 14,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  activeIcon: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/Icone_stock.png',
-                        width: 60,
-                        height: 60,
-                        color: primaryBlue,
-                      ),
-                      if (_showStockBadge)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: BoxConstraints(
-                              minWidth: 14,
-                              minHeight: 14,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  label: "Stocks",
-                ),
               ],
+            ),
+            activeIcon: Stack(
+              children: [
+                Image.asset(
+                  'assets/images/Icone_message.png',
+                  width: 60,
+                  height: 60,
+                ),
+                if (_showMessageBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            label: "Messages",
+          ),
+          BottomNavigationBarItem(
+            icon: Stack(
+              children: [
+                Image.asset(
+                  'assets/images/Icone_stock.png',
+                  width: 60,
+                  height: 60,
+                ),
+                if (_showStockBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            activeIcon: Stack(
+              children: [
+                Image.asset(
+                  'assets/images/Icone_stock.png',
+                  width: 60,
+                  height: 60,
+                ),
+                if (_showStockBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            label: "Stocks",
+          ),
+          BottomNavigationBarItem(
+            icon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            activeIcon: Image.asset(
+              'assets/images/Icone-parametres.png',
+              width: 50,
+              height: 50,
+            ),
+            label: "Paramètres",
+          ),
+        ],
             ),
     );
   }
