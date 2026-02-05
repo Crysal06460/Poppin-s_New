@@ -82,7 +82,37 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     _canEditChild = widget.allowEditing && !widget.parentMode;
     _canEditChild = widget.allowEditing && !widget.parentMode;
     _loadChildProfile();
+    // Check permissions
+    _checkOwnerPermission();
     _loadCurrentAssMatName(); // Chargement du nom
+  }
+
+  Future<void> _checkOwnerPermission() async {
+    // If already allowed, no need to check further
+    if (_canEditChild) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      final doc = await FirebaseFirestore.instance.collection('structures').doc(widget.structureId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        final ownerEmail = (data?['ownerEmail'] ?? data?['email'] ?? '').toString().toLowerCase().trim();
+        final currentEmail = (user.email ?? '').toLowerCase().trim();
+        
+        if (ownerEmail.isNotEmpty && ownerEmail == currentEmail) {
+           if (mounted) {
+             setState(() {
+               _canEditChild = true;
+               print("👑 ChildDetails: Permission étendue au propriétaire");
+             });
+           }
+        }
+      }
+    } catch (e) {
+      print("Erreur vérification propriétaire: $e");
+    }
   }
 
   String _structureName = "";
