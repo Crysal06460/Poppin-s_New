@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Variables pour identifier le membre actuel
   String currentUserEmail = "";
+  bool _isOwner = false;
   Set<String> _delegatedChildIds = <String>{};
   Set<String> _myAssignedChildIds = <String>{};
 
@@ -131,6 +132,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final String childId = (child['id'] ?? '').toString();
     if (childId.isEmpty) {
       return false;
+    }
+
+    if (_isOwner) {
+      return true;
     }
 
     if (_myAssignedChildIds.contains(childId)) {
@@ -1484,6 +1489,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _myAssignedChildIds = myAssignedChildIds;
         _memberColorAssignments = memberColorAssignments;
         _memberSortOrder = memberSortOrder;
+        _isOwner = isStructureOwner;
       });
 
       // Définir les couleurs après avoir récupéré le type de structure

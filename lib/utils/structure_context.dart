@@ -181,6 +181,10 @@ class StructureResolver {
           .set({'showAllChildrenOnHome': true}, SetOptions(merge: true));
     }
 
+    final String ownerEmail = (structureData['ownerEmail'] ?? structureData['email'] ?? '').toString().toLowerCase().trim();
+    final bool isOwner = ownerEmail == currentUserEmail;
+    final bool finalShowAllChildren = showAllChildrenPreference || isOwner;
+
     return StructureContext(
       structureId: structureId,
       structureName: structureName,
@@ -188,7 +192,7 @@ class StructureResolver {
       normalizedStructureType: normalizedType,
       structureData: structureData,
       currentUserEmail: currentUserEmail,
-      showAllChildren: showAllChildrenPreference,
+      showAllChildren: finalShowAllChildren,
       userRole: role,
       userData: userData,
     );

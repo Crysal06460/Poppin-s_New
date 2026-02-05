@@ -38,6 +38,7 @@ class _PlanningScreenState extends State<PlanningScreen> {
   String _structureName = "Chargement...";
   String _structureId = "";
   bool _isMAMStructure = false;
+  bool _isStructureOwner = false;  // NEW: Track ownership explicitly
 
   // Définition des couleurs de la palette (cohérence avec dashboard)
   static const Color primaryRed = Color(0xFFD94350);
@@ -87,6 +88,17 @@ class _PlanningScreenState extends State<PlanningScreen> {
         // Vérifier si c'est une MAM
         String structureType = data['structureType'] ?? 'AssistanteMaternelle';
         _isMAMStructure = structureType == 'MAM';
+        
+        // NEW: Check if current user is owner
+        final currentUser = _auth.currentUser;
+        if (currentUser != null) {
+          final ownerEmail = (data['ownerEmail'] ?? data['email'] ?? '').toString().toLowerCase().trim();
+          final currentEmail = (currentUser.email ?? '').toLowerCase().trim();
+          if (ownerEmail.isNotEmpty && ownerEmail == currentEmail) {
+            _isStructureOwner = true;
+            print("👑 Planning: Utilisateur identifié comme PROPRIÉTAIRE (Force Admin)");
+          }
+        }
       }
 
       // 3. Charger les enfants, membres et gardes
@@ -712,8 +724,9 @@ class _PlanningScreenState extends State<PlanningScreen> {
     );
 
     // Vérifier les droits d'accès
+    // FIX: Allow owner to always edit
     final bool canEdit =
-        currentMembre.role == 'admin' || garde.membreId == currentUserUid;
+        _isStructureOwner || currentMembre.role == 'admin' || garde.membreId == currentUserUid;
 
     if (!canEdit) {
       ScaffoldMessenger.of(context).showSnackBar(
