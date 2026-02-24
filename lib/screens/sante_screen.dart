@@ -7,6 +7,7 @@ import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -30,6 +31,7 @@ class _SanteScreenState extends State<SanteScreen> {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
+  DateTime _selectedDate = DateTime.now();
   int _selectedIndex = 1;
 
   // Couleurs officielles de l'application
@@ -164,7 +166,7 @@ class _SanteScreenState extends State<SanteScreen> {
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -217,7 +219,7 @@ class _SanteScreenState extends State<SanteScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
+            final now = _selectedDate;
             final start = DateTime(now.year, now.month, now.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
@@ -1435,7 +1437,7 @@ class _SanteScreenState extends State<SanteScreen> {
 
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
     try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final doc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -1960,9 +1962,25 @@ class _SanteScreenState extends State<SanteScreen> {
           .collection('sante')
           .doc();
 
+      int hour = DateTime.now().hour;
+      int minute = DateTime.now().minute;
+      if (_careTime.contains(':')) {
+        final list = _careTime.split(':');
+        if (list.length >= 2) {
+          hour = int.tryParse(list[0]) ?? hour;
+          minute = int.tryParse(list[1]) ?? minute;
+        }
+      }
+
       final careData = {
         'heure': _careTime,
-        'date': DateTime.now(),
+        'date': DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          hour,
+          minute,
+        ),
         'type': _careType,
         'observations': _observationsController.text,
       };
@@ -2127,15 +2145,15 @@ class _SanteScreenState extends State<SanteScreen> {
                 .collection('sante')
                 .where('date',
                     isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ))
                 .where('date',
                     isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ).add(Duration(days: 1)))
                 .orderBy('date', descending: true)
                 .snapshots(),
@@ -2353,6 +2371,17 @@ class _SanteScreenState extends State<SanteScreen> {
               backRoute: '/home',
               primaryColor: primaryColor,
             ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
+              primaryColor: primaryColor,
+            ),
 
             // 🔄 GARDÉ IDENTIQUE : Tout votre contenu existant
             Expanded(
@@ -2542,15 +2571,15 @@ class _SanteScreenState extends State<SanteScreen> {
                   .collection('sante')
                   .where('date',
                       isGreaterThanOrEqualTo: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
+                        _selectedDate.year,
+                        _selectedDate.month,
+                        _selectedDate.day,
                       ))
                   .where('date',
                       isLessThan: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
+                        _selectedDate.year,
+                        _selectedDate.month,
+                        _selectedDate.day,
                       ).add(Duration(days: 1)))
                   .orderBy('date', descending: true)
                   .snapshots(),

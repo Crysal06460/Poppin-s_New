@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
+import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -50,6 +52,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     'Autre',
   ];
   String _selectedCategory = 'Santé';
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -75,7 +78,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -126,7 +129,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
           print(
               "👨‍👧‍👦 Transmissions: Membre MAM - affichage de ${filteredChildren.length} enfant(s) assigné(s)");
         }
-        // ➕ Ajouter enfants délégués aujourd'hui
+        // ➕ Ajouter enfants délégués aujourd'hui et hier
         try {
           final memSnap = await FirebaseFirestore.instance
               .collection('structures')
@@ -137,9 +140,15 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
-            final start = DateTime(now.year, now.month, now.day);
-            final end = start.add(const Duration(days: 1));
+            myMemberId = memSnap.docs.first.id;
+            final now = _selectedDate;
+            final todayInfos = DateTime(now.year, now.month, now.day);
+            final yesterdayInfos = todayInfos.subtract(Duration(days: 1));
+            
+            // On cherche les délégations couvrant hier et aujourd'hui
+            final start = yesterdayInfos;
+            final end = todayInfos.add(const Duration(days: 1));
+            
             final delSnap = await FirebaseFirestore.instance
                 .collection('structures')
                 .doc(structureId)
@@ -185,17 +194,24 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
       final Set<String> absentChildIds =
           await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
+      // On devrait aussi vérifier les absents d'hier si on veut être puriste, 
+      // mais afficher un absent d'hier pour aujourd'hui n'est pas bloquant si on veut modif l'historique.
 
-      // Maintenant, filtrer les enfants qui ont un programme pour aujourd'hui
+      
+      // Maintenant, filtrer les enfants qui ont un programme pour la date sélectionnée
       enfants = [];
+      
       for (var child in filteredChildren) {
         if (absentChildIds.contains(child['id'])) {
-          continue;
+           continue; 
         }
-        final isScheduledToday =
+
+        final isScheduled =
             PlanningHelper.isScheduledForDate(child, today);
-        final isDelegatedToday = delegatedTodayChildIds.contains(child['id']);
-        if (isScheduledToday || isDelegatedToday) {
+            
+        final isDelegated = delegatedTodayChildIds.contains(child['id']); 
+        
+        if (isScheduled || isDelegated) {
           final String assignedEmail = ChildAvatarColorHelper.normalizeEmail(
               child['assignedMemberEmail']);
           final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
@@ -453,6 +469,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     final enfant = enfants.firstWhere((e) => e['id'] == childId);
     _transmissionController.clear();
     String localCategory = _selectedCategory;
+    DateTime localSelectedDate = _selectedDate;
     String? errorMessage;
 
     showDialog(
@@ -483,7 +500,17 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                           color: primaryColor,
                         ),
                       ),
-                      SizedBox(height: 20),
+                      SizedBox(height: 16),
+                      // Selecteur de date (Aujourd'hui / Hier)
+                      Text(
+                        "Date : ${DateFormat('dd MMMM yyyy', 'fr_FR').format(_selectedDate)}",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      SizedBox(height: 16),
                       Text(
                         "Catégorie",
                         style: TextStyle(
@@ -582,12 +609,13 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                                 return;
                               }
 
-                              _selectedCategory = localCategory;
-                              _addTransmissionToFirebase(
-                                childId,
-                                localCategory,
-                                _transmissionController.text.trim(),
-                              );
+                                _selectedCategory = localCategory;
+                                _addTransmissionToFirebase(
+                                  childId,
+                                  localCategory,
+                                  _transmissionController.text.trim(),
+                                  _selectedDate,
+                                );
                               Navigator.of(context).pop();
                             },
                             style: ElevatedButton.styleFrom(
@@ -857,9 +885,10 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
-  Future<bool> _isChildArrivedToday(String structureId, String childId) async {
+  Future<bool> _isChildArrivedOnDate(
+      String structureId, String childId, DateTime date) async {
     try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String dateKey = DateFormat('yyyy-MM-dd').format(date);
       final doc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -888,7 +917,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   }
 
   Future<void> _guardAddTransmission(String structureId, String childId) async {
-    final arrived = await _isChildArrivedToday(structureId, childId);
+    final arrived = await _isChildArrivedOnDate(structureId, childId, _selectedDate);
+
     if (!arrived) {
       if (!mounted) return;
       showDialog(
@@ -896,7 +926,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         builder: (_) => AlertDialog(
           title: Text('Arrivée requise'),
           content: Text(
-              "Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une transmission."),
+              "Attention : l'enfant n'est pas arrivé à la date sélectionnée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une transmission."),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -907,11 +937,12 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
       );
       return;
     }
+
     _showAddTransmissionPopup(childId);
   }
 
-  Future<void> _addTransmissionToFirebase(
-      String childId, String category, String content) async {
+  Future<void> _addTransmissionToFirebase(String childId, String category,
+      String content, DateTime date) async {
     try {
       // Trouver l'enfant pour récupérer l'ID de structure
       final enfant = enfants.firstWhere((e) => e['id'] == childId);
@@ -927,8 +958,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
           .add({
         'category': category,
         'content': content,
-        'date': DateTime.now(),
-        'heure': DateFormat('HH:mm').format(DateTime.now()),
+        'date': date,
+        'heure': DateFormat('HH:mm').format(DateTime.now()), // Keep current time for sorting/display or update if needed? Usually 'heure' is display time.
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1028,7 +1059,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         builder: (_) => AlertDialog(
           title: Text('Aucun enfant disponible'),
           content: Text(
-            "Aucun enfant ne vous est associé pour aujourd'hui.\nImpossible d'envoyer une transmission groupée.",
+            "Aucun enfant ne vous est associé pour ce jour.\nImpossible d'envoyer une transmission groupée.",
           ),
           actions: [
             TextButton(
@@ -1459,15 +1490,15 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                 .collection('transmissions')
                 .where('date',
                     isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ))
                 .where('date',
                     isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ).add(Duration(days: 1)))
                 .orderBy('date', descending: true)
                 .snapshots(),
@@ -1479,7 +1510,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                   padding: EdgeInsets.all(12),
                   alignment: Alignment.center,
                   child: Text(
-                    "Aucune transmission aujourd'hui",
+                    "Aucune transmission récente",
                     style: TextStyle(
                       fontSize: 14,
                       fontStyle: FontStyle.italic,
@@ -1504,7 +1535,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     Padding(
                       padding: EdgeInsets.only(left: 8, top: 4, bottom: 8),
                       child: Text(
-                        "Transmissions d'aujourd'hui",
+                        "Transmissions récentes",
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1619,7 +1650,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Aucun enfant prévu aujourd\'hui',
+            'Aucun enfant prévu ce jour',
             style: TextStyle(
               fontSize: 18,
               color: primaryColor,
@@ -1713,6 +1744,17 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
               title: 'Transmissions',
               structureName: structureName,
               iconPath: 'assets/images/Icone_transmissions.png',
+              primaryColor: primaryColor,
+            ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
               primaryColor: primaryColor,
             ),
 
@@ -1908,15 +1950,15 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                           .collection('transmissions')
                           .where('date',
                               isGreaterThanOrEqualTo: DateTime(
-                                DateTime.now().year,
-                                DateTime.now().month,
-                                DateTime.now().day,
+                                _selectedDate.year,
+                                _selectedDate.month,
+                                _selectedDate.day,
                               ))
                           .where('date',
                               isLessThan: DateTime(
-                                DateTime.now().year,
-                                DateTime.now().month,
-                                DateTime.now().day,
+                                _selectedDate.year,
+                                _selectedDate.month,
+                                _selectedDate.day,
                               ).add(Duration(days: 1)))
                           .orderBy('date', descending: true)
                           .snapshots(),
@@ -1946,7 +1988,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                                 ),
                                 SizedBox(height: 12),
                                 Text(
-                                  "Aucune transmission aujourd'hui",
+                                  "Aucune transmission récente",
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.grey.shade500,

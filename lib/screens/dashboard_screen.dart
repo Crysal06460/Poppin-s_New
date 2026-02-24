@@ -3993,7 +3993,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final bool canBroadcastNotifications =
           isDashboardAdmin ||
               structureId == 'e5udQot4UtYxsrOoqaHZ2n4VEkk1';
-      final bool canViewSubscriptionStats = isDashboardAdmin;
+      final bool canViewSubscriptionStats =
+          isDashboardAdmin && normalizedEmail != 'chrisgugu1101@gmail.com';
 
       final dynamic showNewsRaw = structureData['showDashboardNews'];
       final bool hasNewsPreference = showNewsRaw is bool;

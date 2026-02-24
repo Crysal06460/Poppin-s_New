@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
 import 'package:poppins_app/widgets/custom_bottom_navigation.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -44,6 +45,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
   bool _pipi = false;
   bool _selles = false;
   String _careTime = "";
+  DateTime _selectedDate = DateTime.now();
 
   final List<String> changeTypes = [
     "Couche",
@@ -144,7 +146,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -197,7 +199,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
+            final now = _selectedDate;
             final start = DateTime(now.year, now.month, now.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
@@ -741,6 +743,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
     _changeType = '';
     String localChangeType = _changeType;
     String localCareTime = _careTime;
+    DateTime localSelectedDate = _selectedDate;  // Use instance variable initialized in _guardAddChange
 
     _observationsController.clear();
     _pipi = false;
@@ -833,7 +836,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                   if (isTabletDevice) SizedBox(height: 4),
                                   if (isTabletDevice)
                                     Text(
-                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(DateTime.now())}",
+                                      "Le ${DateFormat('d MMMM yyyy', 'fr_FR').format(localSelectedDate)}",
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.white.withOpacity(0.85),
@@ -853,6 +856,16 @@ class _ChangeScreenState extends State<ChangeScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Date affichée (pas de toggle)
+                            Text(
+                              "Date : ${DateFormat('dd MMMM yyyy', 'fr_FR').format(_selectedDate)}",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            SizedBox(height: 16),
                             // Heure du change
                             Container(
                               margin: EdgeInsets.only(
@@ -1373,6 +1386,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                                     // Mise à jour des variables
                                     _careTime = localCareTime;
                                     _changeType = localChangeType;
+                                    _selectedDate = localSelectedDate;
                                     _addChangeToFirebase(childId);
                                     Navigator.of(context).pop();
                                   },
@@ -1411,9 +1425,10 @@ class _ChangeScreenState extends State<ChangeScreen> {
     );
   }
 
-  Future<bool> _isChildArrivedToday(String structureId, String childId) async {
+  Future<bool> _isChildArrivedOnDate(
+      String structureId, String childId, DateTime date) async {
     try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String dateKey = DateFormat('yyyy-MM-dd').format(date);
       final doc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -1442,7 +1457,8 @@ class _ChangeScreenState extends State<ChangeScreen> {
   }
 
   Future<void> _guardAddChange(String structureId, String childId) async {
-    final arrived = await _isChildArrivedToday(structureId, childId);
+    final arrived = await _isChildArrivedOnDate(structureId, childId, _selectedDate);
+
     if (!arrived) {
       if (!mounted) return;
       showDialog(
@@ -1450,7 +1466,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
         builder: (_) => AlertDialog(
           title: Text('Arrivée requise'),
           content: Text(
-              "Attention : vous n'avez pas indiqué l'heure d'arrivée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter un change."),
+              "Attention : l'enfant n'est pas arrivé à la date sélectionnée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter un change."),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -1461,6 +1477,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
       );
       return;
     }
+
     _showAddChangePopup(childId);
   }
 
@@ -1908,9 +1925,20 @@ class _ChangeScreenState extends State<ChangeScreen> {
           .collection('changes')
           .doc();
 
+      final parts = _careTime.split(':');
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+      final changeDate = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        hour,
+        minute,
+      );
+
       final changeData = {
         'heure': _careTime,
-        'date': DateTime.now(),
+        'date': changeDate,
         'type': _changeType,
         'pipi': _pipi,
         'selles': _selles,
@@ -2052,15 +2080,15 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 .collection('changes')
                 .where('date',
                     isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ))
                 .where('date',
                     isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ).add(Duration(days: 1)))
                 .orderBy('date', descending: true)
                 .snapshots(),
@@ -2073,7 +2101,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                 return Container(
                   padding: EdgeInsets.all(16),
                   child: Text(
-                    "Aucun change enregistré aujourd'hui",
+                    "Aucun change récent",
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontStyle: FontStyle.italic,
@@ -2232,6 +2260,17 @@ class _ChangeScreenState extends State<ChangeScreen> {
               title: 'Change',
               structureName: structureName,
               iconPath: 'assets/images/Icone_change.png',
+              primaryColor: primaryBlue,
+            ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
               primaryColor: primaryBlue,
             ),
 
@@ -2424,15 +2463,15 @@ class _ChangeScreenState extends State<ChangeScreen> {
                   .collection('changes')
                   .where('date',
                       isGreaterThanOrEqualTo: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
+                        _selectedDate.year,
+                        _selectedDate.month,
+                        _selectedDate.day,
                       ))
                   .where('date',
                       isLessThan: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
+                        _selectedDate.year,
+                        _selectedDate.month,
+                        _selectedDate.day,
                       ).add(Duration(days: 1)))
                   .orderBy('date', descending: true)
                   .snapshots(),
@@ -2455,7 +2494,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
                           ),
                           SizedBox(height: 12),
                           Text(
-                            "Aucun change enregistré aujourd'hui",
+                            "Aucun change récent",
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey.shade500,
@@ -2608,7 +2647,7 @@ class _ChangeScreenState extends State<ChangeScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Aucun enfant prévu aujourd\'hui',
+            'Aucun enfant prévu ce jour',
             style: TextStyle(
               fontSize: 18,
               color: primaryColor,

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -53,6 +54,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   bool isLoading = true;
   String structureName = "Chargement...";
   String structureId = "";
+  DateTime _selectedDate = DateTime.now();
   int _selectedIndex = 1;
   TextEditingController _observationsController = TextEditingController();
   TextEditingController newActivityController = TextEditingController();
@@ -569,7 +571,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final String structureType = structureContext.normalizedStructureType;
       final bool allowAllChildren = structureContext.showAllChildren;
 
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -621,7 +623,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
+            final now = _selectedDate;
             final start = DateTime(now.year, now.month, now.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
@@ -1942,7 +1944,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // Vérifie si l'enfant a une heure d'arrivée enregistrée aujourd'hui
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
     try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final doc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -2484,9 +2486,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
+        ), // Close Row
+      ), // Close Container
+    ); // Close GestureDetector
   }
 
   Future<void> _addActivityToFirebase(String childId) async {
@@ -2503,9 +2505,25 @@ class _ActivityScreenState extends State<ActivityScreen> {
           .collection('activites')
           .doc();
 
+      int hour = DateTime.now().hour;
+      int minute = DateTime.now().minute;
+      if (_activityTime.contains(':')) {
+        final list = _activityTime.split(':');
+        if (list.length >= 2) {
+          hour = int.tryParse(list[0]) ?? hour;
+          minute = int.tryParse(list[1]) ?? minute;
+        }
+      }
+
       final activityData = {
         'heure': _activityTime,
-        'date': DateTime.now(),
+        'date': DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          hour,
+          minute,
+        ),
         'type': _activityType,
         'attitude': _activityAttitude, // ✅ CORRIGÉ : Sauvegarde de l'attitude
         'participation': _participationLevel,
@@ -2663,17 +2681,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 .where(
                   'date',
                   isGreaterThanOrEqualTo: DateTime(
-                    DateTime.now().year,
-                    DateTime.now().month,
-                    DateTime.now().day,
+                    _selectedDate.year,
+                    _selectedDate.month,
+                    _selectedDate.day,
                   ),
                 )
                 .where(
                   'date',
                   isLessThan: DateTime(
-                    DateTime.now().year,
-                    DateTime.now().month,
-                    DateTime.now().day,
+                    _selectedDate.year,
+                    _selectedDate.month,
+                    _selectedDate.day,
                   ).add(Duration(days: 1)),
                 )
                 .orderBy('date', descending: true)
@@ -2835,11 +2853,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
         backgroundColor: Colors.white,
         body: Column(
           children: [
+            // 🎉 NOUVEAU : CommonAppBar au lieu de _buildAppBar(context)
             CommonAppBar(
               title: 'Activités',
               structureName: structureName,
-              iconPath: 'assets/images/Icone_activité.png',
+              iconPath: 'assets/images/Icone_activite.png',
               backRoute: '/home',
+              primaryColor: primaryColor,
+            ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
               primaryColor: primaryColor,
             ),
             Expanded(
@@ -3032,17 +3062,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   .where(
                     'date',
                     isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ),
                   )
                   .where(
                     'date',
                     isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ).add(Duration(days: 1)),
                   )
                   .orderBy('date', descending: true)

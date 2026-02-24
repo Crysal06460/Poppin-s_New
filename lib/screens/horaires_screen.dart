@@ -12,6 +12,7 @@ import '../utils/child_avatar_color_helper.dart';
 import '../utils/structure_context.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
+import '../widgets/date_selector.dart';
 
 class HorairesScreen extends StatefulWidget {
   @override
@@ -42,6 +43,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
   String structureName = "Chargement...";
   int _selectedIndex = 1;
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
@@ -65,6 +67,17 @@ class _HorairesScreenState extends State<HorairesScreen> {
               structureName: structureName,
               iconPath: 'assets/images/Icone_horaire.png',
               backRoute: '/home',
+              primaryColor: primaryColor,
+            ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
               primaryColor: primaryColor,
             ),
             Expanded(
@@ -159,6 +172,15 @@ class _HorairesScreenState extends State<HorairesScreen> {
   void _annulerAbsent(Map<String, dynamic> enfant) {
     print("🟠 DEBUG: Annulation absence pour ${enfant['prenom']}");
     final now = DateTime.now();
+    // Utiliser la date sélectionnée pour l'action mais garder l'heure précise pour l'audit
+    final actionTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      now.hour,
+      now.minute,
+      now.second,
+    );
 
     setState(() {
       enfant['absent'] = false;
@@ -169,7 +191,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
     Map<String, dynamic> horairesData = {
       'prenom': enfant['prenom'],
       'actionType': 'annuler_absent',
-      'exactTime': now,
+      'actionType': 'annuler_absent',
+      'exactTime': actionTime,
       'absent': false,
       'segments': enfant['segments'],
     };
@@ -332,7 +355,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
     Map<String, dynamic> horairesData = {
       'prenom': enfant['prenom'],
       'actionType': '${type}_modifiee',
-      'exactTime': DateTime.now(),
+      'exactTime': DateTime.now(), // Garde l'heure de modification réelle
       'heure': newTime,
       'segments': List<Map<String, dynamic>>.from(segments),
     };
@@ -388,7 +411,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
 
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
-      final today = DateTime.now();
+      final today = _selectedDate; // Utiliser la date sélectionnée
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -439,7 +462,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
+            final now = _selectedDate;
             final start = DateTime(now.year, now.month, now.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
@@ -502,7 +525,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
             "  👶 ID: ${child['id']}, Nom: ${child['firstName']}, Assigné à : '$assignedEmail', Visible: ${isVisible ? 'OUI' : 'NON'}");
       }
 
-      // Récupérer les horaires enregistrés pour aujourd'hui
+      // Récupérer les horaires enregistrés pour la date sélectionnée
       final dateActuelle = DateFormat('yyyy-MM-dd').format(today);
       final horairesSnapshot = await FirebaseFirestore.instance
           .collection('structures')
@@ -630,9 +653,11 @@ class _HorairesScreenState extends State<HorairesScreen> {
       // Force un rebuild avec un délai minimal
       Future.delayed(Duration(milliseconds: 100), () {
         if (mounted) {
+        if (mounted) {
           print("🔄 FORCE REBUILD après délai");
           _rebuildKey = DateTime.now().millisecondsSinceEpoch.toString();
-          setState(() {});
+          if (mounted) setState(() {});
+        }
         }
       });
     } catch (e) {
@@ -650,7 +675,8 @@ class _HorairesScreenState extends State<HorairesScreen> {
       final String structureId = structureContext.structureId;
       final String currentUserEmail = structureContext.currentUserEmail;
       final now = DateTime.now();
-      final dateActuelle = DateFormat('yyyy-MM-dd').format(now);
+      // Utiliser la date sélectionnée pour le document
+      final dateActuelle = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
       final String actionType = (horaires['actionType'] ?? '').toString();
       if (!horaires.containsKey('absent')) {
@@ -716,6 +742,9 @@ class _HorairesScreenState extends State<HorairesScreen> {
     Map<String, dynamic> segment = segments[segmentIndex];
 
     final now = DateTime.now();
+    // Si c'est pour une date passée, on garde l'heure actuelle de saisie comme valeur par défaut
+    // mais on pourrait vouloir forcer une heure cohérente.
+    // Pour l'instant on prend l'heure actuelle système comme heure de l'événement
     final currentTime = DateFormat('HH:mm').format(now);
 
     setState(() {
@@ -731,7 +760,7 @@ class _HorairesScreenState extends State<HorairesScreen> {
     Map<String, dynamic> horairesData = {
       'prenom': enfant['prenom'],
       'actionType': type,
-      'exactTime': now,
+      'exactTime': now, // Timestamp de l'action réelle
       'heure': currentTime,
       'segments': List<Map<String, dynamic>>.from(segments),
     };

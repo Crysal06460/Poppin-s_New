@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -27,6 +28,7 @@ class _RepasScreenState extends State<RepasScreen> {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
+  DateTime _selectedDate = DateTime.now();
   int _selectedIndex = 1;
 
   // Couleurs officielles de l'application
@@ -201,7 +203,7 @@ class _RepasScreenState extends State<RepasScreen> {
   Future<void> _loadEnfantsDuJour(StructureContext contextInfo) async {
     setState(() => isLoading = true);
     try {
-      final today = DateTime.now();
+      final today = _selectedDate;
 
       // Récupérer la structure pour déterminer le type (MAM ou AssistanteMaternelle)
       final String structureId = contextInfo.structureId;
@@ -263,7 +265,7 @@ class _RepasScreenState extends State<RepasScreen> {
               .get();
           if (memSnap.docs.isNotEmpty) {
             myMemberId = memSnap.docs.first.id;
-            final now = DateTime.now();
+            final now = _selectedDate;
             final start = DateTime(now.year, now.month, now.day);
             final end = start.add(const Duration(days: 1));
             final delSnap = await FirebaseFirestore.instance
@@ -2196,10 +2198,10 @@ class _RepasScreenState extends State<RepasScreen> {
     );
   }
 
-  // Vérifie si l'enfant a une heure d'arrivée enregistrée aujourd'hui
+  // Vérifie si l'enfant a une heure d'arrivée enregistrée pour la date sélectionnée
   Future<bool> _isChildArrivedToday(String structureId, String childId) async {
     try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final doc = await FirebaseFirestore.instance
           .collection('structures')
           .doc(structureId)
@@ -2412,9 +2414,19 @@ class _RepasScreenState extends State<RepasScreen> {
       final bool isSolide = mealType == 'Solide';
       final bool isMixte = mealType == 'Mixte';
 
+      final List<String> timeParts = _mealTime.split(':');
+      final int hour = int.tryParse(timeParts[0]) ?? DateTime.now().hour;
+      final int minute = int.tryParse(timeParts[1]) ?? DateTime.now().minute;
+      
       final Map<String, dynamic> mealData = {
         'heure': _mealTime,
-        'date': DateTime.now(),
+        'date': DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          hour,
+          minute,
+        ),
         'moment': _selectedMoment,
         'typeAlimentation': mealType,
         'observations': _observationsController.text.trim(),
@@ -2605,14 +2617,14 @@ class _RepasScreenState extends State<RepasScreen> {
                             .collection('repas')
                             .where('date',
                                 isGreaterThanOrEqualTo: DateTime(
-                                    DateTime.now().year,
-                                    DateTime.now().month,
-                                    DateTime.now().day))
+                                    _selectedDate.year,
+                                    _selectedDate.month,
+                                    _selectedDate.day))
                             .where('date',
                                 isLessThan: DateTime(
-                                        DateTime.now().year,
-                                        DateTime.now().month,
-                                        DateTime.now().day)
+                                        _selectedDate.year,
+                                        _selectedDate.month,
+                                        _selectedDate.day)
                                     .add(Duration(days: 1)))
                             .snapshots(),
                         builder: (context, snapshot) {
@@ -2645,15 +2657,15 @@ class _RepasScreenState extends State<RepasScreen> {
                 .collection('repas')
                 .where('date',
                     isGreaterThanOrEqualTo: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ))
                 .where('date',
                     isLessThan: DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
                     ).add(Duration(days: 1)))
                 .orderBy('date', descending: true)
                 .snapshots(),
@@ -2802,12 +2814,23 @@ class _RepasScreenState extends State<RepasScreen> {
           children: [
             // 🆕 REMPLACEMENT : CommonAppBar au lieu de _buildAppBar(context)
             CommonAppBar(
-              title: 'Repas',
-              structureName: structureName,
-              iconPath: 'assets/images/Icone_repas.png',
-              backRoute: '/home',
-              primaryColor: primaryBlue,
-            ),
+            title: 'Repas',
+            structureName: structureName,
+            iconPath: 'assets/images/Icone_repas.png',
+            backRoute: '/home',
+            primaryColor: primaryBlue,
+          ),
+          DateSelector(
+            selectedDate: _selectedDate,
+            onDateSelected: (date) {
+              setState(() {
+                _selectedDate = date;
+                isLoading = true;
+              });
+              _loadStructureInfo();
+            },
+            primaryColor: primaryBlue,
+          ),
 
             // 🔄 GARDÉ IDENTIQUE : Tout votre contenu existant
             Expanded(

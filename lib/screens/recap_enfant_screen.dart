@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/date_selector.dart';
 import '../widgets/swipe_navigation_wrapper.dart';
 import '../widgets/common_app_bar.dart';
 import '../utils/structure_context.dart';
@@ -29,6 +30,7 @@ class _RecapScreenState extends State<RecapScreen> {
       {}; // Pour compter le nombre d'activités par enfant
   bool isLoading = true;
   String structureName = "Chargement...";
+  DateTime _selectedDate = DateTime.now();
   int _selectedIndex = 1;
   static const String _sortDateKey = '_sortDate';
   int _convertHoursToMinutes(String timeStr) {
@@ -107,7 +109,7 @@ class _RecapScreenState extends State<RecapScreen> {
             "🔄 Recap: Utilisateur MAM détecté - Utilisation de l'ID de structure: $structureId");
       }
 
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayWeekday = DateFormat('EEEE', 'fr_FR').format(today);
       final capitalizedWeekday = todayWeekday[0].toUpperCase() +
           todayWeekday.substring(1).toLowerCase();
@@ -270,7 +272,7 @@ class _RecapScreenState extends State<RecapScreen> {
 
   Future<void> _loadChildRecapData(String childId, String structureId) async {
     try {
-      final today = DateTime.now();
+      final today = _selectedDate;
       final todayStart = DateTime(today.year, today.month, today.day);
       final todayEnd = DateTime(today.year, today.month, today.day, 23, 59, 59);
       final todayFormatted = DateFormat('yyyy-MM-dd').format(today);
@@ -1604,6 +1606,17 @@ class _RecapScreenState extends State<RecapScreen> {
               title: 'Récapitulatif',
               structureName: structureName,
               iconPath: 'assets/images/Icone_recap.png',
+              primaryColor: primaryBlue,
+            ),
+            DateSelector(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                  isLoading = true;
+                });
+                _loadEnfantsDuJour();
+              },
               primaryColor: primaryBlue,
             ),
 

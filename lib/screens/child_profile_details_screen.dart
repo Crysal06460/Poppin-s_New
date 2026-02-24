@@ -64,6 +64,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
   List<Map<String, dynamic>> _vaccinationDocuments = [];
   
   String _currentAssMatName = ""; // Nom de l'assmat pour la fiche d'urgence
+  List<Map<String, dynamic>> _structureMembers = []; // Liste des membres pour le menu déroulant
 
 
   // Définition des couleurs de la palette
@@ -85,6 +86,7 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
     // Check permissions
     _checkOwnerPermission();
     _loadCurrentAssMatName(); // Chargement du nom
+    _loadStructureMembers(); // Chargement des membres
   }
 
   Future<void> _checkOwnerPermission() async {
@@ -152,6 +154,95 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
      } catch (e) {
        print("Erreur chargement infos AssMat/Structure: $e");
      }
+  }
+
+  Future<void> _loadStructureMembers() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('members')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _structureMembers = snapshot.docs.map((doc) => doc.data()).toList();
+        });
+      }
+    } catch (e) {
+      print("Erreur loading structure members: $e");
+    }
+  }
+
+  Future<void> _editAssignedMember() async {
+    if (!_ensureEditingAllowed()) return;
+
+    String currentEmail = (childData['assignedMemberEmail'] ?? '').toString().trim();
+    String selectedEmail = currentEmail;
+
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(
+              'Référent de l\'enfant',
+              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Le référent voit l'enfant dans son planning et ses transmissions.",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                SizedBox(height: 16),
+                DropdownButton<String>(
+                  value: selectedEmail,
+                  isExpanded: true,
+                  items: [
+                    DropdownMenuItem<String>(
+                      value: "",
+                      child: Text("Aucun référent (Non assigné)", style: TextStyle(color: Colors.grey)),
+                    ),
+                    ..._structureMembers.map((member) {
+                      final String fName = member['firstName'] ?? '';
+                      final String lName = member['lastName'] ?? '';
+                      final String email = member['email'] ?? '';
+                      final String name = "$fName $lName".trim();
+                      return DropdownMenuItem<String>(
+                        value: email,
+                        child: Text(name.isNotEmpty ? name : email),
+                      );
+                    }),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => selectedEmail = val);
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Annuler', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, selectedEmail),
+                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+                child: Text('Valider'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != null && result != currentEmail) {
+      await _saveChanges('profile', 'assignedMemberEmail', result);
+    }
   }
 
   Future<void> _generateEmergencySheet() async {
@@ -3332,6 +3423,77 @@ class _ChildProfileDetailsScreenState extends State<ChildProfileDetailsScreen> {
                             ],
                           ),
                         ),
+
+                        // Section Référent (Nouveau)
+                        if (_isMAM) ...[
+                          _buildProfileSection(
+                            '👤 Référent (MAM)',
+                            [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Membre assigné :",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          () {
+                                            final currentEmail =
+                                                (childData['assignedMemberEmail'] ?? '')
+                                                    .toString()
+                                                    .trim();
+                                            if (currentEmail.isEmpty)
+                                              return "Aucun référent";
+                                            // Chercher le nom
+                                            try {
+                                              final member = _structureMembers
+                                                  .firstWhere((m) =>
+                                                      (m['email'] ?? '') ==
+                                                      currentEmail);
+                                              return "${member['firstName'] ?? ''} ${member['lastName'] ?? ''}"
+                                                  .trim();
+                                            } catch (e) {
+                                              return currentEmail; // Fallback email
+                                            }
+                                          }(),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: IconButton(
+                                      icon: Icon(Icons.edit,
+                                          color: Colors.amber.shade700, size: 18),
+                                      onPressed: _isReadOnly
+                                          ? () => _ensureEditingAllowed()
+                                          : _editAssignedMember,
+                                      constraints: BoxConstraints(),
+                                      padding: EdgeInsets.all(8),
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Modifier le référent',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
 
                         // Section Autorisations
                         _buildProfileSection(

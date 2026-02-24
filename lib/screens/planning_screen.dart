@@ -1015,6 +1015,186 @@ class _PlanningScreenState extends State<PlanningScreen> {
     }
   }
 
+  void _confirmDuplicatePreviousWeek() {
+    // Calculer les dates
+    final currentWeekStart =
+        _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+    final prevWeekStart = currentWeekStart.subtract(Duration(days: 7));
+    final prevWeekEnd =
+        prevWeekStart.add(Duration(days: 4)); // Vendredi précédent
+
+    final dateFormat = DateFormat('dd/MM', 'fr_FR');
+    final String prevPeriod =
+        "${dateFormat.format(prevWeekStart)} - ${dateFormat.format(prevWeekEnd)}";
+    final String currentPeriod =
+        "${dateFormat.format(currentWeekStart)} - ${dateFormat.format(currentWeekStart.add(Duration(days: 4)))}";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Dupliquer la semaine précédente"),
+        content: Text(
+            "Voulez-vous copier le planning de la semaine du $prevPeriod sur la semaine actuelle ($currentPeriod) ?\n\nCela créera des gardes pour chaque jour."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("ANNULER"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _duplicatePreviousWeek();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+            child: Text("DUPLIQUER"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _duplicatePreviousWeek() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final currentWeekStart =
+          _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+      final prevWeekStart = currentWeekStart.subtract(Duration(days: 7));
+
+      // Batch pour les écritures (max 500 opérations)
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+      int batchCount = 0;
+
+      // Collection reference
+      final gardesRef = FirebaseFirestore.instance
+          .collection('structures')
+          .doc(_structureId)
+          .collection('gardes');
+
+      // Pour chaque jour de la semaine précédente (Lundi à Vendredi)
+      for (int day = 0; day < 5; day++) {
+        final sourceDate = prevWeekStart.add(Duration(days: day));
+        final targetDate = currentWeekStart.add(Duration(days: day));
+        final jourSemaine = day + 1; // 1=Lundi
+
+        // 1. Récupérer les gardes récurrentes pour ce jour
+        final recurrentSnapshot = await gardesRef
+            .where('recurrent', isEqualTo: true)
+            .where('jourSemaine', isEqualTo: jourSemaine)
+            .get();
+
+        // 2. Récupérer les exceptions pour ce jour spécifique
+        final dayStart =
+            DateTime(sourceDate.year, sourceDate.month, sourceDate.day);
+        final dayEnd = dayStart.add(Duration(days: 1));
+
+        final exceptionsSnapshot = await gardesRef
+            .where('recurrent', isEqualTo: false)
+            .where('dateException',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+            .where('dateException', isLessThan: Timestamp.fromDate(dayEnd))
+            .get();
+
+        // 3. Fusionner pour obtenir le planning effectif du jour source
+        List<Garde> effectiveGardes = [];
+
+        // Ajouter les récurrentes
+        for (var doc in recurrentSnapshot.docs) {
+          final data = doc.data();
+          effectiveGardes.add(Garde(
+            id: doc.id,
+            enfantId: data['enfantId'] ?? '',
+            membreId: data['membreId'] ?? '',
+            mamId: _structureId,
+            jourSemaine: data['jourSemaine'] ?? 1,
+            heureDebut: data['heureDebut'] ?? '08:00',
+            heureFin: data['heureFin'] ?? '17:00',
+            recurrent: true,
+          ));
+        }
+
+        // Appliquer les exceptions (remplacer ou ajouter)
+        for (var doc in exceptionsSnapshot.docs) {
+          final data = doc.data();
+          final exceptionGarde = Garde(
+            id: doc.id,
+            enfantId: data['enfantId'] ?? '',
+            membreId: data['membreId'] ?? '',
+            mamId: _structureId,
+            jourSemaine: data['jourSemaine'] ?? jourSemaine,
+            heureDebut: data['heureDebut'] ?? '08:00',
+            heureFin: data['heureFin'] ?? '17:00',
+            recurrent: false,
+            dateException: (data['dateException'] as Timestamp).toDate(),
+          );
+
+          final index = effectiveGardes.indexWhere((g) =>
+              g.recurrent &&
+              g.enfantId == exceptionGarde.enfantId &&
+              g.membreId == exceptionGarde.membreId);
+
+          if (index >= 0) {
+            effectiveGardes[index] = exceptionGarde;
+          } else {
+            effectiveGardes.add(exceptionGarde);
+          }
+        }
+
+        // 4. Créer les nouvelles gardes pour la date cible
+        for (var garde in effectiveGardes) {
+          // Créer une nouvelle référence de document
+          final newDocRef = gardesRef.doc();
+
+          final newGarde = Garde(
+            id: newDocRef.id,
+            enfantId: garde.enfantId,
+            membreId: garde.membreId,
+            mamId: _structureId,
+            jourSemaine: jourSemaine,
+            heureDebut: garde.heureDebut,
+            heureFin: garde.heureFin,
+            recurrent: false, // On crée une exception pour figer ce planning
+            dateException: targetDate,
+          );
+
+          batch.set(newDocRef, newGarde.toJson());
+          batchCount++;
+
+          // Si batch trop gros, commit et nouveau batch
+          if (batchCount >= 450) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            batchCount = 0;
+          }
+        }
+      }
+
+      // Commit final
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Semaine dupliquée avec succès"),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Recharger
+      _loadGardes();
+    } catch (e) {
+      print("Erreur duplication semaine: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erreur lors de la duplication: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1041,6 +1221,11 @@ class _PlanningScreenState extends State<PlanningScreen> {
         ),
         actions: [
           // Seulement garder le bouton d'historique
+          IconButton(
+            icon: Icon(Icons.copy, color: Colors.white),
+            onPressed: () => _confirmDuplicatePreviousWeek(),
+            tooltip: 'Dupliquer la semaine précédente',
+          ),
           IconButton(
             icon: Icon(Icons.history, color: Colors.white),
             onPressed: () => _navigateToHistory(),

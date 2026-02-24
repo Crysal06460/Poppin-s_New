@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:go_router/go_router.dart';
+import '../utils/structure_context.dart';
 
 class MonthlyReportGenerateScreen extends StatefulWidget {
   final Map<String, dynamic> reportParams;
@@ -51,6 +52,8 @@ class _MonthlyReportGenerateScreenState
 
   String currentUserEmail = "";
   String structureId = "";
+  String structureName = "";
+  Map<String, dynamic> structureDataMap = {};
 
   // Vérifier et créer les informations financières si nécessaires
   Future<void> _ensureFinancialInfoExists() async {
@@ -84,73 +87,27 @@ class _MonthlyReportGenerateScreenState
     }
   }
 
-  Future<String> _getStructureId() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return "";
 
-      // Obtenir l'email de l'utilisateur actuel
-      currentUserEmail = user.email?.toLowerCase() ?? '';
-      print("👤 Email de l'utilisateur connecté: $currentUserEmail");
-
-      // Vérifier si l'utilisateur est un membre MAM
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserEmail)
-          .get();
-
-      print(
-          "👤 Vérification du document utilisateur: ${userDoc.exists ? 'existe' : 'n\'existe pas'}");
-      if (userDoc.exists) {
-        final userData = userDoc.data();
-        print("👤 Données utilisateur: $userData");
-      }
-
-      // Si c'est un membre MAM, obtenir l'ID de la structure associée
-      if (userDoc.exists &&
-          userDoc.data() != null &&
-          userDoc.data()!.containsKey('structureId')) {
-        String structId = userDoc.data()!['structureId'];
-        print("👤 Utilisateur MAM détecté avec structureId: $structId");
-        return structId;
-      }
-
-      // Par défaut, utiliser l'ID de l'utilisateur
-      print("👤 Utilisateur standard avec uid: ${user.uid}");
-      return user.uid;
-    } catch (e) {
-      print("🚨 Erreur dans _getStructureId: $e");
-      return "";
-    }
-  }
 
   Future<void> _loadData() async {
     try {
       setState(() => isLoading = true);
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('Utilisateur non connecté');
+      final structureContext = await StructureResolver().resolve();
+      structureId = structureContext.structureId;
+      structureDataMap = structureContext.structureData;
+      structureName = structureContext.structureName;
+      currentUserEmail = structureContext.currentUserEmail;
 
-      // Obtenir l'ID de structure correct
-      structureId = await _getStructureId();
       if (structureId.isEmpty) {
         throw Exception('ID de structure non trouvé');
       }
 
       print("🔍 Chargement des données pour la structure: $structureId");
 
-      // Charger les données de la structure avec l'ID correct
-      final structureDoc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId) // ← Utiliser structureId au lieu de user.uid
-          .get();
-
-      if (!structureDoc.exists) {
-        print(
-            "⚠️ Document de structure non trouvé, utilisation de valeurs par défaut");
-        structureData = {'structureName': 'Ma Structure'};
-      } else {
-        structureData = structureDoc.data() ?? {};
+      structureData = structureDataMap;
+      if (structureData['structureName'] == null) {
+        structureData['structureName'] = structureName;
       }
 
       // Charger les données de l'enfant avec l'ID correct
