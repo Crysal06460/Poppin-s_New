@@ -384,7 +384,8 @@ class FirebaseTrialService {
           final subDoc = await _firestore
               .collection('subscriptions')
               .doc(resolvedUid)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 5));
           final docData = subDoc.data();
           if (docData != null && docData.isNotEmpty) {
             candidates.add(docData);
@@ -398,7 +399,8 @@ class FirebaseTrialService {
               .collection('subscriptions')
               .where('structureId', isEqualTo: resolvedUid)
               .limit(1)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 5));
           if (subQuery.docs.isNotEmpty) {
             candidates.add(subQuery.docs.first.data());
           }
@@ -411,7 +413,8 @@ class FirebaseTrialService {
               .collection('subscriptions')
               .where('email', isEqualTo: resolvedEmail)
               .limit(1)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 5));
           if (subQuery.docs.isNotEmpty) {
             candidates.add(subQuery.docs.first.data());
           }

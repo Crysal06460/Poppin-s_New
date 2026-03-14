@@ -1090,46 +1090,63 @@ class _ChildFinancialInfoScreenState extends State<ChildFinancialInfoScreen> {
 
       bool hasSentInvitation = false;
       bool hasLinkedExistingParent = false;
+      final List<String> failedEmails = [];
 
       // Envoyer une invitation à chaque parent
       for (var parentData in parentsToInvite) {
         final String normalizedEmail = parentData['email'];
         final String parentFirstName = parentData['firstName'];
         final String parentLastName = parentData['lastName'];
-        
-        // Vérifier si le parent existe déjà (pour le message de feedback)
-        final parentUserDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(normalizedEmail)
-            .get();
 
-        if (parentUserDoc.exists) {
-          hasLinkedExistingParent = true;
-          // Si le parent existe déjà, on s'assure qu'il est lié à l'enfant
-          await FirebaseFirestore.instance
-            .collection('users')
-            .doc(normalizedEmail)
-            .update({
-              'children': FieldValue.arrayUnion([widget.childId]),
-              'createdChildren': FieldValue.arrayUnion([widget.childId]),
-            });
-          print("ℹ️ Parent déjà existant, enfant rattaché ($normalizedEmail).");
-          continue;
+        try {
+          // Vérifier si le parent existe déjà (pour le message de feedback)
+          final parentUserDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(normalizedEmail)
+              .get();
+
+          if (parentUserDoc.exists) {
+            hasLinkedExistingParent = true;
+            // Si le parent existe déjà, on s'assure qu'il est lié à l'enfant
+            await FirebaseFirestore.instance
+              .collection('users')
+              .doc(normalizedEmail)
+              .update({
+                'children': FieldValue.arrayUnion([widget.childId]),
+                'createdChildren': FieldValue.arrayUnion([widget.childId]),
+              });
+            print("ℹ️ Parent déjà existant, enfant rattaché ($normalizedEmail).");
+            continue;
+          }
+
+          print("🔑 Envoi invitation via service pour $normalizedEmail");
+
+          // Utiliser le service centralisé pour envoyer l'invitation
+          await ParentInvitationService.sendInvitationToParent(
+            childId: widget.childId,
+            childFirstName: childData['firstName'] ?? "Enfant",
+            parentEmail: normalizedEmail,
+            parentFirstName: parentFirstName,
+            parentLastName: parentLastName,
+            structureId: structureId,
+          );
+
+          hasSentInvitation = true;
+        } catch (e) {
+          print("❌ Erreur invitation pour $normalizedEmail: $e");
+          failedEmails.add(normalizedEmail);
         }
+      }
 
-        print("🔑 Envoi invitation via service pour $normalizedEmail");
-        
-        // Utiliser le service centralisé pour envoyer l'invitation
-        await ParentInvitationService.sendInvitationToParent(
-          childId: widget.childId,
-          childFirstName: childData['firstName'] ?? "Enfant",
-          parentEmail: normalizedEmail,
-          parentFirstName: parentFirstName,
-          parentLastName: parentLastName,
-          structureId: structureId,
+      if (failedEmails.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "⚠️ Échec envoi pour : ${failedEmails.join(', ')}",
+            ),
+            backgroundColor: Colors.orange,
+          ),
         );
-
-        hasSentInvitation = true;
       }
 
       if (mounted) {

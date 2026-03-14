@@ -4105,6 +4105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       onError: (error) {
         print('Erreur écoute notifications structure: $error');
+        _structureNotificationSub?.cancel();
+        _structureNotificationSub = null;
       },
     );
   }

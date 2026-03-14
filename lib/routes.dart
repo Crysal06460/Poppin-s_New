@@ -223,7 +223,9 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/quick-login',
       builder: (context, state) => QuickLoginScreen(
-        data: state.extra as Map<String, String>,
+        data: state.extra is Map
+            ? Map<String, String>.from(state.extra as Map)
+            : const {},
       ),
     ),
 
@@ -255,14 +257,18 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/invitation-validated',
       builder: (context, state) {
-        final invitationInfo = state.extra as Map<String, dynamic>;
+        final invitationInfo = state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{};
         return InvitationValidatedScreen(invitationInfo: invitationInfo);
       },
     ),
     GoRoute(
       path: '/invitation-signup',
       builder: (context, state) {
-        final invitationInfo = state.extra as Map<String, dynamic>;
+        final invitationInfo = state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{};
         return InvitationSignupScreen(invitationInfo: invitationInfo);
       },
     ),
@@ -863,7 +869,9 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/upgrade-confirmed',
       builder: (context, state) => SubscriptionUpgradeConfirmedScreen(
-        upgradeInfo: state.extra as Map<String, dynamic>,
+        upgradeInfo: state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{},
       ),
     ),
     GoRoute(

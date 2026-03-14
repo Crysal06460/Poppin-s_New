@@ -75,6 +75,7 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
             "❌ Session invalide (dailySecurity: $dailySecurity, hasFirebaseSession: $hasFirebaseSession) - authentification requise");
       }
 
+      if (!mounted) return;
       if (quickLoginEmail != null && quickLoginEmail.isNotEmpty) {
         context.go('/quick-login',
             extra: {'email': quickLoginEmail.trim(), 'reason': reason});
@@ -241,21 +242,17 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
       context.go('/welcome');
     } on FirebaseException catch (e) {
       if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
-        setState(() {
-          _isOffline = true;
-        });
+        if (mounted) setState(() { _isOffline = true; });
       } else {
         print("⚠️ Firebase erreur: ${e.code}");
-        context.go('/welcome');
+        if (mounted) context.go('/welcome');
       }
     } on TimeoutException {
-      setState(() {
-        _isOffline = true;
-      });
+      if (mounted) setState(() { _isOffline = true; });
     } catch (e) {
       print("⚠️ Erreur navigation: $e, fallback vers Welcome");
       UserRoleCache.setRole(null);
-      context.go('/welcome');
+      if (mounted) context.go('/welcome');
     }
   }
 

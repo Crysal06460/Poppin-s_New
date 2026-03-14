@@ -27,10 +27,10 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
   bool hasDigit = false;
 
   // Données d'invitation
-  late String email;
-  late String invitationType;
-  late String structureId;
-  late String structureName;
+  String email = '';
+  String invitationType = 'unknown';
+  String structureId = '';
+  String structureName = 'la structure';
   String? childName;
   String? childId;
 
@@ -1203,11 +1203,15 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
               .where('structureId', isEqualTo: structureId)
               .get();
 
-          if (invitationsQuery.docs.isNotEmpty) {
-            await FirebaseFirestore.instance
-                .collection('invitations')
-                .doc(invitationsQuery.docs.first.id)
-                .update({'status': 'completed'});
+          // 🔧 Marquer TOUTES les invitations pending/active comme completed
+          for (final doc in invitationsQuery.docs) {
+            final status = (doc.data()['status'] ?? '').toString().toLowerCase();
+            if (status == 'pending' || status == 'active') {
+              await FirebaseFirestore.instance
+                  .collection('invitations')
+                  .doc(doc.id)
+                  .update({'status': 'completed'});
+            }
           }
         } catch (e) {
           print("Erreur update invitation: $e");

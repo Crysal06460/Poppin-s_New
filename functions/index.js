@@ -25,10 +25,18 @@ const db = getFirestore();
 const messaging = getMessaging();
 
 // ===== CONFIGURATION MAILJET =====
-const mailjet = Mailjet.apiConnect(
-    '47ce0aca4cc62f625096a6af3fa5cb8a', // Votre clé API Mailjet
-    '22096ea903efc5beb1e190890b870f97'  // Votre clé secrète Mailjet
-);
+const MAILJET_API_KEY = defineSecret('MAILJET_API_KEY');
+const MAILJET_SECRET_KEY = defineSecret('MAILJET_SECRET_KEY');
+let mailjetClient;
+function getMailjet() {
+    if (!mailjetClient) {
+        mailjetClient = Mailjet.apiConnect(
+            MAILJET_API_KEY.value(),
+            MAILJET_SECRET_KEY.value()
+        );
+    }
+    return mailjetClient;
+}
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
@@ -52,8 +60,8 @@ setGlobalOptions({
 exports.finalizeStripeSignup = onRequest(
     {
         region: 'europe-west1',
-        cors: true, // autorise les appels navigateur
-        secrets: [STRIPE_SECRET_KEY],
+        cors: true,
+        secrets: [STRIPE_SECRET_KEY, MAILJET_API_KEY, MAILJET_SECRET_KEY],
     },
     async (req, res) => {
         try {
@@ -266,7 +274,7 @@ exports.finalizeStripeSignup = onRequest(
                     </html>
                     `;
 
-                    await mailjet.post('send', { version: 'v3.1' }).request({
+                    await getMailjet().post('send', { version: 'v3.1' }).request({
                         Messages: [{
                             From: { Email: "noreply@poppin-s.fr", Name: "Équipe Poppins" },
                             To: [{ Email: emailFinal, Name: `${firstName} ${lastName}` }],
@@ -416,6 +424,57 @@ exports.stripeWebhook = onRequest(
                 console.error("Erreur récupération customer Stripe :", err);
             }
 
+            // 🔧 FALLBACK: Si structureId absent des métadonnées, le résoudre via Firestore
+            if (!structureId && customerEmail) {
+                try {
+                    // 1. Chercher dans users/{email}
+                    const userDoc = await db.collection("users").doc(customerEmail).get();
+                    if (userDoc.exists && userDoc.data().structureId) {
+                        structureId = userDoc.data().structureId;
+                        console.log(`🔧 structureId résolu via users pour ${customerEmail}: ${structureId}`);
+                    }
+                } catch (err) {
+                    console.error("Erreur résolution structureId via users:", err);
+                }
+            }
+
+            if (!structureId && customerEmail) {
+                try {
+                    // 2. Chercher dans structures par ownerEmail
+                    const structQuery = await db.collection("structures")
+                        .where("ownerEmail", "==", customerEmail)
+                        .limit(1)
+                        .get();
+                    if (!structQuery.empty) {
+                        structureId = structQuery.docs[0].id;
+                        console.log(`🔧 structureId résolu via structures.ownerEmail pour ${customerEmail}: ${structureId}`);
+                    }
+                } catch (err) {
+                    console.error("Erreur résolution structureId via structures:", err);
+                }
+            }
+
+            if (!structureId && customerEmail) {
+                try {
+                    // 3. Chercher dans subscriptions existantes par email
+                    const existingSub = await db.collection("subscriptions")
+                        .where("email", "==", customerEmail)
+                        .where("structureId", "!=", "")
+                        .limit(1)
+                        .get();
+                    if (!existingSub.empty) {
+                        structureId = existingSub.docs[0].data().structureId;
+                        console.log(`🔧 structureId résolu via subscriptions existantes pour ${customerEmail}: ${structureId}`);
+                    }
+                } catch (err) {
+                    console.error("Erreur résolution structureId via subscriptions:", err);
+                }
+            }
+
+            if (!structureId) {
+                console.warn(`⚠️ WEBHOOK: structureId introuvable pour sub ${subId} (email: ${customerEmail}). Subscription sauvegardée sans structureId.`);
+            }
+
             try {
                 const subscriptionUpdate = {
                     status,
@@ -426,7 +485,7 @@ exports.stripeWebhook = onRequest(
                     source: "stripe",
                     email: customerEmail,
                     stripeCustomerId: sub.customer,
-                    planId: priceId, // IMPORTANT: Sauvegarder le planId
+                    planId: priceId,
                     priceAmount: priceAmount,
                     updatedAt: FieldValue.serverTimestamp(),
                 };
@@ -439,7 +498,33 @@ exports.stripeWebhook = onRequest(
                     subscriptionUpdate,
                     { merge: true },
                 );
-                console.log(`✅ Subscription ${subId} updated in Firestore.`);
+                console.log(`✅ Subscription ${subId} updated in Firestore (structureId: ${structureId || 'non résolu'}).`);
+
+                // 🔧 Mettre à jour la structure si on a un structureId et que le statut est actif
+                if (structureId && subscriptionActive) {
+                    try {
+                        await db.collection("structures").doc(structureId).update({
+                            subscriptionActive: true,
+                            subscriptionStatus: status,
+                            subscriptionDocId: subId,
+                            subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                        });
+                        console.log(`✅ Structure ${structureId} mise à jour avec subscriptionActive:true`);
+                    } catch (structErr) {
+                        console.error(`⚠️ Erreur mise à jour structure ${structureId}:`, structErr);
+                    }
+                } else if (structureId && !subscriptionActive) {
+                    try {
+                        await db.collection("structures").doc(structureId).update({
+                            subscriptionActive: false,
+                            subscriptionStatus: status,
+                            subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                        });
+                        console.log(`✅ Structure ${structureId} mise à jour avec subscriptionActive:false (status: ${status})`);
+                    } catch (structErr) {
+                        console.error(`⚠️ Erreur mise à jour structure ${structureId}:`, structErr);
+                    }
+                }
 
             } catch (err) {
                 console.error("Erreur mise à jour Stripe webhook :", err);
@@ -452,7 +537,8 @@ exports.stripeWebhook = onRequest(
 
 // ===== NOUVELLE FONCTION : Envoyer un email depuis l'app =====
 exports.sendEmailToParent = onCall({
-    region: 'europe-west1' // Même région que vos autres fonctions
+    region: 'europe-west1',
+    secrets: [MAILJET_API_KEY, MAILJET_SECRET_KEY],
 }, async (request) => {
     console.log('📧 NOUVEAU: sendEmailToParent appelée');
 
@@ -537,7 +623,7 @@ exports.sendEmailToParent = onCall({
         console.log('📧 Envoi via Mailjet...');
 
         // Envoi via Mailjet (utilise votre configuration existante)
-        const request_mailjet = mailjet.post('send', { version: 'v3.1' }).request({
+        const request_mailjet = getMailjet().post('send', { version: 'v3.1' }).request({
             Messages: [mailjetMessage]
         });
 
@@ -1174,7 +1260,8 @@ exports.lookupInvitationByEmail = onCall({
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
 exports.processEmailQueue = onDocumentWritten({
     document: 'emailQueue/{emailId}',
-    region: 'europe-west1'
+    region: 'europe-west1',
+    secrets: [MAILJET_API_KEY, MAILJET_SECRET_KEY],
 }, async (event) => {
     // Si le document est supprimé, on ne fait rien
     if (!event.data.after.exists) {
@@ -1274,7 +1361,7 @@ exports.processEmailQueue = onDocumentWritten({
         // Envoyer l'email via Mailjet
         console.log(`📧 Envoi email vers: ${emailData.to} via Mailjet...`);
 
-        const request = mailjet.post('send', { version: 'v3.1' }).request({
+        const request = getMailjet().post('send', { version: 'v3.1' }).request({
             Messages: [mailjetMessage]
         });
 
@@ -1939,6 +2026,37 @@ exports.cleanupOldNotifications = onSchedule({
         console.error('❌ Erreur nettoyage:', error);
     }
 
+    return null;
+});
+
+// 🗑️ NETTOYAGE : Supprimer les invitations expirées (hebdomadaire)
+exports.cleanupExpiredInvitations = onSchedule({
+    schedule: 'every sunday 03:00',
+    timeZone: 'Europe/Paris',
+    region: 'europe-west1'
+}, async (event) => {
+    try {
+        const now = Timestamp.now();
+        console.log('🗑️ Nettoyage des invitations expirées...');
+
+        const snapshot = await db
+            .collection('invitations')
+            .where('status', 'in', ['pending', 'expired'])
+            .where('expiresAt', '<', now)
+            .get();
+
+        if (snapshot.empty) {
+            console.log('✅ Aucune invitation expirée à supprimer');
+            return null;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        console.log(`🗑️ ${snapshot.size} invitation(s) expirée(s) supprimée(s)`);
+    } catch (error) {
+        console.error('❌ Erreur nettoyage invitations:', error);
+    }
     return null;
 });
 

@@ -1213,6 +1213,15 @@ class NotificationService {
 
   static Future<void> handleBackgroundMessage(RemoteMessage message) async {
     try {
+      // Si le message a un champ notification, le système OS l'a déjà affiché
+      // dans la barre de notifications. Ne pas persister pour éviter un double
+      // popup au prochain lancement de l'app (comportement indésirable sur Android).
+      // Les popups in-app ne sont montrés que si l'utilisateur tape sur la
+      // notification (via getInitialMessage / onMessageOpenedApp).
+      if (message.notification != null) {
+        return;
+      }
+
       final Map<String, dynamic> data =
           Map<String, dynamic>.from(message.data);
       final String type = (data['type'] ?? '').toString();
@@ -1220,13 +1229,11 @@ class NotificationService {
         return;
       }
 
-      final String title = (message.notification?.title ??
-              data['_notificationTitle']?.toString() ??
+      final String title = (data['_notificationTitle']?.toString() ??
               data['title']?.toString() ??
               '')
           .trim();
-      final String body = (message.notification?.body ??
-              data['_notificationBody']?.toString() ??
+      final String body = (data['_notificationBody']?.toString() ??
               data['body']?.toString() ??
               '')
           .trim();

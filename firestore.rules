@@ -74,7 +74,12 @@ service cloud.firestore {
     /* INVITATIONS */
     match /invitations/{invitationId} {
       allow read: if isSignedIn();
-      allow update, delete: if false;
+      // Permettre à l'utilisateur invité de marquer son invitation comme complétée
+      allow update: if isSignedIn() &&
+        resource.data.email == lower(request.auth.token.email) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']) &&
+        request.resource.data.status == 'completed';
+      allow delete: if false;
       allow create: if isSignedIn() &&
         request.resource.data.email is string &&
         request.resource.data.structureId is string &&
@@ -87,6 +92,23 @@ service cloud.firestore {
     /* HORAIRES HISTORY (racine) */
     match /horaires_history/{docId} {
       allow read, write: if isSignedIn();
+    }
+
+    /* NOTIFICATIONS */
+    match /notifications/{notificationId} {
+      // Lecture autorisée si la notification appartient à l'utilisateur connecté
+      allow read: if isSignedIn() && (
+        resource.data.recipientUserId == request.auth.token.email ||
+        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == request.auth.uid
+      );
+      // Seul le marquage appDelivered est autorisé côté client
+      allow update: if isSignedIn() && (
+        resource.data.recipientUserId == request.auth.token.email ||
+        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == request.auth.uid
+      ) && request.resource.data.diff(resource.data).changedKeys().hasOnly(['appDelivered', 'appDeliveredAt']);
+      allow create, delete: if false;
     }
 
     /* RESTE - Bloqué par défaut */

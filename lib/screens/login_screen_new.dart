@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
-      );
+      ).timeout(const Duration(seconds: 15));
 
       // Renouveler le token FCM pour éviter d\'hériter d\'un ancien compte
       try {

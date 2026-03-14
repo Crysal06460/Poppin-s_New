@@ -1744,9 +1744,10 @@ class _ChangeScreenState extends State<ChangeScreen> {
                               spacing: 10,
                               runSpacing: 10,
                               children: [
+                                'Nez',
+                                'Yeux',
+                                'Oreilles',
                                 'Crème',
-                                'Gel',
-                                'Lait',
                               ].map((soin) {
                                 final selected = localSoins.contains(soin);
                                 return GestureDetector(

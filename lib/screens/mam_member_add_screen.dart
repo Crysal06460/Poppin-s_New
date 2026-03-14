@@ -44,6 +44,7 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
   }
 
   Future<void> _loadMemberInfo() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -88,9 +89,7 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
     } catch (e) {
       print("Erreur lors du chargement des informations MAM: $e");
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
@@ -122,14 +121,14 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
 
     // Vérifier si le nombre maximum de membres est atteint
     if (_currentMemberCount >= _maxMemberCount) {
-      setState(() {
+      if (mounted) setState(() {
         _errorMessage =
             "Vous avez atteint le nombre maximum de membres ($_maxMemberCount) autorisé par votre abonnement.";
       });
       return;
     }
 
-    setState(() {
+    if (mounted) setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
@@ -150,7 +149,7 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
           await FirebaseFirestore.instance.collection('users').doc(email).get();
 
       if (userDoc.exists) {
-        setState(() {
+        if (mounted) setState(() {
           _errorMessage = "Cet utilisateur existe déjà.";
           _isLoading = false;
         });
@@ -237,27 +236,24 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
       );
 
       // Mettre à jour le compteur local
-      setState(() {
+      if (mounted) setState(() {
         _currentMemberCount = nextMemberNumber;
       });
 
       // Afficher la boîte de dialogue de confirmation
       _showConfirmationDialog(email, structureName);
     } catch (e) {
-      setState(() {
+      if (mounted) setState(() {
         _errorMessage = "Erreur lors de l'ajout du membre: ${e.toString()}";
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_errorMessage),
           backgroundColor: Colors.red,
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 
