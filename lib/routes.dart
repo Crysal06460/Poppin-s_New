@@ -69,7 +69,6 @@ import 'package:poppins_app/screens/subscription_upgrade_confirmed_screen.dart';
 import 'package:poppins_app/screens/subscription_upgrade_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/cleaning_schedule_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:poppins_app/screens/parent_second_address_screen.dart';
 import 'package:poppins_app/screens/parent_coordonnees_screen.dart';
 import 'package:poppins_app/screens/splash_screen.dart';
@@ -306,10 +305,26 @@ final GoRouter router = GoRouter(
       ),
     ),
     */
-    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) {
+        final user = FirebaseAuth.instance.currentUser;
+        const adminEmails = {'cbeylet06@gmail.com', 'chrisgugu1101@gmail.com'};
+        if (user == null || !adminEmails.contains(user.email?.toLowerCase())) {
+          return Scaffold(
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF3D9DF2),
+              foregroundColor: Colors.white,
+              title: const Text('Administration'),
+            ),
+            body: const Center(child: Text('Accès non autorisé')),
+          );
+        }
+        return const AdminScreen();
+      },
+    ),
 
-    // Ajout de la route pour l'écran de tarification
-    /*
+    // Écran de tarification (affiché aux utilisateurs sans abonnement)
     GoRoute(
       path: '/pricing',
       builder: (context, state) {
@@ -330,7 +345,6 @@ final GoRouter router = GoRouter(
         );
       },
     ),
-    */
 
     /*
     GoRoute(

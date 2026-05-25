@@ -39,7 +39,26 @@ service cloud.firestore {
 
     /* SUBSCRIPTIONS */
     match /subscriptions/{docId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        // Cas 1 : structureId = uid (assistante maternelle solo)
+        resource.data.structureId == request.auth.uid ||
+        // Cas 2 : via le profil utilisateur (membres MAM, email-based IDs)
+        (
+          request.auth.token.email is string &&
+          exists(/databases/$(database)/documents/users/$(lower(request.auth.token.email))) &&
+          resource.data.structureId == get(/databases/$(database)/documents/users/$(lower(request.auth.token.email))).data.get('structureId', request.auth.uid)
+        ) ||
+        // Cas 3 : document Stripe sans structureId résolu — fallback par email
+        (
+          request.auth.token.email is string &&
+          resource.data.get('email', '') == lower(request.auth.token.email)
+        ) ||
+        // Cas 4 : document Stripe avec ownerEmail (créé par finalizeStripeSignup)
+        (
+          request.auth.token.email is string &&
+          resource.data.get('ownerEmail', '') == lower(request.auth.token.email)
+        )
+      );
       allow create, update: if isSignedIn();
       allow delete: if false;
     }

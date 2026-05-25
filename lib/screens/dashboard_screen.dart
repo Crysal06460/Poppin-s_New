@@ -19,7 +19,6 @@ import 'package:poppins_app/screens/planning_screen.dart';
 import 'package:poppins_app/screens/delegations_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
-import 'package:poppins_app/screens/child_removal_screen.dart';
 import 'package:poppins_app/screens/child_history_detail_screen.dart';
 import 'package:poppins_app/screens/history_date_selection_screen.dart';
 import '../services/photo_cleanup_service.dart';
@@ -35,9 +34,8 @@ import '../theme/app_colors.dart';
 import '../services/structure_notification_service.dart';
 import 'admin_broadcast_notification_screen.dart';
 import 'admin_subscription_dashboard_screen.dart';
+import 'package:poppins_app/screens/documents_screen.dart';
 
-// Dans la classe _DashboardScreenState
-int _abacusClickCount = 0;
 const Set<String> _dashboardAdminEmails = {
   'cbeylet06@gmail.com',
   'chrisgugu1101@gmail.com',
@@ -2365,6 +2363,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _openDocuments() async {
+    final structureId = await _getStructureId();
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentsScreen(structureId: structureId),
+      ),
+    );
+  }
+
   void _openMamAdministration() {
     final List<Widget> actions = [
       _sheetAction(
@@ -2422,6 +2431,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     actions.addAll([
+      _sheetAction(
+        label: 'Documents professionnels',
+        onTap: _openDocuments,
+        bulletColor: _tileBlue,
+      ),
       _sheetAction(
         label: 'Politique de confidentialité',
         onTap: () =>
@@ -5020,6 +5034,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             maxWidth: maxWidth,
           ),
         ],
+
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.folder_rounded,
+          title: "Documents professionnels",
+          description: "Diplôme, agrément, assurance, formation...",
+          onTap: _openDocuments,
+          maxWidth: maxWidth,
+        ),
       ],
     );
   }

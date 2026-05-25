@@ -281,10 +281,13 @@ class UnifiedSubscriptionService {
     );
   }
 
-  /// ✅ AMÉLIORATION : Calcule la date d'expiration
+  /// Calcule la date d'expiration estimée.
+  /// Note : la date réelle d'expiration est stockée dans Firestore par les
+  /// services iOS/Android. Cette méthode sert uniquement de fallback pour l'UI.
   DateTime? _calculateExpiryDate(String productId) {
-    // Pour les abonnements mensuels, ajouter 30 jours
-    return DateTime.now().add(Duration(days: 30));
+    // Retourner null : les services iOS/Android fournissent la vraie date
+    // via Firestore. Retourner une date fixe "+30j" causerait des incohérences.
+    return null;
   }
 
   /// Mappe le statut de PurchaseStatus vers SubscriptionStatus
@@ -304,10 +307,14 @@ class UnifiedSubscriptionService {
   }
 
   /// Détermine si c'est une période d'essai
+  /// Note : la détection réelle de la période d'essai se fait côté iOS/Android
+  /// via les données de l'App Store / Google Play. Cette méthode retourne false
+  /// par défaut pour ne pas marquer incorrectement tous les achats comme essais.
   bool _isTrialPeriod(String productId) {
-    // ✅ AMÉLIORATION : Logique plus précise pour détecter la période d'essai
-    // Pour le moment, on considère que tous les nouveaux achats sont des essais
-    return true;
+    // La période d'essai est gérée par les services iOS/Android qui lisent
+    // les vraies données de transaction. On ne peut pas déterminer ici
+    // si c'est un essai — retourner false est plus sûr.
+    return false;
   }
 
   /// ✅ AMÉLIORATION : Formatage des prix avec € et /mois

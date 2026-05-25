@@ -11,6 +11,23 @@ class SubscriptionHelper {
   static final UnifiedSubscriptionService _subscriptionService =
       UnifiedSubscriptionService.instance;
 
+  /// Résout le structureId réel depuis le profil utilisateur
+  static Future<String> _resolveStructureId() async {
+    final user = _auth.currentUser;
+    if (user == null) return '';
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(user.email?.toLowerCase() ?? user.uid)
+          .get();
+      if (userDoc.exists) {
+        final sid = userDoc.data()?['structureId'] as String?;
+        if (sid != null && sid.trim().isNotEmpty) return sid.trim();
+      }
+    } catch (_) {}
+    return user.uid;
+  }
+
   /// Vérifie si l'utilisateur a un abonnement actif et retourne les détails
   static Future<Map<String, dynamic>> getSubscriptionInfo() async {
     try {
@@ -22,10 +39,13 @@ class SubscriptionHelper {
         };
       }
 
+      // 🔧 CORRECTION : Résoudre le vrai structureId (pas juste user.uid)
+      final String structureId = await _resolveStructureId();
+
       // Vérifier dans Firestore
       QuerySnapshot<Map<String, dynamic>> subscriptionQuery = await _firestore
           .collection('subscriptions')
-          .where('structureId', isEqualTo: user.uid)
+          .where('structureId', isEqualTo: structureId)
           .where('status', isEqualTo: 'active')
           .orderBy('createdAt', descending: true)
           .limit(1)
@@ -34,7 +54,7 @@ class SubscriptionHelper {
       if (subscriptionQuery.docs.isEmpty) {
         subscriptionQuery = await _firestore
             .collection('subscriptions')
-            .where('structureId', isEqualTo: user.uid)
+            .where('structureId', isEqualTo: structureId)
             .where('status', isEqualTo: 'trial')
             .limit(1)
             .get();
@@ -43,7 +63,7 @@ class SubscriptionHelper {
       if (subscriptionQuery.docs.isEmpty) {
         subscriptionQuery = await _firestore
             .collection('subscriptions')
-            .where('structureId', isEqualTo: user.uid)
+            .where('structureId', isEqualTo: structureId)
             .limit(1)
             .get();
       }

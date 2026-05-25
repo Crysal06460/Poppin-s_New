@@ -7,7 +7,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../services/voice_message_service.dart';
+import '../widgets/voice_message_widget.dart';
 
 class MamGroupChatScreen extends StatefulWidget {
   final String structureId;
@@ -18,13 +21,159 @@ class MamGroupChatScreen extends StatefulWidget {
   State<MamGroupChatScreen> createState() => _MamGroupChatScreenState();
 }
 
-class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
+class _MamGroupChatScreenState extends State<MamGroupChatScreen>
+    with SingleTickerProviderStateMixin {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
   final TextEditingController _controller = TextEditingController();
   final Map<String, Future<String>> _resolvedNames = {};
   bool _sending = false;
   bool _uploading = false;
+
+  // Voice recording state
+  bool _isRecording = false;
+  bool _isSendingVoice = false;
+  Duration _recordingDuration = Duration.zero;
+  double _dragOffset = 0.0;
+  Timer? _recordingTimer;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  static const Color _primaryBlue = Color(0xFF3D9DF2);
+  static const Color _primaryRed = Color(0xFFD94350);
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _pulseController.dispose();
+    _recordingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (_isRecording) return;
+    final started = await VoiceMessageService.startRecording();
+    if (!started) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permission microphone requise'),
+            backgroundColor: _primaryRed,
+          ),
+        );
+      }
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isRecording = true;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0.0;
+    });
+    _pulseController.repeat(reverse: true);
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _recordingDuration =
+              Duration(seconds: _recordingDuration.inSeconds + 1);
+        });
+      }
+    });
+  }
+
+  Future<void> _stopAndSendVoice() async {
+    if (!_isRecording) return;
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    setState(() {
+      _isRecording = false;
+      _isSendingVoice = true;
+    });
+    HapticFeedback.lightImpact();
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final localPath = await VoiceMessageService.stopRecording();
+      if (localPath == null) {
+        setState(() => _isSendingVoice = false);
+        return;
+      }
+
+      if (_recordingDuration.inSeconds < 1) {
+        setState(() => _isSendingVoice = false);
+        return;
+      }
+
+      final messageRef = _firestore
+          .collection('structures')
+          .doc(widget.structureId)
+          .collection('mam_chat')
+          .doc('default')
+          .collection('messages')
+          .doc();
+
+      final uploaded = await VoiceMessageService.uploadAudio(
+        localPath: localPath,
+        conversationId: 'mam_${widget.structureId}',
+        messageId: messageRef.id,
+      );
+
+      final senderName = await _resolveSenderName(user);
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+
+      await messageRef.set({
+        'type': 'audio',
+        'audioUrl': uploaded.url,
+        'duration': uploaded.duration,
+        'senderId': user.uid,
+        'senderEmail': (user.email ?? '').toLowerCase(),
+        'senderName': senderName,
+        'timestamp': FieldValue.serverTimestamp(),
+        'structureId': widget.structureId,
+        'senderFcmToken': fcmToken ?? '',
+        'notificationSent': false,
+      });
+    } catch (e) {
+      debugPrint('Erreur envoi vocal MAM: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Erreur lors de l'envoi du message vocal"),
+            backgroundColor: _primaryRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingVoice = false);
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecording) return;
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    await VoiceMessageService.cancelRecording();
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0.0;
+    });
+  }
 
   Widget? _buildSenderLabel({
     required bool isMe,
@@ -132,96 +281,178 @@ class _MamGroupChatScreenState extends State<MamGroupChatScreen> {
                     return Align(
                       alignment:
                           isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin:
-                            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        padding: const EdgeInsets.all(12),
-                        constraints: const BoxConstraints(maxWidth: 280),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? const Color(0xFF3D9DF2).withOpacity(0.12)
-                              : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: isMe
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          children: [
-                            if (senderLabelWidget != null) senderLabelWidget,
-                            if (type == 'file')
-                              _FileBubble(
-                                fileName: (data['fileName'] ?? '').toString(),
-                                url: (data['fileUrl'] ?? '').toString(),
-                              )
-                            else
-                              Text(
-                                (data['text'] ?? '').toString(),
-                                style: const TextStyle(fontSize: 15),
+                      child: type == 'audio'
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (senderLabelWidget != null)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 4),
+                                      child: senderLabelWidget,
+                                    ),
+                                  VoiceMessageBubble(
+                                    audioUrl:
+                                        (data['audioUrl'] ?? '').toString(),
+                                    durationSeconds:
+                                        (data['duration'] as num?)?.toInt() ??
+                                            0,
+                                    isMe: isMe,
+                                    time: time,
+                                  ),
+                                ],
                               ),
-                            const SizedBox(height: 6),
-                            Text(
-                              time,
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade600),
+                            )
+                          : Container(
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.all(12),
+                              constraints: const BoxConstraints(maxWidth: 280),
+                              decoration: BoxDecoration(
+                                color: isMe
+                                    ? const Color(0xFF3D9DF2).withOpacity(0.12)
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (senderLabelWidget != null)
+                                    senderLabelWidget,
+                                  if (type == 'file')
+                                    _FileBubble(
+                                      fileName:
+                                          (data['fileName'] ?? '').toString(),
+                                      url: (data['fileUrl'] ?? '').toString(),
+                                    )
+                                  else
+                                    Text(
+                                      (data['text'] ?? '').toString(),
+                                      style: const TextStyle(fontSize: 15),
+                                    ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    time,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
                     );
                   },
                 );
               },
             ),
           ),
-          SafeArea(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: _uploading ? null : _pickAndSendFile,
-                    icon: _uploading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.attach_file),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendText(),
-                      decoration: const InputDecoration(
-                        hintText: 'Écrire un message...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(14)),
-                        ),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          if (_isRecording)
+            VoiceRecordingOverlay(
+              duration: _recordingDuration,
+              dragOffset: _dragOffset,
+              pulseAnimation: _pulseAnimation,
+            )
+          else
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Column(
+                  children: [
+                    if (_isSendingVoice)
+                      LinearProgressIndicator(
+                        backgroundColor: _primaryBlue.withOpacity(0.15),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(_primaryBlue),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _sending ? null : _sendText,
-                    child: _sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed:
+                              _uploading || _isSendingVoice
+                                  ? null
+                                  : _pickAndSendFile,
+                          icon: _uploading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.attach_file),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendText(),
+                            decoration: const InputDecoration(
+                              hintText: 'Écrire un message...',
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(14)),
+                              ),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
                             ),
-                          )
-                        : const Text('Envoyer'),
-                  ),
-                ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Bouton micro avec appui long
+                        GestureDetector(
+                          onLongPressStart: (_) => _startVoiceRecording(),
+                          onLongPressEnd: (_) => _stopAndSendVoice(),
+                          onLongPressMoveUpdate: (details) {
+                            setState(() {
+                              _dragOffset =
+                                  details.localOffsetFromOrigin.dx;
+                            });
+                            if (_dragOffset < -80) {
+                              _cancelVoiceRecording();
+                            }
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _primaryBlue.withOpacity(0.12),
+                            ),
+                            child: Icon(
+                              Icons.mic_rounded,
+                              color: _primaryBlue,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _sending || _isSendingVoice
+                              ? null
+                              : _sendText,
+                          child: _sending
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Envoyer'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

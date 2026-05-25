@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,9 +17,10 @@ import 'package:mime/mime.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// 🔥 AJOUT DE L'IMPORT
 import '../services/notification_service.dart';
+import '../services/voice_message_service.dart';
 import '../utils/safe_query.dart';
+import '../widgets/voice_message_widget.dart';
 
 class ParentMessagesScreen extends StatefulWidget {
   final String?
@@ -30,7 +32,8 @@ class ParentMessagesScreen extends StatefulWidget {
   _ParentMessagesScreenState createState() => _ParentMessagesScreenState();
 }
 
-class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
+class _ParentMessagesScreenState extends State<ParentMessagesScreen>
+    with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final TextEditingController _messageController = TextEditingController();
@@ -52,9 +55,25 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
   String _parentLastName = '';
   String _parentEmail = '';
 
+  // Voice recording state
+  bool _isRecording = false;
+  bool _isSendingVoice = false;
+  Duration _recordingDuration = Duration.zero;
+  double _dragOffset = 0.0;
+  Timer? _recordingTimer;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadUserData();
     });
@@ -332,7 +351,127 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
   @override
   void dispose() {
     _messageController.dispose();
+    _pulseController.dispose();
+    _recordingTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (_isRecording || _selectedChild == null) return;
+    final started = await VoiceMessageService.startRecording();
+    if (!started) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Permission microphone requise pour les messages vocaux'),
+            backgroundColor: primaryRed,
+          ),
+        );
+      }
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isRecording = true;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0.0;
+    });
+    _pulseController.repeat(reverse: true);
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _recordingDuration =
+              Duration(seconds: _recordingDuration.inSeconds + 1);
+        });
+      }
+    });
+  }
+
+  Future<void> _stopAndSendVoice() async {
+    if (!_isRecording) return;
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    setState(() {
+      _isRecording = false;
+      _isSendingVoice = true;
+    });
+    HapticFeedback.lightImpact();
+
+    try {
+      final localPath = await VoiceMessageService.stopRecording();
+      if (localPath == null || _selectedChild == null) {
+        setState(() => _isSendingVoice = false);
+        return;
+      }
+
+      if (_recordingDuration.inSeconds < 1) {
+        setState(() => _isSendingVoice = false);
+        return;
+      }
+
+      final user = _auth.currentUser;
+      if (user == null) {
+        setState(() => _isSendingVoice = false);
+        return;
+      }
+
+      final childId = _selectedChild!['id'];
+      final structureId = _selectedChild!['structureId'];
+
+      final messageRef = _firestore.collection('exchanges').doc();
+      final conversationId = childId;
+
+      final uploaded = await VoiceMessageService.uploadAudio(
+        localPath: localPath,
+        conversationId: conversationId,
+        messageId: messageRef.id,
+      );
+
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      await messageRef.set({
+        'childId': childId,
+        'senderId': user.uid,
+        'senderEmail': _parentEmail,
+        'senderFirstName': _parentFirstName,
+        'senderLastName': _parentLastName,
+        'type': 'audio',
+        'audioUrl': uploaded.url,
+        'duration': uploaded.duration,
+        'timestamp': FieldValue.serverTimestamp(),
+        'senderType': 'parent',
+        'nonLu': true,
+        'readByParent': true,
+        'senderFcmToken': fcmToken,
+      });
+
+      await _notifyAssistanteMaternel(childId, structureId);
+    } catch (e) {
+      debugPrint('Erreur envoi vocal: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Erreur lors de l'envoi du message vocal"),
+            backgroundColor: primaryRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingVoice = false);
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecording) return;
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    await VoiceMessageService.cancelRecording();
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0.0;
+    });
   }
 
   Future<void> _loadUserData() async {
@@ -867,68 +1006,119 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
                             : Center(child: Text("Sélectionnez un enfant")),
                       ),
 
-                      // Champ de saisie de message - Amélioré pour la gestion du clavier
-                      Container(
-                        padding: EdgeInsets.fromLTRB(8.0, 8.0, 8.0,
-                            MediaQuery.of(context).padding.bottom + 8.0),
-                        color: Colors.white,
-                        child: SafeArea(
-                          child: Column(
-                            children: [
-                              // Indicateur de progression d'upload
-                              if (_isUploadingFile)
-                                Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  child: LinearProgressIndicator(
-                                    backgroundColor: lightBlue,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        primaryBlue),
-                                  ),
-                                ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.attach_file),
-                                    onPressed: _isUploadingFile
-                                        ? null
-                                        : _pickAndSendFile,
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _messageController,
-                                      decoration: InputDecoration(
-                                        hintText: "Écrivez votre message...",
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(24),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        filled: true,
-                                        fillColor: Colors.grey[100],
-                                        contentPadding: EdgeInsets.symmetric(
+                      // Barre de saisie / enregistrement vocal
+                      _isRecording
+                          ? VoiceRecordingOverlay(
+                              duration: _recordingDuration,
+                              dragOffset: _dragOffset,
+                              pulseAnimation: _pulseAnimation,
+                            )
+                          : Container(
+                              padding: EdgeInsets.fromLTRB(
+                                  8.0,
+                                  8.0,
+                                  8.0,
+                                  MediaQuery.of(context).padding.bottom + 8.0),
+                              color: Colors.white,
+                              child: SafeArea(
+                                child: Column(
+                                  children: [
+                                    if (_isUploadingFile || _isSendingVoice)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
                                             horizontal: 16, vertical: 8),
+                                        child: LinearProgressIndicator(
+                                          backgroundColor: lightBlue,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  primaryBlue),
+                                        ),
                                       ),
-                                      minLines: 1,
-                                      maxLines: 4,
-                                      textInputAction: TextInputAction.send,
-                                      onSubmitted: (value) {
-                                        if (value.trim().isNotEmpty) {
-                                          _sendMessage();
-                                        }
-                                      },
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.attach_file),
+                                          onPressed:
+                                              _isUploadingFile || _isSendingVoice
+                                                  ? null
+                                                  : _pickAndSendFile,
+                                        ),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _messageController,
+                                            decoration: InputDecoration(
+                                              hintText:
+                                                  "Écrivez votre message...",
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(24),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              filled: true,
+                                              fillColor: Colors.grey[100],
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 8),
+                                            ),
+                                            minLines: 1,
+                                            maxLines: 4,
+                                            textInputAction:
+                                                TextInputAction.send,
+                                            onSubmitted: (value) {
+                                              if (value.trim().isNotEmpty) {
+                                                _sendMessage();
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        // Bouton micro (appui long)
+                                        GestureDetector(
+                                          onLongPressStart: (_) =>
+                                              _startVoiceRecording(),
+                                          onLongPressEnd: (_) =>
+                                              _stopAndSendVoice(),
+                                          onLongPressMoveUpdate: (details) {
+                                            setState(() {
+                                              _dragOffset = details
+                                                  .localOffsetFromOrigin.dx;
+                                            });
+                                            if (_dragOffset < -80) {
+                                              _cancelVoiceRecording();
+                                            }
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 4),
+                                            child: Container(
+                                              width: 40,
+                                              height: 40,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: primaryBlue
+                                                    .withOpacity(0.12),
+                                              ),
+                                              child: Icon(
+                                                Icons.mic_rounded,
+                                                color: primaryBlue,
+                                                size: 22,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(Icons.send,
+                                              color: primaryBlue),
+                                          onPressed: _isSendingVoice
+                                              ? null
+                                              : _sendMessage,
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.send, color: primaryBlue),
-                                    onPressed: _sendMessage,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                            ),
                     ],
                   ),
       ),
@@ -1249,9 +1439,10 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
     final timestamp = message['timestamp'] as Timestamp?;
     final time =
         timestamp != null ? DateFormat('HH:mm').format(timestamp.toDate()) : '';
+    final type = (message['type'] ?? 'text').toString();
 
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -1261,45 +1452,54 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen> {
             CircleAvatar(
               radius: 16,
               backgroundColor: primaryBlue,
-              child: Icon(Icons.person, color: Colors.white, size: 16),
+              child: const Icon(Icons.person, color: Colors.white, size: 16),
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
           ],
           Flexible(
-            child: message['type'] == 'file'
-                ? _buildFileMessage(message, isMe)
-                : Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isMe
-                          ? primaryBlue.withOpacity(0.9)
-                          : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          message['content'] ?? '',
-                          style: TextStyle(
-                            color: isMe ? Colors.white : Colors.black87,
-                          ),
+            child: type == 'audio'
+                ? VoiceMessageBubble(
+                    audioUrl: message['audioUrl'] ?? '',
+                    durationSeconds: (message['duration'] as num?)?.toInt() ?? 0,
+                    isMe: isMe,
+                    time: time,
+                    isRead: !(message['nonLu'] == true),
+                  )
+                : type == 'file'
+                    ? _buildFileMessage(message, isMe)
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? primaryBlue.withOpacity(0.9)
+                              : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          time,
-                          style: TextStyle(
-                            color: isMe
-                                ? Colors.white.withOpacity(0.7)
-                                : Colors.grey[600],
-                            fontSize: 10,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message['content'] ?? '',
+                              style: TextStyle(
+                                color: isMe ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              time,
+                              style: TextStyle(
+                                color: isMe
+                                    ? Colors.white.withOpacity(0.7)
+                                    : Colors.grey[600],
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
           ),
-          if (isMe) SizedBox(width: 8),
+          if (isMe) const SizedBox(width: 8),
         ],
       ),
     );

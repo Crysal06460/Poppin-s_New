@@ -185,7 +185,9 @@ class SubscriptionService {
     }
   }
 
-  /// Nettoie les vieux documents contradictoires si la structure est officielle
+  /// Log les documents subscription expirés contradictoires (structure active).
+  /// On ne supprime PLUS ces docs car ils servent d'audit trail et le webhook
+  /// Stripe pourrait en avoir besoin. On logge simplement pour debug.
   static Future<void> _backgroundCleanup(String structureId) async {
     try {
       final query = await FirebaseFirestore.instance
@@ -194,13 +196,14 @@ class SubscriptionService {
           .where('status', isEqualTo: 'expired')
           .get();
 
-      for (final doc in query.docs) {
+      if (query.docs.isNotEmpty) {
         print(
-            '🧹 NETTOYAGE : Suppression du vieux document expiré ${doc.id} car la structure est active.');
-        await doc.reference.delete();
+            '⚠️ AUDIT : ${query.docs.length} subscription(s) expirée(s) pour structure active $structureId. '
+            'Incohérence probable — vérifier dans Firebase Console.');
+        // Ne pas supprimer : ces docs sont des preuves d'audit et Stripe les réécrit via webhook.
       }
     } catch (e) {
-      print('⚠️ Erreur nettoyage background: $e');
+      print('⚠️ Erreur audit background: $e');
     }
   }
 
@@ -462,7 +465,11 @@ class SubscriptionService {
       // Résoudre structureId correct pour la sauvegarde
       final String structureId = await _getCurrentStructureId(user);
 
-      // Mettre à jour ou créer l'abonnement
+      // NOTE : La sauvegarde détaillée est faite par iOSSubscriptionService.
+      // Cette méthode (_updateSubscriptionInFirestore) n'est appelée que comme
+      // fallback dans handlePurchaseUpdates() pour les plateformes non-iOS.
+      // On ne crée plus de doc avec une trialEndsAt fixe incorrecte.
+      // Mettre à jour ou créer l'abonnement (sans trialEndsAt artificielle)
       await FirebaseFirestore.instance.collection('subscriptions').add({
         'structureId': structureId,
         'structureType': structureType,
@@ -471,8 +478,8 @@ class SubscriptionService {
         'status': 'active',
         'productId': purchase.productID,
         'purchaseId': purchase.purchaseID,
-        'trialEndsAt':
-            Timestamp.fromDate(DateTime.now().add(Duration(days: 7))),
+        'platform': 'ios',
+        'source': 'app_store',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

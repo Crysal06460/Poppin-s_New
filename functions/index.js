@@ -359,7 +359,60 @@ exports.stripeWebhook = onRequest(
             "customer.subscription.created",
             "customer.subscription.updated",
             "customer.subscription.deleted",
+            // ✅ AJOUT : événements de facturation critiques
+            "invoice.payment_failed",
+            "invoice.payment_succeeded",
         ];
+
+        // ✅ GESTION INVOICE : paiement échoué ou réussi
+        if (event.type === 'invoice.payment_failed' || event.type === 'invoice.payment_succeeded') {
+            const invoice = event.data.object;
+            const invoiceSubId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+            if (invoiceSubId) {
+                try {
+                    const subSnap = await db.collection('subscriptions').doc(invoiceSubId).get();
+                    let invoiceStructureId = subSnap.exists ? subSnap.data().structureId : null;
+
+                    if (!invoiceStructureId && invoice.customer_email) {
+                        const userDoc = await db.collection('users').doc(invoice.customer_email.toLowerCase()).get();
+                        if (userDoc.exists) invoiceStructureId = userDoc.data().structureId;
+                    }
+
+                    if (event.type === 'invoice.payment_failed') {
+                        console.warn(`⚠️ Paiement échoué pour subscription ${invoiceSubId} (structure: ${invoiceStructureId})`);
+                        await db.collection('subscriptions').doc(invoiceSubId).set({
+                            lastPaymentFailed: true,
+                            lastPaymentFailedAt: FieldValue.serverTimestamp(),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        }, { merge: true });
+                        // Mettre le statut past_due sur la structure si on l'a
+                        if (invoiceStructureId) {
+                            await db.collection('structures').doc(invoiceStructureId).set({
+                                subscriptionStatus: 'past_due',
+                                subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                            }, { merge: true });
+                        }
+                    } else if (event.type === 'invoice.payment_succeeded') {
+                        console.log(`✅ Paiement réussi pour subscription ${invoiceSubId}`);
+                        await db.collection('subscriptions').doc(invoiceSubId).set({
+                            lastPaymentFailed: false,
+                            lastPaymentSucceededAt: FieldValue.serverTimestamp(),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        }, { merge: true });
+                        if (invoiceStructureId) {
+                            await db.collection('structures').doc(invoiceStructureId).set({
+                                subscriptionActive: true,
+                                subscriptionStatus: 'active',
+                                subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+                            }, { merge: true });
+                        }
+                    }
+                } catch (invoiceErr) {
+                    console.error('❌ Erreur traitement invoice event:', invoiceErr);
+                }
+            }
+            return res.json({ received: true });
+        }
 
         if (subEvents.includes(event.type)) {
             const sub = event.data.object;
@@ -545,7 +598,7 @@ exports.sendEmailToParent = onCall({
     // Vérification authentification
     if (!request.auth) {
         console.error('❌ Utilisateur non authentifié');
-        throw new Error('unauthenticated');
+        throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
     }
 
     const {
@@ -572,7 +625,7 @@ exports.sendEmailToParent = onCall({
     // Validation des données
     if (!recipientEmail || !recipientName || !subject || !message) {
         console.error('❌ Données manquantes');
-        throw new Error('invalid-argument');
+        throw new HttpsError('invalid-argument', 'Données manquantes (recipientEmail, recipientName, subject, message)');
     }
 
     try {
@@ -683,7 +736,7 @@ exports.sendEmailToParent = onCall({
             console.error('❌ Erreur sauvegarde historique:', saveError);
         }
 
-        throw new Error('internal');
+        throw new HttpsError('internal', error.message);
     }
 });
 
@@ -967,10 +1020,10 @@ function generateEmailHtml(content) {
 // ======= DÉLÉGATIONS MAM =======
 exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) => {
     if (!request.auth) {
-        throw new Error('unauthenticated');
+        throw new HttpsError('unauthenticated', 'Authentification requise');
     }
     const { delegationId } = request.data || {};
-    if (!delegationId) throw new Error('invalid-argument');
+    if (!delegationId) throw new HttpsError('invalid-argument', 'delegationId manquant');
 
     const delSnap = await db.collectionGroup('delegations').where('__name__', '==', delegationId).get();
     // collectionGroup on __name__ doesn't work; fetch needs structureId. Fallback: client provides structureId in doc path.
@@ -986,10 +1039,10 @@ exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) =>
             .doc(delegationId)
             .get();
     } else {
-        throw new Error('invalid-argument');
+        throw new HttpsError('invalid-argument', 'structureId requis pour résoudre la délégation');
     }
 
-    if (!delegationDoc.exists) throw new Error('not-found');
+    if (!delegationDoc.exists) throw new HttpsError('not-found', 'Délégation introuvable');
     const d = delegationDoc.data();
     if (d.status !== 'proposed') return { success: false, message: 'Already processed' };
     // Vérifier que l'appelant correspond bien au membre délégué
@@ -1002,7 +1055,7 @@ exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) =>
             .where('email', '==', email).limit(5).get();
         memSnap.forEach(m => { if (m.id === d.amDelegateId) allowed = true; });
     }
-    if (!allowed) throw new Error('permission-denied');
+    if (!allowed) throw new HttpsError('permission-denied', 'Accès non autorisé');
 
     const structureId = d.structureId;
     const date = d.date.toDate ? d.date.toDate() : new Date(d.date);
@@ -1057,12 +1110,12 @@ exports.acceptDelegation = onCall({ region: 'europe-west1' }, async (request) =>
 });
 
 exports.declineDelegation = onCall({ region: 'europe-west1' }, async (request) => {
-    if (!request.auth) throw new Error('unauthenticated');
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Authentification requise');
     const { delegationId, structureId } = request.data || {};
-    if (!delegationId || !structureId) throw new Error('invalid-argument');
+    if (!delegationId || !structureId) throw new HttpsError('invalid-argument', 'delegationId et structureId requis');
     const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
     const snap = await ref.get();
-    if (!snap.exists) throw new Error('not-found');
+    if (!snap.exists) throw new HttpsError('not-found', 'Délégation introuvable');
     const d = snap.data();
     const userRec = await getAuth().getUser(request.auth.uid);
     const email = (userRec.email || '').toLowerCase();
@@ -1073,18 +1126,18 @@ exports.declineDelegation = onCall({ region: 'europe-west1' }, async (request) =
         const ids = memSnap.docs.map(d => d.id);
         if (ids.includes(d.amDelegateId) || ids.includes(d.amOriginId)) allowed = true;
     }
-    if (!allowed) throw new Error('permission-denied');
+    if (!allowed) throw new HttpsError('permission-denied', 'Accès non autorisé');
     await ref.update({ status: 'declined', updatedAt: FieldValue.serverTimestamp() });
     return { success: true };
 });
 
 exports.cancelDelegation = onCall({ region: 'europe-west1' }, async (request) => {
-    if (!request.auth) throw new Error('unauthenticated');
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Authentification requise');
     const { delegationId, structureId } = request.data || {};
-    if (!delegationId || !structureId) throw new Error('invalid-argument');
+    if (!delegationId || !structureId) throw new HttpsError('invalid-argument', 'delegationId et structureId requis');
     const ref = db.collection('structures').doc(structureId).collection('delegations').doc(delegationId);
     const snap = await ref.get();
-    if (!snap.exists) throw new Error('not-found');
+    if (!snap.exists) throw new HttpsError('not-found', 'Délégation introuvable');
     const d = snap.data();
     const userRec = await getAuth().getUser(request.auth.uid);
     const email = (userRec.email || '').toLowerCase();
@@ -1095,7 +1148,7 @@ exports.cancelDelegation = onCall({ region: 'europe-west1' }, async (request) =>
         const ids = memSnap.docs.map(d => d.id);
         if (ids.includes(d.amOriginId)) allowed = true;
     }
-    if (!allowed) throw new Error('permission-denied');
+    if (!allowed) throw new HttpsError('permission-denied', 'Accès non autorisé');
     await ref.update({ status: 'canceled', updatedAt: FieldValue.serverTimestamp() });
     return { success: true };
 });
@@ -2847,6 +2900,21 @@ exports.backfillSubscriptions = onRequest({
     region: 'europe-west1',
     cors: true
 }, async (request, response) => {
+    // 🔐 PROTECTION : Vérifier le token admin Firebase
+    const authHeader = request.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) {
+        return response.status(401).json({ error: 'Token manquant' });
+    }
+    try {
+        const decoded = await getAuth().verifyIdToken(token);
+        if (!decoded.admin && !['cbeylet06@gmail.com', 'chrisgugu1101@gmail.com'].includes(decoded.email || '')) {
+            return response.status(403).json({ error: 'Accès réservé aux admins' });
+        }
+    } catch (authErr) {
+        return response.status(401).json({ error: 'Token invalide' });
+    }
+
     try {
         console.log("🚀 Début du backfill des subscriptions...");
 
@@ -2984,6 +3052,17 @@ exports.backfillSubscriptions = onRequest({
 exports.fixSubscriptionStatusV2 = onRequest({
     region: 'europe-west1'
 }, async (request, response) => {
+    // 🔐 PROTECTION admin
+    const authHeader2 = request.headers.authorization || '';
+    const token2 = authHeader2.startsWith('Bearer ') ? authHeader2.slice(7) : null;
+    if (!token2) return response.status(401).json({ error: 'Token manquant' });
+    try {
+        const decoded2 = await getAuth().verifyIdToken(token2);
+        if (!decoded2.admin && !['cbeylet06@gmail.com', 'chrisgugu1101@gmail.com'].includes(decoded2.email || '')) {
+            return response.status(403).json({ error: 'Accès réservé aux admins' });
+        }
+    } catch (_e) { return response.status(401).json({ error: 'Token invalide' }); }
+
     try {
         console.log("🔧 Début de la correction V2 des subscriptionStatus...");
 
@@ -3126,7 +3205,7 @@ exports.fixSubscriptionStatusV2 = onRequest({
 const _expiredTrialStatuses = ['trial', 'trialing'];
 
 exports.deactivateExpiredTrials = onSchedule(
-    { schedule: 'every 24 hours', timeZone: 'Europe/Paris' },
+    { schedule: 'every 24 hours', timeZone: 'Europe/Paris', region: 'europe-west1' },
     async () => {
         const now = Timestamp.now();
         console.log('🚀 Début du nettoyage des trials expirés à', now.toDate());
@@ -3203,7 +3282,6 @@ function _toDate(value) {
 
 async function _expireStructureAndSubscription(structureId) {
     const structureRef = db.collection('structures').doc(structureId);
-    const subscriptionRef = db.collection('subscriptions').doc(structureId);
     const serverTimestamp = FieldValue.serverTimestamp();
 
     const batch = db.batch();
@@ -3219,8 +3297,13 @@ async function _expireStructureAndSubscription(structureId) {
         { merge: true },
     );
 
+    // 🔧 CORRECTION : Pour les trials Firebase, le doc subscription est créé avec
+    // l'ID = structureId (voir FirebaseTrialService). Pour les abonnements Stripe/IAP
+    // le doc a un ID différent. On met à jour les deux cas.
+    // 1. Tenter de mettre à jour le doc subscription avec ID = structureId (trial Firebase)
+    const subscriptionRefById = db.collection('subscriptions').doc(structureId);
     batch.set(
-        subscriptionRef,
+        subscriptionRefById,
         {
             status: 'expired',
             isTrialPeriod: false,
@@ -3230,6 +3313,24 @@ async function _expireStructureAndSubscription(structureId) {
     );
 
     await batch.commit();
+
+    // 2. Mettre à jour aussi les docs subscription liés par structureId (Stripe/IAP)
+    try {
+        const linkedSubs = await db.collection('subscriptions')
+            .where('structureId', '==', structureId)
+            .where('status', 'in', ['trial', 'trialing', 'active'])
+            .get();
+        if (!linkedSubs.empty) {
+            const subBatch = db.batch();
+            linkedSubs.docs.forEach(doc => {
+                subBatch.set(doc.ref, { status: 'expired', isTrialPeriod: false, updatedAt: serverTimestamp }, { merge: true });
+            });
+            await subBatch.commit();
+            console.log(`✅ ${linkedSubs.size} subscription(s) liée(s) expirée(s) pour structure ${structureId}`);
+        }
+    } catch (err) {
+        console.error(`⚠️ Erreur expiration subscriptions liées pour ${structureId}:`, err);
+    }
 }
 
 const inactiveSubscriptionStatuses = new Set([
@@ -3479,6 +3580,17 @@ exports.syncSubscriptionWithStructure = onDocumentWritten({
 exports.repairSubscriptions = onRequest({
     region: 'europe-west1'
 }, async (request, response) => {
+    // 🔐 PROTECTION admin
+    const authHeaderR = request.headers.authorization || '';
+    const tokenR = authHeaderR.startsWith('Bearer ') ? authHeaderR.slice(7) : null;
+    if (!tokenR) return response.status(401).json({ error: 'Token manquant' });
+    try {
+        const decodedR = await getAuth().verifyIdToken(tokenR);
+        if (!decodedR.admin && !['cbeylet06@gmail.com', 'chrisgugu1101@gmail.com'].includes(decodedR.email || '')) {
+            return response.status(403).json({ error: 'Accès réservé aux admins' });
+        }
+    } catch (_eR) { return response.status(401).json({ error: 'Token invalide' }); }
+
     try {
         const snapshot = await db.collection('subscriptions').get();
         let updated = 0;
@@ -3847,29 +3959,32 @@ exports.dailySubscriptionCheck = onSchedule({
 
 exports.cleanupInactiveSubscriptions = onCall({
     region: 'europe-west1'
-}, async (data, context) => {
-    if (!context.auth || !context.auth.token?.admin) {
+}, async (request) => {
+    // v2 API: request.auth replaces context.auth
+    if (!request.auth || !request.auth.token?.admin) {
         throw new HttpsError('permission-denied', 'Must be admin');
     }
 
-    const activeUsers = await db
-        .collection('users')
+    // NOTE: abonnements Stripe/IAP sont stockés sur structures, pas sur users.
+    // On cible la bonne collection.
+    const activeStructures = await db
+        .collection('structures')
         .where('subscriptionActive', '==', true)
         .get();
 
     const batch = db.batch();
     let updated = 0;
 
-    activeUsers.forEach((doc) => {
-        const userData = doc.data() || {};
-        const lastWebhook = userData.lastWebhookUpdate?.toDate
-            ? userData.lastWebhookUpdate.toDate()
+    activeStructures.forEach((doc) => {
+        const data = doc.data() || {};
+        const lastWebhook = data.lastWebhookUpdate?.toDate
+            ? data.lastWebhookUpdate.toDate()
             : null;
 
         if (!lastWebhook) {
-            const startDate = userData.subscriptionStartDate?.toDate
-                ? userData.subscriptionStartDate.toDate()
-                : null;
+            const startDate = data.subscriptionUpdatedAt?.toDate
+                ? data.subscriptionUpdatedAt.toDate()
+                : (data.createdAt?.toDate ? data.createdAt.toDate() : null);
             if (startDate && (Date.now() - startDate.getTime()) > (35 * 24 * 60 * 60 * 1000)) {
                 batch.update(doc.ref, {
                     subscriptionActive: false,

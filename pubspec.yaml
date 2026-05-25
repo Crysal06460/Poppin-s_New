@@ -43,8 +43,6 @@ dependencies:
   shared_preferences: ^2.2.0
   flutter_secure_storage: ^9.2.2
   timezone: ^0.9.4
-  mockito: ^5.4.2
-  build_runner: ^2.4.6
   permission_handler: ^11.3.1
   video_player: ^2.8.2
   video_thumbnail: ^0.5.3
@@ -63,10 +61,14 @@ dependencies:
   
   app_badge_plus: ^1.1.6
   gal: ^2.3.0
-  
+
   # Ajouts pour le support d'email
   mailer: ^6.0.1
   html: ^0.15.4
+
+  # Messages vocaux
+  record: ^5.2.0
+  audioplayers: ^6.4.0
 
 dev_dependencies:
   flutter_test:
