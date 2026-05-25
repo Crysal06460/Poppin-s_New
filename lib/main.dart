@@ -303,9 +303,9 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
         scaffoldBackgroundColor: kAppBackgroundColor,
         canvasColor: kAppBackgroundColor,
         fontFamily: 'Roboto',
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
             TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
           },
         ),

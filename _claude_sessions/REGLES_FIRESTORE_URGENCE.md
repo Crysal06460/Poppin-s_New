@@ -1,3 +1,25 @@
+# 🚨 URGENCE — Règles Firestore à remettre en cas de panique
+
+**Créé le :** 2026-05-25  
+**Utiliser si :** des utilisateurs ne peuvent pas se connecter demain matin
+
+---
+
+## Commande de remise en état immédiate (30 secondes)
+
+```bash
+cd /Users/macbook/poppins
+cp firestore.rules.BACKUP_AVANT_MODIFICATIONS firestore.rules
+firebase deploy --only firestore:rules
+```
+
+C'est tout. Les utilisateurs se reconnectent dans la minute.
+
+---
+
+## Règles originales (copie de sécurité textuelle)
+
+```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -12,55 +34,35 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(lower(request.auth.token.email))).data.role in ['admin', 'mamMember', 'assistant'];
     }
 
-    /* USERS */
     match /users/{userId} {
       allow read: if isSignedIn();
-
-      allow write: if isSignedIn() &&
-        (
-          userId == request.auth.uid ||
-          (
-            request.auth.token.email is string &&
-            (
-              userId == request.auth.token.email ||
-              userId == lower(request.auth.token.email)
-            )
-          ) ||
-          (
-            canManageParentUsers() &&
-            request.resource.data.role == 'parent' &&
-            (resource == null || resource.data.role == 'parent')
-          )
-        );
-
-      allow update: if isSignedIn() &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
+      allow write: if isSignedIn() && (
+        userId == request.auth.uid ||
+        (request.auth.token.email is string && (userId == request.auth.token.email || userId == lower(request.auth.token.email))) ||
+        (canManageParentUsers() && request.resource.data.role == 'parent' && (resource == null || resource.data.role == 'parent'))
+      );
+      allow update: if isSignedIn() && request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
     }
 
-    /* SUBSCRIPTIONS */
     match /subscriptions/{docId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if false;
     }
 
-    /* STRUCTURES */
     match /structures/{structureId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
-
       match /{documentPath=**} {
         allow read: if isSignedIn();
         allow write: if isSignedIn();
       }
     }
 
-    /* EXCHANGES - PERMISSIF */
     match /exchanges/{messageId} {
       allow read, write: if isSignedIn();
     }
 
-    /* EMAIL QUEUE */
     match /emailQueue/{emailId} {
       allow read: if false;
       allow update, delete: if false;
@@ -71,10 +73,8 @@ service cloud.firestore {
         request.resource.data.templateData is map;
     }
 
-    /* INVITATIONS */
     match /invitations/{invitationId} {
       allow read: if isSignedIn();
-      // Permettre à l'utilisateur invité de marquer son invitation comme complétée
       allow update: if isSignedIn() &&
         resource.data.email == lower(request.auth.token.email) &&
         request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']) &&
@@ -89,20 +89,16 @@ service cloud.firestore {
         request.resource.data.expiresAt is timestamp;
     }
 
-    /* HORAIRES HISTORY (racine) */
     match /horaires_history/{docId} {
       allow read, write: if isSignedIn();
     }
 
-    /* NOTIFICATIONS */
     match /notifications/{notificationId} {
-      // Lecture autorisée si la notification appartient à l'utilisateur connecté
       allow read: if isSignedIn() && (
         resource.data.recipientUserId == request.auth.token.email ||
         resource.data.recipientUserId == lower(request.auth.token.email) ||
         resource.data.recipientUserId == request.auth.uid
       );
-      // Seul le marquage appDelivered est autorisé côté client
       allow update: if isSignedIn() && (
         resource.data.recipientUserId == request.auth.token.email ||
         resource.data.recipientUserId == lower(request.auth.token.email) ||
@@ -111,9 +107,17 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    /* RESTE - Bloqué par défaut */
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+```
+
+---
+
+## Contexte
+
+- Ces règles étaient en prod AVANT la session du 2026-05-25
+- Les règles actuelles déployées sont IDENTIQUES (la tentative de restriction subscriptions a été revertée)
+- Aucun risque connu avec ces règles pour les 100 utilisateurs actifs
