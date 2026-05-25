@@ -20,6 +20,10 @@ import '../widgets/common_app_bar.dart';
 import '../utils/safe_query.dart';
 import '../utils/structure_context.dart';
 import '../utils/child_avatar_color_helper.dart';
+import 'dart:async';
+import '../services/voice_message_service.dart';
+import '../widgets/voice_message_widget.dart';
+import 'package:flutter/services.dart';
 
 class ExchangesScreen extends StatefulWidget {
   const ExchangesScreen({Key? key}) : super(key: key);
@@ -33,7 +37,7 @@ bool isTablet(BuildContext context) {
 }
 
 class _ExchangesScreenState extends State<ExchangesScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   List<Map<String, dynamic>> enfants = [];
   bool isLoading = true;
   String structureName = "Chargement...";
@@ -50,6 +54,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   Map<String, List<Map<String, dynamic>>> parentsCache = {};
   final Map<String, String> _senderNameCache = {}; // Cache pour les noms des expéditeurs
 
+  // Voice recording state
+  bool _isRecording = false;
+  bool _isSendingVoice = false;
+  Duration _recordingDuration = Duration.zero;
+  double _dragOffset = 0;
+  Timer? _recordingTimer;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   // Couleurs officielles de l'application
   static const Color primaryRed = Color(0xFFD94350); // #D94350
   static const Color primaryBlue = Color(0xFF3D9DF2); // #3D9DF2
@@ -60,7 +73,14 @@ class _ExchangesScreenState extends State<ExchangesScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // AJOUTÉ
+    WidgetsBinding.instance.addObserver(this);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     initializeDateFormatting('fr_FR', null).then((_) {
       _loadEnfantsDuJour();
     });
@@ -69,7 +89,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // AJOUTÉ
+    WidgetsBinding.instance.removeObserver(this);
+    _pulseController.dispose();
+    _recordingTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     _inputScrollController.dispose();
@@ -653,6 +675,130 @@ class _ExchangesScreenState extends State<ExchangesScreen>
     } catch (e) {
       print("❌ Erreur lors du forçage du badge: $e");
     }
+  }
+
+  Future<void> _startVoiceRecording(String childId,
+      void Function(void Function()) setStateDialog,
+      BuildContext dialogContext) async {
+    if (_isRecording) return;
+    final hasPermission = await VoiceMessageService.requestPermission();
+    if (!hasPermission) {
+      if (dialogContext.mounted) {
+        showDialog(
+          context: dialogContext,
+          builder: (_) => AlertDialog(
+            title: const Text('Permission microphone'),
+            content: const Text(
+                'Le microphone est désactivé.\n\nVa dans Réglages → Poppins → Microphone et active-le.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(_).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    final started = await VoiceMessageService.startRecording();
+    if (!started) {
+      if (dialogContext.mounted) {
+        showDialog(
+          context: dialogContext,
+          builder: (_) => AlertDialog(
+            title: const Text('Erreur'),
+            content:
+                const Text('Impossible de démarrer l\'enregistrement vocal.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(_).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setStateDialog(() {
+      _isRecording = true;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0;
+    });
+    _pulseController.repeat(reverse: true);
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setStateDialog(() {
+        _recordingDuration = Duration(seconds: _recordingDuration.inSeconds + 1);
+      });
+    });
+  }
+
+  Future<void> _stopAndSendVoice(String childId, BuildContext dialogContext,
+      void Function(void Function()) setStateDialog) async {
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    if (_recordingDuration.inSeconds < 1) {
+      await VoiceMessageService.cancelRecording();
+      setStateDialog(() {
+        _isRecording = false;
+        _recordingDuration = Duration.zero;
+      });
+      return;
+    }
+    HapticFeedback.lightImpact();
+    setStateDialog(() {
+      _isRecording = false;
+      _isSendingVoice = true;
+    });
+    try {
+      final localPath = await VoiceMessageService.stopRecording();
+      if (localPath == null) {
+        setStateDialog(() => _isSendingVoice = false);
+        return;
+      }
+      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+      final uploaded = await VoiceMessageService.uploadAudio(
+        localPath: localPath,
+        conversationId: childId,
+        messageId: messageId,
+      );
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setStateDialog(() => _isSendingVoice = false);
+        return;
+      }
+      await FirebaseFirestore.instance.collection('exchanges').add({
+        'childId': childId,
+        'senderId': user.uid,
+        'senderType': 'assistante',
+        'type': 'audio',
+        'audioUrl': uploaded.url,
+        'audioDuration': uploaded.duration,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+      setStateDialog(() {
+        _isSendingVoice = false;
+        _recordingDuration = Duration.zero;
+      });
+    } catch (e) {
+      setStateDialog(() => _isSendingVoice = false);
+    }
+  }
+
+  Future<void> _cancelVoiceRecording(
+      void Function(void Function()) setStateDialog) async {
+    _recordingTimer?.cancel();
+    _pulseController.stop();
+    HapticFeedback.heavyImpact();
+    await VoiceMessageService.cancelRecording();
+    setStateDialog(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+      _dragOffset = 0;
+    });
   }
 
   Future<void> _pickAndSendFile(
@@ -2048,7 +2194,51 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                           // Barre de saisie existante
                           Padding(
                             padding: EdgeInsets.all(isTabletDevice ? 20 : 16),
-                            child: Row(
+                            child: _isRecording
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      VoiceRecordingOverlay(
+                                        duration: _recordingDuration,
+                                        dragOffset: _dragOffset,
+                                        pulseAnimation: _pulseAnimation,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          TextButton.icon(
+                                            onPressed: () =>
+                                                _cancelVoiceRecording(
+                                                    setDialogState),
+                                            icon: const Icon(
+                                                Icons.delete_outline,
+                                                color: Colors.redAccent),
+                                            label: const Text('Annuler',
+                                                style: TextStyle(
+                                                    color: Colors.redAccent)),
+                                          ),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                                backgroundColor: primaryBlue),
+                                            onPressed: _isSendingVoice
+                                                ? null
+                                                : () => _stopAndSendVoice(
+                                                    enfant['id'],
+                                                    dialogContext,
+                                                    setDialogState),
+                                            icon: const Icon(Icons.send,
+                                                color: Colors.white),
+                                            label: const Text('Envoyer',
+                                                style: TextStyle(
+                                                    color: Colors.white)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  )
+                                : Row(
                               children: [
                                 IconButton(
                                   icon: Icon(
@@ -2056,7 +2246,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                     size: isTabletDevice ? 28 : 24,
                                   ),
                                   color: primaryBlue,
-                                  onPressed: _isUploadingFile
+                                  onPressed: _isUploadingFile || _isSendingVoice
                                       ? null
                                       : () => _pickAndSendFile(
                                           enfant['id'], dialogContext),
@@ -2101,7 +2291,6 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                       fillColor: Colors.grey.shade50,
                                     ),
                                     onChanged: (_) {
-                                      // Assure que le curseur et la dernière ligne restent visibles
                                       WidgetsBinding.instance
                                           .addPostFrameCallback((_) {
                                         if (_inputScrollController.hasClients) {
@@ -2114,7 +2303,32 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                     },
                                   ),
                                 ),
-                                SizedBox(width: isTabletDevice ? 12 : 8),
+                                SizedBox(width: isTabletDevice ? 8 : 4),
+                                // Bouton micro (appui long)
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(40),
+                                    onTap: () => _startVoiceRecording(
+                                        enfant['id'], setDialogState, dialogContext),
+                                    child: Container(
+                                      width: isTabletDevice ? 48 : 40,
+                                      height: isTabletDevice ? 48 : 40,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: primaryBlue.withOpacity(0.12),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.mic_rounded,
+                                          color: primaryBlue,
+                                          size: isTabletDevice ? 26 : 22,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: isTabletDevice ? 8 : 4),
                                 CircleAvatar(
                                   backgroundColor: primaryBlue,
                                   radius: isTabletDevice ? 24 : 20,
@@ -2124,8 +2338,10 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                                       color: Colors.white,
                                       size: isTabletDevice ? 24 : 20,
                                     ),
-                                    onPressed: () => _sendMessage(
-                                        enfant['id'], dialogContext),
+                                    onPressed: _isSendingVoice
+                                        ? null
+                                        : () => _sendMessage(
+                                            enfant['id'], dialogContext),
                                   ),
                                 ),
                               ],

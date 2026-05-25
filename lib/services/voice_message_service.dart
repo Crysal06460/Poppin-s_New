@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class VoiceMessageService {
   static final AudioRecorder _recorder = AudioRecorder();
@@ -12,13 +11,12 @@ class VoiceMessageService {
 
   static Future<bool> requestPermission() async {
     if (kIsWeb) return true;
-    final status = await Permission.microphone.request();
-    return status == PermissionStatus.granted;
+    return await _recorder.hasPermission();
   }
 
   static Future<bool> startRecording() async {
     try {
-      final hasPermission = await requestPermission();
+      final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) return false;
 
       final dir = await getTemporaryDirectory();
