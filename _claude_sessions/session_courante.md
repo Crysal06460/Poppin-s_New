@@ -1,76 +1,59 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-05-25 (session chrisbeylet@gmail.com)
-**Statut global :** ✅ Backend déployé — 🔄 Test en cours sur iPhone (WiFi)
+**Dernière mise à jour :** 2026-05-25 (session chrisbeylet@gmail.com — soirée)
+**Statut global :** ✅ Messages vocaux fonctionnels sur iPhone (permission + enregistrement OK)
 
 ---
 
-## ✅ Travaux terminés aujourd'hui
+## ✅ Travaux terminés aujourd'hui (session complète)
 
 ### Agent 1 — Audit & Correction Abonnements/Stripe/Firebase ✅
 **9 bugs trouvés — 8 corrigés :**
 - `cleanupInactiveSubscriptions` crashait (API v1 → v2)
-- 3 endpoints admin sans auth → sécurisés (verifyIdToken + contrôle email)
-- invoice.payment_failed + invoice.payment_succeeded → ajoutés au webhook Stripe ✅ (fait dans Stripe Dashboard)
+- 3 endpoints admin sans auth → sécurisés
+- invoice.payment_failed + invoice.payment_succeeded → ajoutés au webhook Stripe
 - `_expireStructureAndSubscription` ciblait mauvais chemin Firestore → corrigé
 - Scheduler `deactivateExpiredTrials` sans région → europe-west1 ajouté
 - `_isTrialPeriod()` toujours true → corrigé
 - `_calculateExpiryDate()` retournait date fictive → retourne null
 - `_backgroundCleanup()` supprimait audit trail → remplacé par log
 - `subscription_helper` utilisait user.uid au lieu du structureId → corrigé
-**Fichiers :** `functions/index.js`, `unified_subscription_service.dart`, `subscription_service.dart`, `subscription_helper.dart`
 
 ### Agent 2 — Onglet Documents ✅
-**Fichiers :** `lib/screens/documents_screen.dart` (créé), `lib/screens/dashboard_screen.dart` (modifié)
+`lib/screens/documents_screen.dart` (créé), `lib/screens/dashboard_screen.dart` (modifié)
 5 types de docs, upload Firebase Storage + Firestore, badges expiration, FAB, bottom sheet
 
-### Agent 3 — Messages Vocaux ✅
-**Fichiers :** `lib/services/voice_message_service.dart` (créé), `lib/widgets/voice_message_widget.dart` (créé)
-`parent_messages_screen.dart` + `mam_group_chat_screen.dart` (modifiés)
-Enregistrement AAC, upload Storage, bulles vocales waveform, appui long + glisser annuler
-**Package :** `record: ^6.0.0` (upgrade depuis ^5.2.0 — fix erreur build iOS)
-**UI :** bouton micro entre champ texte et bouton envoi → appui LONG pour enregistrer
+### Agent 3 — Messages Vocaux ✅ (terminé en soirée)
+**Fichiers modifiés :**
+- `lib/services/voice_message_service.dart` — utilise `_recorder.hasPermission()` (record_ios natif)
+- `lib/widgets/voice_message_widget.dart` (créé) — VoiceMessageBubble + VoiceRecordingOverlay
+- `lib/screens/parent_messages_screen.dart` (modifié) — côté parent
+- `lib/screens/exchanges_screen.dart` (modifié) — côté assistante maternelle
+
+**Corrections appliquées sur exchanges_screen.dart :**
+- Bouton micro entre champ texte et bouton envoi (appui simple pour démarrer)
+- Permission via `_recorder.hasPermission()` (record_ios natif, pas permission_handler)
+  → Raison : permission_handler ne déclenchait pas la dialog iOS, Poppins absente de Réglages → Micro
+- Boutons **Envoyer** et **Annuler** dans l'overlay d'enregistrement (remplace swipe-to-cancel)
+- AlertDialog d'erreur visible dans la fenêtre de dialogue (pas derrière)
+- `_pulseController` démarré/arrêté correctement
+- `onTap` seul sur le micro (suppression du double-déclenchement `onLongPress`)
+
+**Test iPhone :** Permission demandée au 1er appui ✅ — Enregistrement fonctionnel ✅
+**À tester demain :** réception côté parent + lecture du message vocal
 
 ### Agent 4 — Audit Général ✅
-- Route `/pricing` commentée (bug bloquant) → réactivée dans `routes.dart`
+- Route `/pricing` réactivée
 - `throw Error()` → `throw HttpsError()` dans 4 Cloud Functions
-- Imports dupliqués dans `routes.dart` et `dashboard_screen.dart`
-- `mockito`/`build_runner` en double dans `pubspec.yaml`
+- Imports dupliqués corrigés
+- `mockito`/`build_runner` dédoublés dans pubspec.yaml
 
-### Sécurité supplémentaire ✅
-- Route `/admin` sécurisée dans `routes.dart` (guard email admin)
-- Règles Firestore `subscriptions` → tentative de restriction → **revertée** (voir ci-dessous)
-
----
-
-## 🚨 Incident résolu — "Page non trouvée" (chrisgugu1101@gmail.com)
-
-**Ce qui s'est passé :**
-- Nouvelles règles Firestore subscriptions ont bloqué les lectures pour certains comptes
-- `isUserSubscribed()` (ancienne version compilée) retournait false → redirection vers `/pricing`
-- `/pricing` était commentée dans l'ancienne app → "Page non trouvée"
-
-**Résolution :**
-- Règles revertées à `allow read: if isSignedIn()` → tout fonctionne
-- Compte de Christelle (chrisgugu1101@gmail.com) : `subscriptionExpiresAt` mis à 2027-12-31 ✅
-- MAM amies fondatrices : `subscriptionExpiresAt` mis à 2027-12-31 ✅
-
-**Pourquoi les règles restrictives cassaient :**
-- Ancienne app en prod vérifie `subscriptionExpiresAt` → si expiré → fallback sur collection subscriptions
-- Nouvelles règles bloquaient ce fallback pour les comptes IAP avec structureId ≠ auth.uid
-- Solution long terme : déployer d'abord le nouveau code Flutter (lit `subscriptionActive: true` en priorité)
-
----
-
-## 🆘 Procédure urgence règles Firestore
-
-Si des utilisateurs ne peuvent pas se connecter :
-```bash
-cd /Users/macbook/poppins
-cp firestore.rules.BACKUP_AVANT_MODIFICATIONS firestore.rules
-firebase deploy --only firestore:rules
-```
-Voir aussi : `_claude_sessions/REGLES_FIRESTORE_URGENCE.md`
+### Sécurité + Incident ✅
+- Règles Firestore `subscriptions` revertées à `allow read: if isSignedIn()`
+- Compte Christelle (chrisgugu1101@gmail.com) : `subscriptionExpiresAt` → 2027-12-31
+- MAM amies fondatrices : `subscriptionExpiresAt` → 2027-12-31
+- Backup règles : `firestore.rules.BACKUP_AVANT_MODIFICATIONS`
+- Procédure urgence : `_claude_sessions/REGLES_FIRESTORE_URGENCE.md`
 
 ---
 
@@ -79,38 +62,58 @@ Voir aussi : `_claude_sessions/REGLES_FIRESTORE_URGENCE.md`
 ```bash
 # Backend déployé ✅
 firebase deploy --only functions,firestore:rules
-# Résultat : 31 Cloud Functions + règles Firestore
+# 31 Cloud Functions + règles Firestore
+
+# Git push ✅
+# Commit : 2e2ab6f — Fix messages vocaux dans exchanges_screen
+# Commit : 3863f3b — Ajout des messages vocaux + onglet Documents
 ```
 
-**Flutter app : PAS encore soumise aux stores** — code corrigé localement, test en cours sur iPhone
+**Flutter app : PAS encore soumise aux stores** — version 2.1.0+1 testée sur iPhone
 
 ---
 
-## 📱 Test en cours
+## 📱 État des tests iPhone
 
-- Simulateur iOS (iPhone 17) : app installée ✅
-- iPhone de Christophe (WiFi) : `flutter run` en cours — test messages vocaux + documents
-- Pour lancer sur iPhone : `flutter run -d 00008120-00141D543A6A601E`
-- Le bouton micro est entre le champ texte et le bouton envoi (appui LONG pour enregistrer)
+- **Messages vocaux exchanges_screen** : permission OK + enregistrement OK ✅
+- **Réception côté parent** : À TESTER DEMAIN
+- **Lecture bulle vocale côté parent** : À TESTER DEMAIN
+- **Onglet Documents (Administration)** : À TESTER
+
+Pour lancer l'app sur iPhone USB :
+```bash
+xcrun devicectl device install app --device DD806C2B-D826-5B25-942C-700897662872 /Users/macbook/poppins/build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device DD806C2B-D826-5B25-942C-700897662872 com.beylet.poppinsApp
+```
+
+Pour rebuild avant :
+```bash
+cd /Users/macbook/poppins && flutter build ios
+```
 
 ---
 
 ## ⚠️ Reste à faire
 
-### Priorité 1 — Soumettre l'app aux stores
-- Tester sur iPhone réel (en cours)
-- Bump version dans `pubspec.yaml` (actuellement `2.0.33`)
-- `flutter build ios --release` → soumettre via Xcode / Transporter
-- `flutter build appbundle --release` → soumettre via Google Play Console
+### Priorité 1 — Tester réception messages vocaux (demain)
+- Tester que le parent reçoit bien le message vocal dans `parent_messages_screen.dart`
+- Tester la lecture de la bulle vocale (VoiceMessageBubble)
+- Si OK → soumettre aux stores
 
-### Priorité 2 — Règles Firestore subscriptions (après déploiement app)
+### Priorité 2 — Soumettre l'app aux stores
+- `flutter build ios --release` → Archive Xcode → TestFlight → App Store
+- `flutter build appbundle --release` → Google Play Console
+- Version actuelle : `2.1.0+1` dans pubspec.yaml
+
+### Priorité 3 — Règles Firestore subscriptions (après déploiement app)
 - Une fois le nouveau Flutter déployé, re-sécuriser la lecture subscriptions
-- Le nouveau code lit `subscriptionActive: true` → n'a plus besoin du fallback subscriptions
+- Le nouveau code lit `subscriptionActive: true` → n'a plus besoin du fallback
 
 ### Non urgent
 - Règles `structures` trop permissives → à sécuriser plus tard
 - Validation server-side des reçus IAP → à implémenter
 - Routes mortes `/trial-info`, `/structure-details` → à nettoyer
+- Affichage bulles vocales côté `exchanges_screen` (reçues) — pas encore fait
 
 ---
 
@@ -118,6 +121,12 @@ firebase deploy --only functions,firestore:rules
 
 - App en production ~100 utilisateurs actifs/jour — NE PAS casser
 - Admin : cbeylet06@gmail.com, chrisgugu1101@gmail.com
-- chrisgugu1101@gmail.com = Christelle (femme de Christophe) — utilise l'app tous les jours — NE PAS toucher
+- chrisgugu1101@gmail.com = Christelle (femme de Christophe) — utilise l'app tous les jours
 - Deux comptes Claude sur même Mac : lire ce fichier à chaque session
 - structureId Christelle : euAkwrpTFEMeH1GXjJQcUy8yLO53
+- Device iPhone Christophe : DD806C2B-D826-5B25-942C-700897662872
+
+## 🔑 Point technique clé (permission microphone iOS)
+`permission_handler` ne déclenchait PAS la dialog iOS pour Poppins.
+Solution : utiliser `_recorder.hasPermission()` du package `record` (record_ios natif).
+C'est ce qui fait apparaître Poppins dans Réglages → Confidentialité → Micro.
