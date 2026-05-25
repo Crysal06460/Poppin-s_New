@@ -67,7 +67,7 @@ dependencies:
   html: ^0.15.4
 
   # Messages vocaux
-  record: ^5.2.0
+  record: ^6.0.0
   audioplayers: ^6.4.0
 
 dev_dependencies:
