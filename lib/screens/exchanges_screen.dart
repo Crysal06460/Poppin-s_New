@@ -775,9 +775,9 @@ class _ExchangesScreenState extends State<ExchangesScreen>
         'senderType': 'assistante',
         'type': 'audio',
         'audioUrl': uploaded.url,
-        'audioDuration': uploaded.duration,
-        'createdAt': FieldValue.serverTimestamp(),
-        'isRead': false,
+        'duration': uploaded.duration,
+        'timestamp': FieldValue.serverTimestamp(),
+        'nonLu': true,
       });
       setStateDialog(() {
         _isSendingVoice = false;
