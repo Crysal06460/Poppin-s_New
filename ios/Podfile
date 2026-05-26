@@ -41,6 +41,12 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+
+      # Firebase distribue gRPC/abseil/openssl comme binaires pré-compilés sans dSYM.
+      # On désactive la recherche de dSYM pour ces frameworks pour supprimer les warnings Upload Symbols.
+      if ['BoringSSL-GRPC', 'gRPC-Core', 'gRPC-C++', 'abseil', 'FirebaseFirestoreInternal'].include?(target.name)
+        config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf'
+      end
     end
   end
 end
