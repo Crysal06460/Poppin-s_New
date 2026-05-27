@@ -252,16 +252,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           : _documents.isEmpty
               ? _buildEmptyState()
               : _buildDocumentList(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddDocumentSheet,
-        backgroundColor: _primaryBlue,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'Ajouter',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
     );
   }
 
@@ -295,7 +285,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Ajoutez vos documents professionnels\n(diplôme, agrément, assurance…)',
+              'Ajoutez vos documents\n(diplôme, agrément, assurance…)',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
