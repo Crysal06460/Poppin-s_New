@@ -34,33 +34,45 @@ class _DocumentType {
 const List<_DocumentType> _documentTypes = [
   _DocumentType(
     id: 'secourisme',
-    label: 'Diplôme secourisme (PSC1/AFGSU)',
+    label: 'Diplôme de secourisme (PSC, SST, AFGSU)',
     icon: Icons.health_and_safety_rounded,
     color: _primaryRed,
   ),
   _DocumentType(
-    id: 'assurance',
-    label: 'Assurance responsabilité civile',
+    id: 'assurance_rc',
+    label: 'Assurance RC Pro',
     icon: Icons.shield_rounded,
     color: _primaryBlue,
   ),
   _DocumentType(
-    id: 'agrement',
-    label: 'Agrément assistante maternelle',
-    icon: Icons.verified_rounded,
+    id: 'protection_juridique',
+    label: 'Protection juridique',
+    icon: Icons.gavel_rounded,
     color: _brightCyan,
   ),
   _DocumentType(
-    id: 'formation',
-    label: 'Formation continue',
-    icon: Icons.school_rounded,
+    id: 'assurance_auto',
+    label: 'Assurance automobile Pro',
+    icon: Icons.directions_car_rounded,
     color: _primaryYellow,
   ),
   _DocumentType(
+    id: 'assurance_local',
+    label: 'Assurance local / habitation',
+    icon: Icons.home_rounded,
+    color: Color(0xFF27AE60),
+  ),
+  _DocumentType(
+    id: 'agrement',
+    label: 'Agrément Assistant(e) Maternel(le)',
+    icon: Icons.verified_rounded,
+    color: Color(0xFF8E44AD),
+  ),
+  _DocumentType(
     id: 'autre',
-    label: 'Autre document',
+    label: 'Autres documents',
     icon: Icons.folder_rounded,
-    color: Color(0xFF9B59B6),
+    color: Color(0xFF7F8C8D),
   ),
 ];
 

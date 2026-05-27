@@ -2432,7 +2432,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     actions.addAll([
       _sheetAction(
-        label: 'Documents professionnels',
+        label: 'Mes Documents',
         onTap: _openDocuments,
         bulletColor: _tileBlue,
       ),
@@ -5038,8 +5038,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
           icon: Icons.folder_rounded,
-          title: "Documents professionnels",
-          description: "Diplôme, agrément, assurance, formation...",
+          title: "Mes Documents",
+          description: "Diplôme, agrément, assurances, autres...",
           onTap: _openDocuments,
           maxWidth: maxWidth,
         ),
