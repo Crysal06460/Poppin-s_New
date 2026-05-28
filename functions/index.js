@@ -1464,7 +1464,7 @@ exports.processEmailQueue = onDocumentWritten({
 // ===== NOUVELLE FONCTION : Retry des emails failed =====
 exports.retryFailedEmails = onSchedule({
     schedule: 'every 15 minutes',
-    region: 'us-central1',
+    region: 'europe-west1',
     memory: '128MiB',
     cpu: 0.08,
     maxInstances: 1,
@@ -1476,11 +1476,11 @@ exports.retryFailedEmails = onSchedule({
 
         console.log('🔄 Recherche des emails échoués à retry...');
 
+        // retryCount >= 3 car un email passe à 'failed' seulement après 3 tentatives
         const failedEmails = await db
             .collection('emailQueue')
             .where('status', '==', 'failed')
             .where('lastErrorAt', '<', twoHoursAgo)
-            .where('retryCount', '<', 3)
             .limit(10)
             .get();
 
@@ -4001,4 +4001,113 @@ exports.cleanupInactiveSubscriptions = onCall({
     }
 
     return { success: true, deactivated: updated };
+});
+
+// ===== INVITATION PARENT AUTOMATIQUE (déclenchée côté serveur) =====
+// Se déclenche quand un enfant est créé ou modifié avec un email parent
+// Fonctionne pour toutes les versions de l'app, sans rebuild nécessaire
+exports.onChildParentEmailSet = onDocumentWritten({
+    document: 'structures/{structureId}/children/{childId}',
+    region: 'europe-west1',
+}, async (event) => {
+    if (!event.data.after.exists) return null; // document supprimé
+
+    const afterData = event.data.after.data();
+    const beforeData = event.data.before.exists ? event.data.before.data() : {};
+    const { structureId, childId } = event.params;
+
+    const childFirstName = (afterData.firstName || 'Enfant').toString();
+
+    // Collecter les emails parents à inviter (parent1 et parent2)
+    const parentsToCheck = [];
+    for (const key of ['parent1', 'parent2']) {
+        const after = afterData[key] || {};
+        const before = beforeData[key] || {};
+        const emailAfter = (after.email || '').toString().trim().toLowerCase();
+        const emailBefore = (before.email || '').toString().trim().toLowerCase();
+
+        // Déclencher seulement si l'email vient d'apparaître ou a changé
+        if (emailAfter && emailAfter !== emailBefore) {
+            parentsToCheck.push({
+                email: emailAfter,
+                firstName: (after.firstName || '').toString(),
+                lastName: (after.lastName || '').toString(),
+            });
+        }
+    }
+
+    if (parentsToCheck.length === 0) return null;
+
+    // Récupérer le nom de la structure
+    let structureName = 'Structure d\'accueil';
+    try {
+        const structDoc = await db.collection('structures').doc(structureId).get();
+        structureName = (structDoc.data() || {}).structureName || structureName;
+    } catch (_) {}
+
+    for (const parent of parentsToCheck) {
+        const { email, firstName, lastName } = parent;
+        console.log(`📧 onChildParentEmailSet: invitation pour ${email} (enfant: ${childFirstName})`);
+
+        try {
+            // Vérifier si une invitation pending existe déjà pour éviter les doublons
+            const existing = await db.collection('invitations')
+                .where('email', '==', email)
+                .where('childId', '==', childId)
+                .where('status', '==', 'pending')
+                .limit(1)
+                .get();
+
+            if (!existing.empty) {
+                console.log(`ℹ️ Invitation déjà existante pour ${email} / ${childId}, skip`);
+                continue;
+            }
+
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+            // Créer l'invitation
+            await db.collection('invitations').add({
+                email,
+                type: 'parent',
+                structureId,
+                structureName,
+                childId,
+                childName: childFirstName,
+                parentFirstName: firstName,
+                parentLastName: lastName,
+                status: 'pending',
+                createdAt: FieldValue.serverTimestamp(),
+                expiresAt: Timestamp.fromDate(expiresAt),
+                source: 'onChildParentEmailSet',
+            });
+
+            // Mettre en file d'envoi
+            await db.collection('emailQueue').add({
+                to: email,
+                template: 'parent-invitation',
+                subject: `Invitation Poppins - Pour ${childFirstName}`,
+                status: 'pending',
+                createdAt: FieldValue.serverTimestamp(),
+                retryCount: 0,
+                priority: 'high',
+                templateData: {
+                    firstName,
+                    lastName,
+                    childName: childFirstName,
+                    childId,
+                    structureName,
+                    structureId,
+                    androidLink: 'https://play.google.com/store/apps/details?id=com.beylet.poppinsapp',
+                    iosLink: 'https://apps.apple.com/us/app/poppins/id6744274953',
+                    year: new Date().getFullYear().toString(),
+                },
+            });
+
+            console.log(`✅ Invitation + emailQueue créés pour ${email}`);
+        } catch (err) {
+            console.error(`❌ Erreur invitation pour ${email}:`, err);
+        }
+    }
+
+    return null;
 });

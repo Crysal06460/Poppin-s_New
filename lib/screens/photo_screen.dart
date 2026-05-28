@@ -419,12 +419,15 @@ class _PhotosScreenState extends State<PhotosScreen>
       }
 
       if (selectedImages.isNotEmpty) {
+        // Lire les bytes immédiatement : le fichier temporaire scaled_ peut être
+        // supprimé par Android entre la sélection et l'envoi
         final List<Uint8List> newWebImages = [];
-        if (kIsWeb) {
-          for (final image in selectedImages) {
+        for (final image in selectedImages) {
+          try {
             final bytes = await image.readAsBytes();
             newWebImages.add(bytes);
-            print("Image web chargée: ${bytes.length} bytes");
+          } catch (e) {
+            print("Impossible de lire l'image en mémoire: $e");
           }
         }
 
@@ -434,9 +437,7 @@ class _PhotosScreenState extends State<PhotosScreen>
           _pickedVideo = null;
           _videoThumbFuture = null;
           _videoDurationText = null;
-          if (kIsWeb) {
-            _webImages.addAll(newWebImages);
-          }
+          _webImages.addAll(newWebImages);
         });
       }
     } catch (e) {
@@ -458,10 +459,12 @@ class _PhotosScreenState extends State<PhotosScreen>
       );
 
       if (image != null) {
-        Uint8List? webBytes;
-        if (kIsWeb) {
-          webBytes = await image.readAsBytes();
-          print("Image web chargée: ${webBytes.length} bytes");
+        // Lire les bytes immédiatement pour éviter PathNotFoundException
+        Uint8List? imageBytes;
+        try {
+          imageBytes = await image.readAsBytes();
+        } catch (e) {
+          print("Impossible de lire l'image caméra en mémoire: $e");
         }
 
         if (!mounted) return;
@@ -471,8 +474,8 @@ class _PhotosScreenState extends State<PhotosScreen>
           _pickedVideo = null;
           _videoThumbFuture = null;
           _videoDurationText = null;
-          if (kIsWeb && webBytes != null) {
-            _webImages.add(webBytes);
+          if (imageBytes != null) {
+            _webImages.add(imageBytes);
           }
         });
         if (setStateDialog != null) {
@@ -625,29 +628,20 @@ class _PhotosScreenState extends State<PhotosScreen>
         try {
           print("Début upload image ${index + 1}/$total...");
 
-          if (kIsWeb) {
-            Uint8List data;
-            if (index < _webImages.length) {
-              data = _webImages[index];
-            } else {
-              data = await photo.readAsBytes();
-            }
-            await ref
-                .putData(
-                  data,
-                  SettableMetadata(contentType: 'image/jpeg'),
-                )
-                .timeout(Duration(minutes: 2));
+          // Utiliser les bytes en mémoire (lus à la sélection) pour éviter
+          // PathNotFoundException sur les fichiers temporaires scaled_ d'Android
+          Uint8List data;
+          if (index < _webImages.length) {
+            data = _webImages[index];
           } else {
-            final file = File(photo.path);
-            final bytes = await file.readAsBytes();
-            await ref
-                .putData(
-                  bytes,
-                  SettableMetadata(contentType: 'image/jpeg'),
-                )
-                .timeout(Duration(minutes: 2));
+            data = await photo.readAsBytes();
           }
+          await ref
+              .putData(
+                data,
+                SettableMetadata(contentType: 'image/jpeg'),
+              )
+              .timeout(Duration(minutes: 2));
 
           final String downloadUrl = await ref.getDownloadURL();
           await _addMediaToFirebase(childId, downloadUrl, type: 'Photo');
@@ -1254,23 +1248,16 @@ class _PhotosScreenState extends State<PhotosScreen>
                                         final XFile photo =
                                             _pickedPhotos[index];
                                         Widget preview;
-                                        if (kIsWeb) {
-                                          Uint8List? bytes;
-                                          if (index < _webImages.length) {
-                                            bytes = _webImages[index];
-                                          }
-                                          preview = bytes != null
-                                              ? Image.memory(bytes,
-                                                  fit: BoxFit.cover)
-                                              : Center(
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<
-                                                                Color>(
-                                                            primaryColor),
-                                                  ),
-                                                );
+                                        // Utiliser les bytes en mémoire pour le
+                                        // preview (évite Image.file sur fichier
+                                        // temporaire potentiellement supprimé)
+                                        final Uint8List? previewBytes =
+                                            index < _webImages.length
+                                                ? _webImages[index]
+                                                : null;
+                                        if (previewBytes != null) {
+                                          preview = Image.memory(previewBytes,
+                                              fit: BoxFit.cover);
                                         } else {
                                           preview = Image.file(
                                             File(photo.path),

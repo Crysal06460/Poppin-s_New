@@ -122,9 +122,23 @@ class BiometricAuthService {
         prefs.getBool('$_enabledFlagPrefix$normalizedEmail') ?? false;
     if (!enabled) return false;
 
-    final savedPassword =
-        await _secureStorage.read(key: '$_credentialKeyPrefix$normalizedEmail');
-    return savedPassword != null && savedPassword.isNotEmpty;
+    try {
+      final savedPassword = await _secureStorage.read(
+          key: '$_credentialKeyPrefix$normalizedEmail');
+      if (savedPassword == null || savedPassword.isEmpty) {
+        // Keystore invalidé après mise à jour de l'app : désactiver proprement
+        await prefs.setBool('$_enabledFlagPrefix$normalizedEmail', false);
+        return false;
+      }
+      return true;
+    } on PlatformException catch (error) {
+      debugPrint('Biometric isBiometricEnabled error: ${error.message}');
+      await prefs.setBool('$_enabledFlagPrefix$normalizedEmail', false);
+      return false;
+    } catch (error) {
+      debugPrint('Biometric isBiometricEnabled error: $error');
+      return false;
+    }
   }
 
   Future<String?> getSavedPassword(String email) async {
@@ -132,9 +146,17 @@ class BiometricAuthService {
     final normalizedEmail = _normalizeEmail(email);
     if (normalizedEmail.isEmpty) return null;
 
-    return _secureStorage.read(
-      key: '$_credentialKeyPrefix$normalizedEmail',
-    );
+    try {
+      return await _secureStorage.read(
+        key: '$_credentialKeyPrefix$normalizedEmail',
+      );
+    } on PlatformException catch (error) {
+      debugPrint('Biometric getSavedPassword error: ${error.message}');
+      return null;
+    } catch (error) {
+      debugPrint('Biometric getSavedPassword error: $error');
+      return null;
+    }
   }
 
   Future<List<String>> getEnabledEmails() async {

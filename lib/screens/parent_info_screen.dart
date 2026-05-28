@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../utils/structure_context.dart';
+import 'parent_invitation_service.dart';
 
 class ParentInfoScreen extends StatefulWidget {
   final String childId;
@@ -929,6 +930,29 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
           'phone': phoneController.text.trim(),
         }
       });
+
+      // Envoyer l'invitation dès la saisie de l'email (sans attendre la fin du wizard)
+      try {
+        final childDoc = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(structureId)
+            .collection('children')
+            .doc(widget.childId)
+            .get();
+        final childFirstName =
+            (childDoc.data()?['firstName'] ?? 'Enfant').toString();
+        await ParentInvitationService.sendInvitationToParent(
+          childId: widget.childId,
+          childFirstName: childFirstName,
+          parentEmail: normalizedEmail,
+          parentFirstName: firstNameController.text.trim(),
+          parentLastName: lastNameController.text.trim(),
+          structureId: structureId,
+        );
+        print('✅ Invitation envoyée à $normalizedEmail depuis parent_info_screen');
+      } catch (e) {
+        print('⚠️ Invitation non envoyée (sera retentée en fin de wizard): $e');
+      }
 
       print(
           "✅ Infos du parent enregistrées. Redirection vers parent-address avec childId: ${widget.childId}");

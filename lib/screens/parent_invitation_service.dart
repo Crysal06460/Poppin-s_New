@@ -89,8 +89,8 @@ class ParentInvitationService {
             'childId': childId,
             'structureName': structureName,
             'structureId': structureId,
-            'androidLink': 'https://play.google.com/store/apps/details?id=com.example.poppins_app',
-            'iosLink': 'https://apps.apple.com/app/id123456789',
+            'androidLink': 'https://play.google.com/store/apps/details?id=com.beylet.poppinsapp',
+            'iosLink': 'https://apps.apple.com/us/app/poppins/id6744274953',
             'year': DateTime.now().year.toString()
           }
         });
