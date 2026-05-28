@@ -1388,7 +1388,15 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                 ),
               ],
             ),
-            child: messageData['type'] == 'file'
+            child: messageData['type'] == 'audio'
+                ? VoiceMessageBubble(
+                    audioUrl: messageData['audioUrl'] ?? '',
+                    durationSeconds:
+                        (messageData['duration'] as num?)?.toInt() ?? 0,
+                    isMe: isMe,
+                    time: formattedTimestamp,
+                  )
+                : messageData['type'] == 'file'
                 ? _buildFileMessageForTablet(messageData, isTablet)
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

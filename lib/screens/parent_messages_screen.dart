@@ -1008,10 +1008,42 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen>
 
                       // Barre de saisie / enregistrement vocal
                       _isRecording
-                          ? VoiceRecordingOverlay(
-                              duration: _recordingDuration,
-                              dragOffset: _dragOffset,
-                              pulseAnimation: _pulseAnimation,
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                VoiceRecordingOverlay(
+                                  duration: _recordingDuration,
+                                  dragOffset: _dragOffset,
+                                  pulseAnimation: _pulseAnimation,
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: _cancelVoiceRecording,
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.redAccent),
+                                      label: const Text('Annuler',
+                                          style: TextStyle(
+                                              color: Colors.redAccent)),
+                                    ),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: primaryBlue),
+                                      onPressed: _isSendingVoice
+                                          ? null
+                                          : _stopAndSendVoice,
+                                      icon: const Icon(Icons.send,
+                                          color: Colors.white),
+                                      label: const Text('Envoyer',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             )
                           : Container(
                               padding: EdgeInsets.fromLTRB(
@@ -1072,24 +1104,15 @@ class _ParentMessagesScreenState extends State<ParentMessagesScreen>
                                             },
                                           ),
                                         ),
-                                        // Bouton micro (appui long)
-                                        GestureDetector(
-                                          onLongPressStart: (_) =>
-                                              _startVoiceRecording(),
-                                          onLongPressEnd: (_) =>
-                                              _stopAndSendVoice(),
-                                          onLongPressMoveUpdate: (details) {
-                                            setState(() {
-                                              _dragOffset = details
-                                                  .localOffsetFromOrigin.dx;
-                                            });
-                                            if (_dragOffset < -80) {
-                                              _cancelVoiceRecording();
-                                            }
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 4),
+                                        // Bouton micro (appui simple)
+                                        Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            borderRadius:
+                                                BorderRadius.circular(40),
+                                            onTap: _isSendingVoice
+                                                ? null
+                                                : _startVoiceRecording,
                                             child: Container(
                                               width: 40,
                                               height: 40,
