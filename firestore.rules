@@ -2,65 +2,123 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function canManageParentUsers() {
-      return request.auth != null &&
-        request.auth.token.email is string &&
-        get(/databases/$(database)/documents/users/$(lower(request.auth.token.email))).data.role in ['admin', 'mamMember', 'assistant'];
+    function myEmail() {
+      return request.auth.token.email.lower();
     }
 
-    /* USERS */
+    // L'utilisateur appartient à la structure (assmat = uid==structureId,
+    // membre MAM / parent = structureId dans son doc)
+    function isStructureMember(structureId) {
+      return request.auth.uid == structureId ||
+             (exists(/databases/$(database)/documents/users/$(myEmail())) &&
+              get(/databases/$(database)/documents/users/$(myEmail())).data.structureId == structureId);
+    }
+
+    // L'utilisateur est un professionnel (assmat, MAM, admin)
+    function isProfessional() {
+      return exists(/databases/$(database)/documents/users/$(myEmail())) &&
+             get(/databases/$(database)/documents/users/$(myEmail())).data.role in
+               ['admin', 'mamMember', 'assistant', 'structure'];
+    }
+
+    // Seul un pro peut créer/modifier des comptes parent
+    function canManageParentUsers() {
+      return isSignedIn() &&
+             request.auth.token.email is string &&
+             get(/databases/$(database)/documents/users/$(myEmail())).data.role in
+               ['admin', 'mamMember', 'assistant'];
+    }
+
+    // ─── USERS ────────────────────────────────────────────────────────────────
+    // Lecture : son propre doc OU professionnel (pour lookup email parent)
+    // Écriture : son propre doc OU professionnel créant/modifiant un parent
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        userId == request.auth.uid ||
+        userId == myEmail() ||
+        isProfessional()
+      );
 
-      allow write: if isSignedIn() &&
+      allow write: if isSignedIn() && (
+        userId == request.auth.uid ||
+        userId == myEmail() ||
         (
-          userId == request.auth.uid ||
-          (
-            request.auth.token.email is string &&
-            (
-              userId == request.auth.token.email ||
-              userId == lower(request.auth.token.email)
-            )
-          ) ||
-          (
-            canManageParentUsers() &&
-            request.resource.data.role == 'parent' &&
-            (resource == null || resource.data.role == 'parent')
-          )
-        );
+          canManageParentUsers() &&
+          request.resource.data.role == 'parent' &&
+          (resource == null || resource.data.role == 'parent')
+        )
+      );
 
+      // Mise à jour du badge non-lu uniquement (self-service)
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
     }
 
-    /* SUBSCRIPTIONS */
+    // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
+    // Chaque abonnement est identifié par le structureId.
+    // Seul le membre de la structure peut lire/écrire son abonnement.
+    // Les Cloud Functions (admin SDK) contournent ces règles → webhooks Stripe OK.
     match /subscriptions/{docId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow read: if isSignedIn() && isStructureMember(docId);
+      allow create, update: if isSignedIn() && isStructureMember(docId);
       allow delete: if false;
     }
 
-    /* STRUCTURES */
+    // ─── STRUCTURES ───────────────────────────────────────────────────────────
+    // CRITIQUE : données très sensibles (photos, santé, adresses, téléphones)
+    // Seul un membre de la structure (assmat, MAM, parent lié) peut accéder.
     match /structures/{structureId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && isStructureMember(structureId);
+      allow write: if isSignedIn() && isStructureMember(structureId);
 
       match /{documentPath=**} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow read: if isSignedIn() && isStructureMember(structureId);
+        allow write: if isSignedIn() && isStructureMember(structureId);
       }
     }
 
-    /* EXCHANGES - PERMISSIF */
+    // ─── EXCHANGES (messagerie) ───────────────────────────────────────────────
+    // Lecture : expéditeur, ou parent de l'enfant, ou assmat de la structure
+    // Écriture : tout utilisateur connecté peut créer un message
+    // Mise à jour : expéditeur OU marquage lu uniquement
     match /exchanges/{messageId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        // Je suis l'expéditeur
+        resource.data.senderId == request.auth.uid ||
+        resource.data.senderEmail == myEmail() ||
+        // Je suis un parent avec cet enfant dans ma liste
+        (
+          exists(/databases/$(database)/documents/users/$(myEmail())) &&
+          get(/databases/$(database)/documents/users/$(myEmail())).data.children is list &&
+          get(/databases/$(database)/documents/users/$(myEmail())).data.children.hasAny([resource.data.childId])
+        ) ||
+        // Je suis l'assmat : l'enfant est dans ma structure
+        (
+          exists(/databases/$(database)/documents/users/$(myEmail())) &&
+          get(/databases/$(database)/documents/users/$(myEmail())).data.structureId is string &&
+          exists(/databases/$(database)/documents/structures/$(get(/databases/$(database)/documents/users/$(myEmail())).data.structureId)/children/$(resource.data.childId))
+        )
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        // Expéditeur peut modifier son message
+        resource.data.senderId == request.auth.uid ||
+        resource.data.senderEmail == myEmail() ||
+        // N'importe quel membre peut marquer comme lu
+        request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['nonLu', 'readByParent', 'readByAssistant'])
+      );
+      allow delete: if false;
     }
 
-    /* EMAIL QUEUE */
+    // ─── EMAIL QUEUE ──────────────────────────────────────────────────────────
+    // Jamais lisible côté client. Création uniquement avec validation stricte.
     match /emailQueue/{emailId} {
       allow read: if false;
       allow update, delete: if false;
@@ -71,12 +129,17 @@ service cloud.firestore {
         request.resource.data.templateData is map;
     }
 
-    /* INVITATIONS */
+    // ─── INVITATIONS ──────────────────────────────────────────────────────────
+    // Lecture : uniquement l'invité (son email) OU un professionnel
+    // Mise à jour : uniquement l'invité peut marquer son invitation 'completed'
+    // Création : tout professionnel connecté avec champs requis
     match /invitations/{invitationId} {
-      allow read: if isSignedIn();
-      // Permettre à l'utilisateur invité de marquer son invitation comme complétée
+      allow read: if isSignedIn() && (
+        resource.data.email == myEmail() ||
+        isProfessional()
+      );
       allow update: if isSignedIn() &&
-        resource.data.email == lower(request.auth.token.email) &&
+        resource.data.email == myEmail() &&
         request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']) &&
         request.resource.data.status == 'completed';
       allow delete: if false;
@@ -89,29 +152,28 @@ service cloud.firestore {
         request.resource.data.expiresAt is timestamp;
     }
 
-    /* HORAIRES HISTORY (racine) */
+    // ─── HORAIRES HISTORY (racine) ────────────────────────────────────────────
     match /horaires_history/{docId} {
       allow read, write: if isSignedIn();
     }
 
-    /* NOTIFICATIONS */
+    // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
     match /notifications/{notificationId} {
-      // Lecture autorisée si la notification appartient à l'utilisateur connecté
       allow read: if isSignedIn() && (
         resource.data.recipientUserId == request.auth.token.email ||
-        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == myEmail() ||
         resource.data.recipientUserId == request.auth.uid
       );
-      // Seul le marquage appDelivered est autorisé côté client
       allow update: if isSignedIn() && (
         resource.data.recipientUserId == request.auth.token.email ||
-        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == myEmail() ||
         resource.data.recipientUserId == request.auth.uid
-      ) && request.resource.data.diff(resource.data).changedKeys().hasOnly(['appDelivered', 'appDeliveredAt']);
+      ) && request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(['appDelivered', 'appDeliveredAt']);
       allow create, delete: if false;
     }
 
-    /* RESTE - Bloqué par défaut */
+    // ─── TOUT LE RESTE : bloqué par défaut ───────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

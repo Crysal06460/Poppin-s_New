@@ -19,7 +19,6 @@ import 'package:poppins_app/screens/schedule_info_screen.dart';
 import 'package:poppins_app/screens/add_second_parent_screen.dart';
 import 'package:poppins_app/screens/child_final_details_screen.dart';
 import 'package:poppins_app/screens/horaires_screen.dart';
-import 'package:poppins_app/screens/test_photo_screen.dart'; // Import de la nouvelle page test
 import 'package:poppins_app/screens/repas_screen.dart';
 import 'package:poppins_app/screens/activity_screen.dart';
 import 'package:poppins_app/screens/sieste_screen.dart';
@@ -33,7 +32,6 @@ import 'package:poppins_app/screens/dashboard_screen.dart';
 import 'package:poppins_app/screens/photo_management_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
 import 'package:poppins_app/screens/structure_management_screen.dart';
-import 'package:poppins_app/screens/structure_confirmation_screen.dart';
 // Importez les nouveaux écrans
 import 'package:poppins_app/screens/child_documents_screen.dart';
 import 'package:poppins_app/screens/child_pickup_auth_screen.dart';
@@ -45,8 +43,6 @@ import 'package:poppins_app/screens/actualites_screen.dart'; // Import de l'écr
 import 'package:poppins_app/screens/transmissions_screen.dart';
 import 'package:poppins_app/screens/monthly_report_generate_screen.dart';
 import 'package:poppins_app/screens/monthly_report_selection_screen.dart';
-import 'package:poppins_app/screens/child_salary_info_screen.dart';
-import 'package:poppins_app/screens/test_data_generator.dart';
 import 'package:poppins_app/screens/parent_home_screen.dart';
 import 'package:poppins_app/screens/parent_messages_screen.dart';
 import 'package:poppins_app/screens/parent_stock_screen.dart';
@@ -57,7 +53,6 @@ import 'package:poppins_app/screens/register_screen.dart';
 import 'package:poppins_app/screens/pricing_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
-import 'package:poppins_app/screens/trial_pricing_info_screen.dart';
 
 // Nouveaux imports pour le système d'authentification
 import 'package:poppins_app/screens/welcome_screen.dart';
@@ -283,12 +278,6 @@ final GoRouter router = GoRouter(
         return RegisterScreen(prefilledEmail: prefilledEmail);
       },
     ),
-    /*
-    GoRoute(
-      path: '/trial-info',
-      builder: (context, state) => const TrialPricingInfoScreen(),
-    ),
-    */
     GoRoute(
       path: '/freezer-temperature',
       builder: (context, state) => const FreezerTemperatureScreen(),
@@ -297,14 +286,6 @@ final GoRouter router = GoRouter(
       path: '/account-deletion',
       builder: (context, state) => const AccountDeletionScreen(),
     ),
-    /*
-    GoRoute(
-      path: '/subscription-confirmed',
-      builder: (context, state) => SubscriptionConfirmedScreen(
-        structureInfo: state.extra as Map<String, dynamic>? ?? {},
-      ),
-    ),
-    */
     GoRoute(
       path: '/admin',
       builder: (context, state) {
@@ -346,34 +327,6 @@ final GoRouter router = GoRouter(
       },
     ),
 
-    /*
-    GoRoute(
-      path: '/structure-details',
-      builder: (context, state) => const StructureDetailsScreen(),
-    ),
-    */
-    GoRoute(
-      path: '/structure-confirmation',
-      builder: (context, state) {
-        final dynamic extra = state.extra;
-        String structureType = "Structure inconnue";
-        if (extra is Map<String, dynamic>) {
-          structureType = (extra['structureType'] ?? structureType).toString();
-        } else if (extra is String && extra.isNotEmpty) {
-          structureType = extra;
-        }
-        return StructureConfirmationScreen(structureType: structureType);
-      },
-    ),
-    /*
-    GoRoute(
-      path: '/subscription',
-      builder: (context, state) {
-        final structureType = state.extra as String? ?? "Structure inconnue";
-        return SubscriptionScreen(structureType: structureType);
-      },
-    ),
-    */
     GoRoute(
       path: '/congratulations',
       builder: (context, state) {
@@ -615,11 +568,6 @@ final GoRouter router = GoRouter(
       },
     ),
     GoRoute(path: '/horaires', builder: (context, state) => HorairesScreen()),
-    // Nouvelle route pour la page test
-    GoRoute(
-      path: '/test-photo',
-      builder: (context, state) => TestPhotoScreen(),
-    ),
     GoRoute(
       path: '/repas', // Définition de la route pour la page Repas
       builder: (BuildContext context, GoRouterState state) {
@@ -742,22 +690,6 @@ final GoRouter router = GoRouter(
         final reportParams = state.extra as Map<String, dynamic>? ?? {};
         return MonthlyReportGenerateScreen(reportParams: reportParams);
       },
-    ),
-    GoRoute(
-      path: '/child-salary-info',
-      builder: (context, state) {
-        final String? childId = state.extra as String?;
-        if (childId == null || childId.isEmpty) {
-          return const Scaffold(
-            body: Center(child: Text("Erreur : ID d'enfant manquant")),
-          );
-        }
-        return ChildSalaryInfoScreen(childId: childId);
-      },
-    ),
-    GoRoute(
-      path: '/test-data-generator',
-      builder: (context, state) => const TestDataGeneratorScreen(),
     ),
     GoRoute(
       path: '/parent/home',
@@ -989,8 +921,6 @@ String? _handleRedirect(BuildContext context, GoRouterState state) {
     '/invitation-validated',
     '/invitation-signup',
     '/pricing',
-    '/structure-details',
-    '/structure-confirmation',
     '/subscription-confirmed',
     '/splash',
     '/congratulations', // Route publique pour le retour de paiement
