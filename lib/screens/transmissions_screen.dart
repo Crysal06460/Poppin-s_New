@@ -244,18 +244,21 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     }
   }
 
+  // Transmission groupée : TOUS les enfants de l'assmat, présents ou non.
+  // Ne pas filtrer par présence du jour — un message "Je serai absente lundi"
+  // doit partir à tous les parents, même si leur enfant n'était pas là.
   List<Map<String, dynamic>> _resolveBulkTransmissionTargets() {
-    final base = _allChildren.isNotEmpty ? _allChildren : enfants;
+    if (_allChildren.isEmpty) return [];
+
     if (!_isMamStructure || _allowAllChildren) {
-      return List<Map<String, dynamic>>.from(base);
+      return List<Map<String, dynamic>>.from(_allChildren);
     }
 
-    return base.where((child) {
+    // MAM : enfants assignés à ce membre (indépendamment de leur présence)
+    return _allChildren.where((child) {
       final assignedEmail =
           (child['assignedMemberEmail'] ?? '').toString().toLowerCase();
-      final bool isAssigned = assignedEmail == _currentUserEmail;
-      final bool isDelegated = _delegatedChildIds.contains(child['id']);
-      return isAssigned || isDelegated;
+      return assignedEmail == _currentUserEmail;
     }).toList();
   }
 
@@ -1059,7 +1062,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
         builder: (_) => AlertDialog(
           title: Text('Aucun enfant disponible'),
           content: Text(
-            "Aucun enfant ne vous est associé pour ce jour.\nImpossible d'envoyer une transmission groupée.",
+            "Aucun enfant ne vous est associé.\nImpossible d'envoyer une transmission groupée.",
           ),
           actions: [
             TextButton(
@@ -1730,8 +1733,8 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
   Widget build(BuildContext context) {
     // Détection de l'iPad/tablette
     final bool isTabletDevice = isTablet(context);
+    // Le bouton s'affiche dès que des enfants existent (présents ou non)
     final bool showBulkButton = !isLoading &&
-        enfants.isNotEmpty &&
         _resolveBulkTransmissionTargets().isNotEmpty;
 
     return SwipeNavigationWrapper(
