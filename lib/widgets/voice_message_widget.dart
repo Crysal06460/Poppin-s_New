@@ -109,13 +109,28 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble>
         ? Colors.white.withOpacity(0.35)
         : Colors.grey.shade400;
 
+    // Coins asymétriques style WhatsApp/Messenger
+    final radius = BorderRadius.only(
+      topLeft: const Radius.circular(18),
+      topRight: const Radius.circular(18),
+      bottomLeft: widget.isMe ? const Radius.circular(18) : const Radius.circular(4),
+      bottomRight: widget.isMe ? const Radius.circular(4) : const Radius.circular(18),
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: bubbleColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      constraints: const BoxConstraints(maxWidth: 260),
+      constraints: const BoxConstraints(minWidth: 200, maxWidth: 280),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

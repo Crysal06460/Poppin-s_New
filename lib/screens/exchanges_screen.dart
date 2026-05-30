@@ -1370,7 +1370,24 @@ class _ExchangesScreenState extends State<ExchangesScreen>
               ),
             ),
           ),
-          // Message
+          // Message — audio sans Container englobant pour éviter la double-boîte
+          if (messageData['type'] == 'audio')
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width *
+                        (isTablet ? 0.6 : 0.75)),
+                child: VoiceMessageBubble(
+                  audioUrl: messageData['audioUrl'] ?? '',
+                  durationSeconds:
+                      (messageData['duration'] as num?)?.toInt() ?? 0,
+                  isMe: isMe,
+                  time: formattedTimestamp,
+                ),
+              ),
+            )
+          else
           Container(
             margin: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 16),
             padding: EdgeInsets.all(isTablet ? 16 : 12),
@@ -1388,15 +1405,7 @@ class _ExchangesScreenState extends State<ExchangesScreen>
                 ),
               ],
             ),
-            child: messageData['type'] == 'audio'
-                ? VoiceMessageBubble(
-                    audioUrl: messageData['audioUrl'] ?? '',
-                    durationSeconds:
-                        (messageData['duration'] as num?)?.toInt() ?? 0,
-                    isMe: isMe,
-                    time: formattedTimestamp,
-                  )
-                : messageData['type'] == 'file'
+            child: messageData['type'] == 'file'
                 ? _buildFileMessageForTablet(messageData, isTablet)
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
