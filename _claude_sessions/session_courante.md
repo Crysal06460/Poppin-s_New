@@ -1,119 +1,115 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-05-25 (session chrisbeylet@gmail.com — soirée)
-**Statut global :** ✅ Messages vocaux fonctionnels sur iPhone (permission + enregistrement OK)
+**Dernière mise à jour :** 2026-05-30 (session chrisbeylet@gmail.com)
+**Statut global :** ✅ Engagement Réciproque — feature complète + bugs PDF corrigés + Lu et approuvé implémenté
 
 ---
 
-## ✅ Travaux terminés aujourd'hui (session complète)
+## ✅ Travaux terminés (sessions du 30 mai)
 
-### Agent 1 — Audit & Correction Abonnements/Stripe/Firebase ✅
-**9 bugs trouvés — 8 corrigés :**
-- `cleanupInactiveSubscriptions` crashait (API v1 → v2)
-- 3 endpoints admin sans auth → sécurisés
-- invoice.payment_failed + invoice.payment_succeeded → ajoutés au webhook Stripe
-- `_expireStructureAndSubscription` ciblait mauvais chemin Firestore → corrigé
-- Scheduler `deactivateExpiredTrials` sans région → europe-west1 ajouté
-- `_isTrialPeriod()` toujours true → corrigé
-- `_calculateExpiryDate()` retournait date fictive → retourne null
-- `_backgroundCleanup()` supprimait audit trail → remplacé par log
-- `subscription_helper` utilisait user.uid au lieu du structureId → corrigé
+### Fonctionnalité "Engagement Réciproque" — COMPLÈTE ✅
 
-### Agent 2 — Onglet Documents ✅
-`lib/screens/documents_screen.dart` (créé), `lib/screens/dashboard_screen.dart` (modifié)
-5 types de docs, upload Firebase Storage + Firestore, badges expiration, FAB, bottom sheet
+**17 fichiers créés dans `lib/features/documents/` :**
 
-### Agent 3 — Messages Vocaux ✅ (terminé en soirée)
+```
+models/
+  engagement_reciproque_model.dart     ← modèle complet (enums, toJson/fromJson/copyWith/isComplete)
+services/
+  engagement_storage_service.dart      ← brouillon Firestore + historique + upload Storage
+  pdf_generator_service.dart           ← PDF A4 style Pajemploi (Open Sans, cases dessinées, 2 colonnes)
+steps/
+  step1_employeur.dart                 ← civilité, nom, prénom, adresse, CP, qualité, tel, email
+  step2_salarie.dart                   ← idem (téléphone obligatoire)
+  step3_enfant_contrat.dart            ← nom enfant + DatePicker FR
+  step4_conditions_accueil.dart        ← heures/semaine, heures/mois, semaines/an
+  step5_remuneration.dart              ← salaire mensuel + horaire (sans suggestion)
+  step6_lieu_date.dart                 ← lieu pré-rempli + date aujourd'hui par défaut
+  step7_signatures.dart                ← TextField "Lu et approuvé" + pad signature + export PNG async
+screens/
+  engagement_wizard_screen.dart        ← wizard 7 étapes, brouillon auto, PopScope, GlobalKeys
+  engagement_recap_screen.dart         ← récap 7 sections + boutons ✏️ Modifier → retour étape N
+  engagement_list_screen.dart          ← liste StreamBuilder + téléchargement PDF via http + viewer
+  engagement_pdf_viewer_screen.dart    ← PdfPreview (canDebug: false)
+widgets/
+  wizard_progress_bar.dart             ← 7 étapes animées
+  wizard_navigation_buttons.dart       ← Précédent / Étape X/7 / Suivant|Terminer
+  engagement_card.dart                 ← carte avec 👁 partager 🗑
+```
+
 **Fichiers modifiés :**
-- `lib/services/voice_message_service.dart` — utilise `_recorder.hasPermission()` (record_ios natif)
-- `lib/widgets/voice_message_widget.dart` (créé) — VoiceMessageBubble + VoiceRecordingOverlay
-- `lib/screens/parent_messages_screen.dart` (modifié) — côté parent
-- `lib/screens/exchanges_screen.dart` (modifié) — côté assistante maternelle
+- `pubspec.yaml` → ajout `signature: ^5.4.1`
+- `lib/screens/dashboard_screen.dart` → "Engagement Réciproque" dans menu Administration (mobile + tablette)
+- `firestore.rules` → ajout règles `engagements_reciproques/{userId}/brouillons` et `historique`
 
-**Corrections appliquées sur exchanges_screen.dart :**
-- Bouton micro entre champ texte et bouton envoi (appui simple pour démarrer)
-- Permission via `_recorder.hasPermission()` (record_ios natif, pas permission_handler)
-  → Raison : permission_handler ne déclenchait pas la dialog iOS, Poppins absente de Réglages → Micro
-- Boutons **Envoyer** et **Annuler** dans l'overlay d'enregistrement (remplace swipe-to-cancel)
-- AlertDialog d'erreur visible dans la fenêtre de dialogue (pas derrière)
-- `_pulseController` démarré/arrêté correctement
-- `onTap` seul sur le micro (suppression du double-déclenchement `onLongPress`)
-
-**Test iPhone :** Permission demandée au 1er appui ✅ — Enregistrement fonctionnel ✅
-**À tester demain :** réception côté parent + lecture du message vocal
-
-### Agent 4 — Audit Général ✅
-- Route `/pricing` réactivée
-- `throw Error()` → `throw HttpsError()` dans 4 Cloud Functions
-- Imports dupliqués corrigés
-- `mockito`/`build_runner` dédoublés dans pubspec.yaml
-
-### Sécurité + Incident ✅
-- Règles Firestore `subscriptions` revertées à `allow read: if isSignedIn()`
-- Compte Christelle (chrisgugu1101@gmail.com) : `subscriptionExpiresAt` → 2027-12-31
-- MAM amies fondatrices : `subscriptionExpiresAt` → 2027-12-31
-- Backup règles : `firestore.rules.BACKUP_AVANT_MODIFICATIONS`
-- Procédure urgence : `_claude_sessions/REGLES_FIRESTORE_URGENCE.md`
+**Accès utilisateur :** Dashboard → Administration → "Engagement Réciproque"
 
 ---
 
-## 🚀 Déploiements effectués
+## 🐛 Bugs corrigés (toutes sessions)
 
-```bash
-# Backend déployé ✅
-firebase deploy --only functions,firestore:rules
-# 31 Cloud Functions + règles Firestore
-
-# Git push ✅
-# Commit : 2e2ab6f — Fix messages vocaux dans exchanges_screen
-# Commit : 3863f3b — Ajout des messages vocaux + onglet Documents
-```
-
-**Flutter app : PAS encore soumise aux stores** — version 2.1.0+1 testée sur iPhone
+1. **Firestore permission-denied** → règles déployées ✅
+2. **Bouton mystère dans PdfPreview** → `canDebug: false` ✅
+3. **Téléphone** → `FilteringTextInputFormatter.digitsOnly` + max 10 chiffres ✅
+4. **Email** → regex `[^@]+@[^@]+\.[^@]+` dans validate() ✅
+5. **"Modifier" dans récap** → retourne numéro d'étape, wizard saute à la bonne étape ✅
+6. **Bouton "Utiliser mes informations"** → supprimé (step2) ✅
+7. **Suggestion salaire + Appliquer** → supprimés (step5) ✅
+8. **Bug "Effacer" signatures** → copyWith sentinel `_absent` pour Uint8List? nullable ✅
+9. **Bug retour recap → step7** → `exporterEtValider()` conserve signatures déjà dans le modèle ✅
+10. **Cases à cocher PDF toutes cochées** → `pw.Container` dessinés (pas Unicode) ✅
+11. **Œil ne s'ouvre pas** → télécharge bytes via `http.get(url)` + ouvre PdfViewerScreen ✅
+12. **Apostrophe/€ cassés dans PDF** → `PdfGoogleFonts.openSans` + fonction `_s()` sanitize ✅
+13. **Footer "Modèle issu de..."** → supprimé du PDF ✅
+14. **Logo PDF** → `app_icon.png` remplace `logo.png` ✅
+15. **"Lu et approuvé" en tactile impossible** → TextField clavier + affichage Waltograph ✅
+16. **"LU ET APPROUVE" trop gros dans PDF** → réduit à 10pt ✅
 
 ---
 
-## 📱 État des tests iPhone
+## 🔑 Points techniques clés
 
-- **Messages vocaux exchanges_screen** : permission OK + enregistrement OK ✅
-- **Réception côté parent** : À TESTER DEMAIN
-- **Lecture bulle vocale côté parent** : À TESTER DEMAIN
-- **Onglet Documents (Administration)** : À TESTER
+### PDF Generator (`pdf_generator_service.dart`)
+- Police : `PdfGoogleFonts.openSans*` (Unicode complet) + fallback Helvetica
+- Police manuscrite : `fonts/waltographUI.ttf` chargé via `rootBundle` → `pw.Font.ttf()`
+- Apostrophes : fonction `_s()` remplace U+2018/U+2019 → apostrophe droite
+- Cases à cocher : `pw.Container` avec bordure + "X" (pas de glyphe Unicode)
+- Logo : `assets/images/app_icon.png`
+- Signatures : image PNG 55px de hauteur dans le bloc
+- "Lu et approuvé" : 10pt Waltograph dans le bloc signature du PDF
 
-Pour lancer l'app sur iPhone USB :
-```bash
-xcrun devicectl device install app --device DD806C2B-D826-5B25-942C-700897662872 /Users/macbook/poppins/build/ios/iphoneos/Runner.app
-xcrun devicectl device process launch --device DD806C2B-D826-5B25-942C-700897662872 com.beylet.poppinsApp
-```
+### Step 7 Signatures (`step7_signatures.dart`)
+- `_approvalEmployeur` / `_approvalSalarie` : TextEditingController
+- `_isLuEtApprouve()` : validation souple (sans accent accepté, casse ignorée)
+- Affichage Waltograph en preview Flutter quand texte valide
+- `exporterEtValider()` bloque si texte non saisi avant export PNG
 
-Pour rebuild avant :
-```bash
-cd /Users/macbook/poppins && flutter build ios
-```
+### Architecture Engagement Réciproque
+- Entry point : `dashboard_screen.dart` → `_openEngagementReciproque()` → `EngagementListScreen(userId)`
+- Wizard → Recap : `Navigator.push<int>` → retourne numéro étape si Modifier
+- Wizard reçoit le numéro → `setState(() => _etapeCourante = N)`
+- Brouillon auto sauvegardé à chaque étape via `EngagementStorageService`
+
+### Bug copyWith signatures (IMPORTANT)
+- `copyWith(signatureEmployeur: null)` n'effaçait pas la valeur (Dart: `null ?? existing = existing`)
+- Fix : sentinel `_absent` dans le modèle → `Object? signatureEmployeur = _absent`
 
 ---
 
 ## ⚠️ Reste à faire
 
-### Priorité 1 — Tester réception messages vocaux (demain)
-- Tester que le parent reçoit bien le message vocal dans `parent_messages_screen.dart`
-- Tester la lecture de la bulle vocale (VoiceMessageBubble)
-- Si OK → soumettre aux stores
+### Priorité 1 — Soumettre 2.1.5 aux stores (toujours en attente)
+- iOS : `Product > Archive` dans Xcode → App Store Connect
+- Android : upload `app-release.aab` 2.1.5 sur Google Play Console
 
-### Priorité 2 — Soumettre l'app aux stores
-- `flutter build ios --release` → Archive Xcode → TestFlight → App Store
-- `flutter build appbundle --release` → Google Play Console
-- Version actuelle : `2.1.0+1` dans pubspec.yaml
+### Priorité 2 — Faux message orange "Échec envoi"
+- Dans `child_financial_info_screen.dart`, wrapper l'update user dans try/catch séparé
 
 ### Priorité 3 — Règles Firestore subscriptions (après déploiement app)
-- Une fois le nouveau Flutter déployé, re-sécuriser la lecture subscriptions
-- Le nouveau code lit `subscriptionActive: true` → n'a plus besoin du fallback
 
 ### Non urgent
-- Règles `structures` trop permissives → à sécuriser plus tard
-- Validation server-side des reçus IAP → à implémenter
-- Routes mortes `/trial-info`, `/structure-details` → à nettoyer
-- Affichage bulles vocales côté `exchanges_screen` (reçues) — pas encore fait
+- Règles `structures` trop permissives
+- Validation server-side reçus IAP
+- Routes mortes `/trial-info`, `/structure-details`
 
 ---
 
@@ -124,9 +120,3 @@ cd /Users/macbook/poppins && flutter build ios
 - chrisgugu1101@gmail.com = Christelle (femme de Christophe) — utilise l'app tous les jours
 - Deux comptes Claude sur même Mac : lire ce fichier à chaque session
 - structureId Christelle : euAkwrpTFEMeH1GXjJQcUy8yLO53
-- Device iPhone Christophe : DD806C2B-D826-5B25-942C-700897662872
-
-## 🔑 Point technique clé (permission microphone iOS)
-`permission_handler` ne déclenchait PAS la dialog iOS pour Poppins.
-Solution : utiliser `_recorder.hasPermission()` du package `record` (record_ios natif).
-C'est ce qui fait apparaître Poppins dans Réglages → Confidentialité → Micro.

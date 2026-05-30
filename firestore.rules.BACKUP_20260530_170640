@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function canManageParentUsers() {
+      return request.auth != null &&
+        request.auth.token.email is string &&
+        get(/databases/$(database)/documents/users/$(lower(request.auth.token.email))).data.role in ['admin', 'mamMember', 'assistant'];
+    }
+
+    /* USERS */
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      allow write: if isSignedIn() &&
+        (
+          userId == request.auth.uid ||
+          (
+            request.auth.token.email is string &&
+            (
+              userId == request.auth.token.email ||
+              userId == lower(request.auth.token.email)
+            )
+          ) ||
+          (
+            canManageParentUsers() &&
+            request.resource.data.role == 'parent' &&
+            (resource == null || resource.data.role == 'parent')
+          )
+        );
+
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
+    }
+
+    /* SUBSCRIPTIONS */
+    match /subscriptions/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    /* STRUCTURES */
+    match /structures/{structureId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+
+      match /{documentPath=**} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+    }
+
+    /* EXCHANGES - PERMISSIF */
+    match /exchanges/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+
+    /* EMAIL QUEUE */
+    match /emailQueue/{emailId} {
+      allow read: if false;
+      allow update, delete: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.to is string &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.templateData is map;
+    }
+
+    /* INVITATIONS */
+    match /invitations/{invitationId} {
+      allow read: if isSignedIn();
+      // Permettre à l'utilisateur invité de marquer son invitation comme complétée
+      allow update: if isSignedIn() &&
+        resource.data.email == lower(request.auth.token.email) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']) &&
+        request.resource.data.status == 'completed';
+      allow delete: if false;
+      allow create: if isSignedIn() &&
+        request.resource.data.email is string &&
+        request.resource.data.structureId is string &&
+        request.resource.data.childId is string &&
+        request.resource.data.status is string &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.expiresAt is timestamp;
+    }
+
+    /* HORAIRES HISTORY (racine) */
+    match /horaires_history/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    /* NOTIFICATIONS */
+    match /notifications/{notificationId} {
+      // Lecture autorisée si la notification appartient à l'utilisateur connecté
+      allow read: if isSignedIn() && (
+        resource.data.recipientUserId == request.auth.token.email ||
+        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == request.auth.uid
+      );
+      // Seul le marquage appDelivered est autorisé côté client
+      allow update: if isSignedIn() && (
+        resource.data.recipientUserId == request.auth.token.email ||
+        resource.data.recipientUserId == lower(request.auth.token.email) ||
+        resource.data.recipientUserId == request.auth.uid
+      ) && request.resource.data.diff(resource.data).changedKeys().hasOnly(['appDelivered', 'appDeliveredAt']);
+      allow create, delete: if false;
+    }
+
+    /* RESTE - Bloqué par défaut */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

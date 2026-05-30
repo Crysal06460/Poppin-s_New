@@ -35,6 +35,7 @@ import '../services/structure_notification_service.dart';
 import 'admin_broadcast_notification_screen.dart';
 import 'admin_subscription_dashboard_screen.dart';
 import 'package:poppins_app/screens/documents_screen.dart';
+import 'package:poppins_app/features/documents/screens/engagement_list_screen.dart';
 
 const Set<String> _dashboardAdminEmails = {
   'cbeylet06@gmail.com',
@@ -2374,6 +2375,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openEngagementReciproque() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EngagementListScreen(userId: userId),
+      ),
+    );
+  }
+
   void _openMamAdministration() {
     final List<Widget> actions = [
       _sheetAction(
@@ -2434,6 +2446,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _sheetAction(
         label: 'Mes Documents',
         onTap: _openDocuments,
+        bulletColor: _tileBlue,
+      ),
+      _sheetAction(
+        label: 'Engagement Réciproque',
+        onTap: _openEngagementReciproque,
         bulletColor: _tileBlue,
       ),
       _sheetAction(
@@ -5041,6 +5058,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: "Mes Documents",
           description: "Diplôme, agrément, assurances, autres...",
           onTap: _openDocuments,
+          maxWidth: maxWidth,
+        ),
+        SizedBox(height: maxHeight * 0.02),
+        _buildTabletActionItem(
+          icon: Icons.handshake_outlined,
+          title: "Engagement Réciproque",
+          description: "Créer et gérer les engagements réciproques",
+          onTap: _openEngagementReciproque,
           maxWidth: maxWidth,
         ),
       ],

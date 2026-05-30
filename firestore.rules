@@ -173,6 +173,21 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    // ─── ENGAGEMENTS RÉCIPROQUES ──────────────────────────────────────────────
+    // Seul le propriétaire (userId == uid) peut lire/écrire ses engagements.
+    // Sous-collections : brouillons/ et historique/
+    match /engagements_reciproques/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      match /brouillons/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /historique/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
     // ─── TOUT LE RESTE : bloqué par défaut ───────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
