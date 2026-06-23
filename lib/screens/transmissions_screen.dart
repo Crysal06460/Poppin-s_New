@@ -194,45 +194,51 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
       final Set<String> absentChildIds =
           await AbsenceHelper.fetchAbsentChildIds(structureId, date: today);
-      // On devrait aussi vérifier les absents d'hier si on veut être puriste, 
-      // mais afficher un absent d'hier pour aujourd'hui n'est pas bloquant si on veut modif l'historique.
 
-      
-      // Maintenant, filtrer les enfants qui ont un programme pour la date sélectionnée
+      // Tous les enfants liés apparaissent, présents ou non
       enfants = [];
-      
+
       for (var child in filteredChildren) {
-        if (absentChildIds.contains(child['id'])) {
-           continue; 
+        final bool isAbsent = absentChildIds.contains(child['id']);
+        final bool isScheduled = PlanningHelper.isScheduledForDate(child, today);
+        final bool isDelegated = delegatedTodayChildIds.contains(child['id']);
+
+        String presenceStatus;
+        if (isAbsent) {
+          presenceStatus = 'absent';
+        } else if (isScheduled || isDelegated) {
+          presenceStatus = 'present';
+        } else {
+          presenceStatus = 'not_scheduled';
         }
 
-        final isScheduled =
-            PlanningHelper.isScheduledForDate(child, today);
-            
-        final isDelegated = delegatedTodayChildIds.contains(child['id']); 
-        
-        if (isScheduled || isDelegated) {
-          final String assignedEmail = ChildAvatarColorHelper.normalizeEmail(
-              child['assignedMemberEmail']);
-          final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
-            isMamStructure: useMamColors,
-            mamAssignments: mamColorAssignments,
-            assignedMemberEmail: assignedEmail,
-            gender: child['gender']?.toString(),
-          );
-          String? photoUrl = child['photoUrl'];
-          enfants.add({
-            'id': child['id'],
-            'prenom': child['firstName'],
-            'genre': child['gender'],
-            'photoUrl': photoUrl,
-            'assignedMemberEmail': assignedEmail,
-            'avatarColor': avatarColor,
-              'structureId':
-                  structureId, // Ajouter l'ID de structure pour les requêtes futures
-          });
-        }
+        final String assignedEmail = ChildAvatarColorHelper.normalizeEmail(
+            child['assignedMemberEmail']);
+        final Color avatarColor = ChildAvatarColorHelper.resolveAvatarColor(
+          isMamStructure: useMamColors,
+          mamAssignments: mamColorAssignments,
+          assignedMemberEmail: assignedEmail,
+          gender: child['gender']?.toString(),
+        );
+        String? photoUrl = child['photoUrl'];
+        enfants.add({
+          'id': child['id'],
+          'prenom': child['firstName'],
+          'genre': child['gender'],
+          'photoUrl': photoUrl,
+          'assignedMemberEmail': assignedEmail,
+          'avatarColor': avatarColor,
+          'structureId': structureId,
+          'presenceStatus': presenceStatus,
+        });
       }
+
+      // Présents en premier, puis non prévus, puis absents
+      enfants.sort((a, b) {
+        const order = {'present': 0, 'not_scheduled': 1, 'absent': 2};
+        return (order[a['presenceStatus']] ?? 1)
+            .compareTo(order[b['presenceStatus']] ?? 1);
+      });
       setState(() {
         isLoading = false;
         _delegatedChildIds = delegatedTodayChildIds;
@@ -888,62 +894,6 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
-  Future<bool> _isChildArrivedOnDate(
-      String structureId, String childId, DateTime date) async {
-    try {
-      final String dateKey = DateFormat('yyyy-MM-dd').format(date);
-      final doc = await FirebaseFirestore.instance
-          .collection('structures')
-          .doc(structureId)
-          .collection('horaires')
-          .doc(dateKey)
-          .get();
-      if (!doc.exists) return false;
-      final data = doc.data() as Map<String, dynamic>?;
-      if (data == null || !data.containsKey(childId)) return false;
-      final ch = data[childId] as Map<String, dynamic>?;
-      if (ch == null) return false;
-      if (ch['actionType'] == 'absent') return false;
-      if (ch['segments'] is List) {
-        for (final seg in (ch['segments'] as List)) {
-          final arr = seg['arrivee'];
-          if (arr != null && arr.toString().isNotEmpty) return true;
-        }
-      }
-      final arr = ch['arrivee'];
-      if (arr != null && arr.toString().isNotEmpty) return true;
-      return false;
-    } catch (e) {
-      print('Erreur vérification arrivée (transmission): $e');
-      return false;
-    }
-  }
-
-  Future<void> _guardAddTransmission(String structureId, String childId) async {
-    final arrived = await _isChildArrivedOnDate(structureId, childId, _selectedDate);
-
-    if (!arrived) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text('Arrivée requise'),
-          content: Text(
-              "Attention : l'enfant n'est pas arrivé à la date sélectionnée.\n\nVeuillez indiquer l'horaire d'arrivée pour pouvoir ajouter une transmission."),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    _showAddTransmissionPopup(childId);
-  }
-
   Future<void> _addTransmissionToFirebase(String childId, String category,
       String content, DateTime date) async {
     try {
@@ -1396,6 +1346,51 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
     );
   }
 
+  Widget _buildPresenceBadge(String? status) {
+    Color color;
+    String label;
+    IconData icon;
+    switch (status) {
+      case 'present':
+        color = Colors.green;
+        label = 'Présent';
+        icon = Icons.check_circle_outline;
+        break;
+      case 'absent':
+        color = Colors.orange;
+        label = 'Absent';
+        icon = Icons.cancel_outlined;
+        break;
+      default:
+        color = Colors.grey;
+        label = 'Non prévu';
+        icon = Icons.schedule;
+    }
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEnfantCard(BuildContext context, int index) {
     final enfant = enfants[index];
     final String genre = enfant['genre']?.toString() ?? '';
@@ -1462,21 +1457,25 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                 ),
                 SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      _buildPresenceBadge(enfant['presenceStatus']),
+                    ],
                   ),
                 ),
                 IconButton(
                   icon: Icon(Icons.add_circle, color: primaryColor, size: 30),
-                  onPressed: () => _guardAddTransmission(
-                      enfant['structureId'] ??
-                          FirebaseAuth.instance.currentUser?.uid,
-                      enfant['id']),
+                  onPressed: () => _showAddTransmissionPopup(enfant['id']),
                   tooltip: 'Ajouter une transmission',
                 ),
               ],
@@ -1653,7 +1652,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Aucun enfant prévu ce jour',
+            'Aucun enfant associé',
             style: TextStyle(
               fontSize: 18,
               color: primaryColor,
@@ -1882,21 +1881,27 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
 
                 SizedBox(width: 16), // Informations de l'enfant
                 Expanded(
-                  child: Text(
-                    enfant['prenom'],
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87, // 🆕 NOIR
-                      shadows: [
-                        // 🆕 Ombre blanche pour lisibilité
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 3,
-                          color: Colors.white.withOpacity(0.8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        enfant['prenom'],
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                          shadows: [
+                            Shadow(
+                              offset: Offset(0, 1),
+                              blurRadius: 3,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(height: 4),
+                      _buildPresenceBadge(enfant['presenceStatus']),
+                    ],
                   ),
                 ),
 
@@ -1921,10 +1926,7 @@ class _TransmissionsScreenState extends State<TransmissionsScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(Icons.add, color: cardColor, size: 24),
-                      onPressed: () => _guardAddTransmission(
-                          enfant['structureId'] ??
-                              FirebaseAuth.instance.currentUser?.uid,
-                          enfant['id']),
+                      onPressed: () => _showAddTransmissionPopup(enfant['id']),
                       tooltip: "Ajouter une transmission",
                       padding: EdgeInsets.all(10),
                       constraints: BoxConstraints(minWidth: 0, minHeight: 0),

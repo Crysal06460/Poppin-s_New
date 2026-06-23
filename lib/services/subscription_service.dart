@@ -110,13 +110,18 @@ class SubscriptionService {
 
         if (structureSnapshot.exists) {
           final data = structureSnapshot.data() ?? {};
+
+          // Accès offert définitivement (amis, partenaires, bêta-testeurs)
+          if (data['gifted'] == true) {
+            print('🎁 Accès gratuit permanent (gifted). Accès validé.');
+            return true;
+          }
+
           if (_isSubscriptionDocActive(data)) {
             print(
                 '✅ Abonnement structure ACTIF (Stripe). Accès validé immédiatement.');
 
             // 🧹 NETTOYAGE SILENCIEUX EN ARRIÈRE-PLAN
-            // Si on a trouvé un "faux positif" ailleurs (ex: un vieux fichier subscription "expired"),
-            // on lance un nettoyage pour éviter que ça ne pollue les futures lectures.
             _backgroundCleanup(resolvedStructureId);
 
             return true;

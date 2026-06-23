@@ -58,6 +58,13 @@ service cloud.firestore {
       // Mise à jour du badge non-lu uniquement (self-service)
       allow update: if isSignedIn() &&
         request.resource.data.diff(resource.data).changedKeys().hasOnly(['unreadMessages']);
+
+      // ─── AI USAGE (quota assistant Calculs IA) ────────────────────────────
+      // Jamais accessible côté client : seule la Cloud Function (Admin SDK,
+      // qui contourne ces règles) peut lire/écrire le compteur quotidien.
+      match /aiUsage/{date} {
+        allow read, write: if false;
+      }
     }
 
     // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
@@ -177,6 +184,36 @@ service cloud.firestore {
     // Seul le propriétaire (userId == uid) peut lire/écrire ses engagements.
     // Sous-collections : brouillons/ et historique/
     match /engagements_reciproques/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      match /brouillons/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /historique/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // ─── CONTRATS CDI ─────────────────────────────────────────────────────────
+    // Seul le propriétaire (userId == uid) peut lire/écrire ses contrats CDI.
+    // Sous-collections : brouillons/ et historique/
+    match /contrats_cdi/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      match /brouillons/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /historique/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // ─── CONTRATS CDD ─────────────────────────────────────────────────────────
+    // Seul le propriétaire (userId == uid) peut lire/écrire ses contrats CDD.
+    // Sous-collections : brouillons/ et historique/
+    match /contrats_cdd/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
 
       match /brouillons/{docId} {

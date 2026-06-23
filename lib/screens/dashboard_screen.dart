@@ -36,6 +36,10 @@ import 'admin_broadcast_notification_screen.dart';
 import 'admin_subscription_dashboard_screen.dart';
 import 'package:poppins_app/screens/documents_screen.dart';
 import 'package:poppins_app/features/documents/screens/engagement_list_screen.dart';
+import 'package:poppins_app/features/documents/screens/contrat_cdi_list_screen.dart';
+import 'package:poppins_app/features/documents/screens/contrat_cdd_list_screen.dart';
+import 'package:poppins_app/features/documents/screens/avenant_list_screen.dart';
+import 'package:poppins_app/features/calculs/screens/calculs_home_screen.dart';
 
 const Set<String> _dashboardAdminEmails = {
   'cbeylet06@gmail.com',
@@ -2386,6 +2390,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openContratCdi() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContratCdiListScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _openContratCdd() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContratCddListScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _openAvenant() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AvenantListScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _openCalculs() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CalculsHomeScreen()),
+    );
+  }
+
+  void _openContratsMenu() {
+    _showCategorySheet(
+      title: 'Contrats',
+      color: _tileBlue,
+      children: [
+        _sheetAction(
+          label: 'Engagement Réciproque',
+          onTap: _openEngagementReciproque,
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Contrat CDI',
+          onTap: _openContratCdi,
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Contrat CDD',
+          onTap: _openContratCdd,
+          bulletColor: _tileBlue,
+        ),
+        _sheetAction(
+          label: 'Avenant au contrat',
+          onTap: _openAvenant,
+          bulletColor: _tileBlue,
+        ),
+      ],
+    );
+  }
+
   void _openMamAdministration() {
     final List<Widget> actions = [
       _sheetAction(
@@ -2449,8 +2522,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bulletColor: _tileBlue,
       ),
       _sheetAction(
-        label: 'Engagement Réciproque',
-        onTap: _openEngagementReciproque,
+        label: 'Contrats',
+        onTap: _openContratsMenu,
+        bulletColor: _tileBlue,
+      ),
+      _sheetAction(
+        label: 'Calculs',
+        onTap: _openCalculs,
         bulletColor: _tileBlue,
       ),
       _sheetAction(
@@ -5062,10 +5140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
-          icon: Icons.handshake_outlined,
-          title: "Engagement Réciproque",
-          description: "Créer et gérer les engagements réciproques",
-          onTap: _openEngagementReciproque,
+          icon: Icons.description_outlined,
+          title: "Contrats",
+          description: "Engagement, CDI, CDD, Avenant",
+          onTap: _openContratsMenu,
           maxWidth: maxWidth,
         ),
       ],

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Récapitulatif mensuel</title>
+    <title>Mémo mensuel</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -31,36 +31,47 @@
             font-size: 26px;
             font-weight: 700;
         }
+        .header p {
+            margin-top: 10px;
+            font-size: 16px;
+            opacity: 0.9;
+        }
         .content {
             padding: 32px 28px;
+        }
+        .content p {
+            line-height: 1.6;
+            margin: 0 0 16px 0;
         }
         .summary-box {
             background: #f0f7ff;
             border-left: 4px solid #3D9DF2;
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 18px 20px;
-            margin-bottom: 24px;
+            margin: 24px 0;
         }
-        .summary-box strong {
+        .summary-box p {
+            margin: 0 0 10px 0;
+            font-weight: 600;
             color: #3D9DF2;
         }
-        .details-list {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 24px 0;
+        .summary-box ul {
+            margin: 0;
+            padding-left: 20px;
         }
-        .details-list li {
-            margin-bottom: 10px;
-            padding-left: 26px;
-            position: relative;
+        .summary-box ul li {
+            margin-bottom: 6px;
+            color: #1f2d3d;
         }
-        .details-list li::before {
-            content: '•';
-            position: absolute;
-            left: 10px;
-            top: 0;
-            font-size: 20px;
-            color: #3D9DF2;
+        .rappel-box {
+            background: #fff5f5;
+            border-left: 4px solid #D94350;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 24px 0;
+            font-size: 14px;
+            color: #D94350;
+            font-weight: 600;
         }
         .footer {
             padding: 24px 28px;
@@ -68,6 +79,7 @@
             text-align: center;
             font-size: 12px;
             color: #6b7b93;
+            line-height: 1.6;
         }
         .footer strong {
             color: #1f2d3d;
@@ -77,29 +89,34 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Récapitulatif mensuel</h1>
-            <p style="margin-top:12px;font-size:16px;opacity:0.9;">{{monthLabel}} - {{structureName}}</p>
+            <h1>Mémo mensuel</h1>
+            <p>{{monthLabel}} — {{structureName}}</p>
         </div>
         <div class="content">
             <p>Bonjour {{assistantName}},</p>
-            <p>Vous trouverez en pièce jointe le récapitulatif complet de vos transmissions pour la période du <strong>{{periodStart}}</strong> au <strong>{{periodEnd}}</strong>.</p>
+            <p>Vous trouverez en pièce jointe votre mémo mensuel pour <strong>{{monthLabel}}</strong>, couvrant la période du <strong>1er au 25 du mois</strong>.</p>
 
             <div class="summary-box">
-                <strong>Ce récapitulatif contient :</strong>
-                <ul class="details-list">
-                    <li>Les événements quotidiens pour chacun de vos {{childCount}} enfant(s) suivi(s)</li>
-                    <li>Les horaires d'arrivée et de départ saisis dans Poppins</li>
-                    <li>Toutes les activités, repas, siestes, soins et transmissions enregistrés</li>
+                <p>Ce mémo contient pour chacun de vos {{childCount}} enfant(s) :</p>
+                <ul>
+                    <li>Le tableau jour par jour avec heures d'arrivée et de départ réelles</li>
+                    <li>Le statut de présence ou d'absence pour chaque journée</li>
+                    <li>Les repas enregistrés dans Poppins</li>
+                    <li>Le total des heures réelles et le récapitulatif mensuel</li>
                 </ul>
             </div>
 
-            <p>Le document PDF joint est prêt à être téléchargé et conservé dans vos archives.</p>
+            <div class="rappel-box">
+                Pensez à vérifier les éléments du mémo avant de le transmettre aux parents.
+            </div>
 
-            <p style="margin-top: 24px;">Merci pour votre confiance et votre travail quotidien auprès des enfants.</p>
+            <p>Le PDF joint est prêt à être téléchargé, imprimé ou conservé dans vos archives.</p>
+            <p>Merci pour votre travail quotidien auprès des enfants.</p>
         </div>
         <div class="footer">
             <p><strong>Poppins</strong></p>
-            <p>Ce message a été envoyé automatiquement. Pour toute question, vous pouvez répondre directement à cet email.</p>
+            <p>Ce message est envoyé automatiquement le 25 de chaque mois.<br>
+            Pour toute question, contactez le support depuis l'application.</p>
         </div>
     </div>
 </body>

@@ -102,6 +102,8 @@ flutter:
             
   assets:
     - assets/images/umbrella.png
+    - assets/images/poppins_icone_pdf.png
+    - assets/images/poppins_titre_pdf.png
     - assets/images/google.png
     - assets/images/biberon.png
     - assets/images/no_activities.png

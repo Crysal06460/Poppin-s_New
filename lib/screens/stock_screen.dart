@@ -46,6 +46,7 @@ class _StockScreenState extends State<StockScreen> {
   Map<String, List<String>> stockCategories = {
     'Hygiène': [
       'Couches',
+      'Couche d\'eau',
       'Lait de change',
       'Liniment',
       'Eau nettoyante',

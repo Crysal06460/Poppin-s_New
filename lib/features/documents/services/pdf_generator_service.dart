@@ -181,10 +181,13 @@ class PdfGeneratorService {
   Future<Uint8List> genererEngagementPdf(EngagementReciproqueModel model) async {
     final doc = pw.Document(title: 'Engagement Réciproque', author: "Poppin's");
 
-    pw.ImageProvider? logo;
+    pw.MemoryImage? icone;
+    pw.MemoryImage? titreImg;
     try {
-      final data = await rootBundle.load('assets/images/app_icon.png');
-      logo = pw.MemoryImage(data.buffer.asUint8List());
+      final iconeBytes = await rootBundle.load('assets/images/poppins_icone_pdf.png');
+      icone = pw.MemoryImage(iconeBytes.buffer.asUint8List());
+      final titreBytes = await rootBundle.load('assets/images/poppins_titre_pdf.png');
+      titreImg = pw.MemoryImage(titreBytes.buffer.asUint8List());
     } catch (_) {}
 
     // Open Sans = Unicode complet (€, apostrophes typographiques, accents)
@@ -213,9 +216,15 @@ class PdfGeneratorService {
     final sB = pw.TextStyle(font: fontB, fontSize: 8, color: _noir);
     final sI = pw.TextStyle(font: fontI, fontSize: 7, color: _gris);
     final sLabel = pw.TextStyle(font: fontN, fontSize: 7, color: _gris);
-    final sTitreSection = pw.TextStyle(font: fontB, fontSize: 10, color: _bleu);
-    final sTitreApp = pw.TextStyle(font: fontB, fontSize: 18, color: _bleu);
-    final sSousTitre = pw.TextStyle(font: fontN, fontSize: 7, color: _gris, letterSpacing: 1.2);
+    pw.Widget sectionHeader(String titre) => pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 5),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          color: _bleu,
+          child: pw.Text(
+            titre,
+            style: pw.TextStyle(font: fontB, fontSize: 10, color: _blanc),
+          ),
+        );
 
     doc.addPage(
       pw.Page(
@@ -226,35 +235,42 @@ class PdfGeneratorService {
           children: [
 
             // ── EN-TÊTE ────────────────────────────────────────────────────
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Logo + nom app
-                if (logo != null) ...[
-                  pw.Image(logo, width: 32, height: 32),
-                  pw.SizedBox(width: 6),
+            pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 10),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.SizedBox(width: 40),
+                  if (titreImg != null)
+                    pw.Expanded(child: pw.Center(
+                        child: pw.Image(titreImg, height: 40, fit: pw.BoxFit.contain)))
+                  else
+                    pw.Expanded(child: pw.Center(
+                        child: pw.Text("Poppin's",
+                            style: pw.TextStyle(font: fontB, fontSize: 18, color: _bleu)))),
+                  if (icone != null)
+                    pw.Image(icone, width: 48, height: 48)
+                  else
+                    pw.SizedBox(width: 48),
                 ],
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text("Poppin's", style: sB.copyWith(fontSize: 13, color: _bleu)),
-                    pw.Text("Le copilote des assistant(e)s maternel(le)s & MAM",
-                        style: sLabel),
-                  ],
-                ),
-                pw.Expanded(child: pw.SizedBox()),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text('Engagement réciproque', style: sTitreApp),
-                    pw.Text('PROMESSE D\'EMBAUCHE', style: sSousTitre),
-                  ],
-                ),
-              ],
+              ),
             ),
-            pw.SizedBox(height: 5),
-            pw.Divider(color: _bleu, thickness: 1),
-            pw.SizedBox(height: 6),
+            // ── TITRE ──────────────────────────────────────────────────────
+            pw.Container(
+              width: double.infinity,
+              margin: const pw.EdgeInsets.only(bottom: 8, top: 4),
+              padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              decoration: pw.BoxDecoration(
+                color: _bleu,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: pw.Center(
+                child: pw.Text(
+                  'Engagement réciproque - promesse d\'embauche',
+                  style: pw.TextStyle(font: fontB, fontSize: 13, color: _blanc),
+                ),
+              ),
+            ),
 
             // ── DEUX COLONNES EMPLOYEUR / SALARIÉ ─────────────────────────
             pw.Row(
@@ -270,18 +286,7 @@ class PdfGeneratorService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Row(children: [
-                          pw.Text('Futur employeur', style: sB),
-                          pw.SizedBox(width: 4),
-                          pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                            decoration: pw.BoxDecoration(
-                              color: _bleu,
-                              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                            ),
-                            child: pw.Text('1', style: sB.copyWith(color: _blanc, fontSize: 7)),
-                          ),
-                        ]),
+                        pw.Text('Futur employeur', style: sB),
                         pw.SizedBox(height: 5),
                         _civilite(model.civiliteEmployeur, sN),
                         _champ('Nom', _s(model.nomEmployeur), sLabel, sB),
@@ -365,8 +370,7 @@ class PdfGeneratorService {
             pw.SizedBox(height: 7),
 
             // ── CONDITIONS D'ACCUEIL ──────────────────────────────────────
-            pw.Text('Conditions d\'accueil', style: sTitreSection),
-            pw.SizedBox(height: 5),
+            sectionHeader('Conditions d\'accueil'),
             _ligneCondition('Durée hebdomadaire — nombre d\'heures',
                 _fmtDouble(model.heuresParSemaine), '/ semaine', sN, sB),
             _ligneCondition('Durée mensuelle — nombre d\'heures',
@@ -376,8 +380,7 @@ class PdfGeneratorService {
             pw.SizedBox(height: 6),
 
             // ── RÉMUNÉRATION ──────────────────────────────────────────────
-            pw.Text('Rémunération', style: sTitreSection),
-            pw.SizedBox(height: 5),
+            sectionHeader('Rémunération'),
             pw.Row(
               children: [
                 pw.Expanded(child: _salaire('Salaire mensuel brut',
@@ -441,19 +444,26 @@ class PdfGeneratorService {
             pw.Divider(color: _bleuClair, thickness: 0.5),
             pw.SizedBox(height: 3),
             pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Fait à ', style: sN),
-                pw.Container(
-                  width: 100,
-                  padding: const pw.EdgeInsets.only(bottom: 1),
-                  decoration: const pw.BoxDecoration(
-                    border: pw.Border(bottom: pw.BorderSide(color: _gris, width: 0.4)),
-                  ),
-                  child: pw.Text(_s(model.lieuSignature), style: sN),
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('Fait à ', style: sN),
+                    pw.Container(
+                      width: 100,
+                      padding: const pw.EdgeInsets.only(bottom: 1),
+                      decoration: const pw.BoxDecoration(
+                        border: pw.Border(bottom: pw.BorderSide(color: _gris, width: 0.4)),
+                      ),
+                      child: pw.Text(_s(model.lieuSignature), style: sN),
+                    ),
+                    pw.Text('  le  ', style: sN),
+                    pw.Text(_fmtDate(model.dateSignature), style: sN),
+                  ],
                 ),
-                pw.Text('  le  ', style: sN),
-                pw.Text(_fmtDate(model.dateSignature), style: sN),
+                pw.Text('1 / 1', style: sLabel),
               ],
             ),
             pw.SizedBox(height: 3),
@@ -526,8 +536,8 @@ class PdfGeneratorService {
   ) {
     final identite = [civilite, prenom, nom].whereType<String>().join(' ').trim();
     final styleWalt = fontWaltograph != null
-        ? pw.TextStyle(font: fontWaltograph, fontSize: 10, color: _noir)
-        : sI.copyWith(fontSize: 9);
+        ? pw.TextStyle(font: fontWaltograph, fontSize: 14, color: _noir)
+        : sI.copyWith(fontSize: 10);
     return pw.Container(
       padding: const pw.EdgeInsets.all(8),
       decoration: pw.BoxDecoration(
@@ -536,16 +546,19 @@ class PdfGeneratorService {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(titre, style: sB),
+          pw.Text(titre, style: sB.copyWith(fontSize: 9, color: _bleu)),
           if (identite.isNotEmpty)
             pw.Text(identite, style: sI.copyWith(fontSize: 7.5)),
           pw.SizedBox(height: 4),
-          pw.Text('Lu et approuve', style: styleWalt),
-          pw.SizedBox(height: 4),
-          sigBytes != null
-              ? pw.Image(pw.MemoryImage(sigBytes),
-                  width: double.infinity, height: 55, fit: pw.BoxFit.contain)
-              : pw.SizedBox(height: 55),
+          pw.Text('Lu et approuvé', style: styleWalt),
+          pw.SizedBox(height: 6),
+          pw.Container(
+            height: 60,
+            decoration: pw.BoxDecoration(border: pw.Border.all(color: _gris, width: 0.5)),
+            child: sigBytes != null
+                ? pw.Image(pw.MemoryImage(sigBytes), fit: pw.BoxFit.contain)
+                : pw.SizedBox(),
+          ),
         ],
       ),
     );

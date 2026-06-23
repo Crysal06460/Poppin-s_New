@@ -16,6 +16,8 @@ import 'dart:io';
 import 'routes.dart';
 import 'theme/app_colors.dart';
 import 'firebase_options.dart';
+import 'features/aide/aide_floating_button.dart';
+import 'features/aide/aide_route_observer.dart';
 
 import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
@@ -183,6 +185,7 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    attachAideRouteTracking(router);
     _applyPreferredOrientations(force: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyPreferredOrientations(force: true);
@@ -278,7 +281,12 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
       builder: (context, child) {
         return ColoredBox(
           color: kAppBackgroundColor,
-          child: child ?? const SizedBox.shrink(),
+          child: Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              const AideFloatingButton(),
+            ],
+          ),
         );
       },
       localizationsDelegates: const [

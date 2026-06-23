@@ -990,47 +990,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen>
                               },
                             ),
                             _buildModernTile(
-                              icon: Icons.photo_camera_rounded,
-                              title: "Photo de profil",
-                              subtitle: "Modifier la photo de votre enfant",
-                              color: Colors.indigo,
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final child =
-                                    selectedChild as Map<String, dynamic>;
-                                final result = await navigatorContext.push(
-                                  '/parent/child-photo',
-                                  extra: {
-                                    'childId': child['id'],
-                                    'structureId':
-                                        child['structureId'] ?? _structureId,
-                                    'childName':
-                                        child['firstName'] ?? 'Mon enfant',
-                                  },
-                                );
-                                if (result == true && mounted) {
-                                  ScaffoldMessenger.of(navigatorContext)
-                                      .showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          Icon(Icons.check_circle,
-                                              color: Colors.white, size: 20),
-                                          SizedBox(width: 8),
-                                          Text('Photo mise à jour avec succès'),
-                                        ],
-                                      ),
-                                      backgroundColor: Colors.green,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                            _buildModernTile(
                               icon: Icons.schedule_rounded,
                               title: "Horaires de l'enfant",
                               subtitle: "Définir les créneaux d'accueil",
