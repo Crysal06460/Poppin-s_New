@@ -28,8 +28,8 @@ const messaging = getMessaging();
 const MAILJET_API_KEY = defineSecret('MAILJET_API_KEY');
 const MAILJET_SECRET_KEY = defineSecret('MAILJET_SECRET_KEY');
 
-// ===== CONFIGURATION OpenAI — Assistant Calculs IA =====
-const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
+// ===== CONFIGURATION DeepSeek — Assistant Calculs IA =====
+const DEEPSEEK_API_KEY = defineSecret('DEEPSEEK_API_KEY');
 let mailjetClient;
 function getMailjet() {
     if (!mailjetClient) {
@@ -4487,7 +4487,7 @@ exports.onChildParentEmailSet = onDocumentWritten({
     return null;
 });
 
-// ===== ASSISTANT CALCULS IA (chat limité, OpenAI gpt-4o-mini) =====
+// ===== ASSISTANT CALCULS IA (chat limité, DeepSeek deepseek-chat) =====
 // Mots-clés autorisant l'appel à l'IA (filtre en amont, sans coût)
 const CALCUL_ASSISTANT_KEYWORDS = [
     'heure', 'salaire', 'contrat', 'congé', 'conge', 'tarif', 'mensualis',
@@ -4502,7 +4502,7 @@ const CALCUL_ASSISTANT_OFF_TOPIC_MESSAGE =
 
 exports.askCalculAssistant = onCall({
     region: 'europe-west1',
-    secrets: [OPENAI_API_KEY],
+    secrets: [DEEPSEEK_API_KEY],
 }, async (request) => {
     console.log('🤖 askCalculAssistant appelée');
 
@@ -4566,7 +4566,7 @@ exports.askCalculAssistant = onCall({
         throw new HttpsError('internal', 'Erreur lors de la vérification du quota');
     }
 
-    // Appel à l'IA OpenAI (gpt-4o-mini)
+    // Appel à l'IA DeepSeek (deepseek-chat)
     try {
         // Le modèle ne doit jamais produire de chiffre/calcul lui-même : le formulaire local de l'app
         // (calcul déterministe) est la seule source fiable. L'IA ne fait qu'expliquer le principe et
@@ -4581,14 +4581,14 @@ exports.askCalculAssistant = onCall({
             "question sort de ce cadre métier, réponds uniquement : 'Je ne peux répondre qu'aux questions " +
             "liées aux contrats et calculs d'assistante maternelle.' Sois très concis (max 80 mots).";
 
-        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY.value()}`,
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY.value()}`,
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
+                model: 'deepseek-chat',
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: question },
@@ -4597,16 +4597,16 @@ exports.askCalculAssistant = onCall({
             }),
         });
 
-        if (!openaiResponse.ok) {
-            const errorBody = await openaiResponse.text();
-            throw new Error(`OpenAI API a répondu avec le statut ${openaiResponse.status}: ${errorBody}`);
+        if (!deepseekResponse.ok) {
+            const errorBody = await deepseekResponse.text();
+            throw new Error(`DeepSeek API a répondu avec le statut ${deepseekResponse.status}: ${errorBody}`);
         }
 
-        const openaiData = await openaiResponse.json();
-        const aiMessage = openaiData?.choices?.[0]?.message?.content;
+        const deepseekData = await deepseekResponse.json();
+        const aiMessage = deepseekData?.choices?.[0]?.message?.content;
 
         if (!aiMessage) {
-            throw new Error('Réponse OpenAI vide ou mal formée');
+            throw new Error('Réponse DeepSeek vide ou mal formée');
         }
 
         console.log('✅ Réponse IA générée avec succès');
@@ -4614,7 +4614,7 @@ exports.askCalculAssistant = onCall({
         return { response: aiMessage };
 
     } catch (error) {
-        console.error('❌ Erreur appel IA OpenAI:', error);
+        console.error('❌ Erreur appel IA DeepSeek:', error);
 
         // L'appel API a échoué : on rembourse le quota pour ne pas pénaliser l'utilisateur
         try {

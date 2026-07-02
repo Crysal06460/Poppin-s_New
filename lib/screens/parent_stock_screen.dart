@@ -48,7 +48,8 @@ class _ParentStockScreenState extends State<ParentStockScreen>
       'Eau nettoyante',
       'Coton',
       'Lingette',
-      'Mouchoirs'
+      'Paquet de mouchoirs',
+      'Boîte de mouchoirs'
     ],
     'Alimentation': [
       'Eau minérale',

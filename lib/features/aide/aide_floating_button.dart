@@ -5,23 +5,28 @@ import 'aide_route_observer.dart';
 
 const Color _primaryBlue = Color(0xFF3D9DF2);
 
-/// Écrans publics (pas encore connecté) où le bouton d'aide n'a pas de sens.
-const Set<String> _hiddenOnPaths = {
-  '/',
-  '/welcome',
-  '/quick-login',
-  '/login',
-  '/splash',
-  '/register',
-  '/invitation-code',
-  '/invitation-validated',
-  '/invitation-signup',
-  '/pricing',
-  '/congratulations',
+/// Seuls les 12 écrans de fonctionnalités accessibles depuis la grille du
+/// Home doivent afficher le bouton d'aide — nulle part ailleurs (dashboard,
+/// administration, paramètres, écrans publics, etc.). Liste calquée sur la
+/// grille `features` de home_screen.dart.
+const Set<String> _visibleOnPaths = {
+  '/horaires',
+  '/repas',
+  '/activites',
+  '/sieste',
+  '/sante',
+  '/change',
+  '/photos',
+  '/agenda',
+  '/stock',
+  '/recap-enfant',
+  '/actualites',
+  '/transmissions',
 };
 
-/// Bouton d'aide flottant global, affiché sur tous les écrans (injecté une
-/// seule fois au niveau du `builder` de MaterialApp dans main.dart).
+/// Bouton d'aide flottant global (injecté une seule fois au niveau du
+/// `builder` de MaterialApp dans main.dart), mais visible uniquement sur les
+/// 12 écrans de fonctionnalités du Home ([_visibleOnPaths]).
 /// Ouvre une FAQ statique adaptée à l'écran courant — aucun appel IA, donc
 /// aucun coût et aucun risque de réponse erronée.
 class AideFloatingButton extends StatelessWidget {
@@ -50,7 +55,7 @@ class AideFloatingButton extends StatelessWidget {
     return ValueListenableBuilder<String>(
       valueListenable: currentRoutePath,
       builder: (context, path, _) {
-        if (_hiddenOnPaths.contains(path)) {
+        if (!_visibleOnPaths.contains(path)) {
           return const SizedBox.shrink();
         }
         return Positioned(

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class RemplacementsManagementScreen extends StatefulWidget {
@@ -221,6 +222,16 @@ class _RemplacementsManagementScreenState
         elevation: 0,
         iconTheme: const IconThemeData(color: primaryBlue),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: primaryBlue),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/structure-management');
+            }
+          },
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -399,22 +410,26 @@ class _RemplacementsManagementScreenState
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: ListTile(
-                        title: Text(
-                          displayName,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          "${data['replacementEmail'] ?? ''}\n"
-                          "${_formatTimestamp(data['startDate'])} → "
-                          "${_formatTimestamp(data['endDate'])}",
-                        ),
-                        isThreeLine: true,
-                        trailing: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ListTile(
+                            title: Text(
+                              displayName,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              "${data['replacementEmail'] ?? ''}\n"
+                              "${_formatTimestamp(data['startDate'])} → "
+                              "${_formatTimestamp(data['endDate'])}",
+                            ),
+                            isThreeLine: true,
+                            // Seul le badge de statut reste en trailing : un
+                            // ListTile impose une hauteur fixe à trailing,
+                            // insuffisante pour empiler badge + bouton
+                            // (provoquait un RenderFlex overflow).
+                            trailing: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -430,16 +445,24 @@ class _RemplacementsManagementScreenState
                                 ),
                               ),
                             ),
-                            if (canCancel)
-                              TextButton(
-                                onPressed: () => _cancelRemplacement(doc.id),
-                                child: const Text(
-                                  "Annuler",
-                                  style: TextStyle(color: primaryRed),
+                          ),
+                          if (canCancel)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  right: 8, bottom: 4),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () =>
+                                      _cancelRemplacement(doc.id),
+                                  child: const Text(
+                                    "Annuler",
+                                    style: TextStyle(color: primaryRed),
+                                  ),
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     );
                   }).toList(),

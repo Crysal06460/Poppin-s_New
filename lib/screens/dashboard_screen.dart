@@ -2432,7 +2432,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _openContratsMenu() {
     _showCategorySheet(
-      title: 'Contrats',
+      title: 'Documents contractuels',
       color: _tileBlue,
       children: [
         _sheetAction(
@@ -2522,7 +2522,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bulletColor: _tileBlue,
       ),
       _sheetAction(
-        label: 'Contrats',
+        label: 'Documents contractuels',
         onTap: _openContratsMenu,
         bulletColor: _tileBlue,
       ),
@@ -5141,7 +5141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         SizedBox(height: maxHeight * 0.02),
         _buildTabletActionItem(
           icon: Icons.description_outlined,
-          title: "Contrats",
+          title: "Documents contractuels",
           description: "Engagement, CDI, CDD, Avenant",
           onTap: _openContratsMenu,
           maxWidth: maxWidth,

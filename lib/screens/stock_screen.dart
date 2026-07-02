@@ -52,7 +52,8 @@ class _StockScreenState extends State<StockScreen> {
       'Eau nettoyante',
       'Coton',
       'Lingettes',
-      'Mouchoirs'
+      'Paquet de mouchoirs',
+      'Boîte de mouchoirs'
     ],
     'Alimentation': [
       'Eau minérale',
