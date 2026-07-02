@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:poppins_app/services/remplacement_session_service.dart';
 
 class InvitationSignupScreen extends StatefulWidget {
   final Map<String, dynamic> invitationInfo;
@@ -95,6 +96,34 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
     }
   }
 
+  IconData get _headerIcon {
+    if (invitationType == 'mamMember') return Icons.business;
+    if (invitationType == 'remplacement') return Icons.swap_horiz;
+    return Icons.family_restroom;
+  }
+
+  String get _headerTitle {
+    if (_isExistingUser) {
+      return invitationType == 'remplacement'
+          ? "Connexion remplaçante"
+          : "Rejoindre la structure";
+    }
+    if (invitationType == 'mamMember') return "Rejoindre en tant que membre";
+    if (invitationType == 'remplacement') {
+      return "Rejoindre en tant que remplaçante";
+    }
+    return "Rejoindre en tant que parent";
+  }
+
+  String get _headerSubtitle {
+    if (invitationType == 'mamMember') return "Vous allez rejoindre $structureName";
+    if (invitationType == 'remplacement') {
+      return "Vous allez remplacer temporairement $structureName, avec votre "
+          "propre mot de passe";
+    }
+    return "Vous allez rejoindre $structureName pour $childName";
+  }
+
   @override
   Widget build(BuildContext context) {
     // Récupérer les dimensions de l'écran
@@ -109,6 +138,8 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
       accentColor = brightCyan;
     } else if (invitationType == 'parent') {
       accentColor = primaryYellow;
+    } else if (invitationType == 'remplacement') {
+      accentColor = primaryRed;
     }
 
     return Scaffold(
@@ -151,9 +182,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
           children: [
             // Icône et titre
             Icon(
-              invitationType == 'mamMember'
-                  ? Icons.business
-                  : Icons.family_restroom,
+              _headerIcon,
               size: 60,
               color: accentColor,
             ),
@@ -161,11 +190,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
             const SizedBox(height: 20),
 
             Text(
-              _isExistingUser
-                  ? "Rejoindre la structure"
-                  : (invitationType == 'mamMember'
-                      ? "Rejoindre en tant que membre"
-                      : "Rejoindre en tant que parent"),
+              _headerTitle,
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -177,9 +202,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
             const SizedBox(height: 10),
 
             Text(
-              invitationType == 'mamMember'
-                  ? "Vous allez rejoindre $structureName"
-                  : "Vous allez rejoindre $structureName pour $childName",
+              _headerSubtitle,
               style: const TextStyle(
                 fontSize: 16,
                 color: Colors.grey,
@@ -513,9 +536,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                       ],
                     ),
                     child: Icon(
-                      invitationType == 'mamMember'
-                          ? Icons.business
-                          : Icons.family_restroom,
+                      _headerIcon,
                       size: maxWidth * 0.06,
                       color: accentColor,
                     ),
@@ -526,10 +547,10 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
                   // Titre principal
                   Text(
                     _isExistingUser
-                        ? "Connexion requise"
-                        : (invitationType == 'mamMember'
-                            ? "Rejoindre en tant que membre"
-                            : "Rejoindre en tant que parent"),
+                        ? (invitationType == 'remplacement'
+                            ? "Connexion remplaçante"
+                            : "Connexion requise")
+                        : _headerTitle,
                     style: TextStyle(
                       fontSize: maxWidth * 0.03,
                       fontWeight: FontWeight.bold,
@@ -543,9 +564,7 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
 
                   // Sous-titre
                   Text(
-                    invitationType == 'mamMember'
-                        ? "Vous allez rejoindre $structureName"
-                        : "Vous allez rejoindre $structureName pour $childName",
+                    _headerSubtitle,
                     style: TextStyle(
                       fontSize: maxWidth * 0.02,
                       color: Colors.grey.shade600,
@@ -1223,6 +1242,60 @@ class _InvitationSignupScreenState extends State<InvitationSignupScreen> {
         // Redirection vers l'interface parent
         if (mounted) {
           context.go('/parent/home');
+        }
+      } else if (invitationType == 'remplacement') {
+        // ⚠️ Branche DÉLIBÉRÉMENT différente des autres : on n'écrit JAMAIS
+        // sur users/{email} (pas de structureId, pas de role). Si cet email
+        // correspond par ailleurs à un vrai compte Poppins existant (le check
+        // fetchSignInMethodsForEmail ci-dessus l'a déjà routé vers "connecte-toi
+        // avec ton mot de passe réel"), on ne doit surtout pas corrompre ce
+        // compte. Tout l'accès temporaire est porté par le doc
+        // `remplacements/{id}` + un custom token vers l'UID de la propriétaire
+        // (voir RemplacementSessionService), jamais par une identité users/.
+
+        // Marquer l'invitation comme complétée : autorisé par les règles
+        // Firestore car la remplaçante ne modifie que le statut de SA PROPRE
+        // invitation (resource.data.email == myEmail()).
+        try {
+          final invitationId = invitationInfo['invitationId'];
+          if (invitationId != null && invitationId.toString().isNotEmpty) {
+            await FirebaseFirestore.instance
+                .collection('invitations')
+                .doc(invitationId.toString())
+                .update({'status': 'completed'});
+          }
+        } catch (e) {
+          print("Erreur marquage invitation remplacement complétée: $e");
+        }
+
+        // Le doc `remplacements/{id}` vit sous structures/{structureId}, que
+        // cette remplaçante toute juste créée ne peut PAS écrire directement
+        // (elle n'est pas encore membre de la structure — voir
+        // isStructureMember() dans firestore.rules). On réutilise donc
+        // `activateRemplacementSession` (Cloud Function, Admin SDK) via
+        // RemplacementSessionService.tryActivate() : si sa fenêtre est déjà
+        // ouverte, ça bascule immédiatement sa session sur l'UID propriétaire
+        // ET positionne replacementUid/status côté serveur. Sinon, cela sera
+        // fait automatiquement à son premier vrai login (login_screen_new /
+        // quick_login_screen), une fois la fenêtre ouverte.
+        bool activated = false;
+        try {
+          activated = await RemplacementSessionService.instance.tryActivate();
+        } catch (e) {
+          print("Erreur activation remplacement à l'inscription: $e");
+        }
+
+        if (!mounted) return;
+        if (activated) {
+          context.go('/home');
+        } else {
+          setState(() {
+            isLoading = false;
+            errorMessage = "Compte créé avec succès. Votre période de "
+                "remplacement n'a pas encore commencé (ou est terminée) : "
+                "revenez vous connecter sur l'écran de connexion à la date "
+                "prévue.";
+          });
         }
       }
     } catch (e) {

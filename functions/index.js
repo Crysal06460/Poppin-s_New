@@ -818,6 +818,237 @@ exports.purgeIncompleteAccount = onCall({
     return { purged: true };
 });
 
+// ============================================
+// ========== CHANGEMENT D'EMAIL SELF-SERVICE ==========
+// ============================================
+// Migre l'email utilisé comme clé/identifiant à travers Firestore puis Firebase Auth.
+// Ordre volontaire : Firestore d'abord (toutes les lectures avant le batch d'écriture),
+// Auth en tout dernier (la plus petite étape, la plus facile à annuler en cas d'échec).
+// Pendant toute la préparation, request.auth.token.email reste l'ancien email, donc les
+// règles Firestore (isStructureMember, isProfessional, etc.) continuent de résoudre
+// correctement users/{oldEmail} pour toute autre requête en vol de cet utilisateur.
+exports.updateUserEmail = onCall({
+    region: 'europe-west1',
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const uid = request.auth.uid;
+    const rawNewEmail = request.data?.newEmail;
+    if (!rawNewEmail || typeof rawNewEmail !== 'string') {
+        throw new HttpsError('invalid-argument', 'newEmail-required');
+    }
+
+    const newEmail = rawNewEmail.trim().toLowerCase();
+    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    if (!emailRegex.test(newEmail)) {
+        throw new HttpsError('invalid-argument', 'invalid-email');
+    }
+
+    // 1. Résoudre l'identité via l'UID authentifié (jamais via un oldEmail fourni par le client)
+    let currentUserRecord;
+    try {
+        currentUserRecord = await getAuth().getUser(uid);
+    } catch (error) {
+        console.error('❌ updateUserEmail: impossible de récupérer l\'utilisateur courant:', error);
+        throw new HttpsError('internal', 'auth-lookup-failed');
+    }
+
+    const oldEmail = (currentUserRecord.email || '').trim().toLowerCase();
+    if (!oldEmail) {
+        throw new HttpsError('failed-precondition', 'current-user-has-no-email');
+    }
+    if (newEmail === oldEmail) {
+        throw new HttpsError('invalid-argument', 'same-email');
+    }
+
+    // 2. Rejeter si le nouvel email est déjà pris
+    try {
+        await getAuth().getUserByEmail(newEmail);
+        // Si ça résout, l'email existe déjà
+        throw new HttpsError('already-exists', 'email-already-used');
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        if (error.code !== 'auth/user-not-found') {
+            console.error('❌ updateUserEmail: erreur vérification email cible:', error);
+            throw new HttpsError('internal', 'auth-lookup-failed');
+        }
+        // auth/user-not-found : c'est le cas attendu, on continue
+    }
+
+    // 3. Lire users/{oldEmail}, résoudre structureId, vérifier si propriétaire
+    const oldUserRef = db.collection('users').doc(oldEmail);
+    const oldUserSnap = await oldUserRef.get();
+    if (!oldUserSnap.exists) {
+        throw new HttpsError('not-found', 'user-doc-not-found');
+    }
+    const oldUserData = oldUserSnap.data() || {};
+    const structureId = oldUserData.structureId || null;
+
+    let structureRef = null;
+    let structureSnap = null;
+    let structureData = null;
+    if (structureId) {
+        structureRef = db.collection('structures').doc(structureId);
+        structureSnap = await structureRef.get();
+        if (structureSnap.exists) {
+            structureData = structureSnap.data() || {};
+        }
+    }
+
+    const isOwnerOfEmail = (value) => (value || '').toString().trim().toLowerCase() === oldEmail;
+    const structureOwnerEmailMatches = structureData ? isOwnerOfEmail(structureData.ownerEmail) : false;
+    const structureEmailMatches = structureData ? isOwnerOfEmail(structureData.email) : false;
+
+    // 4. Toutes les lectures nécessaires AVANT de construire le batch (un batch ne peut pas requêter)
+    let membersSnap = { docs: [] };
+    let assistantSnap = null;
+    let childrenDocsMap = new Map(); // path -> { ref, updates: {}, original: {} }
+
+    if (structureId) {
+        membersSnap = await structureRef.collection('members').where('email', '==', oldEmail).get();
+
+        const assistantRef = structureRef.collection('assistants').doc(oldEmail);
+        const assistantDocSnap = await assistantRef.get();
+        if (assistantDocSnap.exists) {
+            assistantSnap = assistantDocSnap;
+        }
+
+        const [byAssigned, byParent1, byParent2] = await Promise.all([
+            structureRef.collection('children').where('assignedMemberEmail', '==', oldEmail).get(),
+            structureRef.collection('children').where('parent1.email', '==', oldEmail).get(),
+            structureRef.collection('children').where('parent2.email', '==', oldEmail).get(),
+        ]);
+
+        const registerChildUpdate = (doc, field) => {
+            const path = doc.ref.path;
+            if (!childrenDocsMap.has(path)) {
+                childrenDocsMap.set(path, { ref: doc.ref, updates: {}, original: {} });
+            }
+            const entry = childrenDocsMap.get(path);
+            const data = doc.data() || {};
+            if (field === 'assignedMemberEmail') {
+                entry.updates.assignedMemberEmail = newEmail;
+                entry.original.assignedMemberEmail = data.assignedMemberEmail;
+            } else if (field === 'parent1') {
+                entry.updates['parent1.email'] = newEmail;
+                entry.original['parent1.email'] = (data.parent1 || {}).email;
+            } else if (field === 'parent2') {
+                entry.updates['parent2.email'] = newEmail;
+                entry.original['parent2.email'] = (data.parent2 || {}).email;
+            }
+        };
+
+        byAssigned.docs.forEach((doc) => registerChildUpdate(doc, 'assignedMemberEmail'));
+        byParent1.docs.forEach((doc) => registerChildUpdate(doc, 'parent1'));
+        byParent2.docs.forEach((doc) => registerChildUpdate(doc, 'parent2'));
+    }
+
+    // 5. Construire UN SEUL batch avec toutes les écritures Firestore
+    const newUserRef = db.collection('users').doc(newEmail);
+    const assistantOldRef = assistantSnap ? assistantSnap.ref : null;
+    const assistantNewRef = assistantSnap ? structureRef.collection('assistants').doc(newEmail) : null;
+    const assistantData = assistantSnap ? (assistantSnap.data() || {}) : null;
+
+    const structureUpdates = {};
+    if (structureOwnerEmailMatches) structureUpdates.ownerEmail = newEmail;
+    if (structureEmailMatches) structureUpdates.email = newEmail;
+
+    const buildBatch = (forward) => {
+        const batch = db.batch();
+
+        if (forward) {
+            batch.set(newUserRef, {
+                ...oldUserData,
+                email: newEmail,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            batch.delete(oldUserRef);
+        } else {
+            batch.set(oldUserRef, oldUserData);
+            batch.delete(newUserRef);
+        }
+
+        if (structureRef && Object.keys(structureUpdates).length > 0) {
+            if (forward) {
+                batch.update(structureRef, structureUpdates);
+            } else {
+                const revert = {};
+                if (structureOwnerEmailMatches) revert.ownerEmail = structureData.ownerEmail;
+                if (structureEmailMatches) revert.email = structureData.email;
+                batch.update(structureRef, revert);
+            }
+        }
+
+        membersSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, { email: forward ? newEmail : oldEmail });
+        });
+
+        if (assistantSnap) {
+            if (forward) {
+                batch.set(assistantNewRef, {
+                    ...assistantData,
+                    email: newEmail,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                batch.delete(assistantOldRef);
+            } else {
+                batch.set(assistantOldRef, assistantData);
+                batch.delete(assistantNewRef);
+            }
+        }
+
+        childrenDocsMap.forEach(({ ref, updates, original }) => {
+            batch.update(ref, forward ? updates : original);
+        });
+
+        return batch;
+    };
+
+    try {
+        await buildBatch(true).commit();
+    } catch (error) {
+        console.error('❌ updateUserEmail: échec du batch Firestore, aucune écriture appliquée:', error);
+        throw new HttpsError('internal', 'firestore-migration-failed');
+    }
+
+    console.log(`✅ updateUserEmail: migration Firestore ${oldEmail} → ${newEmail} effectuée (uid: ${uid})`);
+
+    // 6. Seulement après succès du batch : mettre à jour Firebase Auth (dernière étape)
+    try {
+        await getAuth().updateUser(uid, { email: newEmail });
+    } catch (authError) {
+        console.error('❌ updateUserEmail: échec de la mise à jour Auth après migration Firestore, rollback:', authError);
+        try {
+            await buildBatch(false).commit();
+            console.log(`↩️ updateUserEmail: rollback Firestore réussi pour ${oldEmail}`);
+        } catch (rollbackError) {
+            console.error('🚨 updateUserEmail: ÉCHEC DU ROLLBACK, nécessite une reprise manuelle:', rollbackError);
+            try {
+                await db.collection('emailChangeFailures').doc(uid).set({
+                    uid,
+                    oldEmail,
+                    newEmail,
+                    structureId,
+                    authErrorMessage: authError.message || String(authError),
+                    rollbackErrorMessage: rollbackError.message || String(rollbackError),
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+            } catch (logError) {
+                console.error('🚨 updateUserEmail: impossible même de logger l\'échec critique:', logError);
+            }
+            throw new HttpsError('internal', 'critical-failure-manual-fixup-required');
+        }
+        // Rollback Firestore réussi : l'utilisateur est revenu à son état d'avant l'appel.
+        throw new HttpsError('internal', 'auth-update-failed-rolled-back');
+    }
+
+    console.log(`✅ updateUserEmail: changement d'email complet ${oldEmail} → ${newEmail} (uid: ${uid})`);
+
+    return { success: true, oldEmail, newEmail };
+});
+
 async function collectBlockingReasons(uid, structureSnapshot) {
     const reasons = [];
 
@@ -1311,6 +1542,366 @@ exports.lookupInvitationByEmail = onCall({
             'Une erreur est survenue lors de la validation de votre invitation.'
         );
     }
+});
+
+// ================================================================
+// ===== REMPLACEMENTS (accès temporaire délégué, date-bornés) =====
+// ================================================================
+// Mécanisme : la remplaçante s'authentifie avec SON PROPRE mot de passe.
+// Si une fenêtre de remplacement est active pour son email, on lui délivre
+// un custom token pour l'UID de la PROPRIÉTAIRE (getAuth().createCustomToken),
+// et son client se reconnecte avec ce jeton. Elle devient alors littéralement
+// l'UID de la propriétaire pour Firestore → aucune règle de sécurité à
+// modifier (engagements_reciproques/contrats_cdi/contrats_cdd exigent
+// request.auth.uid == userId exactement ; ce mécanisme le satisfait tel quel).
+//
+// Regex email partagée avec lookupInvitationByEmail.
+const REMPLACEMENT_EMAIL_REGEX = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+
+function remplacementToDate(value) {
+    if (!value) return null;
+    if (value instanceof Timestamp) return value.toDate();
+    if (value?.toDate) return value.toDate();
+    if (value instanceof Date) return value;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+// ===== 1. createRemplacement — propriétaire uniquement =====
+// Crée une invitation (même format que les autres), un doc `remplacements`
+// (status: 'invited') et une entrée emailQueue avec le template dédié.
+exports.createRemplacement = onCall({ region: 'europe-west1' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const {
+        structureId,
+        replacementEmail,
+        replacementFirstName,
+        replacementLastName,
+        startDate,
+        endDate,
+    } = request.data || {};
+
+    if (!structureId || typeof structureId !== 'string') {
+        throw new HttpsError('invalid-argument', 'structureId manquant');
+    }
+
+    // V1 : seule la propriétaire de la structure peut créer un remplacement pour elle-même.
+    if (request.auth.uid !== structureId) {
+        throw new HttpsError('permission-denied', 'Seule la propriétaire de la structure peut créer un remplacement.');
+    }
+
+    const emailNormalized = (replacementEmail || '').toString().trim().toLowerCase();
+    if (!emailNormalized || !REMPLACEMENT_EMAIL_REGEX.test(emailNormalized)) {
+        throw new HttpsError('invalid-argument', "Adresse email de la remplaçante invalide.");
+    }
+
+    const start = remplacementToDate(startDate);
+    const end = remplacementToDate(endDate);
+    if (!start || !end) {
+        throw new HttpsError('invalid-argument', 'Dates de début et de fin invalides.');
+    }
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (start < todayStart) {
+        throw new HttpsError('invalid-argument', 'La date de début ne peut pas être dans le passé.');
+    }
+    if (start >= end) {
+        throw new HttpsError('invalid-argument', 'La date de début doit être antérieure à la date de fin.');
+    }
+
+    const ownerRecord = await getAuth().getUser(request.auth.uid);
+    const ownerEmail = (ownerRecord.email || '').toLowerCase();
+    if (ownerEmail && ownerEmail === emailNormalized) {
+        throw new HttpsError('invalid-argument', 'Vous ne pouvez pas vous désigner vous-même comme remplaçante.');
+    }
+
+    const structureSnap = await db.collection('structures').doc(structureId).get();
+    if (!structureSnap.exists) {
+        throw new HttpsError('not-found', 'Structure introuvable.');
+    }
+    const structureData = structureSnap.data() || {};
+    const structureName = structureData.structureName || structureData.name || 'ma structure';
+    const ownerName = [
+        structureData.ownerFirstName || structureData.firstName || '',
+        structureData.ownerLastName || structureData.lastName || '',
+    ].map((s) => (s || '').toString().trim()).filter(Boolean).join(' ').trim() || ownerEmail || 'La structure';
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const invitationRef = db.collection('invitations').doc();
+    const remplacementRef = db.collection('structures').doc(structureId).collection('remplacements').doc();
+
+    const batch = db.batch();
+
+    batch.set(invitationRef, {
+        email: emailNormalized,
+        type: 'remplacement',
+        structureId,
+        structureName,
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromDate(expiresAt),
+    });
+
+    batch.set(remplacementRef, {
+        replacementEmail: emailNormalized,
+        replacementFirstName: (replacementFirstName || '').toString().trim(),
+        replacementLastName: (replacementLastName || '').toString().trim(),
+        replacementUid: null,
+        ownerUid: request.auth.uid,
+        structureId,
+        structureName,
+        ownerName,
+        startDate: Timestamp.fromDate(start),
+        endDate: Timestamp.fromDate(end),
+        status: 'invited',
+        invitationId: invitationRef.id,
+        createdBy: request.auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        cancelledAt: null,
+        cancelledBy: null,
+        lastActivatedAt: null,
+    });
+
+    await batch.commit();
+
+    // Email hors batch (comme pour les autres invitations) : un échec d'envoi
+    // ne doit pas faire échouer la création du remplacement lui-même.
+    try {
+        await db.collection('emailQueue').add({
+            to: emailNormalized,
+            template: 'remplacement-invitation',
+            subject: `Invitation à remplacer ${ownerName} sur Poppins`,
+            status: 'pending',
+            createdAt: FieldValue.serverTimestamp(),
+            retryCount: 0,
+            priority: 'high',
+            templateData: {
+                firstName: (replacementFirstName || '').toString().trim(),
+                lastName: (replacementLastName || '').toString().trim(),
+                ownerName,
+                structureName,
+                startDate: start.toLocaleDateString('fr-FR'),
+                endDate: end.toLocaleDateString('fr-FR'),
+                androidLink: 'https://play.google.com/store/apps/details?id=com.beylet.poppinsapp',
+                iosLink: 'https://apps.apple.com/us/app/poppins/id6744274953',
+                year: new Date().getFullYear().toString(),
+                to: emailNormalized,
+            },
+        });
+    } catch (err) {
+        console.error('❌ Erreur création emailQueue remplacement:', err);
+    }
+
+    console.log(`✅ Remplacement créé: ${remplacementRef.id} pour ${emailNormalized} (structure ${structureId})`);
+
+    return { success: true, remplacementId: remplacementRef.id, invitationId: invitationRef.id };
+});
+
+// ===== 2. activateRemplacementSession — appelée par le client remplaçant =====
+// Juste après signInWithEmailAndPassword (avant tout routing) — donc à CHAQUE
+// connexion normale de N'IMPORTE QUEL utilisateur, pas seulement au moment de
+// la redemption de l'invitation. Cherche un remplacement actif via l'index
+// collectionGroup (replacementEmail, status), vérifie la fenêtre de dates, et
+// renvoie un custom token pour l'UID propriétaire si tout correspond. Ne doit
+// jamais faire échouer un login normal : toute erreur inattendue renvoie
+// simplement { active: false }.
+//
+// ⚠️ GARDE-FOU DE SÉCURITÉ INDISPENSABLE : puisqu'un email Firebase Auth est
+// unique et peut donc déjà appartenir à un compte Poppins totalement étranger
+// (coïncidence, faute de frappe de la propriétaire en créant le remplacement,
+// etc.), on ne peut PAS activer/lier un remplacement sur la seule base d'une
+// correspondance d'email lors d'une connexion ordinaire : cela donnerait accès
+// aux données de la propriétaire (enfants, santé, contrats) à une personne
+// réelle qui n'a jamais consulté ni accepté l'invitation. On exige donc que
+// l'invitation associée (invitations/{invitationId}) ait déjà été marquée
+// `completed` — ce qui ne se produit QUE dans le flux explicite de redemption
+// (invitation_signup_screen.dart, après avoir suivi le lien/code d'invitation
+// et s'être authentifié dans cet écran dédié), jamais lors d'une connexion
+// normale. Un compte préexistant qui n'a jamais suivi ce flux garde son
+// invitation à `pending` pour toujours et ne sera donc jamais activé ici.
+exports.activateRemplacementSession = onCall({ region: 'europe-west1' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const email = (request.auth.token.email || '').toString().trim().toLowerCase();
+    if (!email) {
+        return { active: false };
+    }
+
+    try {
+        const snap = await db.collectionGroup('remplacements')
+            .where('replacementEmail', '==', email)
+            .where('status', 'in', ['invited', 'active'])
+            .get();
+
+        if (snap.empty) {
+            return { active: false };
+        }
+
+        const now = new Date();
+        let matchDoc = null;
+        for (const doc of snap.docs) {
+            const d = doc.data();
+            const start = remplacementToDate(d.startDate);
+            const end = remplacementToDate(d.endDate);
+            if (start && end && start <= now && now <= end) {
+                matchDoc = doc;
+                break;
+            }
+        }
+
+        if (!matchDoc) {
+            return { active: false };
+        }
+
+        const data = matchDoc.data();
+
+        // Défense en profondeur : si un replacementUid est déjà lié, seul ce
+        // même uid peut réactiver (empêche un cas résiduel où l'email aurait
+        // pu être réattribué entre-temps côté Firebase Auth).
+        if (data.replacementUid && data.replacementUid !== request.auth.uid) {
+            return { active: false };
+        }
+
+        // Garde-fou principal : exiger que l'invitation ait été explicitement
+        // complétée via l'écran de redemption avant toute liaison/activation.
+        if (!data.invitationId) {
+            console.warn(`⚠️ activateRemplacementSession: remplacement ${matchDoc.id} sans invitationId, refus`);
+            return { active: false };
+        }
+        const invitationSnap = await db.collection('invitations').doc(data.invitationId).get();
+        const invitationStatus = invitationSnap.exists ? invitationSnap.data().status : null;
+        if (invitationStatus !== 'completed') {
+            return { active: false };
+        }
+
+        const updates = {
+            status: 'active',
+            lastActivatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+        if (!data.replacementUid) {
+            updates.replacementUid = request.auth.uid;
+        }
+        await matchDoc.ref.update(updates);
+
+        const customToken = await getAuth().createCustomToken(data.ownerUid);
+        const endDate = remplacementToDate(data.endDate) || new Date();
+
+        console.log(`✅ activateRemplacementSession: session active pour ${email} → owner ${data.ownerUid}`);
+
+        return {
+            active: true,
+            customToken,
+            remplacementId: matchDoc.id,
+            structureId: data.structureId,
+            structureName: data.structureName || '',
+            ownerName: data.ownerName || '',
+            endDate: endDate.toISOString(),
+        };
+    } catch (error) {
+        console.error('❌ activateRemplacementSession error:', error);
+        // Ne jamais casser une connexion normale à cause de cette fonctionnalité optionnelle.
+        return { active: false };
+    }
+});
+
+// ===== 3. cancelRemplacement — propriétaire uniquement =====
+exports.cancelRemplacement = onCall({ region: 'europe-west1' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+    const { structureId, remplacementId } = request.data || {};
+    if (!structureId || !remplacementId) {
+        throw new HttpsError('invalid-argument', 'structureId et remplacementId requis');
+    }
+    if (request.auth.uid !== structureId) {
+        throw new HttpsError('permission-denied', 'Seule la propriétaire de la structure peut annuler un remplacement.');
+    }
+
+    const ref = db.collection('structures').doc(structureId).collection('remplacements').doc(remplacementId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+        throw new HttpsError('not-found', 'Remplacement introuvable.');
+    }
+    const data = snap.data();
+    if (!['invited', 'active'].includes(data.status)) {
+        return { success: false, message: 'already-processed' };
+    }
+
+    await ref.update({
+        status: 'cancelled',
+        cancelledAt: FieldValue.serverTimestamp(),
+        cancelledBy: request.auth.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // ⚠️ Effet de bord volontaire et documenté : revokeRefreshTokens invalide
+    // TOUTES les sessions actives de la propriétaire (uid == structureId),
+    // y compris ses propres connexions en cours ailleurs. C'est nécessaire
+    // pour couper l'accès de la remplaçante immédiatement, puisque sa session
+    // est littéralement l'UID de la propriétaire (mécanisme du custom token).
+    // La propriétaire devra simplement se reconnecter.
+    try {
+        await getAuth().revokeRefreshTokens(data.ownerUid);
+    } catch (err) {
+        console.error('❌ Erreur revokeRefreshTokens (cancelRemplacement):', err);
+    }
+
+    console.log(`🛑 Remplacement ${remplacementId} annulé par ${request.auth.uid}`);
+    return { success: true };
+});
+
+// ===== 4. expireRemplacements — onSchedule toutes les 15 min =====
+// Même principe que cleanupExpiredInvitations, mais en collectionGroup car
+// `remplacements` est une sous-collection de `structures`. Ne fait QUE
+// marquer 'expired' : contrairement à cancelRemplacement, on n'appelle PAS
+// revokeRefreshTokens ici pour ne pas déconnecter la propriétaire à chaque
+// expiration naturelle — la coupure précise à l'heure est gérée côté client
+// (RemplacementSessionService.checkStillActive, minuteur + AuthCheckScreen).
+exports.expireRemplacements = onSchedule({
+    schedule: 'every 15 minutes',
+    region: 'europe-west1',
+    memory: '128MiB',
+    cpu: 0.08,
+    maxInstances: 1,
+    minInstances: 0,
+    concurrency: 1,
+}, async (event) => {
+    try {
+        const now = Timestamp.now();
+        console.log('⏳ Vérification des remplacements expirés...');
+
+        const snapshot = await db.collectionGroup('remplacements')
+            .where('status', 'in', ['invited', 'active'])
+            .where('endDate', '<', now)
+            .get();
+
+        if (snapshot.empty) {
+            console.log('✅ Aucun remplacement expiré');
+            return null;
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+                status: 'expired',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
+        await batch.commit();
+        console.log(`⏳ ${snapshot.size} remplacement(s) expiré(s)`);
+    } catch (error) {
+        console.error('❌ Erreur expireRemplacements:', error);
+    }
+    return null;
 });
 
 // ===== NOUVELLE FONCTION : Traiter la queue d'emails avec Mailjet =====
@@ -3825,6 +4416,15 @@ exports.onChildParentEmailSet = onDocumentWritten({
         console.log(`📧 onChildParentEmailSet: invitation pour ${email} (enfant: ${childFirstName})`);
 
         try {
+            // Garde-fou : si users/{email} existe déjà, ce parent est déjà lié à un compte
+            // Poppins (ex: migration d'email self-service qui réécrit parent1/parent2.email) →
+            // ne pas ré-inviter un parent déjà lié.
+            const existingUserDoc = await db.collection('users').doc(email).get();
+            if (existingUserDoc.exists) {
+                console.log(`ℹ️ users/${email} existe déjà, parent déjà lié - pas d'invitation créée`);
+                continue;
+            }
+
             // Vérifier si une invitation pending existe déjà pour éviter les doublons
             const existing = await db.collection('invitations')
                 .where('email', '==', email)

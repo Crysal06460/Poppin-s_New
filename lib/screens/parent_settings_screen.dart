@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
+import '../services/email_change_service.dart';
 import '../utils/session_util.dart';
 import '../utils/message_badge_util.dart';
 import '../utils/stock_badge_util.dart';
@@ -302,42 +302,8 @@ class _ParentSettingsScreenState extends State<ParentSettingsScreen> {
   }
 
   Future<bool> _changeEmail(
-      String newEmail, String password, Function(String) onError) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception("Utilisateur non connecté");
-
-      if (user.email == newEmail) {
-        onError("Le nouvel email doit être différent.");
-        return false;
-      }
-
-      final cred = EmailAuthProvider.credential(email: user.email!, password: password);
-      await user.reauthenticateWithCredential(cred);
-
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('updateUserEmail');
-
-      await callable.call({
-        'newEmail': newEmail,
-        'password': password,
-      });
-
-      return true;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') {
-        onError("Mot de passe incorrect.");
-      } else {
-        onError("Erreur d'authentification: ${e.message}");
-      }
-      return false;
-    } on FirebaseFunctionsException catch (e) {
-      onError("${e.message}");
-      return false;
-    } catch (e) {
-      onError("Erreur: $e");
-      return false;
-    }
+      String newEmail, String password, Function(String) onError) {
+    return EmailChangeService.changeEmail(newEmail, password, onError);
   }
   
   @override

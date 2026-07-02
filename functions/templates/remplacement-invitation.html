@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invitation Remplacement - Poppins</title>
+  <style>
+    body {
+      background-color: #f3faff;
+      font-family: "Arial", sans-serif;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 30px auto;
+      background-color: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #F2B705 0%, #D94350 100%);
+      padding: 30px 20px;
+      text-align: center;
+      color: white;
+    }
+
+    .header img {
+      width: 60px;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      margin: 0;
+    }
+
+    .content {
+      padding: 30px 20px;
+    }
+
+    .content p {
+      margin-bottom: 16px;
+      font-size: 16px;
+    }
+
+    .email-box {
+      background-color: #fff4e0;
+      border-left: 6px solid #F2B705;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin: 30px 0;
+    }
+
+    .email-title {
+      text-transform: uppercase;
+      font-weight: bold;
+      color: #b8790a;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .email {
+      font-size: 20px;
+      font-weight: bold;
+      color: #0c4b72;
+      word-break: break-word;
+    }
+
+    .period-box {
+      background-color: #e6f4ff;
+      border-left: 6px solid #3D9DF2;
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+    }
+
+    .period-box strong {
+      color: #0c4b72;
+    }
+
+    .steps {
+      background-color: #f9fbfd;
+      padding: 20px;
+      border-radius: 10px;
+      margin: 30px 0;
+    }
+
+    .steps ol {
+      padding-left: 20px;
+    }
+
+    .steps li {
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .highlight {
+      color: #D94350;
+      font-weight: bold;
+    }
+
+    .app-links {
+      text-align: center;
+      margin-top: 30px;
+    }
+
+    .app-link {
+      display: inline-block;
+      margin: 0 10px;
+      padding: 10px 20px;
+      background-color: #e8f2fc;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #3D9DF2;
+      font-weight: bold;
+    }
+
+    .footer {
+      font-size: 13px;
+      color: #999;
+      text-align: center;
+      padding: 20px;
+      background-color: #f1f5f8;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    @media (max-width: 600px) {
+      .header h1 {
+        font-size: 20px;
+      }
+
+      .email {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://www.poppin-s.fr/wp-content/uploads/2025/07/cropped-app_icon.png" alt="Logo Poppins" />
+      <h1>Invitation à remplacer {{ownerName}}</h1>
+    </div>
+
+    <div class="content">
+      <p>Bonjour {{firstName}} {{lastName}},</p>
+
+      <p><strong>{{ownerName}}</strong> vous invite à la remplacer temporairement sur <strong>{{structureName}}</strong> via l'application <strong>Poppins</strong>.</p>
+
+      <p>Vous disposerez d'un accès identique au sien (enfants, contrats, documents, transmissions) avec <strong>votre propre mot de passe</strong>, pendant une période précise :</p>
+
+      <div class="period-box">
+        Du <strong>{{startDate}}</strong> au <strong>{{endDate}}</strong>
+      </div>
+
+      <div class="email-box">
+        <div class="email-title">Votre email d'invitation</div>
+        <div class="email">{{to}}</div>
+        <div style="font-size: 13px; margin-top: 8px;">Valable 30 jours</div>
+      </div>
+
+      <div class="steps">
+        <p><strong>Pour activer votre accès :</strong></p>
+        <ol>
+          <li>Téléchargez l'application Poppins</li>
+          <li>Sélectionnez <strong>"J'ai reçu une invitation"</strong></li>
+          <li>Entrez votre email : <span class="highlight">{{to}}</span></li>
+          <li>Choisissez votre propre mot de passe</li>
+          <li>Connectez-vous à la date de début de votre remplacement : l'accès s'active automatiquement</li>
+        </ol>
+      </div>
+
+      <div class="app-links">
+        <p>Téléchargez l'application :</p>
+        <a href="https://apps.apple.com/us/app/poppins/id6744274953" class="app-link">App Store</a>
+        <a href="https://play.google.com/store/apps/details?id=com.beylet.poppinsapp" class="app-link">Google Play</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      Si vous avez des questions, contactez <strong>{{ownerName}}</strong> directement.<br /><br />
+      © {{year}} Poppins
+    </div>
+  </div>
+</body>
+</html>

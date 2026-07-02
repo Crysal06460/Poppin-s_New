@@ -10,7 +10,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import 'package:cloud_functions/cloud_functions.dart'; // AJOUT
+import '../services/email_change_service.dart';
 
 class StructureManagementScreen extends StatefulWidget {
   const StructureManagementScreen({Key? key}) : super(key: key);
@@ -412,48 +412,11 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
   }
 
   Future<bool> _changeEmail(
-    String newEmail, 
-    String password, 
+    String newEmail,
+    String password,
     Function(String) onError
-  ) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception("Utilisateur non connecté");
-      
-      if (user.email == newEmail) {
-        onError("Le nouvel email doit être différent de l'actuel.");
-        return false;
-      }
-
-      // 1. Ré-authentification
-      final cred = EmailAuthProvider.credential(email: user.email!, password: password);
-      await user.reauthenticateWithCredential(cred);
-
-      // 2. Appel Cloud Function
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('updateUserEmail'); // Nom de la fonction
-
-      await callable.call({
-        'newEmail': newEmail,
-        'password': password, // Optionnel selon la CF, mais envoyé au cas où
-      });
-
-      return true;
-
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') {
-        onError("Mot de passe incorrect.");
-      } else {
-        onError("Erreur d'authentification: ${e.message}");
-      }
-      return false;
-    } on FirebaseFunctionsException catch (e) {
-      onError("${e.message}");
-      return false;
-    } catch (e) {
-      onError("Une erreur est survenue: $e");
-      return false;
-    }
+  ) {
+    return EmailChangeService.changeEmail(newEmail, password, onError);
   }
 
   Future<void> _fetchCitiesForPostalCode(String postalCode) async {
@@ -1466,6 +1429,60 @@ class _StructureManagementScreenState extends State<StructureManagementScreen> {
                   : null,
             ),
             SizedBox(height: 32),
+
+            // Bouton Gérer les remplacements (congé maternité, arrêt maladie...)
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.2),
+                    offset: const Offset(0, 2),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.go('/remplacements'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFDFE9F2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: primaryColor.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.swap_horiz,
+                          color: primaryColor,
+                          size: 20,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Gérer les remplacements',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: 20),
 
             // Bouton Supprimer mon compte
             Container(

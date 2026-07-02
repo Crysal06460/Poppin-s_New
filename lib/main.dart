@@ -18,6 +18,7 @@ import 'theme/app_colors.dart';
 import 'firebase_options.dart';
 import 'features/aide/aide_floating_button.dart';
 import 'features/aide/aide_route_observer.dart';
+import 'widgets/remplacement_banner.dart';
 
 import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
@@ -283,7 +284,9 @@ class _PoppinsAppState extends State<PoppinsApp> with WidgetsBindingObserver {
           color: kAppBackgroundColor,
           child: Stack(
             children: [
-              child ?? const SizedBox.shrink(),
+              RemplacementBannerOverlay(
+                child: child ?? const SizedBox.shrink(),
+              ),
               const AideFloatingButton(),
             ],
           ),

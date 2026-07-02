@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:poppins_app/services/notification_service.dart';
 import 'package:poppins_app/services/biometric_auth_service.dart';
+import 'package:poppins_app/services/remplacement_session_service.dart';
 import '../utils/user_role_cache.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -295,6 +296,12 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       ).timeout(const Duration(seconds: 15));
+
+      // 🔁 Remplacement : si une fenêtre de remplacement est active pour cet
+      // email, bascule la session sur l'UID de la propriétaire AVANT toute
+      // décision de routing basée sur le rôle. Ne fait rien (et ne casse
+      // jamais la connexion normale) si aucun remplacement ne correspond.
+      await RemplacementSessionService.instance.tryActivate();
 
       // Renouveler le token FCM pour éviter d\'hériter d\'un ancien compte
       try {

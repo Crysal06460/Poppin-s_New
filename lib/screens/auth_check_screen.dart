@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:poppins_app/services/notification_service.dart';
 import 'package:poppins_app/services/subscription_service.dart';
 import 'package:poppins_app/services/firebase_trial_service.dart';
+import 'package:poppins_app/services/remplacement_session_service.dart';
 
 class AuthCheckScreen extends StatefulWidget {
   const AuthCheckScreen({Key? key}) : super(key: key);
@@ -29,6 +30,19 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
   }
 
   Future<void> _checkUserStatus() async {
+    // 🔁 Remplacement : porte d'entrée unique au démarrage froid. Si un
+    // marqueur local "acting as replacement" existe mais que la fenêtre est
+    // en réalité expirée (app relancée après coup, minuteur foreground non
+    // exécuté pendant que l'app était tuée, etc.), on coupe l'accès et on
+    // redirige vers l'écran de connexion AVANT toute autre logique. Ne fait
+    // rien pour les ~100% d'utilisateurs sans remplacement en cours.
+    final bool remplacementStillOk =
+        await RemplacementSessionService.instance.checkStillActive();
+    if (!remplacementStillOk) {
+      if (mounted) context.go('/welcome');
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
 
     // Vérifications d'état

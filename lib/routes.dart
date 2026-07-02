@@ -32,6 +32,7 @@ import 'package:poppins_app/screens/dashboard_screen.dart';
 import 'package:poppins_app/screens/photo_management_screen.dart';
 import 'package:poppins_app/screens/child_removal_screen.dart';
 import 'package:poppins_app/screens/structure_management_screen.dart';
+import 'package:poppins_app/screens/remplacements_management_screen.dart';
 // Importez les nouveaux écrans
 import 'package:poppins_app/screens/child_documents_screen.dart';
 import 'package:poppins_app/screens/child_pickup_auth_screen.dart';
@@ -637,6 +638,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/structure-management',
       builder: (context, state) => const StructureManagementScreen(),
+    ),
+    GoRoute(
+      path: '/remplacements',
+      builder: (context, state) => const RemplacementsManagementScreen(),
     ),
     GoRoute(
       path: '/child-financial-info',
