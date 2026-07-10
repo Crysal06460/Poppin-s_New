@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -36,6 +37,11 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   String _structureName = '';
   String _currentPrice = '';
   String _newPrice = '';
+  // Une abonnée Stripe (inscription web) qui déclenchait un achat In-App
+  // Purchase depuis cet écran se serait retrouvée avec 2 abonnements
+  // facturés en parallèle (Stripe jamais résilié + nouvel achat Apple/
+  // Google) — on route donc vers upgradeStripeSubscription à la place.
+  bool _isStripeSubscription = false;
 
   // ✅ Services unifiés pour la gestion des abonnements
   final UnifiedSubscriptionService _subscriptionService =
@@ -154,6 +160,58 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     });
   }
 
+  /// Mise à niveau pour une abonnée Stripe : modifie l'abonnement Stripe
+  /// EXISTANT (changement de prix avec proration) via la Cloud Function
+  /// upgradeStripeSubscription, qui fait aussi la synchronisation Firestore
+  /// côté serveur — pas besoin d'appeler _syncStructureAfterUpgrade ici.
+  Future<void> _upgradeViaStripe(int targetCount) async {
+    if (_upgradeCompleted) return;
+
+    final String tier = targetCount >= 4 ? '4+' : '2-3';
+    final int newMemberCount = targetCount >= 4 ? 4 : 3;
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('upgradeStripeSubscription');
+      await callable.call(<String, dynamic>{'tier': tier});
+
+      _upgradeCompleted = true;
+      final int previousMemberPlan = _maxMemberCount;
+
+      setState(() {
+        _isPurchasing = false;
+        _maxMemberCount = newMemberCount;
+        _newPrice = _getPriceForMembers(newMemberCount);
+      });
+
+      final String structureId = await _getStructureId();
+      if (!mounted) return;
+
+      context.go('/upgrade-confirmed', extra: {
+        'structureType': 'MAM',
+        'structureId': structureId,
+        'memberCount': newMemberCount,
+        'oldMemberCount': previousMemberPlan,
+        'productId': 'stripe_$tier',
+        'priceDisplay': _getPriceForMembers(newMemberCount),
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isPurchasing = false;
+        _errorMessage = e.message ?? 'Erreur lors de la mise à niveau Stripe';
+      });
+      _showSnackBar(_errorMessage, Colors.red);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isPurchasing = false;
+        _errorMessage = "Erreur lors de la mise à niveau: $e";
+      });
+      _showSnackBar(_errorMessage, Colors.red);
+    }
+  }
+
   Future<void> _syncStructureAfterUpgrade(int newMemberCount) async {
     try {
       final String structureId = await _getStructureId();
@@ -175,6 +233,10 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
           'subscriptionActive': true,
           'subscriptionStatus': 'active',
           'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+          // Sans ces 2 champs, le prix affiché ailleurs dans l'app
+          // (résumé d'abonnement, etc.) restait celui de l'ancien forfait.
+          'currentPriceAmount': _priceAmountForMembers(newMemberCount),
+          'currentPriceDisplay': _getPriceForMembers(newMemberCount),
         },
         SetOptions(merge: true),
       );
@@ -322,6 +384,12 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       // Récupérer le type de structure
       _structureType = data['structureType'] ?? 'AssistanteMaternelle';
       _structureName = data['structureName'] ?? 'Ma structure';
+      final String platform = (data['subscriptionPlatform'] ??
+              data['subscriptionSource'] ??
+              '')
+          .toString()
+          .toLowerCase();
+      _isStripeSubscription = platform == 'stripe';
 
       // Cet écran sert à la fois à convertir une Assistante Maternelle solo
       // en MAM, et à augmenter le nombre de membres d'une MAM existante — il
@@ -410,11 +478,31 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
   }
 
   // Obtenir le prix pour un nombre donné de membres
+  // 1 membre (Assistante Maternelle solo) = 3,99€ ; 2 ou 3 membres = 9,99€ ;
+  // 4 membres et + = 14,99€. Manquait le cas "1 membre" (affichait 9,99€ à
+  // tort), invisible tant que l'écran était inaccessible aux comptes solo.
   String _getPriceForMembers(int memberCount) {
+    if (memberCount <= 1) {
+      return '3,99 € / mois';
+    }
     if (memberCount <= 3) {
       return '9,99 € / mois';
     }
     return '14,99 € / mois';
+  }
+
+  double _priceAmountForMembers(int memberCount) {
+    if (memberCount <= 1) return 3.99;
+    if (memberCount <= 3) return 9.99;
+    return 14.99;
+  }
+
+  // Libellé d'affichage par palier (2 et 3 membres ont le même prix, donc le
+  // même palier "2-3" — cf. _buildTierButton).
+  String _tierLabel(int memberCount) {
+    if (memberCount <= 1) return '1 membre';
+    if (memberCount <= 3) return '2-3 membres';
+    return '4 membres et +';
   }
 
   Future<String> _getStructureId() async {
@@ -450,6 +538,14 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
     try {
       final int targetCount = _selectedMemberCount < 2 ? 2 : _selectedMemberCount;
       print('🛒 Tentative de mise à niveau vers $targetCount membre(s)');
+
+      if (_isStripeSubscription) {
+        // Abonnée Stripe : on modifie l'abonnement existant côté serveur au
+        // lieu de déclencher un achat In-App (qui créerait un 2e abonnement
+        // parallèle, jamais résilié).
+        await _upgradeViaStripe(targetCount);
+        return;
+      }
 
       if (SubscriptionService.isInDevMode) {
         print('🧪 MODE DEV: Simulation d\'achat');
@@ -497,50 +593,48 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       );
     }
   }
-  // ✅ CORRECTION - SEULE VERSION de la méthode _buildMemberCountButton
-  Widget _buildMemberCountButton({
-    required int count,
+  // 2 forfaits MAM seulement (pas 3) : "2 membres" et "3 membres" ont
+  // exactement le même prix (9,99€), donc les proposer comme 2 boutons
+  // distincts n'apporte rien et prête à confusion. "value" (3) est le
+  // nombre de membres utilisé pour le produit/prix réel acheté (identique
+  // pour 2 ou 3 membres), "minForTier" (2) sert uniquement à savoir si ce
+  // palier est déjà atteint.
+  Widget _buildTierButton({
+    required String label,
+    required int value,
+    required int minForTier,
+    int? maxForTier,
     required bool isSelected,
     required Color color,
   }) {
-    // ✅ CORRECTION : Pour une MAM, désactiver les options inférieures OU ÉGALES au nombre actuel
-    // MAIS s'assurer qu'on ne peut pas descendre en dessous de 2
-    bool isDisabled = count <= _maxMemberCount;
-
-    // ✅ AJOUT : Indiquer si c'est l'abonnement actuel
-    bool isCurrent = count == _maxMemberCount;
-
-    // ✅ AJOUT : Validation pour MAM (minimum 2 membres)
-    bool isValidForMAM = count >= 2;
+    final bool isCurrent = _maxMemberCount >= minForTier &&
+        (maxForTier == null || _maxMemberCount <= maxForTier);
+    final bool isDisabled = _maxMemberCount >= minForTier;
 
     return GestureDetector(
-      onTap: (isDisabled || !isValidForMAM)
+      onTap: isDisabled
           ? null
           : () {
               setState(() {
-                _selectedMemberCount = count;
-                _newPrice = _getPriceForMembers(count);
+                _selectedMemberCount = value;
+                _newPrice = _getPriceForMembers(value);
               });
             },
       child: Container(
-        width: 90,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        width: 140,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: !isValidForMAM
-              ? Colors.grey.shade200
-              : isDisabled
-                  ? (isCurrent ? Colors.blue.shade50 : Colors.grey.shade200)
-                  : (isSelected ? color : Colors.white),
+          color: isDisabled
+              ? (isCurrent ? Colors.blue.shade50 : Colors.grey.shade200)
+              : (isSelected ? color : Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: !isValidForMAM
-                ? Colors.grey.shade300
-                : isDisabled
-                    ? (isCurrent ? Colors.blue.shade300 : Colors.grey.shade300)
-                    : (isSelected ? color : Colors.grey.shade300),
+            color: isDisabled
+                ? (isCurrent ? Colors.blue.shade300 : Colors.grey.shade300)
+                : (isSelected ? color : Colors.grey.shade300),
             width: 1.5,
           ),
-          boxShadow: isSelected && !isDisabled && isValidForMAM
+          boxShadow: isSelected && !isDisabled
               ? [
                   BoxShadow(
                     color: color.withOpacity(0.3),
@@ -553,15 +647,13 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
         child: Column(
           children: [
             Text(
-              "$count",
+              label,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: !isValidForMAM
-                    ? Colors.grey.shade400
-                    : isDisabled
-                        ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
-                        : (isSelected ? Colors.white : Colors.grey.shade700),
+                color: isDisabled
+                    ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
+                    : (isSelected ? Colors.white : Colors.grey.shade700),
               ),
             ),
             SizedBox(height: 4),
@@ -569,35 +661,30 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
               "membres",
               style: TextStyle(
                 fontSize: 12,
-                color: !isValidForMAM
-                    ? Colors.grey.shade400
-                    : isDisabled
-                        ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
-                        : (isSelected ? Colors.white : Colors.grey.shade700),
+                color: isDisabled
+                    ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
+                    : (isSelected ? Colors.white : Colors.grey.shade700),
               ),
             ),
-            if (count == _maxMemberCount) ...[
+            SizedBox(height: 4),
+            Text(
+              _getPriceForMembers(value),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDisabled
+                    ? (isCurrent ? Colors.blue.shade700 : Colors.grey)
+                    : (isSelected ? Colors.white : color),
+              ),
+            ),
+            if (isCurrent) ...[
               SizedBox(height: 4),
               Text(
                 "actuel",
                 style: TextStyle(
                   fontSize: 10,
                   fontStyle: FontStyle.italic,
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.8)
-                      : Colors.blue.shade700,
-                ),
-              ),
-            ],
-            // ✅ AJOUT : Indiquer si en dessous du minimum MAM
-            if (!isValidForMAM) ...[
-              SizedBox(height: 4),
-              Text(
-                "min. 2",
-                style: TextStyle(
-                  fontSize: 10,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.grey.shade500,
+                  color: Colors.blue.shade700,
                 ),
               ),
             ],
@@ -769,12 +856,22 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  for (int i = 2; i <= 4; i++)
-                                    _buildMemberCountButton(
-                                      count: i,
-                                      isSelected: _selectedMemberCount == i,
-                                      color: primaryBlue,
-                                    ),
+                                  _buildTierButton(
+                                    label: "2-3",
+                                    value: 3,
+                                    minForTier: 2,
+                                    maxForTier: 3,
+                                    isSelected: _selectedMemberCount >= 2 &&
+                                        _selectedMemberCount <= 3,
+                                    color: primaryBlue,
+                                  ),
+                                  _buildTierButton(
+                                    label: "4+",
+                                    value: 4,
+                                    minForTier: 4,
+                                    isSelected: _selectedMemberCount >= 4,
+                                    color: primaryBlue,
+                                  ),
                                 ],
                               ),
                               SizedBox(height: 12),
@@ -838,7 +935,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                           ),
                                           SizedBox(height: 8),
                                           Text(
-                                            "$_maxMemberCount membres",
+                                            _tierLabel(_maxMemberCount),
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -872,7 +969,7 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
                                           ),
                                           SizedBox(height: 8),
                                           Text(
-                                            "$_selectedMemberCount membres",
+                                            _tierLabel(_selectedMemberCount),
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,

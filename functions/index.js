@@ -3956,6 +3956,117 @@ exports.onStructureCreated = onDocumentCreated({
 });
 
 // ==========================================
+// ===== MISE À NIVEAU MAM (abonnés Stripe) ===
+// ==========================================
+// Corrige un gap découvert le 10/07 : l'écran de mise à niveau
+// (subscription_upgrade_screen.dart) ne savait déclencher qu'un nouvel achat
+// In-App Purchase, quelle que soit la source de l'abonnement actuel — une
+// abonnée Stripe qui tapait "Mettre à niveau" se serait retrouvée avec un
+// second abonnement (Apple/Google) facturé en parallèle du premier (Stripe),
+// jamais résilié. Cette fonction modifie DIRECTEMENT l'abonnement Stripe
+// existant (même souscription, changement de prix avec proration) au lieu
+// d'en créer un nouveau.
+const STRIPE_MAM_PRICE_IDS = {
+    '2-3': 'price_1SfkUILID2pA5i1C75uu1TCH',
+    '4+': 'price_1SfkWULID2pA5i1CmSdrRF0c',
+};
+
+exports.upgradeStripeSubscription = onCall({
+    region: 'europe-west1',
+    secrets: [STRIPE_SECRET_KEY],
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const tier = (request.data && request.data.tier || '').toString();
+    if (!STRIPE_MAM_PRICE_IDS[tier]) {
+        throw new HttpsError('invalid-argument', `tier invalide (attendu '2-3' ou '4+'): ${tier}`);
+    }
+    const newPriceId = STRIPE_MAM_PRICE_IDS[tier];
+    const newMaxMemberCount = tier === '4+' ? 50 : 3;
+
+    // Résoudre structureId comme partout ailleurs : users/{email}.structureId, sinon uid
+    const email = (request.auth.token?.email || '').toLowerCase();
+    let structureId = request.auth.uid;
+    if (email) {
+        const userDoc = await db.collection('users').doc(email).get();
+        const sid = userDoc.exists ? userDoc.data().structureId : null;
+        if (sid && String(sid).trim()) structureId = String(sid).trim();
+    }
+
+    const structureRef = db.collection('structures').doc(structureId);
+    const structureSnap = await structureRef.get();
+    if (!structureSnap.exists) {
+        throw new HttpsError('not-found', 'Structure introuvable');
+    }
+    const structureData = structureSnap.data();
+
+    const platform = (structureData.subscriptionPlatform || structureData.subscriptionSource || '').toString().toLowerCase();
+    if (platform !== 'stripe') {
+        throw new HttpsError('failed-precondition', `Cette fonction ne gère que les abonnements Stripe (plateforme détectée: ${platform || 'inconnue'})`);
+    }
+
+    const subId = structureData.subscriptionDocId || structureData.stripeSubscriptionId;
+    if (!subId) {
+        throw new HttpsError('failed-precondition', 'Aucun abonnement Stripe lié à cette structure');
+    }
+
+    let subscription;
+    try {
+        subscription = await getStripe().subscriptions.retrieve(subId);
+    } catch (error) {
+        console.error(`❌ upgradeStripeSubscription: abonnement Stripe ${subId} introuvable:`, error);
+        throw new HttpsError('not-found', 'Abonnement Stripe introuvable');
+    }
+
+    const currentItem = subscription.items?.data?.[0];
+    if (!currentItem) {
+        throw new HttpsError('internal', 'Abonnement Stripe sans ligne de produit');
+    }
+
+    if (currentItem.price?.id === newPriceId) {
+        return { success: true, alreadyOnTier: true, maxMemberCount: newMaxMemberCount };
+    }
+
+    let updatedSubscription;
+    try {
+        updatedSubscription = await getStripe().subscriptions.update(subId, {
+            items: [{ id: currentItem.id, price: newPriceId }],
+            proration_behavior: 'create_prorations',
+        });
+    } catch (error) {
+        console.error(`❌ upgradeStripeSubscription: échec de la mise à jour Stripe pour ${subId}:`, error);
+        throw new HttpsError('internal', `Échec de la mise à jour de l'abonnement Stripe: ${error.message}`);
+    }
+
+    const priceDisplay = tier === '4+' ? '14,99 € / mois' : '9,99 € / mois';
+    const priceAmount = tier === '4+' ? 14.99 : 9.99;
+
+    await structureRef.set({
+        structureType: 'MAM',
+        maxMemberCount: newMaxMemberCount,
+        subscriptionActive: true,
+        subscriptionStatus: 'active',
+        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+        currentPriceAmount: priceAmount,
+        currentPriceDisplay: priceDisplay,
+    }, { merge: true });
+
+    await db.collection('subscriptions').doc(subId).set({
+        planId: newPriceId,
+        maxMemberCount: newMaxMemberCount,
+        priceAmount,
+        priceDisplay,
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log(`✅ upgradeStripeSubscription: ${subId} passé au tier ${tier} (structure ${structureId})`);
+
+    return { success: true, subscriptionId: updatedSubscription.id, maxMemberCount: newMaxMemberCount };
+});
+
+// ==========================================
 // ===== SYNC SUBSCRIPTION → STRUCTURE  =====
 // ==========================================
 exports.syncSubscriptionWithStructure = onDocumentWritten({

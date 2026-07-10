@@ -1444,11 +1444,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else {
           // Code existant pour Assistante Maternelle (pas de changement)
           print("AssistanteMaternelle détectée, vérification des équipements");
-          // ... reste du code inchangé pour AssistanteMaternelle
+          // Toujours compter les membres réels, même ici : une structure peut
+          // déjà fonctionner avec plusieurs membres réels sans que le champ
+          // structureType ait jamais été correctement positionné en 'MAM'
+          // (constaté en prod). Forcer currentMemberCount à 1 sans vérifier
+          // masquait cet état réel — ex: le bouton "Passer en MAM" continuait
+          // d'apparaître pour une structure ayant déjà 2 membres.
+          final membersSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('members')
+              .get();
+          final int realMemberCount = membersSnapshot.docs.length;
+
           setState(() {
             isMAMStructure = false;
-            maxMemberCount = 1; // Pour AssistanteMaternelle seule
-            currentMemberCount = 1;
+            maxMemberCount = data['maxMemberCount'] is int
+                ? data['maxMemberCount'] as int
+                : 1;
+            currentMemberCount = realMemberCount > 0 ? realMemberCount : 1;
           });
         }
       }
@@ -2513,13 +2527,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           disabledMessage: lockedMessage,
         ),
       ]);
-    } else {
+    } else if (currentMemberCount <= 1 && maxMemberCount <= 1) {
       // Assistante Maternelle solo (ni MAM, ni parent-employeur) : aucune
       // entrée de menu ne menait jusqu'ici vers la conversion en MAM — le
       // seul écran capable de le faire (/subscription-upgrade) était de plus
       // inaccessible tant qu'on n'était pas déjà une MAM. Sans ce bouton,
       // aucune utilisatrice solo ne pouvait jamais devenir une MAM depuis
       // l'app (signalé par une utilisatrice bloquée depuis 3 semaines).
+      //
+      // Condition sur currentMemberCount/maxMemberCount, PAS uniquement sur
+      // isMAMStructure (structureType == 'MAM') : une structure peut déjà
+      // fonctionner avec plusieurs membres réels sans que ce champ ait
+      // jamais été correctement positionné (cas constaté en prod — une
+      // structure à 2 membres réels restée en structureType
+      // 'AssistanteMaternelle'), auquel cas proposer "Passer en MAM" à
+      // nouveau n'aurait aucun sens.
       actions.add(
         _sheetAction(
           label: 'Passer en MAM',

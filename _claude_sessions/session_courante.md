@@ -1,6 +1,33 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-10 (session chrisbeylet@gmail.com)
+**Dernière mise à jour :** 2026-07-10 soir (session chrisbeylet@gmail.com) — session interrompue par Christophe, à reprendre demain
+
+## 🔧 EN COURS — Conversion Assistante Maternelle → MAM (PAS ENCORE TESTÉE DE BOUT EN BOUT)
+
+### Contexte
+Utilisatrice (Fiona Audy, fionaudy04@gmail.com) bloquée depuis 3 semaines : impossible de convertir son compte solo en MAM. Trouvé 3 bugs empilés dans `subscription_upgrade_screen.dart` + `dashboard_screen.dart` (voir commit précédent pour le détail : gate `isMam` bloquant l'accès, `maxMemberCount` forcé à 2 avant paiement, `structureType` jamais mis à jour après conversion). Corrigés et **committés** dans le commit "Corrige route horaires, bug perte de planning, conversion MAM inaccessible — v2.1.8+2062".
+
+### Ce qui a été ajouté APRÈS ce commit (non committé, dans l'arbre de travail)
+1. **`lib/screens/dashboard_screen.dart` — `_checkIfMAMStructure()`** : la branche "else" (structure non-MAM) forçait `currentMemberCount = 1` SANS jamais vérifier le nombre réel de membres dans la sous-collection `members`. Bug découvert en testant sur le compte de test de la femme de Christophe (`chrisgugu1101@gmail.com`, structure `euAkwrpTFEMeH1GXjJQcUy8yL053` "Les P'tits Lutins") : `structureType: "AssistanteMaternelle"` mais 2 vrais membres dans la sous-collection `members` (configurée manuellement par le passé, jamais via un vrai flux de conversion) — le bouton "Passer en MAM" réapparaissait à tort. Fix : compter les vrais documents `members` même dans la branche non-MAM. **Corrigé et vérifié fonctionnel** (le bouton a bien disparu pour ce compte après le fix).
+2. **`lib/screens/subscription_upgrade_screen.dart` — simplification 3→2 choix** : à la demande de Christophe, remplacé les 3 boutons (2/3/4 membres) par 2 paliers ("2-3 membres" à 9,99€, "4 membres et +" à 14,99€) — 2 et 3 membres ont le même prix, avoir 3 boutons "mélangeait plus qu'autre chose". Nouvelle fonction `_buildTierButton` (remplace `_buildMemberCountButton`), nouveau `_tierLabel()` pour l'affichage. Choisir "2-3" utilise en interne memberCount=3 (plus généreux que 2, même prix, cohérent avec la convention déjà utilisée côté Stripe/webhook).
+3. **Bug prix corrigé** : `_getPriceForMembers(1)` retournait "9,99€" au lieu de "3,99€" pour 1 membre (invisible tant que l'écran était inaccessible aux comptes solo). Ajout aussi de `_priceAmountForMembers()` et écriture de `currentPriceAmount`/`currentPriceDisplay` dans `_syncStructureAfterUpgrade` (jamais fait avant).
+4. **Nouveau flux Stripe — `functions/index.js` : `exports.upgradeStripeSubscription`** (déployée) : gap découvert en répondant à la question de Christophe "est-ce que le prix se met à jour sur Stripe aussi ?" — AUCUN code ne gérait le cas d'une abonnée Stripe voulant upgrader depuis l'app ; le flux existant aurait déclenché un 2ᵉ achat In-App Purchase en parallèle de l'abonnement Stripe (double facturation, jamais résilié). Nouvelle Cloud Function qui modifie l'abonnement Stripe EXISTANT (changement d'item price + proration) au lieu d'en créer un nouveau. Réutilise les Price ID déjà connus du code (`price_1SfkUILID2pA5i1C75uu1TCH` = 2-3, `price_1SfkWULID2pA5i1CmSdrRF0c` = 4+) — **Christophe n'a pas encore confirmé sur le Dashboard Stripe que ces Price ID sont bien actifs/non archivés**, à vérifier. Côté client (`subscription_upgrade_screen.dart`), détection `_isStripeSubscription` (basée sur `subscriptionPlatform`/`subscriptionSource` == 'stripe') qui route vers `_upgradeViaStripe()` au lieu du flux IAP.
+   - ⚠️ **Aucun test réel possible** contre un vrai abonnement Stripe depuis cet environnement (pas d'accès Stripe Dashboard). Seulement vérifié : `node --check` (syntaxe) + déploiement réussi.
+
+### État des tests
+- `dart analyze` clean sur les 3 fichiers modifiés (aucune erreur, seulement des warnings préexistants sans rapport).
+- Testé en conditions réelles sur simulateur iOS (voir section outillage ci-dessous) : le fix `currentMemberCount` fonctionne (bouton "Passer en MAM" disparaît bien pour une structure à 2 membres réels).
+- **PAS ENCORE TESTÉ** : le parcours complet des 2 nouveaux boutons de palier (2-3 / 4+) avec les bons prix affichés, la conversion effective (dev mode simulé), ni le flux Stripe réel. Christophe n'avait pas de compte solo sous la main pour tester (celui de sa femme est maintenant correctement détecté comme multi-membres, donc le bouton ne s'affiche plus pour elle — c'est le comportement voulu, mais ça empêche de re-tester avec ce compte).
+
+### Pour reprendre demain
+1. **Compte de test créé et prêt** : `claude.test.conversion.mam@poppins-test.local` / `TestConversion2026!` (compte Firebase Auth réel, structure `AssistanteMaternelle` solo, 1 membre, isolé — pas une vraie utilisatrice). Se connecter avec ce compte sur le simulateur pour voir et tester l'écran "Passer en MAM" avec les 2 nouveaux boutons.
+2. Vérifier que le prix affiché est bien 3,99€ pour "1 membre" (abonnement actuel), puis tester le choix "2-3" (doit afficher 9,99€) et "4+" (14,99€), simuler la mise à niveau (mode dev, pas de vrai achat), et vérifier dans Firebase que `structureType` passe bien à `MAM` avec le bon `maxMemberCount`.
+3. Demander à Christophe de vérifier les 2 Price ID Stripe sur son Dashboard avant de considérer le flux Stripe comme fiable.
+4. **Committer** ces 3 fichiers modifiés (functions/index.js, dashboard_screen.dart, subscription_upgrade_screen.dart) — pas encore fait, resté dans l'arbre de travail à la pause.
+5. **Ne pas réutiliser le build Android déjà fait (v2.1.8+2062)** pour la mise en prod : il a été généré AVANT ces derniers fixes (currentMemberCount, 2 boutons, Stripe). Il faut relancer `flutter build appbundle --release` après avoir committé, avant tout upload sur Play Console. Idem si Christophe relance un archive iOS.
+6. Un `flutter run` tourne peut-être encore en arrière-plan sur le simulateur iOS ("iPhone 17") de la session précédente — sans effet si la machine est encore allumée, sinon il faudra relancer.
+
+---
 
 ## 🚨 INCIDENT PROD 10/07/2026 06h-06h55 — panne totale, résolu
 
