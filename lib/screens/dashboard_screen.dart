@@ -2513,6 +2513,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           disabledMessage: lockedMessage,
         ),
       ]);
+    } else {
+      // Assistante Maternelle solo (ni MAM, ni parent-employeur) : aucune
+      // entrée de menu ne menait jusqu'ici vers la conversion en MAM — le
+      // seul écran capable de le faire (/subscription-upgrade) était de plus
+      // inaccessible tant qu'on n'était pas déjà une MAM. Sans ce bouton,
+      // aucune utilisatrice solo ne pouvait jamais devenir une MAM depuis
+      // l'app (signalé par une utilisatrice bloquée depuis 3 semaines).
+      actions.add(
+        _sheetAction(
+          label: 'Passer en MAM',
+          onTap: () => context.go('/subscription-upgrade'),
+          bulletColor: _tileBlue,
+        ),
+      );
     }
 
     actions.addAll([

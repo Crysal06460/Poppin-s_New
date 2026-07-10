@@ -3,7 +3,7 @@ description: "Une application pour la gestion des enfants en crèche."
 
 publish_to: 'none'
 
-version: 2.1.7+2061
+version: 2.1.8+2062
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

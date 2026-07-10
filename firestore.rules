@@ -12,6 +12,14 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // Super-admins applicatifs (cf. _dashboardAdminEmails /
+    // _notificationAdminEmails côté Flutter) : diffusion notifications,
+    // écrans admin. Volontairement une liste fermée et courte.
+    function isAppAdmin() {
+      return isSignedIn() &&
+        myEmail() in ['cbeylet06@gmail.com', 'chrisgugu1101@gmail.com'];
+    }
+
     // L'utilisateur appartient à la structure (assmat = uid==structureId,
     // membre MAM / parent = structureId dans son doc)
     function isStructureMember(structureId) {
@@ -65,6 +73,14 @@ service cloud.firestore {
       match /aiUsage/{date} {
         allow read, write: if false;
       }
+
+      // ─── AVENANTS AU CONTRAT ───────────────────────────────────────────────
+      // Seul le propriétaire (userId == uid) peut lire/écrire ses avenants.
+      // Un seul niveau de sous-collection : doc 'brouillon' (isDraft: true)
+      // + avenants finalisés (isDraft: false), cf. AvenantStorageService.
+      match /avenants/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
@@ -81,12 +97,43 @@ service cloud.firestore {
     // CRITIQUE : données très sensibles (photos, santé, adresses, téléphones)
     // Seul un membre de la structure (assmat, MAM, parent lié) peut accéder.
     match /structures/{structureId} {
-      allow read: if isSignedIn() && isStructureMember(structureId);
+      // isAppAdmin() sur la lecture : nécessaire pour
+      // firestore.collection('structures').get() (broadcast notifications,
+      // outil admin_screen.dart "corriger relations parent-enfant") — une
+      // requête sur toute la collection ne peut satisfaire isStructureMember
+      // pour aucun compte, donc elle échouait entièrement sans ce cas.
+      allow read: if isSignedIn() && (isStructureMember(structureId) || isAppAdmin());
       allow write: if isSignedIn() && isStructureMember(structureId);
 
+      // ⚠️ ROLLBACK URGENCE 2026-07-10 : l'exclusion `documentPath[0] != 'remplacements'`
+      // a causé une panne totale (probable erreur d'évaluation à l'exécution sur
+      // l'indexation du path, non détectée par la validation de compilation) —
+      // reverti à la règle d'origine. La faille remplacements/{id} écrit toujours
+      // via le wildcard ci-dessous en attendant un correctif revérifié en sandbox.
       match /{documentPath=**} {
         allow read: if isSignedIn() && isStructureMember(structureId);
         allow write: if isSignedIn() && isStructureMember(structureId);
+      }
+
+      // Diffusion admin : StructureNotificationService.broadcast() écrit une
+      // notification dans CHAQUE structure, donc l'appelant n'est membre que
+      // d'une seule d'entre elles.
+      match /notifications/{notificationId} {
+        allow write: if isAppAdmin();
+      }
+
+      // ─── REMPLACEMENTS (délégation temporaire) ──────────────────────────
+      // Écriture : jamais côté client. Seules createRemplacement /
+      // activateRemplacementSession / cancelRemplacement / expireRemplacements
+      // (Cloud Functions, Admin SDK) écrivent ce document — sinon un membre
+      // MAM ou un parent rattaché pourrait forcer son propre email et une
+      // invitation qu'il contrôle à l'état 'completed', puis obtenir un accès
+      // complet à la propriétaire via activateRemplacementSession.
+      // Lecture : uniquement la propriétaire (les 3 écrans clients qui lisent
+      // cette sous-collection le font tous via structures/{auth.uid}/...).
+      match /remplacements/{remplacementId} {
+        allow read: if isSignedIn() && request.auth.uid == structureId;
+        allow write: if false;
       }
     }
 

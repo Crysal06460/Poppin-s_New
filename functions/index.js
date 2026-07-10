@@ -43,6 +43,9 @@ function getMailjet() {
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
+// App-Specific Shared Secret (App Store Connect > Mon app > Achats intégrés en app)
+// À définir avant déploiement : firebase functions:secrets:set APPSTORE_SHARED_SECRET
+const APPSTORE_SHARED_SECRET = defineSecret('APPSTORE_SHARED_SECRET');
 let stripeClient;
 function getStripe() {
     if (!stripeClient) {
@@ -877,6 +880,17 @@ exports.updateUserEmail = onCall({
         // auth/user-not-found : c'est le cas attendu, on continue
     }
 
+    // 2b. Rejeter aussi si un document Firestore existe déjà à users/{newEmail}, même sans
+    // compte Auth associé — ex: placeholder d'invitation créé par parent_home_screen.dart quand
+    // un parent invite une assistante qui n'a pas encore de compte (role: 'assistantFromParent',
+    // invitedByParent, structureId). Le batch plus bas fait un set() sans merge : sans ce garde-fou,
+    // il écraserait silencieusement cette invitation en cours, sans erreur ni log.
+    const newUserDocPreCheck = await db.collection('users').doc(newEmail).get();
+    if (newUserDocPreCheck.exists) {
+        console.warn(`⚠️ updateUserEmail: users/${newEmail} existe déjà en Firestore (uid ${uid} ne peut pas migrer vers cet email)`);
+        throw new HttpsError('already-exists', 'target-email-firestore-doc-exists');
+    }
+
     // 3. Lire users/{oldEmail}, résoudre structureId, vérifier si propriétaire
     const oldUserRef = db.collection('users').doc(oldEmail);
     const oldUserSnap = await oldUserRef.get();
@@ -900,6 +914,11 @@ exports.updateUserEmail = onCall({
     const isOwnerOfEmail = (value) => (value || '').toString().trim().toLowerCase() === oldEmail;
     const structureOwnerEmailMatches = structureData ? isOwnerOfEmail(structureData.ownerEmail) : false;
     const structureEmailMatches = structureData ? isOwnerOfEmail(structureData.email) : false;
+    // structureData.assistantEmail : écrit par parent_home_screen.dart quand un parent-employeur
+    // invite son assistante ; lu ensuite par getAssistantEmail() (notifications), memoResolveAssistant()
+    // (Calculs IA) et parent_messages_screen.dart (compteur non lus). Sans cette migration, ces 3
+    // chemins continuent de pointer vers users/{oldEmail}, supprimé par ce même batch.
+    const structureAssistantEmailMatches = structureData ? isOwnerOfEmail(structureData.assistantEmail) : false;
 
     // 4. Toutes les lectures nécessaires AVANT de construire le batch (un batch ne peut pas requêter)
     let membersSnap = { docs: [] };
@@ -954,6 +973,7 @@ exports.updateUserEmail = onCall({
     const structureUpdates = {};
     if (structureOwnerEmailMatches) structureUpdates.ownerEmail = newEmail;
     if (structureEmailMatches) structureUpdates.email = newEmail;
+    if (structureAssistantEmailMatches) structureUpdates.assistantEmail = newEmail;
 
     const buildBatch = (forward) => {
         const batch = db.batch();
@@ -977,6 +997,7 @@ exports.updateUserEmail = onCall({
                 const revert = {};
                 if (structureOwnerEmailMatches) revert.ownerEmail = structureData.ownerEmail;
                 if (structureEmailMatches) revert.email = structureData.email;
+                if (structureAssistantEmailMatches) revert.assistantEmail = structureData.assistantEmail;
                 batch.update(structureRef, revert);
             }
         }
@@ -3706,7 +3727,16 @@ const inactiveSubscriptionStatuses = new Set([
     'inactive',
     'ended',
     'terminated',
-    'replaced'
+    'replaced',
+    // Statuts Stripe d'échec de paiement / abonnement jamais abouti : doivent
+    // rester inactifs, jamais retomber dans un défaut "actif" (bug corrigé le
+    // 2026-07-08 — un abonnement past_due repassait "actif" ici juste après
+    // que le webhook Stripe principal l'ait correctement marqué inactif).
+    'past_due',
+    'unpaid',
+    'incomplete',
+    'incomplete_expired',
+    'paused'
 ]);
 
 const activeSubscriptionStatuses = new Set([
@@ -3735,7 +3765,15 @@ async function syncStructureWithSubscription(subscriptionId, subscriptionData, s
         platform === 'firebase_trial' ||
         source === 'firebase_trial';
     const isInactiveDoc = inactiveSubscriptionStatuses.has(status);
-    const isActiveDoc = activeSubscriptionStatuses.has(status) || (!isTrialDoc && !isInactiveDoc);
+    const isKnownActiveDoc = activeSubscriptionStatuses.has(status);
+    // Sécurité par défaut : un statut non reconnu (ni actif, ni inactif, ni essai)
+    // est désormais traité comme INACTIF plutôt qu'actif, avec un log pour
+    // investigation manuelle — l'ancien fallback "actif par défaut" est ce qui
+    // a causé le bug ci-dessus.
+    if (!isTrialDoc && !isInactiveDoc && !isKnownActiveDoc) {
+        console.warn(`⚠️ syncStructureWithSubscription: statut inconnu "${status}" pour subscription ${subscriptionId} (structure ${structureId}) — traité comme INACTIF par sécurité, à vérifier manuellement.`);
+    }
+    const isActiveDoc = isKnownActiveDoc;
 
     const updates = {
         subscriptionUpdatedAt: FieldValue.serverTimestamp(),
@@ -4279,6 +4317,157 @@ exports.handleAppStoreWebhook = onRequest({
 });
 
 // ============================================
+// ===== VÉRIFICATION REÇU APP STORE (IAP) =====
+// ============================================
+// Corrige un bug critique : ios_subscription_service.dart écrivait
+// status:'active' dans Firestore dès qu'un PurchaseStatus.purchased/restored
+// arrivait côté client, sans jamais valider le reçu auprès d'Apple (stub TODO
+// jamais implémenté). N'importe quel reçu falsifié/rejoué (device jailbreické,
+// reçu sandbox en prod) obtenait donc un abonnement actif gratuit. Cette
+// fonction est désormais le SEUL endroit qui écrit un abonnement 'active'
+// pour la plateforme iOS — via l'Admin SDK, après confirmation d'Apple.
+
+const APPSTORE_SUBSCRIPTION_PLANS = {
+    'com.beylet.poppinsApp.subscription.assistante_maternelle': { structureType: 'assistante_maternelle', memberCount: 1, maxMemberCount: 1, priceAmount: 3.99, priceDisplay: '3,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_2_membres': { structureType: 'MAM', memberCount: 2, maxMemberCount: 2, priceAmount: 9.99, priceDisplay: '9,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_3_membres': { structureType: 'MAM', memberCount: 3, maxMemberCount: 3, priceAmount: 9.99, priceDisplay: '9,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_4_membres': { structureType: 'MAM', memberCount: 4, maxMemberCount: 99, priceAmount: 14.99, priceDisplay: '14,99 € / mois' },
+};
+
+async function _callAppleVerifyReceipt(url, receiptData, sharedSecret) {
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            'receipt-data': receiptData,
+            'password': sharedSecret,
+            'exclude-old-transactions': true,
+        }),
+    });
+    return resp.json();
+}
+
+exports.verifyApplePurchase = onCall({
+    region: 'europe-west1',
+    secrets: [APPSTORE_SHARED_SECRET],
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+    }
+
+    const { receiptData, productId, transactionId } = request.data || {};
+    if (!receiptData || typeof receiptData !== 'string') {
+        throw new HttpsError('invalid-argument', 'receiptData manquant');
+    }
+    const plan = APPSTORE_SUBSCRIPTION_PLANS[productId];
+    if (!plan) {
+        throw new HttpsError('invalid-argument', `productId inconnu: ${productId}`);
+    }
+
+    const sharedSecret = APPSTORE_SHARED_SECRET.value();
+    let result = await _callAppleVerifyReceipt('https://buy.itunes.apple.com/verifyReceipt', receiptData, sharedSecret);
+    if (result.status === 21007) {
+        // Reçu sandbox envoyé par erreur à l'endpoint de prod -> on retente sur sandbox
+        result = await _callAppleVerifyReceipt('https://sandbox.itunes.apple.com/verifyReceipt', receiptData, sharedSecret);
+    }
+    if (result.status !== 0) {
+        console.warn(`⚠️ verifyApplePurchase: reçu Apple invalide (status ${result.status}) pour uid ${request.auth.uid}, productId ${productId}`);
+        throw new HttpsError('permission-denied', `Reçu Apple invalide (status ${result.status})`);
+    }
+
+    const latestInfo = Array.isArray(result.latest_receipt_info)
+        ? result.latest_receipt_info
+        : (Array.isArray(result.receipt?.in_app) ? result.receipt.in_app : []);
+    const matches = latestInfo.filter((tx) => tx.product_id === productId);
+    if (matches.length === 0) {
+        throw new HttpsError('permission-denied', 'Aucune transaction pour ce productId dans le reçu Apple vérifié');
+    }
+    matches.sort((a, b) => Number(b.purchase_date_ms || 0) - Number(a.purchase_date_ms || 0));
+    const latestTx = matches[0];
+    const expiresMs = Number(latestTx.expires_date_ms || 0);
+    if (!expiresMs || expiresMs <= Date.now()) {
+        throw new HttpsError('permission-denied', 'Abonnement Apple expiré selon le reçu vérifié');
+    }
+
+    // Résoudre structureId comme le fait le reste de l'app : users/{email}.structureId, sinon uid
+    const email = (request.auth.token?.email || '').toLowerCase();
+    let structureId = request.auth.uid;
+    if (email) {
+        const userDoc = await db.collection('users').doc(email).get();
+        const sid = userDoc.exists ? userDoc.data().structureId : null;
+        if (sid && String(sid).trim()) structureId = String(sid).trim();
+    }
+
+    const finalTransactionId = String(latestTx.transaction_id || transactionId || '');
+
+    // Anti-duplication : cette transaction Apple a-t-elle déjà été enregistrée ?
+    if (finalTransactionId) {
+        const existing = await db.collection('subscriptions')
+            .where('transactionId', '==', finalTransactionId)
+            .limit(1)
+            .get();
+        if (!existing.empty) {
+            return { verified: true, alreadyRecorded: true, expiresAt: expiresMs };
+        }
+    }
+
+    const batch = db.batch();
+
+    // Désactiver les anciens abonnements actifs de cette structure
+    const oldActive = await db.collection('subscriptions')
+        .where('structureId', '==', structureId)
+        .where('status', '==', 'active')
+        .get();
+    oldActive.forEach((doc) => {
+        batch.update(doc.ref, { status: 'replaced', replacedAt: FieldValue.serverTimestamp() });
+    });
+
+    const newSubRef = db.collection('subscriptions').doc();
+    const purchaseDate = new Date(Number(latestTx.purchase_date_ms) || Date.now());
+    batch.set(newSubRef, {
+        structureId,
+        structureType: plan.structureType,
+        memberCount: plan.memberCount,
+        maxMemberCount: plan.maxMemberCount,
+        status: 'active',
+        productId,
+        transactionId: finalTransactionId,
+        originalTransactionId: latestTx.original_transaction_id || finalTransactionId,
+        purchaseDate: purchaseDate.toISOString(),
+        expirationDate: new Date(expiresMs).toISOString(),
+        expiresAt: Timestamp.fromMillis(expiresMs),
+        priceAmount: plan.priceAmount,
+        priceDisplay: plan.priceDisplay,
+        currency: 'EUR',
+        billingPeriod: 'monthly',
+        platform: 'ios',
+        source: 'app_store',
+        verifiedByAppleAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    batch.set(db.collection('structures').doc(structureId), {
+        maxMemberCount: plan.maxMemberCount,
+        subscriptionActive: true,
+        subscriptionDocId: newSubRef.id,
+        subscriptionStatus: 'active',
+        subscriptionPlatform: 'ios',
+        subscriptionSource: 'app_store',
+        trialStatus: 'converted',
+        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+        currentPriceAmount: plan.priceAmount,
+        currentPriceDisplay: plan.priceDisplay,
+    }, { merge: true });
+
+    await batch.commit();
+
+    console.log(`✅ verifyApplePurchase: ${productId} vérifié auprès d'Apple et enregistré pour structure ${structureId} (transaction ${finalTransactionId})`);
+
+    return { verified: true, subscriptionId: newSubRef.id, expiresAt: expiresMs };
+});
+
+// ============================================
 // ========== NETTOYAGE ABONNEMENTS ===========
 // ============================================
 exports.dailySubscriptionCheck = onSchedule({
@@ -4499,6 +4688,9 @@ const CALCUL_ASSISTANT_KEYWORDS = [
 const CALCUL_ASSISTANT_MAX_QUESTIONS_PER_DAY = 20;
 const CALCUL_ASSISTANT_OFF_TOPIC_MESSAGE =
     'Je ne peux répondre qu\'aux questions liées aux contrats et calculs d\'assistante maternelle.';
+const CALCUL_ASSISTANT_NUMBER_VIOLATION_MESSAGE =
+    'Je ne peux pas afficher de chiffre ici — utilise l\'écran "Calculer une mensualisation" de ' +
+    'l\'application pour obtenir le montant exact et fiable.';
 
 exports.askCalculAssistant = onCall({
     region: 'europe-west1',
@@ -4607,6 +4799,17 @@ exports.askCalculAssistant = onCall({
 
         if (!aiMessage) {
             throw new Error('Réponse DeepSeek vide ou mal formée');
+        }
+
+        // Garde-fou serveur : la règle métier interdit tout chiffre/calcul précis dans
+        // une réponse IA (seul le formulaire local de mensualisation fait foi). Le
+        // system prompt le demande déjà au modèle, mais deepseek-chat n'est pas fiable
+        // à 100% sur le respect strict des consignes — on filtre donc aussi côté
+        // serveur avant de renvoyer quoi que ce soit au client, plutôt que de ne
+        // compter que sur l'instruction textuelle.
+        if (/\d/.test(aiMessage)) {
+            console.warn(`⚠️ askCalculAssistant: réponse DeepSeek contenait un chiffre malgré la consigne, bloquée avant envoi au client (uid ${uid})`);
+            return { response: CALCUL_ASSISTANT_NUMBER_VIOLATION_MESSAGE };
         }
 
         console.log('✅ Réponse IA générée avec succès');

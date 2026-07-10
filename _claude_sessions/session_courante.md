@@ -1,7 +1,60 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-02 (session chrisbeylet@gmail.com, longue session)
+**Dernière mise à jour :** 2026-07-10 (session chrisbeylet@gmail.com)
+
+## 🚨 INCIDENT PROD 10/07/2026 06h-06h55 — panne totale, résolu
+
+Le fix de la faille "remplacements" (voir plus bas) modifiait la règle générique `structures/{id}/{documentPath=**}` en ajoutant `&& documentPath[0] != 'remplacements'`. Ça a compilé sans erreur (`firebase deploy --dry-run` ne vérifie que la syntaxe), mais a provoqué une **erreur d'évaluation à l'exécution** qui a bloqué TOUTE lecture/écriture sous `structures/{id}/...` (enfants, repas, sieste, santé, photos, messages, équipements) pour TOUS les comptes, pendant ~1h ce matin. Détecté par Christophe et 2 utilisatrices dès 6h.
+
+**Résolu à 06h55** : rollback de cette seule condition (retour à la règle d'origine sans l'exclusion `documentPath`). Confirmé par les tests emulator (voir ci-dessous) : 10/10 passent, y compris tous les scénarios d'usage quotidien normal.
+
+**Conséquence** : la faille de sécurité "remplacements" (membre MAM/parent peut forcer un remplacement + invitation auto-approuvée) est **de nouveau ouverte** — reste à corriger, mais uniquement après validation complète dans l'émulateur, jamais par simple compilation.
+
+**Nouveau garde-fou permanent** : `firestore-tests/` (à la racine du repo) — suite de tests `@firebase/rules-unit-testing` contre l'émulateur Firestore local, jamais contre la prod. Couvre : usage quotidien normal (assistante solo, membre MAM, parent — lecture/écriture enfants/repas/sieste), frontières de sécurité (un inconnu à la structure ne doit jamais pouvoir lire/écrire), notifications admin, avenants. **Obligatoire avant tout déploiement futur de `firestore.rules`** :
+```
+firebase emulators:exec --only firestore "cd firestore-tests && npm test"
+```
+Un seul échec → ne pas déployer. `firebase.json` a maintenant une section `emulators.firestore` (port 8080).
+
+### 📱 Fix client Flutter — PAS ENCORE EN PROD — bug horaires signalé par Mam'aison D'apprenti'sage
+Utilisatrice (`mamaisondapprentisage@laposte.net`) signale depuis le 08/07 : impossible d'ajouter/modifier les horaires d'un enfant, et depuis le 10/07 : "les enfants sont parfois supprimés du jour au lendemain sans pouvoir les rajouter".
+
+**Bug trouvé et corrigé** : `lib/planning/planning_repository.dart::save()` faisait 6 écritures Firestore séparées non-transactionnelles (delete+set du sous-doc planning, delete en double du champ planning sur la fiche enfant, set des nouvelles données, delete du champ legacy schedule). Une interruption entre deux étapes (réseau, app en arrière-plan) pouvait supprimer l'ancien planning sans jamais écrire le nouveau → fiche enfant vidée. Simplifié en un seul `WriteBatch` atomique (2 écritures : set du sous-doc planning sans merge = remplacement complet, + set du doc enfant avec merge qui gère déjà planning ET schedule legacy en un seul appel). `dart analyze` clean.
+
+**Vérification données actuelles** : les 23 enfants de sa structure (KV5UNpUfnGaHWR0gKyjYWQjMFIz1) ont tous un planning non-vide actuellement (2 encore en legacy `schedule` jamais migrés, le reste en nouveau format `planning`). Donc pas de perte de données visible aujourd'hui — le bug explique probablement les échecs de sauvegarde ("impossible de modifier"), mais **ne confirme pas** sa plainte "les enfants sont supprimés" (pourrait être autre chose : profil enfant entier supprimé, pas juste les horaires — pas encore identifié). À clarifier avec elle avant de considérer le sujet clos.
+
+**⚠️ Fix client, pas serveur — ne prendra effet qu'à la prochaine sortie d'app.** Elle a aussi relancé une demande de remboursement pour un paiement en double (février) restée sans suite — action manuelle Stripe/admin, pas un bug de code.
+
 **Statut global :** ✅ Fix changement d'email + ✅ Feature Remplacement déployés en prod (backend) — ✅ 5 correctifs UI/texte + FAQ complète 12 écrans faits mais **NON COMMITÉS** — ✅ Build Android 2.1.7+2061 prêt — 🔧 Build iOS bloqué côté compte Apple (Christophe s'en occupe) — ⚠️ Bug "Aide flottante" du 23/06 **RÉSOLU**
+
+---
+
+## 🔎 08–09/07/2026 — Webhook Stripe, règles Firestore, audit 3 équipes, IAP iOS
+
+### ✅ DÉPLOYÉ EN PROD
+- **Bug webhook Stripe `past_due`** : `syncStructureWithSubscription` (functions/index.js) traitait tout statut Stripe non reconnu (`past_due`, `unpaid`, `incomplete`...) comme "actif" par défaut — corrigé (ces statuts sont maintenant explicitement inactifs, plus de fallback dangereux). Backfill manuel fait sur les 2 structures déjà affectées (dont Mam'aison D'apprenti'sage / `mamaisondapprentisage@laposte.net`).
+- **`firestore.rules`** : ajout d'un `isAppAdmin()` (cbeylet06@gmail.com, chrisgugu1101@gmail.com) pour réparer la diffusion de notifications admin (`admin_broadcast_notification_screen.dart` → `StructureNotificationService.broadcast()`), cassée depuis le durcissement sécurité du 30/05 (lecture globale de `structures` + écriture ciblée sur `structures/{id}/notifications`).
+- **Non traité à ce stade** : l'outil `admin_screen.dart` ("corriger les relations parent-enfant") a probablement le même problème (lecture/écriture cross-structures bloquée par le même durcissement) — Christophe a choisi de ne pas l'ouvrir pour l'instant (donnerait aux 2 comptes admin un accès en lecture aux fiches enfants de toutes les structures).
+- **`firestore.rules` — feature Avenant** : ajout de la règle manquante `users/{userId}/avenants/{docId}` (owner-only, `request.auth.uid == userId`), sur le modèle CDI/CDD/Engagement. La feature était intégralement cassée (`permission-denied` systématique sur brouillon/liste/finalisation).
+- **`functions/index.js` — Calculs IA** : `askCalculAssistant` filtre désormais la réponse DeepSeek côté serveur (`/\d/.test(aiMessage)`) — si un chiffre apparaît malgré la consigne du system prompt, la réponse est remplacée par un message de redirection vers le calcul local au lieu d'être affichée. Déployé (fonction seule).
+- **`firestore.rules` — faille de consentement Remplacement** : la règle générique `structures/{id}/{documentPath=**}` autorisait tout membre de la structure (MAM co-listé, parent) à écrire directement dans `remplacements/{id}`, contournant `createRemplacement`. Fix : `remplacements` exclu explicitement du wildcard (`documentPath[0] != 'remplacements'`), règle dédiée ajoutée — écriture toujours refusée côté client (seules les Cloud Functions Admin SDK écrivent), lecture réservée à la propriétaire réelle (`request.auth.uid == structureId`). Vérifié que les 3 usages client de cette sous-collection sont tous des lectures, aucun write direct.
+- ⚠️ Un secret placeholder `APPSTORE_SHARED_SECRET` (valeur factice, PAS le vrai secret Apple) a dû être créé dans Secret Manager pour débloquer le déploiement d'`askCalculAssistant` (Firebase exige que tous les secrets référencés dans `index.js` existent, même pour un déploiement scopé à une seule fonction). À remplacer par la vraie valeur avant de jamais déployer `verifyApplePurchase`.
+- **`functions/index.js` — email_change, `assistantEmail` non migré** : `updateUserEmail` migrait `ownerEmail`/`email`/`assistants/{email}` mais jamais `structures/{id}.assistantEmail` (écrit par `parent_home_screen.dart` pour un parent-employeur, lu par les notifications/Calculs IA/compteur messages non lus). Ajout de `structureAssistantEmailMatches` + migration forward/rollback sur le même modèle que les 2 champs existants. Déployé (fonction seule).
+- **`functions/index.js` — email_change, écrasement silencieux d'invitation** : `updateUserEmail` ne vérifiait l'unicité du nouvel email que côté Firebase Auth, pas Firestore. Un changement vers un email correspondant à un placeholder d'invitation (`parent_home_screen.dart`, assistante invitée sans compte Auth) écrasait silencieusement ce document sans erreur. Ajout d'une lecture `users/{newEmail}` avant le batch : si le doc existe déjà, `HttpsError('already-exists', 'target-email-firestore-doc-exists')` — déjà géré côté client (`email_change_service.dart:96` mappe `already-exists` → message générique existant, aucun changement Dart nécessaire). Déployé (fonction seule).
+
+### 📱 Fix client Flutter — PAS ENCORE EN PROD (nécessite un nouveau build)
+- **`lib/routes.dart` — route `/subscription-confirmed` manquante** : après un paiement IAP/restauration réussi, `pricing_screen.dart` redirigeait vers cette route inexistante → écran "Page non trouvée" juste après un paiement réel. L'écran `SubscriptionConfirmedScreen` existait déjà tout fait (probablement retiré du routeur par erreur lors du nettoyage du 30/05, l'import était resté). Route `GoRoute('/subscription-confirmed', ...)` rajoutée, même modèle que `/upgrade-confirmed`. **⚠️ Fix client, pas serveur — ne prendra effet qu'à la prochaine sortie (build + soumission App Store/Google Play), pas immédiatement.**
+
+### 📋 Audit 3 équipes (workflow multi-agents, résultat : voir artifact `audit-poppins.html`)
+Déclenché après la découverte du bug webhook. 78 findings bruts → **33 confirmés** (12 critiques) par vérification adversariale, mais **interrompu par une limite de session** avant la fin : Équipe 2 (Abonnements) et Équipe 3 (Fonctionnalités) quasi pas vérifiées (42 findings bruts en attente). **À relancer** : `Workflow({scriptPath, resumeFromRunId: "wf_a5fab21a-c69"})` — les 18 explorations sont en cache, coût réduit.
+Points saillants confirmés : faille Firestore rôle/structureId auto-modifiable, webhooks App Store/Google Play sans vérification de signature, `purgeIncompleteAccount` sans auth, feature Avenant inutilisable (règles manquantes), quota Calculs IA à 20/jour au lieu de 5.
+
+### 🔧 Fix IAP iOS — CODE ÉCRIT, NON DÉPLOYÉ (mis en pause par Christophe)
+`ios_subscription_service.dart::_verifyPurchase()` était un stub TODO qui ne validait jamais le reçu Apple — tout achat/restauration (y compris falsifié) était accepté et écrivait `status:'active'` directement depuis le client. Correctif :
+- `functions/index.js` : nouvelle Cloud Function `exports.verifyApplePurchase` (onCall, region europe-west1) qui appelle `verifyReceipt` d'Apple (prod + fallback sandbox sur status 21007) et n'écrit l'abonnement dans Firestore (`subscriptions` + `structures`) qu'après confirmation — remplace l'écriture cliente.
+- `ios_subscription_service.dart` : `_verifyPurchase` appelle désormais cette Cloud Function via `cloud_functions` ; l'ancienne méthode `_saveSubscriptionToFirestore` (~220 lignes, la faille) a été supprimée.
+- **Bloquant pour déployer** : secret `APPSTORE_SHARED_SECRET` (App Store Connect → app → Achats intégrés en app → "Secret partagé propre à l'app") à configurer via `firebase functions:secrets:set APPSTORE_SHARED_SECRET` avant tout déploiement de cette fonction.
+- **Pourquoi en pause** : Christophe indique que quasiment tous les abonnements actifs passent par Stripe, très peu par Apple IAP → impact financier actuel faible. Le code reste prêt dans le repo (non commité), à reprendre quand le secret sera fourni. Le chemin de code reste néanmoins celui emprunté par défaut par tout nouvel utilisateur iOS qui s'abonne depuis l'app (`Platform.isIOS` dans `unified_subscription_service.dart`), donc la faille reste réelle même si peu exploitée actuellement.
 
 ---
 

@@ -166,6 +166,11 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
           .doc(structureId)
           .set(
         {
+          // Sans ce champ, une Assistante Maternelle solo qui vient de
+          // passer en MAM restait techniquement "AssistanteMaternelle" —
+          // payante pour un forfait MAM mais invisible comme telle partout
+          // ailleurs dans l'app (gestion des membres, dashboard, etc).
+          'structureType': 'MAM',
           'maxMemberCount': maxAllowed,
           'subscriptionActive': true,
           'subscriptionStatus': 'active',
@@ -318,20 +323,24 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
       _structureType = data['structureType'] ?? 'AssistanteMaternelle';
       _structureName = data['structureName'] ?? 'Ma structure';
 
-      // Vérifier si c'est une MAM
+      // Cet écran sert à la fois à convertir une Assistante Maternelle solo
+      // en MAM, et à augmenter le nombre de membres d'une MAM existante — il
+      // ne doit donc JAMAIS bloquer l'accès pour les structures qui ne sont
+      // pas encore des MAM (c'était le cas précédemment et empêchait toute
+      // conversion, l'écran étant la seule porte d'entrée pour ce faire).
       bool isMam = _structureType == 'MAM';
-      if (!isMam) {
-        throw Exception(
-            "Cette fonctionnalité est uniquement disponible pour les MAM");
-      }
 
-      // ✅ CORRECTION : MAM minimum 2 membres
+      // ✅ CORRECTION : MAM minimum 2 membres — mais on ne force ce minimum
+      // que pour une MAM existante dont la donnée serait corrompue. Pour une
+      // Assistante Maternelle solo pas encore convertie, _maxMemberCount doit
+      // rester à sa vraie valeur actuelle (1) : forcer 2 avant même qu'elle
+      // ait choisi/payé un forfait verrouillait à tort le choix "2 membres"
+      // comme si c'était déjà son forfait en cours.
       if (data.containsKey('maxMemberCount')) {
-        _maxMemberCount = data['maxMemberCount'] ?? 2;
-        // ✅ S'assurer que c'est au minimum 2 pour une MAM
-        if (_maxMemberCount < 2) {
+        _maxMemberCount = data['maxMemberCount'] ?? (isMam ? 2 : 1);
+        if (isMam && _maxMemberCount < 2) {
           _maxMemberCount = 2;
-          // Corriger en base de données
+          // Corriger en base de données (uniquement pour une MAM existante)
           await FirebaseFirestore.instance
               .collection('structures')
               .doc(structureId)
@@ -339,16 +348,18 @@ class _SubscriptionUpgradeScreenState extends State<SubscriptionUpgradeScreen> {
         }
       } else if (data.containsKey('subscription') &&
           data['subscription'] != null) {
-        _maxMemberCount = data['subscription']['maxMembers'] ?? 2;
-        // ✅ S'assurer que c'est au minimum 2 pour une MAM
-        if (_maxMemberCount < 2) _maxMemberCount = 2;
+        _maxMemberCount =
+            data['subscription']['maxMembers'] ?? (isMam ? 2 : 1);
+        if (isMam && _maxMemberCount < 2) _maxMemberCount = 2;
       } else {
-        _maxMemberCount = 2; // ✅ MINIMUM 2 pour MAM
-        // Mettre à jour en base
-        await FirebaseFirestore.instance
-            .collection('structures')
-            .doc(structureId)
-            .update({'maxMemberCount': 2});
+        _maxMemberCount = isMam ? 2 : 1;
+        if (isMam) {
+          // Mettre à jour en base (uniquement pour une MAM existante)
+          await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .update({'maxMemberCount': 2});
+        }
       }
 
       // Compter le nombre actuel de membres
