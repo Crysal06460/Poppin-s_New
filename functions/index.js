@@ -4136,43 +4136,6 @@ exports.repairSubscriptions = onRequest({
     }
 });
 
-// Utilitaire : lookup direct via collection subscriptionTokens/{token}
-async function _findUserDocsByToken(token, platform) {
-    if (!token) return [];
-
-    try {
-        const tokenSnap = await db.collection('subscriptionTokens').doc(token).get();
-        if (tokenSnap.exists) {
-            const tokenData = tokenSnap.data() || {};
-            const docPath = tokenData.userDocPath;
-            const docId = tokenData.userDocId || tokenData.uid;
-            if (docPath) {
-                const directDoc = await db.doc(docPath).get();
-                if (directDoc.exists) return [directDoc];
-            }
-            if (docId) {
-                const directDoc = await db.collection('users').doc(docId).get();
-                if (directDoc.exists) return [directDoc];
-            }
-        }
-    } catch (err) {
-        console.error('⚠️ Lookup token direct échoué', err);
-    }
-
-    // Fallback : ancienne requête
-    try {
-        const snapshot = await db
-            .collection('users')
-            .where('subscriptionPlatform', '==', platform)
-            .where(platform === 'android' ? 'purchaseToken' : 'originalTransactionId', '==', token)
-            .get();
-        return snapshot.docs;
-    } catch (err) {
-        console.error('⚠️ Lookup token fallback échoué', err);
-        return [];
-    }
-}
-
 async function _upsertSubscriptionToken({ token, platform, userDocPath, userDocId, productId }) {
     if (!token || !platform) return;
     const payload = {
@@ -4240,11 +4203,24 @@ exports.handleGooglePlayWebhook = onRequest({
         return res.status(400).send('No purchase token');
     }
 
-    const userDocs = await _findUserDocsByToken(purchaseToken, 'android');
+    // 🔧 FIX 11/07/2026 : même trou que handleAppStoreWebhook — _findUserDocsByToken
+    // cherchait sur users/{email}, jamais alimenté par android_subscription_service.dart
+    // (qui écrit purchaseToken uniquement sur subscriptions/{id}). Résolution directe
+    // sur subscriptions à la place.
+    let subDocs = [];
+    try {
+        const byToken = await db.collection('subscriptions')
+            .where('platform', '==', 'android')
+            .where('purchaseToken', '==', purchaseToken)
+            .get();
+        subDocs = byToken.docs;
+    } catch (err) {
+        console.error('❌ handleGooglePlayWebhook: erreur résolution subscriptions:', err);
+    }
 
-    if (!userDocs.length) {
-        console.log('No user found with this purchase token');
-        return res.status(200).send('OK - No user found');
+    if (subDocs.length === 0) {
+        console.log('⚠️ handleGooglePlayWebhook: aucun document subscriptions trouvé pour', purchaseToken);
+        return res.status(200).send('OK - No subscription found');
     }
 
     const updates = {
@@ -4261,6 +4237,7 @@ exports.handleGooglePlayWebhook = onRequest({
             updates.subscriptionCancelDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'expired';
             updates.subscriptionStatus = 'canceled';
+            updates.status = 'canceled';
             break;
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RENEWED:
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RECOVERED:
@@ -4269,6 +4246,7 @@ exports.handleGooglePlayWebhook = onRequest({
             updates.lastRenewalDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'converted';
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_ON_HOLD:
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_PAUSED:
@@ -4280,13 +4258,25 @@ exports.handleGooglePlayWebhook = onRequest({
             break;
     }
 
+    const structureFields = ['subscriptionActive', 'subscriptionStatus', 'trialStatus'];
+    const structureUpdates = { lastWebhookUpdate: updates.lastWebhookUpdate, subscriptionUpdatedAt: FieldValue.serverTimestamp() };
+    structureFields.forEach((key) => {
+        if (key in updates) structureUpdates[key] = updates[key];
+    });
+
     const batch = db.batch();
-    userDocs.forEach((doc) => {
-        batch.update(doc.ref, updates);
+    const structureIdsToUpdate = new Set();
+    subDocs.forEach((doc) => {
+        batch.set(doc.ref, updates, { merge: true });
+        const sid = doc.data().structureId;
+        if (sid) structureIdsToUpdate.add(sid);
+    });
+    structureIdsToUpdate.forEach((sid) => {
+        batch.set(db.collection('structures').doc(sid), structureUpdates, { merge: true });
     });
     await batch.commit();
 
-    console.log(`Updated ${userDocs.length} user(s) for Google Play notification`, {
+    console.log(`✅ handleGooglePlayWebhook: ${subDocs.length} subscription(s) et ${structureIdsToUpdate.size} structure(s) mis à jour`, {
         notificationType,
         subscriptionId
     });
@@ -4374,11 +4364,40 @@ exports.handleAppStoreWebhook = onRequest({
         return res.status(400).send('No transaction ID');
     }
 
-    const userDocs = await _findUserDocsByToken(originalTransactionId, 'ios');
+    // 🔧 FIX 11/07/2026 : _findUserDocsByToken cherchait sur users/{email},
+    // un modèle de données que le flux d'achat iOS réel (ios_subscription_service.dart)
+    // n'alimente jamais — ce webhook ne trouvait donc littéralement JAMAIS aucun
+    // compte, pour aucune utilisatrice iOS, depuis toujours. Les notifications de
+    // renouvellement/échec/annulation n'étaient donc jamais répercutées dans
+    // Firestore. Le vrai modèle de données lu par le reste de l'app est
+    // structures/{id} + subscriptions/{id} : on résout donc directement sur
+    // subscriptions. originalTransactionId est cherché sur 2 champs :
+    // 'originalTransactionId' (nouveaux achats via verifyApplePurchase) et
+    // 'transactionId' (achats existants — pour un tout premier achat, StoreKit
+    // fixe transactionId == originalTransactionId, donc la valeur déjà stockée
+    // reste valable pour matcher les notifications futures de ce même abonnement).
+    let subDocs = [];
+    try {
+        const byOriginal = await db.collection('subscriptions')
+            .where('platform', '==', 'ios')
+            .where('originalTransactionId', '==', originalTransactionId)
+            .get();
+        subDocs = byOriginal.docs;
 
-    if (!userDocs.length) {
-        console.log('No user found with this transaction ID');
-        return res.status(200).send('OK - No user found');
+        if (subDocs.length === 0) {
+            const byTransaction = await db.collection('subscriptions')
+                .where('platform', '==', 'ios')
+                .where('transactionId', '==', originalTransactionId)
+                .get();
+            subDocs = byTransaction.docs;
+        }
+    } catch (err) {
+        console.error('❌ handleAppStoreWebhook: erreur résolution subscriptions:', err);
+    }
+
+    if (subDocs.length === 0) {
+        console.log('⚠️ handleAppStoreWebhook: aucun document subscriptions trouvé pour', originalTransactionId);
+        return res.status(200).send('OK - No subscription found');
     }
 
     const updates = {
@@ -4392,10 +4411,12 @@ exports.handleAppStoreWebhook = onRequest({
         case 'CANCEL':
         case 'DID_FAIL_TO_RENEW':
         case 'EXPIRED':
+        case 'REFUND':
             updates.subscriptionActive = false;
             updates.subscriptionCancelDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'expired';
             updates.subscriptionStatus = 'canceled';
+            updates.status = 'canceled';
             break;
         case 'DID_RENEW':
         case 'INTERACTIVE_RENEWAL':
@@ -4403,6 +4424,7 @@ exports.handleAppStoreWebhook = onRequest({
             updates.lastRenewalDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'converted';
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
         case 'DID_CHANGE_RENEWAL_PREF':
             updates.subscriptionModified = true;
@@ -4411,16 +4433,32 @@ exports.handleAppStoreWebhook = onRequest({
             updates.subscriptionActive = true;
             updates.subscriptionStartDate = FieldValue.serverTimestamp();
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
     }
 
+    // Les champs subscriptionActive/subscriptionStatus/trialStatus doivent aussi
+    // être répercutés sur structures/{id} : c'est CE document que le reste de
+    // l'app lit réellement pour décider de l'accès, pas le doc subscriptions.
+    const structureFields = ['subscriptionActive', 'subscriptionStatus', 'trialStatus'];
+    const structureUpdates = { lastWebhookUpdate: updates.lastWebhookUpdate, subscriptionUpdatedAt: FieldValue.serverTimestamp() };
+    structureFields.forEach((key) => {
+        if (key in updates) structureUpdates[key] = updates[key];
+    });
+
     const batch = db.batch();
-    userDocs.forEach((doc) => {
-        batch.update(doc.ref, updates);
+    const structureIdsToUpdate = new Set();
+    subDocs.forEach((doc) => {
+        batch.set(doc.ref, updates, { merge: true });
+        const sid = doc.data().structureId;
+        if (sid) structureIdsToUpdate.add(sid);
+    });
+    structureIdsToUpdate.forEach((sid) => {
+        batch.set(db.collection('structures').doc(sid), structureUpdates, { merge: true });
     });
     await batch.commit();
 
-    console.log(`Updated ${userDocs.length} user(s) for App Store notification`, {
+    console.log(`✅ handleAppStoreWebhook: ${subDocs.length} subscription(s) et ${structureIdsToUpdate.size} structure(s) mis à jour`, {
         notificationType,
         originalTransactionId
     });

@@ -1,6 +1,16 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-10 soir (session chrisbeylet@gmail.com) — session interrompue par Christophe, à reprendre demain
+**Dernière mise à jour :** 2026-07-11 (session chrisbeylet@gmail.com)
+
+## ✅ DÉPLOYÉ 11/07/2026 — Webhooks App Store / Google Play réparés
+
+En vérifiant "sera-t-elle bien prélevée le mois prochain" pour Fiona (conversion MAM), découvert que `handleAppStoreWebhook` et `handleGooglePlayWebhook` ne trouvaient **littéralement jamais aucun compte** depuis toujours : ils cherchaient sur `users/{email}.subscriptionPlatform`/`originalTransactionId`/`purchaseToken`, des champs que ni `ios_subscription_service.dart` ni `android_subscription_service.dart` n'ont jamais écrits (ces services écrivent uniquement dans `subscriptions`/`structures`). Résultat concret : les notifications Apple/Google de renouvellement, échec de paiement, ou annulation n'ont **jamais** été répercutées dans Firestore, pour aucune utilisatrice iOS/Android, depuis le début. Bug préexistant, pas causé par la conversion MAM — juste découvert en creusant cette question.
+
+**Fix** : les 2 fonctions résolvent maintenant directement sur `subscriptions` (par `originalTransactionId` puis fallback `transactionId` pour iOS — StoreKit fixe les deux égaux au tout premier achat, donc ça couvre aussi l'historique existant ; par `purchaseToken` pour Android — pas de fallback possible, donc **les achats Android déjà existants sans `purchaseToken` enregistré ne seront pas rattrapés rétroactivement**, seuls les futurs achats seront couverts). Fonction morte `_findUserDocsByToken` supprimée.
+
+**Testé avant déploiement** (leçon de l'incident du 10/07 : plus jamais de déploiement sans test réel) : requête exacte exécutée en lecture seule contre la vraie prod — retrouve bien l'abonnement réel de Fiona Audy via son `transactionId`. Aucune erreur d'index. Déployé sans incident (fonctions appelées uniquement par les serveurs Apple/Google, jamais par un utilisateur — aucun risque de type "panne du 10/07").
+
+## 🔧 Conversion Assmat → MAM (Fiona Audy) — récap
 
 ## 🔧 EN COURS — Conversion Assistante Maternelle → MAM (PAS ENCORE TESTÉE DE BOUT EN BOUT)
 
