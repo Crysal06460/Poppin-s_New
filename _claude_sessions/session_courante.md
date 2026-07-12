@@ -10,6 +10,19 @@ En vérifiant "sera-t-elle bien prélevée le mois prochain" pour Fiona (convers
 
 **Testé avant déploiement** (leçon de l'incident du 10/07 : plus jamais de déploiement sans test réel) : requête exacte exécutée en lecture seule contre la vraie prod — retrouve bien l'abonnement réel de Fiona Audy via son `transactionId`. Aucune erreur d'index. Déployé sans incident (fonctions appelées uniquement par les serveurs Apple/Google, jamais par un utilisateur — aucun risque de type "panne du 10/07").
 
+## 🚨 DANGER IDENTIFIÉ ET ÉVITÉ — `dailySubscriptionCheck` — NE PAS corriger naïvement
+
+En creusant plus loin ("y a-t-il d'autres trous du même genre ?"), trouvé que `exports.dailySubscriptionCheck` (cron automatique toutes les 24h, censé désactiver les abonnements sans confirmation webhook depuis 35j) a **exactement le même bug** que les 2 webhooks (interroge `users` au lieu de `structures`) — jamais fonctionné depuis toujours. `exports.cleanupInactiveSubscriptions` (outil admin manuel juste en dessous dans le fichier) a déjà le bon fix appliqué (cible `structures`), jamais reporté sur la version automatique.
+
+**J'ai commencé à porter le même fix, PUIS vérifié l'impact réel avant tout déploiement (leçon du 10/07 appliquée à fond cette fois) : 64 structures actives sur 89 (72%!) auraient été désactivées immédiatement**, dont de vraies utilisatrices payantes (Delphine, Marielle, "L'îlot Doudous", Maria, etc.) — parce que le webhook n'ayant jamais fonctionné, quasiment personne n'a de date de mise à jour récente, donc "pas de nouvelle depuis 35 jours" ne veut pas dire "a arrêté de payer", juste "le suivi n'a jamais marché".
+
+**Décision : reverté avant déploiement, `functions/index.js` remis exactement à l'état du commit `48f152e`, rien de risqué en attente.** `dailySubscriptionCheck` reste dans son état actuel (cassé mais inoffensif — ne fait jamais rien).
+
+**Si ce sujet est repris un jour**, il faudra une approche différente, pas juste corriger la collection cible :
+- D'abord tourner en mode "log only" (lister ce qui serait désactivé, sans jamais écrire) pendant un certain temps pour observer le volume réel une fois les webhooks (maintenant corrigés) auront eu le temps d'alimenter `lastWebhookUpdate` naturellement.
+- Ou "grandfather" toutes les structures actuellement actives (leur donner une date de référence fraîche) avant d'activer la désactivation automatique, pour ne jamais pénaliser quelqu'un pour un défaut de suivi historique plutôt qu'un vrai défaut de paiement.
+- Ne jamais réactiver ce cron sans re-vérifier le nombre de structures impactées juste avant, la situation change chaque jour maintenant que les webhooks fonctionnent.
+
 ## 🔧 Conversion Assmat → MAM (Fiona Audy) — récap
 
 ## 🔧 EN COURS — Conversion Assistante Maternelle → MAM (PAS ENCORE TESTÉE DE BOUT EN BOUT)
