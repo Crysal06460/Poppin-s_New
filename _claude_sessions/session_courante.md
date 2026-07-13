@@ -2,6 +2,18 @@
 
 **Dernière mise à jour :** 2026-07-11 (session chrisbeylet@gmail.com)
 
+## 🚨 INCIDENT + RÉSOLU 11/07/2026 — verifyApplePurchase non déployée, achats iOS cassés en prod
+
+Le build iOS/Android livré aujourd'hui (v2.1.8+2063) incluait le nouveau code client (`ios_subscription_service.dart`, committé le 10/07) qui appelle la Cloud Function `verifyApplePurchase` — mais cette fonction était restée **non déployée** (mise en pause faute de secret Apple, un placeholder avait été mis pour débloquer d'autres déploiements). Conséquence réelle : **tout nouvel achat iOS depuis la sortie de cette version échouait** avec "Achat non validé : NOT FOUND" (Firebase renvoie NOT_FOUND quand la fonction appelée n'existe pas côté serveur) — Apple prélevait bien l'utilisatrice, mais l'app ne validait jamais l'achat côté serveur et ne débloquait rien.
+
+**Découvert via Fiona Audy** (fionaudy04@gmail.com, structure `ueVnOL4WzkMnpo9fWRNMngqseuF3`) : a payé 9,99€ pour passer en MAM 2 membres (confirmé dans ses Réglages iOS > Abonnements, renouvellement 13 août), bloquée en "1 assistante maternelle" avec message d'erreur.
+
+**Résolu en 2 temps :**
+1. **Fiona débloquée manuellement** (Admin SDK, correspond exactement à ce que `verifyApplePurchase` aurait dû faire) : `structureType: MAM`, `maxMemberCount: 3`, nouveau doc `subscriptions` (productId `mam_2_membres`, 9,99€, `manualFix: true`), ancien abonnement assistante_maternelle marqué `replaced`.
+2. **Cause corrigée** : vrai secret App-Specific Shared Secret récupéré sur App Store Connect (Poppin's → Abonnement Poppin's → "Secret partagé spécifique à l'app" → Gérer) et configuré via `firebase functions:secrets:set APPSTORE_SHARED_SECRET`, puis `verifyApplePurchase` déployée pour de vrai. Confirmé fonctionnelle : un appel non authentifié renvoie maintenant 401 (au lieu de 404/NOT_FOUND avant).
+
+**⚠️ À surveiller** : toute utilisatrice iOS ayant tenté un nouvel achat/upgrade entre la sortie de la v2.1.8+2063 et ce fix a pu subir le même problème (prélevée, bloquée). Si d'autres réclamations similaires arrivent pour cette fenêtre, reproduire le fix manuel ci-dessus (structureType/maxMemberCount/subscriptions).
+
 ## ✅ DÉPLOYÉ 11/07/2026 — Webhooks App Store / Google Play réparés
 
 En vérifiant "sera-t-elle bien prélevée le mois prochain" pour Fiona (conversion MAM), découvert que `handleAppStoreWebhook` et `handleGooglePlayWebhook` ne trouvaient **littéralement jamais aucun compte** depuis toujours : ils cherchaient sur `users/{email}.subscriptionPlatform`/`originalTransactionId`/`purchaseToken`, des champs que ni `ios_subscription_service.dart` ni `android_subscription_service.dart` n'ont jamais écrits (ces services écrivent uniquement dans `subscriptions`/`structures`). Résultat concret : les notifications Apple/Google de renouvellement, échec de paiement, ou annulation n'ont **jamais** été répercutées dans Firestore, pour aucune utilisatrice iOS/Android, depuis le début. Bug préexistant, pas causé par la conversion MAM — juste découvert en creusant cette question.
