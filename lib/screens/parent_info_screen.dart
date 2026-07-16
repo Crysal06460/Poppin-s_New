@@ -883,23 +883,6 @@ class _ParentInfoScreenState extends State<ParentInfoScreen> {
         print("📧 Email non trouvé dans users collection.");
       }
 
-      // Vérification supplémentaire - Rechercher dans toutes les structures
-      // pour voir si cet email est utilisé comme compte pro
-      final structuresQuery =
-          await FirebaseFirestore.instance.collection('structures').get();
-
-      for (var structureDoc in structuresQuery.docs) {
-        if (structureDoc.id.toLowerCase() == normalizedEmail) {
-          print("⚠️ Email trouvé comme ID de structure: ${structureDoc.id}");
-          _showError(
-              "Cet email est déjà utilisé comme compte professionnel. Veuillez en utiliser un autre.");
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-      }
-
       // Vérifier si l'utilisateur connecté utilise cet email
       if (user.email?.toLowerCase() == normalizedEmail) {
         print(

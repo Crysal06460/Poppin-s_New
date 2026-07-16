@@ -1,6 +1,108 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-11 (session chrisbeylet@gmail.com)
+**Dernière mise à jour :** 2026-07-16 soir (session chrisbeylet@gmail.com)
+
+## 🚨 16/07/2026 (suite) — Audit complet du parcours enfant + incident de test + garde-fou anti-corruption
+
+Après le fix du matin (voir section ci-dessous), Christophe a demandé une vérification exhaustive : "une fois l'enfant ajouté, est-ce que TOUT fonctionnera pour lui (horaires, profil, historique...) et pour Clara aussi ?" — pour ne pas que Fiona revienne une 4e fois. 2 agents lancés en parallèle pour auditer (1) le reste du parcours d'ajout d'enfant (étapes après "Informations Parent") et (2) tous les écrans de gestion d'un enfant existant (horaires, profils, historique, photo, retrait, coordonnées).
+
+### Bugs trouvés (en plus des 2 du matin)
+1. **`parent_second_info_screen.dart:892`** — même lecture illégale de toute la collection `structures` que le bug du matin, sur l'étape optionnelle "Ajouter un 2e parent". Touche TOUS les utilisateurs non-admin (Fiona ET Clara), pas seulement les fondatrices. **Fix : bloc supprimé (code mort, comparait aussi un champ `type`/`members` qui n'existe même pas dans le vrai modèle de données). Modifié en local, pas commité.**
+2. **`canManageParentUsers()` (firestore.rules) oubliait le rôle `'structure'`** dans sa liste autorisée (`['admin','mamMember','assistant']`) — cassait 2 écrans cœur de métier pour toute fondatrice : `child_financial_info_screen.dart` (rattacher un enfant à un parent déjà existant, silencieux) et surtout **`parent_coordonnées_screen.dart`** (impossible d'enregistrer/modifier l'email d'un parent ou de renvoyer une invitation — Fiona n'aurait jamais pu inviter aucun parent). **Fix : `'structure'` ajouté à la liste. DÉPLOYÉ EN PROD**, testé emulator avant (18 tests, 3 nouveaux ajoutés dans `firestore-tests/run-tests.js`).
+3. **`dashboard_screen.dart::_canCurrentUserEditChild()`** ignorait `showAllChildrenOnHome` — un membre MAM non-propriétaire (Clara) se serait vu bloquée en lecture-seule sur "Profils enfants" pour tout enfant ajouté par l'autre membre (Fiona), malgré le réglage "tous les enfants visibles" activé. **Fix : nouveau champ d'état `_allowAllChildren`, vérifié en priorité. Modifié en local, pas commité.**
+
+### 🚨 Incident pendant la vérification en direct — détecté et corrigé dans la foulée
+En testant "Renvoyer l'invitation" sur la fiche d'Assiyah (dont le `parent1.email` pointait par erreur vers `clara.beausoleil@hotmail.com`, résidu d'un test antérieur de Christophe/Clara), le bug n°2 ci-dessus a été pris en flagrant délit : **le compte réel de Clara a été écrasé** (`role: mamMember` → `role: parent`, `children: [Assiyah]` ajouté) par l'écriture `users/{email}.set({role:'parent',...}, merge:true)` de `_queueParentInvitationEmail()`. Détecté immédiatement, réparé (`role` restauré, `children`/`childName` supprimés), fausse invitation et `parent1` erroné nettoyés sur la fiche d'Assiyah.
+
+**Root cause plus large découverte à cette occasion** : `parent_coordonnées_screen.dart::_queueParentInvitationEmail()` écrivait `role:'parent'` sur n'importe quel email saisi, **sans jamais vérifier si cet email appartenait déjà à un compte professionnel**. N'importe quelle fondatrice qui se trompe d'email (tape l'adresse d'une collègue par erreur) aurait pu casser silencieusement le compte de cette collègue — un vrai bug de corruption de données, pas juste un artefact de test. **Fix ajouté** : garde-fou en tout début de fonction, vérifie `users/{email}.role` et refuse avec un message clair (`"Cet email est déjà utilisé par un compte professionnel"`) si c'est déjà un compte pro. Try/catch ajouté aussi dans `_showEditEmailDialog` pour bien afficher l'erreur. **Modifié en local, pas commité.**
+
+### Vérifié en direct sur simulateur
+- "Renvoyer l'invitation" pour Fiona fonctionne (avant le garde-fou) — confirmé succès complet pour un email normal.
+- Après ajout du garde-fou : re-testé avec l'email de Clara → refusé proprement, message d'erreur clair, **aucune écriture** (vérifié : `role` de Clara toujours `mamMember` après le test).
+- Bug n°1 (2e parent) et n°3 (Clara lecture-seule) : corrigés par lecture de code, **pas testés en direct** faute de temps (pas de session avec un 2e parent essayée, pas de connexion possible avec le vrai mot de passe de Clara).
+
+### État des fichiers — toujours rien commité
+7 fichiers modifiés en local au total depuis hier (aucun commit) : `firestore.rules`, `firestore.indexes.json`, `firestore-tests/run-tests.js`, `lib/screens/mam_member_add_screen.dart`, `lib/screens/parent_info_screen.dart`, `lib/screens/parent_second_info_screen.dart`, `lib/screens/dashboard_screen.dart`, `lib/screens/parent_coordonnees_screen.dart`. 2 déploiements prod déjà faits (`firestore.rules` deux fois, `firestore.indexes.json` une fois) sans qu'aucun ne soit commité dans le repo — **risque réel qu'un futur commit écrase l'état prod actuel**.
+
+---
+
+## 🚨 16/07/2026 (matin) — Fiona Audy : bug "Ajouter un enfant" cassé — corrigé, bug latent identifié (pas un problème d'onboarding actif)
+
+2e signalement de Fiona le lendemain (16/07) : erreur générique "Une erreur est survenue. Veuillez réessayer." à l'étape "Informations Parent" de l'ajout d'enfant, reproductible à volonté. **Reproduit et corrigé en direct sur simulateur iOS avec son vrai compte** (méthode détaillée plus bas — nouvelle capacité acquise cette session).
+
+### Cause n°1 — code mort devenu bloquant, corrigé
+`lib/screens/parent_info_screen.dart::_saveParentInfo()` faisait une lecture non filtrée de **toute** la collection `structures` pour vérifier si l'email saisi correspondait à un ID de structure existant — interdit par les règles Firestore pour un compte non-admin. Ce check n'a jamais pu fonctionner de toute façon (comparait un ID de structure, toujours un UID Firebase Auth, à un email — aucun match possible sur les 798 structures réelles). Présent depuis le tout premier commit du repo (19/05/2025), cassé de façon bloquante seulement depuis le durcissement sécurité du 30/05/2026. **Fix : bloc supprimé. Modifié en local, PAS COMMITÉ, PAS BUILDÉ.**
+
+### Cause n°2 — champ `role` manquant sur le compte de Fiona, réparé manuellement pour elle
+Sans le champ `role` sur `users/{email}`, la fonction `isProfessional()` des règles Firestore échoue, ce qui bloque même la 1ère lecture de l'écran. **Réparé manuellement** : `role: 'structure'` ajouté sur `users/fionaudy04@gmail.com`.
+
+### ⚠️ Ampleur réelle du problème — investiguée à fond, PAS un bug d'onboarding actif
+Premier réflexe (erroné) : un échantillon rapide de 57 structures a suggéré que ~91% des fondatrices seraient affectées — Christophe a eu raison de douter immédiatement ("l'ajout d'enfant est la première chose qu'ils font, ça devait fonctionner, jamais eu de plainte"). Audit complet refait sur les **798 structures réelles** (2 agents lancés en parallèle pour vérifier Clara + l'ampleur réelle) :
+
+- Comptes créés **après le 05/01/2026** (date où `congratulations_screen.dart` a commencé à écrire `role:'structure'` à l'inscription) : **97,5% corrects** (40 structures)
+- Comptes créés **après le 30/05/2026** (durcissement des règles) : **100% corrects** (11 structures)
+- Comptes créés **avant le 05/01/2026** (727 sur 798, la quasi-totalité du parc) : **0,7% corrects** — c'est tout le problème
+- Preuve directe que le flux marche aujourd'hui : **8 structures distinctes** ont ajouté un enfant avec succès après le 30/05/2026 (dont une le 16/07 même), toutes avec `role` correct.
+
+**Fiona correspond exactement au profil du vrai bug** : structure créée le 06/10/2025 (avant le mécanisme qui écrit `role`), et son compte n'a jamais déclenché les réparations automatiques existantes (`auth_check_screen.dart:171/193` — ne se déclenche que si le lookup par `structureId` échoue —, ou le webhook Stripe lors d'un re-paiement). Les ~41 autres vieux comptes payants avec `role` manquant identifiés n'ont **aucune activité récente** (`lastActiveDate`) — elles n'ajoutent quasiment jamais de nouvel enfant, ce qui explique l'absence totale de plainte en 7 semaines malgré le bug.
+
+**Conclusion : bug réel mais dormant, touche des vieux comptes peu actifs, pas les nouvelles inscriptions.** Pas urgent de backfiller en masse dans la panique. Reste à faire, calmement : un backfill ponctuel de `role:'structure'` pour les fondatrices anciennes qui en manquent, si/quand elles refont l'action qui le déclenche.
+
+### Testé en conditions réelles de bout en bout
+Après les 2 fixes, flux complet vérifié sur simulateur : enfant de test créé, infos parent enregistrées (log `✅ Infos du parent enregistrées`), invitation envoyée, redirection vers "Adresse Parent". Enfant/invitation/emailQueue de test supprimés après vérification — aucune trace laissée dans les données réelles de Fiona.
+
+### 🛠️ Méthode de test en direct sur simulateur (nouvelle capacité acquise cette session)
+```
+xcrun simctl boot "DE24F1AD-4500-4EBF-9460-B9161D133082"   # iPhone 17
+open -a Simulator
+flutter run -d DE24F1AD-4500-4EBF-9460-B9161D133082   # ~2-5 min de build la 1ère fois
+```
+Pour interagir (taper, cliquer) : **`cliclick`** (installé via `brew install cliclick` cette session — pas présent par défaut). Piège important : la fenêtre Simulator **change de position à chaque réactivation** (`osascript -e 'tell application "Simulator" to activate'`), donc ne JAMAIS réutiliser des coordonnées calculées à un tour précédent. Toujours, dans l'ordre : activer Simulator → `screencapture -x` (capture plein écran Mac — PAS `simctl io screenshot`, qui ne donne que le contenu de l'écran device, inutile pour calculer des coordonnées Mac) → lire les coordonnées dans l'image (×1.44 pour la résolution réelle en pixels, ÷2 pour convertir en points Mac, écran Retina 2x) → cliquer avec `cliclick c:x,y` (clic) ou `cliclick dd:x,y w:50 dm:x2,y2 w:50 du:x2,y2` (glisser/scroll — **`dm:` obligatoire pour les points intermédiaires d'un drag, `m:` seul ne génère pas d'événement mouseDragged et le scroll ne se produit pas**). Ensuite `xcrun simctl io <device> screenshot` pour voir le résultat sur l'écran device.
+
+---
+
+## 🚨 15/07/2026 — Fiona Audy (fionaudy04@gmail.com) : 2 bugs corrigés + 1 bug profond trouvé (non corrigé)
+
+Fiona a signalé par email 2 bugs le même jour. Les 2 sont maintenant **résolus et vérifiés en direct** (simulateur iOS, connectée avec son vrai compte). Un 3e bug plus profond a été découvert en creusant mais **volontairement pas touché** (hors sujet, nécessite sa propre session).
+
+### Bug 1 — "Ajouter un membre" cassé (permission-denied) — chemin de code corrigé, PAS ENCORE COMMITÉ/BUILDÉ
+Deux causes empilées dans le flux self-service MAM, présentes probablement depuis toujours (jamais fonctionné en prod pour aucune MAM) :
+1. `lib/screens/mam_member_add_screen.dart` créait `users/{email}` du nouveau membre depuis le compte de la fondatrice — interdit par `firestore.rules` (seul le titulaire du compte peut écrire son propre doc). **Fix : écriture supprimée** (le doc sera créé par le membre lui-même à l'inscription, comme le fait déjà `invitation_signup_screen.dart:1123`). **Modifié en local, PAS COMMITÉ.**
+2. `firestore.rules` (règle `invitations`, création) exigeait `childId is string`, un champ pensé pour les invitations parent, jamais fourni pour les invitations `type: mamMember` → la création de l'invitation échouait aussi, systématiquement. **Fix déployé en prod** : `childId is string || type == 'mamMember'`. Testé dans l'émulateur (`firestore-tests/`, 2 nouveaux tests ajoutés, 12/12 passent) avant déploiement.
+
+**Pour Fiona spécifiquement** : contourné l'écran cassé, ajout manuel en base (Admin SDK, clé `firebase-export/serviceAccountKey.json`) : membre Clara Beausoleil (`clara.beausoleil@hotmail.com`) ajouté dans `structures/ueVnOL4WzkMnpo9fWRNMngqseuF3/members/member_2`, invitation créée (`invitations/lyWp9NQTX3tZIyMvE8qv`), email réel envoyé via Mailjet (confirmé `status: sent`). **Testé en direct** : Christophe a suivi le flux "J'ai reçu une invitation" sur simulateur avec l'email de Clara, créé son compte avec un mot de passe provisoire — fonctionnel.
+
+⚠️ **Le bouton "Ajouter un membre" reste cassé pour TOUTE AUTRE fondatrice MAM** tant qu'un nouveau build n'est pas publié (le fix client n'est que dans le code source local, pas committé, pas buildé). Le fix `firestore.rules`, lui, est déjà en prod mais ne suffit pas seul (cause n°1 toujours présente côté client publié).
+
+### Bug 2 — "Aucun enfant trouvé" sur Dashboard → Enfants & Parents — CORRIGÉ ET DÉPLOYÉ
+Cause réelle : **pas un problème de données**, un **index Firestore manquant**. `firestore.indexes.json` avait un `fieldOverride` sur `members.email` qui ne déclarait que le scope `COLLECTION_GROUP` (utilisé légitimement par `home_screen.dart:3483`), ce qui supprimait l'index automatique en scope `COLLECTION` dont dépend `dashboard_screen.dart::_loadChildren()` (partagée par 6 actions : Profils enfants, Modifier horaires, Modifier profil, historique, photos, suppression enfant). L'erreur (`failed-precondition: requires a COLLECTION_ASC index`) était catchée silencieusement et affichée comme "Aucun enfant trouvé", alors que les 6 enfants de Fiona existaient et étaient bien assignés.
+
+**Touche potentiellement TOUTES les vraies MAM multi-membres** (pas les assistantes solo, qui ne passent pas par ce filtre). Le même index manquant cassait aussi silencieusement le "compteur délégations" et la "vérification du mémo mensuel" (vus dans les logs) — devraient aussi être réparés par ce fix.
+
+**Fix déployé** (`firebase deploy --only firestore:indexes`) : ajout des scopes `COLLECTION` (ASC+DESC) à côté du `COLLECTION_GROUP` existant, sans rien supprimer. Index confirmé construit et fonctionnel (requête testée + vérifiée en direct sur simulateur : Fiona voit maintenant bien ses 6 enfants dans "Enfants & Parents").
+
+### Bug 3 — TROUVÉ, PAS CORRIGÉ, à creuser une prochaine session
+`firestore.rules:90-93` — règle `subscriptions/{docId}` : `isStructureMember(docId)` vérifie l'UID contre **l'ID Firestore auto-généré du document d'abonnement** (ex: `ZLZvfzTYGHvuG4ygUmYa`), pas contre le champ `structureId` réel stocké DANS le document. Résultat : `permission-denied` systématique dès qu'un client lit/interroge `subscriptions` (vu dans les logs : `Erreur check ID dashboard`, `Erreur correction structure via abonnement`). Concrètement, le bloc "🛡️ SÉCURITÉ ANTI-WEBHOOK" de `dashboard_screen.dart` (~ligne 1332-1377), censé vérifier que le `productId` réel de l'abonnement (Stripe/IAP) correspond bien au `structureType`/`maxMemberCount` stocké dans `structures/{id}` (garde-fou anti-fraude), échoue silencieusement pour tout le monde, tout le temps — donc ne protège en réalité jamais rien. Pas un trou de sécurité (trop restrictif, pas trop permissif) mais une vérification censée exister qui ne s'exécute jamais.
+
+**À faire avant de toucher à ça** : identifier TOUS les endroits où le client lit/écrit `subscriptions` (au moins `dashboard_screen.dart:1334`, à vérifier aussi `subscription_service.dart`, `unified_subscription_service.dart`, `home_screen.dart`), écrire un test emulator dédié, puis corriger la règle pour se baser sur `resource.data.structureId` plutôt que `docId`. Ne pas se précipiter (leçon de l'incident du 10/07 : toute modif de `firestore.rules` doit passer par `firestore-tests/` avant déploiement).
+
+### État des fichiers — RIEN DE COMMITÉ malgré 2 déploiements prod déjà faits
+- `firestore.rules` et `firestore.indexes.json` sont **déjà déployés en prod** mais **pas committés** dans le repo — à committer rapidement pour ne pas perdre la trace (risque : quelqu'un pourrait écraser l'état prod actuel avec un ancien commit sans le vouloir).
+- `lib/screens/mam_member_add_screen.dart` et `firestore-tests/run-tests.js` : modifiés en local, pas committés, pas déployés/buildés.
+
+### Actions manuelles faites sur données réelles de prod aujourd'hui
+- Structure Fiona (`ueVnOL4WzkMnpo9fWRNMngqseuF3`) : ajout `members/member_2` (Clara Beausoleil), `invitations/lyWp9NQTX3tZIyMvE8qv`, email Mailjet envoyé.
+- Compte Firebase Auth créé pour `clara.beausoleil@hotmail.com` avec un **mot de passe provisoire** (choisi par Christophe pendant le test en direct) — Clara doit le changer dès sa première connexion (via "Mot de passe oublié", flux 100% Firebase natif, aucun code Poppins impliqué).
+- Le vrai mot de passe de Fiona a été utilisé pour se connecter sur le simulateur à des fins de test (fourni en direct par Christophe, non stocké) — **Fiona doit aussi changer son mot de passe**.
+
+### À faire à la prochaine session
+1. Committer les 4 fichiers modifiés (`firestore.rules`, `firestore.indexes.json`, `lib/screens/mam_member_add_screen.dart`, `firestore-tests/run-tests.js`).
+2. Prévoir un nouveau build app (le fix client `mam_member_add_screen.dart` ne profite qu'à Fiona pour l'instant, via le contournement manuel — toute autre fondatrice MAM reste bloquée jusqu'à publication).
+3. Dire à Fiona : les 2 bugs sont résolus, Clara a déjà un compte (mot de passe provisoire à changer), et lui rappeler de changer son propre mot de passe suite aux tests.
+4. Reprendre le bug n°3 (`subscriptions` / `isStructureMember(docId)`) dans une session dédiée, avec tests emulator avant tout déploiement.
+5. Vérifier un jour le message d'avertissement vu au déploiement des index : "7 indexes définis dans le projet absents du fichier local" (drift pré-existant, pas touché, pas urgent).
+
+---
 
 ## 🚨 INCIDENT + RÉSOLU 11/07/2026 — verifyApplePurchase non déployée, achats iOS cassés en prod
 

@@ -147,6 +147,14 @@
         {
           "order": "DESCENDING",
           "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         }
       ]
     },

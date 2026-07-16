@@ -887,32 +887,6 @@ class _ParentSecondInfoScreenState extends State<ParentSecondInfoScreen> {
         }
       }
 
-      // Rechercher dans toutes les structures si l'email est utilisé pour un professionnel
-      final structuresSnapshot =
-          await FirebaseFirestore.instance.collection('structures').get();
-      for (var structureDoc in structuresSnapshot.docs) {
-        final structureData = structureDoc.data();
-        if (structureData['ownerEmail']?.toString().toLowerCase() == email) {
-          _showError(
-              "Cet email est déjà utilisé par un professionnel. Veuillez en utiliser un autre.");
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        if (structureData['type'] == 'mam' &&
-            structureData['members'] != null) {
-          final List<dynamic> members = structureData['members'] ?? [];
-          for (var member in members) {
-            if (member['email']?.toString().toLowerCase() == email) {
-              _showError(
-                  "Cet email est déjà utilisé par un membre MAM. Veuillez en utiliser un autre.");
-              setState(() => _isLoading = false);
-              return;
-            }
-          }
-        }
-      }
-
       print("✅ Email validé avec succès: $email");
 
       // Sauvegarder les infos du deuxième parent dans Firestore

@@ -40,7 +40,7 @@ service cloud.firestore {
       return isSignedIn() &&
              request.auth.token.email is string &&
              get(/databases/$(database)/documents/users/$(myEmail())).data.role in
-               ['admin', 'mamMember', 'assistant'];
+               ['admin', 'mamMember', 'assistant', 'structure'];
     }
 
     // ─── USERS ────────────────────────────────────────────────────────────────
@@ -200,7 +200,8 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
         request.resource.data.email is string &&
         request.resource.data.structureId is string &&
-        request.resource.data.childId is string &&
+        (request.resource.data.childId is string ||
+         request.resource.data.type == 'mamMember') &&
         request.resource.data.status is string &&
         request.resource.data.createdAt == request.time &&
         request.resource.data.expiresAt is timestamp;

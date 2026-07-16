@@ -89,6 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _currentUserEmail = '';
   String? _structureOwnerEmail;
   bool _currentMemberIsAdmin = false;
+  bool _allowAllChildren = true;
   Set<String> _delegatedChildIds = {};
   String? _structureId;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -4024,6 +4025,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _currentUserEmail = currentUserEmail;
           _structureOwnerEmail = structureOwnerEmail;
           _currentMemberIsAdmin = memberIsAdmin;
+          _allowAllChildren = allowAllChildren;
           _delegatedChildIds = delegatedChildIds;
           isMAMStructure = isMam;
         });
@@ -4038,6 +4040,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _canCurrentUserEditChild(Map<String, dynamic> child) {
     if (!isMAMStructure) {
+      return true;
+    }
+
+    if (_allowAllChildren) {
       return true;
     }
 

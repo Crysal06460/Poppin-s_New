@@ -16,6 +16,8 @@ const {
   assertSucceeds,
   assertFails,
 } = require('@firebase/rules-unit-testing');
+const firebase = require('firebase/compat/app');
+require('firebase/compat/firestore');
 
 const RULES_PATH = path.join(__dirname, '..', 'firestore.rules');
 
@@ -106,6 +108,49 @@ async function run(testEnv) {
 
   await check('Un étranger NE PEUT PAS lire les avenants d\'un autre', () =>
     assertFails(asStranger.doc('users/assmatA/avenants/brouillon').get()));
+
+  console.log('\n--- Invitation membre MAM (bug signalé par Fiona Audy, 15/07) ---');
+
+  await check('Fondatrice MAM peut créer une invitation membre (mamMember) sans childId', () =>
+    assertSucceeds(asAssmatOwner.collection('invitations').add({
+      email: 'nouvelle-collegue@test.fr',
+      type: 'mamMember',
+      structureId: 'assmatA',
+      structureName: 'Chez Martine',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 3600 * 1000)),
+      status: 'active',
+    })));
+
+  await check('Invitation parent (type != mamMember) SANS childId reste refusée', () =>
+    assertFails(asAssmatOwner.collection('invitations').add({
+      email: 'parent-sans-enfant@test.fr',
+      type: 'parent',
+      structureId: 'assmatA',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 3600 * 1000)),
+      status: 'active',
+    })));
+
+  console.log('\n--- Coordonnées parent / ajout enfant (bug signalé par Fiona Audy, 16/07) ---');
+
+  await check('Une fondatrice (role structure) peut créer le compte users/{email} d\'un parent', () =>
+    assertSucceeds(asAssmatOwner.doc('users/nouveau-parent@test.fr').set({
+      email: 'nouveau-parent@test.fr',
+      role: 'parent',
+    }, { merge: true })));
+
+  await check('Un membre MAM (role mamMember) peut créer le compte users/{email} d\'un parent', () =>
+    assertSucceeds(asMamMember.doc('users/autre-parent@test.fr').set({
+      email: 'autre-parent@test.fr',
+      role: 'parent',
+    }, { merge: true })));
+
+  await check('Un étranger NE PEUT PAS créer un compte parent arbitraire', () =>
+    assertFails(asStranger.doc('users/parent-vole@test.fr').set({
+      email: 'parent-vole@test.fr',
+      role: 'parent',
+    }, { merge: true })));
 
   return failures;
 }
