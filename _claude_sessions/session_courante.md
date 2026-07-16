@@ -1,6 +1,43 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-16 soir (session chrisbeylet@gmail.com)
+**Dernière mise à jour :** 2026-07-16 22h (session chrisbeylet@gmail.com) — récap complet ci-dessous, à lire en premier en cas de bug remonté demain
+
+## 📦 RELEASE 2.1.9+2064 — publiée le 16/07/2026 au soir (App Store Connect + Google Play Console)
+
+**Si un bug est signalé après cette date, c'est presque certainement lié à l'un des changements ci-dessous.** Commit unique : `9f6957f` — "Corrige ajout membre MAM, ajout enfant, coordonnées parents : requêtes Firestore interdites + rôles manquants" (`git show 9f6957f` pour le diff exact).
+
+### Ce qui a été livré dans cette release (8 fichiers, tous dans le commit 9f6957f)
+1. **`lib/screens/mam_member_add_screen.dart`** — suppression de l'écriture illégale `users/{email}` par la fondatrice lors de l'ajout d'un membre MAM (le nouveau membre crée son propre doc à l'inscription).
+2. **`lib/screens/parent_info_screen.dart`** — suppression d'une lecture non filtrée de toute la collection `structures` (code mort/cassé) qui bloquait la 1ère étape de l'ajout d'enfant.
+3. **`lib/screens/parent_second_info_screen.dart`** — même suppression, sur l'étape optionnelle "Ajouter un 2e parent".
+4. **`lib/screens/dashboard_screen.dart`** — `_canCurrentUserEditChild()` respecte désormais `showAllChildrenOnHome` (nouveau champ `_allowAllChildren`), pour ne plus bloquer en lecture-seule un membre MAM sur les enfants ajoutés par un autre membre.
+5. **`lib/screens/parent_coordonnees_screen.dart`** — garde-fou ajouté dans `_queueParentInvitationEmail()` : refuse d'écraser le rôle d'un compte professionnel existant si l'email saisi comme "parent" appartient déjà à une pro (bug de corruption trouvé en testant, voir incident plus bas). Try/catch ajouté dans `_showEditEmailDialog`.
+6. **`firestore.rules`** — `canManageParentUsers()` inclut maintenant `'structure'` (oubliée avant, cassait "Coordonnées des parents" pour toute fondatrice) ; règle `invitations` create accepte `childId is string OU type == 'mamMember'`.
+7. **`firestore.indexes.json`** — ajout du scope `COLLECTION` manquant sur `members.email` (le `fieldOverride` ne couvrait que `COLLECTION_GROUP`, cassait silencieusement 6 écrans du dashboard MAM).
+8. **`firestore-tests/run-tests.js`** — 6 nouveaux tests couvrant tous les fixes ci-dessus (18/18 passent).
+
+⚠️ **Les fixes `firestore.rules` et `firestore.indexes.json` étaient déjà en prod AVANT ce commit** (déployés séparément le 15 et le 16/07) — ce commit ne fait que synchroniser le repo git avec l'état réel de prod pour ces 2 fichiers. Les 6 fichiers Dart, eux, ne prenaient effet qu'avec cette release.
+
+### Comment vérifier si le problème vient de cette release
+- Si le bug touche **l'ajout d'enfant, l'ajout de membre MAM, les coordonnées parents, ou l'édition d'un profil enfant par un membre MAM non-fondateur** → très probablement lié à cette release, relire `git show 9f6957f` en détail.
+- Si le bug touche autre chose → probablement sans rapport (aucun autre fichier modifié).
+- Pour un rollback rapide côté client : `git revert 9f6957f` (mais attention, ça referait remonter les bugs originaux — mieux vaut corriger le nouveau problème précisément).
+- Pour un rollback côté Firestore uniquement (rules/indexes) : voir l'état d'avant dans `git show 9f6957f^:firestore.rules` et `git show 9f6957f^:firestore.indexes.json`, mais **aucune raison de le faire** — ces 2 fichiers sont des assouplissements/ajouts purs, pas de régression possible dessus (contrairement à l'incident du 10/07 qui était un durcissement).
+
+### 🚨 Interventions manuelles sur données réelles de prod (à connaître pour tout futur diagnostic sur ces comptes)
+Structure `ueVnOL4WzkMnpo9fWRNMngqseuF3` ("Mam Les Petites Bouilles", fondatrice fionaudy04@gmail.com, membre clara.beausoleil@hotmail.com) :
+- `users/fionaudy04@gmail.com.role` mis à `'structure'` (manquait, cause du blocage initial).
+- `structures/.../members/member_2` (Clara) créé manuellement, invitation + email envoyés manuellement (contournement du bug MAM member add, avant que le fix soit publié).
+- **Incident temporaire** : le compte de Clara a été accidentellement écrasé (`role: mamMember` → `parent`) pendant un test de la fonctionnalité "Coordonnées des parents", **puis réparé dans la même session** (role restauré, champs `children`/`childName` parasites supprimés). État final confirmé correct : `role: mamMember`, pas de `children`.
+- Fiche enfant `Assiyah` (`GbDMKfcU3vWNRyz2E5ri`) : `parent1` erroné (pointait vers l'email de Clara, résidu de test) supprimé — Fiona doit ressaisir les vraies infos du parent d'Assiyah.
+- Fausse invitation `type:parent` pour Clara supprimée (`T3EyaYErQOR6NIxjizUf`) — sa vraie invitation `mamMember` (`lyWp9NQTX3tZIyMvE8qv`) reste intacte.
+
+### Ce qui N'A PAS été corrigé (connu, pas dans cette release)
+- **Bug `subscriptions`/`isStructureMember(docId)`** (règle Firestore compare l'UID au mauvais champ, casse le garde-fou anti-fraude webhook) — trouvé le 15/07, jamais touché, nécessite sa propre session avec tests emulator dédiés.
+- **Backfill du champ `role`** pour les vieilles fondatrices (727/798 structures créées avant le 05/01/2026 n'ont pas ce champ) — pas urgent, ces comptes sont largement inactifs, mais un souci similaire à celui de Fiona resurgira si l'une d'elles redevient active et déclenche un des écrans concernés.
+- Drift d'index signalé au déploiement ("7 indexes définis dans le projet absents du fichier local") — jamais creusé.
+
+---
 
 ## 🚨 16/07/2026 (suite) — Audit complet du parcours enfant + incident de test + garde-fou anti-corruption
 
