@@ -84,12 +84,26 @@ service cloud.firestore {
     }
 
     // ─── SUBSCRIPTIONS ────────────────────────────────────────────────────────
-    // Chaque abonnement est identifié par le structureId.
-    // Seul le membre de la structure peut lire/écrire son abonnement.
+    // Deux formes de documents coexistent : les essais gratuits, créés avec
+    // l'ID de document = structureId (isStructureMember(docId) suffit) ; et les
+    // abonnements payants réels, créés avec un ID Firestore auto-généré
+    // (.add()) et un champ structureId à l'intérieur — docId ne correspond
+    // alors jamais à un structureId. isStructureMember(docId) seul bloquait
+    // silencieusement toute confirmation d'achat Android (montant prélevé,
+    // aucun document jamais créé) : on accepte aussi le champ structureId.
     // Les Cloud Functions (admin SDK) contournent ces règles → webhooks Stripe OK.
     match /subscriptions/{docId} {
-      allow read: if isSignedIn() && isStructureMember(docId);
-      allow create, update: if isSignedIn() && isStructureMember(docId);
+      allow read: if isSignedIn() && (
+        isStructureMember(docId) ||
+        (resource.data.structureId is string && isStructureMember(resource.data.structureId))
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.structureId is string &&
+        isStructureMember(request.resource.data.structureId);
+      allow update: if isSignedIn() && (
+        isStructureMember(docId) ||
+        (resource.data.structureId is string && isStructureMember(resource.data.structureId))
+      );
       allow delete: if false;
     }
 

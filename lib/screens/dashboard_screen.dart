@@ -1332,14 +1332,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // 🛡️ SÉCURITÉ ANTI-WEBHOOK : On vérifie l'ID produit directement
         try {
+           // Pas de .limit(1) sans tri : un vieil abonnement 'replaced'
+           // (jamais supprimé lors d'un upgrade) pourrait être retourné à la
+           // place de l'abonnement actif. Priorité au statut 'active', puis
+           // au plus récent.
            final subQuery = await FirebaseFirestore.instance
               .collection('subscriptions')
               .where('structureId', isEqualTo: structureId)
-              .limit(1)
               .get();
-           
+
            if (subQuery.docs.isNotEmpty) {
-               final subData = subQuery.docs.first.data();
+               final activeDocs = subQuery.docs
+                   .where((d) => (d.data()['status'] ?? '').toString().toLowerCase() == 'active')
+                   .toList();
+               final candidates = activeDocs.isNotEmpty ? activeDocs : subQuery.docs;
+               candidates.sort((a, b) {
+                 final da = a.data()['createdAt'];
+                 final db = b.data()['createdAt'];
+                 if (da is! Timestamp && db is! Timestamp) return 0;
+                 if (da is! Timestamp) return 1;
+                 if (db is! Timestamp) return -1;
+                 return db.compareTo(da);
+               });
+               final subData = candidates.first.data();
                final String productId = (subData['productId'] ?? subData['planId'] ?? '').toString().toLowerCase();
                
                // Exactement les mêmes sets que HomeScreen

@@ -152,6 +152,31 @@ async function run(testEnv) {
       role: 'parent',
     }, { merge: true })));
 
+  console.log('\n--- Abonnements (achat Android réel bloqué, 20/07) ---');
+
+  await check('Une structure peut créer son abonnement (ID auto-généré, comme un achat Android réel)', () =>
+    assertSucceeds(asAssmatOwner.collection('subscriptions').add({
+      structureId: 'assmatA',
+      status: 'active',
+      productId: 'abonnement_mam4',
+      platform: 'android',
+    })));
+
+  await check('Une structure peut relire ses propres abonnements via une requête structureId', () =>
+    assertSucceeds(asAssmatOwner.collection('subscriptions').where('structureId', '==', 'assmatA').get()));
+
+  await check('Un étranger NE PEUT PAS créer un abonnement pour une autre structure', () =>
+    assertFails(asStranger.collection('subscriptions').add({
+      structureId: 'assmatA',
+      status: 'active',
+    })));
+
+  await check('Un essai gratuit (ID de document = structureId) reste lisible comme avant', () =>
+    assertSucceeds(asAssmatOwner.doc('subscriptions/assmatA').set({
+      structureId: 'assmatA',
+      status: 'trial',
+    }, { merge: true })));
+
   return failures;
 }
 

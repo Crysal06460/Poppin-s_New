@@ -1,6 +1,43 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-16 22h (session chrisbeylet@gmail.com) — récap complet ci-dessous, à lire en premier en cas de bug remonté demain
+**Dernière mise à jour :** 2026-07-20 tard (session chrisbeylet@gmail.com) — récap complet ci-dessous, à lire en premier en cas de bug remonté demain
+
+## 🚨 20/07/2026 (3e incident du jour) — Fiona repassée en compte solo, effet de bord direct du fix `subscriptions` du jour même
+
+Fiona réécrit (4e fois en 5 jours) : "l'application est repassée en mode utilisateur simple... ma collègue a été supprimée de mon application, et j'ai disparu de la sienne." Vérifié en base : **aucune donnée perdue** — `structures/ueVnOL4WzkMnpo9fWRNMngqseuF3/members` avait toujours ses 2 docs (Fiona + Clara) intacts, et `users/clara.beausoleil@hotmail.com` avait toujours `role: mamMember` + le bon `structureId`. Seul le doc `structures/{id}` avait `structureType: "AssistanteMaternelle"` (au lieu de `"MAM"`) et `maxMemberCount: 1` (au lieu de `3`) — écrit à `2026-07-20T11:45:06Z`, soit ~2h avant son message.
+
+### Cause exacte — effet de bord du fix de règle `subscriptions` déployé plus tôt dans la journée
+`lib/screens/home_screen.dart:967-985` (fonction appelée à chaque ouverture du Home par la fondatrice) interroge `subscriptions` par `structureId` avec un `.limit(1)` **sans tri ni filtre de statut**, pour "corriger" `structureType`/`maxMemberCount` si le vrai abonnement dit autre chose. Cette requête était **cassée en permission-denied depuis 7 semaines** à cause du bug de règle corrigé plus tôt dans la journée (voir section subscriptions ci-dessous) — donc cette logique de "correction" n'avait jamais pu s'exécuter jusqu'à aujourd'hui. Une fois la règle réparée, la requête a réussi pour la première fois... et a pioché le **mauvais document** : Fiona a 2 docs `subscriptions` (`GCdM629zpKZ8FlHPBVEs`, ancien essai solo d'octobre 2025 marqué `replaced`, `structureType: assistante_maternelle` ; et `ZLZvfzTYGHvuG4ygUmYa`, l'abonnement MAM actif réel). Sans tri, Firestore peut retourner l'un ou l'autre — il a retourné l'ancien, et le code a **écrit** cette mauvaise valeur dans `structures/{id}`.
+
+### Fix
+1. **Compte de Fiona réparé immédiatement** (`structureType: MAM`, `maxMemberCount: 3` restaurés).
+2. **`lib/screens/home_screen.dart`** (la vraie source, celle qui écrit) et **`lib/screens/dashboard_screen.dart`** (même faiblesse, mais en lecture seule — pas de risque d'écriture, corrigé par cohérence) : nouvelle logique `_pickMostRelevantSubscription()` — priorité aux docs `status: active`, puis au plus récent par `createdAt`, au lieu d'un `.limit(1)` à l'aveugle. Pas de nouvel index Firestore nécessaire (tri fait côté client, pas de `.orderBy()` serveur). **Modifié en local, pas commité, pas buildé.**
+3. **Audit d'exposition** : sur 490 docs `subscriptions` en prod, 25 structures ont plusieurs docs, seulement ~11 avec des `structureType` incohérents entre eux — la plupart sont des données de test/seed (une structure a 59 docs quasi-identiques, clairement pas un vrai usage). Une seule autre structure réelle avait un vieux doc MAM à côté d'un doc solo actif (`o1hPKGKi5DSWwuHperv9GJfPNzX2`), mais son état actuel (`structures/{id}` sans `structureType`, solo réel) est déjà cohérent avec le doc actif — pas de conflit en cours. **Pas d'action d'urgence jugée nécessaire sur d'autres comptes ce soir.**
+
+⚠️ **Le fix client n'est pas encore livré** (dans le code source local uniquement) — risque résiduel faible mais pas nul tant que la prochaine version n'est pas publiée : toute structure MAM avec un historique d'upgrade (vieux doc `subscriptions` non supprimé) pourrait subir le même genre de régression si sa fondatrice ouvre l'app et que la requête pioche le mauvais doc.
+
+### Fichiers modifiés aujourd'hui (20/07), récap complet — RIEN DE COMMITÉ
+`firestore.rules` (déjà en prod), `firestore-tests/run-tests.js`, `lib/screens/home_screen.dart`, `lib/screens/dashboard_screen.dart`.
+
+---
+
+## 🚨 20/07/2026 — Mam'aison D'apprenti'sage : paiement Google Play réel jamais enregistré (14,99€ perdus dans le vide)
+
+Alice (mamaisondapprentisage@laposte.net, structureId `KV5UNpUfnGaHWR0gKyjYWQjMFIz1`) signale un abonnement "activé" mais un accès bloqué. Investigation en 2 temps :
+
+### Round 1 — carte refusée, faux abonnement
+Vérifié directement sur **Stripe** (clé secrète accessible via `firebase functions:secrets:access STRIPE_SECRET_KEY`, utilisée en lecture seule) : sa carte a été refusée le 02/07, Stripe a réessayé 2 semaines puis annulé l'abonnement pour de bon le 16/07 (`cancellation_details.reason: payment_failed`). Aucun nouveau paiement depuis. Le message "abonnement activé" trompeur venait de 2 champs Firestore jamais mis à jour (`users.subscriptionStatus` figé depuis janvier, vieux doc `subscriptions` Android avec `status:active` malgré une expiration de novembre 2025) — **nettoyés**. Email envoyé à Alice expliquant qu'elle devait reprendre un VRAI abonnement.
+
+### Round 2 (quelques heures plus tard) — elle avait raison, vrai bug applicatif
+Alice répond avec une **capture d'écran de son relevé bancaire** : débit réel Google Play de 14,99€ le 17/07 à 21h39. Vérifié : aucune trace dans Firestore. Cause trouvée avec certitude : **le bug `subscriptions`/`isStructureMember(docId)` identifié le 16/07 et volontairement laissé de côté ("pas urgent") bloquait en réalité BEAUCOUP plus que le garde-fou anti-fraude mort qu'on pensait** — un audit exhaustif (agent dédié) a montré que quasiment TOUTES les lectures/écritures client sur `subscriptions` échouent avec cette règle, y compris **la création du document après un achat Android réel** (`android_subscription_service.dart:402-404`, un simple `.add()` — Android n'a pas d'équivalent serveur à `verifyApplePurchase`, contrairement à iOS qui contourne le problème via Cloud Function). Argent prélevé, accès jamais débloqué.
+
+**Fix déployé** : règle réécrite pour accepter aussi le champ `structureId` interne au document (pas seulement l'ID du doc lui-même), rétrocompatible avec les anciens docs d'essai (ID = structureId). Testé 22/22 sur l'émulateur avant déploiement. Abonnement recréé manuellement pour Alice (marqué `manualFix: true`). **Accès vérifié en direct sur simulateur** (mot de passe temporaire `Depannage2026!` fixé via Admin SDK, connexion réussie, 17 enfants visibles).
+
+⚠️ **Ce bug a très probablement empêché d'autres achats Android de se enregistrer depuis le 30/05/2026** (date d'introduction de la règle cassée) — à surveiller si d'autres plaintes similaires remontent ("j'ai payé mais ça ne marche pas" côté Android). Pas de moyen simple de lister rétroactivement toutes les victimes (aucune trace n'a été écrite nulle part par définition).
+
+**Non commité à ce stade** : `firestore.rules` (déjà déployé en prod, comme les fois précédentes).
+
+---
 
 ## 📦 RELEASE 2.1.9+2064 — publiée le 16/07/2026 au soir (App Store Connect + Google Play Console)
 
