@@ -2,6 +2,38 @@
 
 **Dernière mise à jour :** 2026-07-20 tard (session chrisbeylet@gmail.com) — récap complet ci-dessous, à lire en premier en cas de bug remonté demain
 
+## 📦 RELEASE 2.1.10+2065 — buildée le 20/07/2026 au soir (à uploader/publier)
+
+**Historique des fixes déployés — table de référence rapide en cas de nouveau bug :**
+
+| Date | Commit | Contenu | État |
+|---|---|---|---|
+| 15/07 | `9f6957f` | Ajout membre MAM, ajout enfant (parent_info), coordonnées parents, index `members.email`, `role` manquant | ✅ Publié dans 2.1.9+2064 (17/07) |
+| 15/07 | `b8e7abe` | Bump version 2.1.9+2064 | ✅ Publié |
+| 20/07 | `91ef4f7` | Règle `subscriptions` (achat Android jamais enregistré) + choix du mauvais document d'abonnement (`home_screen.dart`/`dashboard_screen.dart`) | ✅ Buildé (2.1.10+2065), **PAS ENCORE uploadé sur les stores** |
+| 20/07 | *(à venir)* | Bump version 2.1.10+2065 | ⚠️ Fait en local (`pubspec.yaml`), **PAS COMMITÉ** |
+
+**Builds prêts, PAS ENCORE publiés** :
+- Android : `build/app/outputs/bundle/release/app-release.aab` (104,1 Mo)
+- iOS : `build/ios/iphoneos/Runner.app` (64,4 Mo) — archive/export vers App Store Connect à faire (Xcode Organizer, comme d'habitude)
+
+⚠️ **Le bump de version dans `pubspec.yaml` (2.1.10+2065) n'est pas commité** — à faire avant de considérer cette release "propre" dans le repo.
+
+### Ce que corrige cette release par rapport à 2.1.9+2064
+1. **Règle `subscriptions`** : `isStructureMember(docId)` traitait l'ID du document comme un structureId — bloquait la quasi-totalité des lectures/écritures client sur cette collection depuis le 30/05/2026, y compris la confirmation d'un achat Android réel. **Root cause de l'incident Alice (Mam'aison D'apprenti'sage) du 20/07** : 14,99€ prélevés par Google Play, jamais enregistrés en base. Règle déjà déployée en prod le 20/07 (avant même ce build, car c'est une règle Firestore, pas du code client).
+2. **`home_screen.dart` / `dashboard_screen.dart`** : effet de bord de la réparation ci-dessus — une requête `subscriptions` par `structureId` sans tri ni filtre de statut, cassée en silence depuis 7 semaines, a pu pour la première fois piocher un vieil abonnement `replaced` au lieu de l'actif et écraser `structureType`/`maxMemberCount` d'une vraie MAM. **Root cause de l'incident Fiona Audy du 20/07** (sa structure repassée en "AssistanteMaternelle", Clara "disparue" — aucune perte de données réelle). Nouvelle fonction `_pickMostRelevantSubscription()` : priorité au statut `active`, puis au plus récent.
+
+### Interventions manuelles sur données réelles de prod (20/07, en plus de celles déjà listées plus bas)
+- Structure Alice (`KV5UNpUfnGaHWR0gKyjYWQjMFIz1`) : champs obsolètes nettoyés, nouvel abonnement recréé manuellement (`manualFix: true`, 14,99€), accès vérifié en direct. Mot de passe temporaire `Depannage2026!` fixé (à lui communiquer si pas déjà fait).
+- Structure Fiona (`ueVnOL4WzkMnpo9fWRNMngqseuF3`) : `structureType`/`maxMemberCount` restaurés (MAM, 3). **Vieux doc `subscriptions/GCdM629zpKZ8FlHPBVEs` neutralisé** (champ `structureId` retiré, déplacé vers `archivedStructureId`) — élimine le risque de récidive pour elle même avec l'app actuellement installée (avant même ce nouveau build).
+
+### Comment vérifier si un futur bug vient de cette release (2.1.10+2065 / commit 91ef4f7)
+- Si le bug touche **les abonnements Android** (achat non reconnu), **le statut MAM/solo d'une structure**, ou **le nombre de membres autorisés qui change tout seul** → probablement lié, relire `git show 91ef4f7`.
+- Sinon → sans rapport, remonter aux releases précédentes (voir tableau ci-dessus) ou chercher ailleurs.
+- **Autres structures à risque potentiel identifiées mais non traitées** (vieux docs `subscriptions` avec `structureType` incohérent, même mécanisme que Fiona) : audit fait sur 490 docs, la plupart sont des données de test. Une seule structure réelle avait un vieux doc suspect (`o1hPKGKi5DSWwuHperv9GJfPNzX2`) mais son état actuel est cohérent (pas de conflit actif) — pas neutralisée, à surveiller si elle se plaint un jour d'un souci similaire.
+
+---
+
 ## 🚨 20/07/2026 (3e incident du jour) — Fiona repassée en compte solo, effet de bord direct du fix `subscriptions` du jour même
 
 Fiona réécrit (4e fois en 5 jours) : "l'application est repassée en mode utilisateur simple... ma collègue a été supprimée de mon application, et j'ai disparu de la sienne." Vérifié en base : **aucune donnée perdue** — `structures/ueVnOL4WzkMnpo9fWRNMngqseuF3/members` avait toujours ses 2 docs (Fiona + Clara) intacts, et `users/clara.beausoleil@hotmail.com` avait toujours `role: mamMember` + le bon `structureId`. Seul le doc `structures/{id}` avait `structureType: "AssistanteMaternelle"` (au lieu de `"MAM"`) et `maxMemberCount: 1` (au lieu de `3`) — écrit à `2026-07-20T11:45:06Z`, soit ~2h avant son message.
