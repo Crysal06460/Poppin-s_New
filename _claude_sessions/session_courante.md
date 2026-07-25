@@ -1,6 +1,30 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-20 tard (session chrisbeylet@gmail.com) — récap complet ci-dessous, à lire en premier en cas de bug remonté demain
+**Dernière mise à jour :** 2026-07-25 (session chrisbeylet@gmail.com)
+
+## ⏸️ PAUSE — Christophe part sur WorkIt pour plusieurs semaines
+
+Christophe arrête de travailler sur Poppins pour se remettre sur son autre projet (**WorkIt**, projet Firebase `workit-1daa1`) pendant quelques semaines. **Lire cette section en entier avant de reprendre le travail sur Poppins.**
+
+### État au moment de la pause
+- **Repo propre** : rien d'uncommité (`git status` clean), dernier commit `461e922`.
+- **Release 2.1.10+2065** : buildée (Android `.aab` + iOS `Runner.app`), commitée — **statut d'upload sur les stores non confirmé dans cette session**, à vérifier en premier en reprenant (regarder App Store Connect / Google Play Console directement, ou redemander à Christophe).
+- **Tous les incidents ouverts au 20-24/07 ont été résolus** :
+  - Fiona Audy + Clara Beausoleil : comptes réparés et stables, plus de plainte depuis.
+  - Alice / Mam'aison D'apprenti'sage : abonnement Google Play restauré, souci de connexion/mot de passe réglé via lien de réinitialisation généré manuellement (contournement de l'email Firebase, probablement filtré en spam par laposte.net).
+  - Code promo "REMISEBUG" pour Fiona : problème de ciblage produit résolu (recréé sous le bon produit "MAM 2 Membres" au lieu de "MAM 3 Membres").
+
+### ⚠️ À reprendre en priorité au retour sur Poppins
+1. **Confirmer que 2.1.10+2065 est bien publiée** sur App Store Connect et Google Play Console (pas juste buildée) — sinon le fix `subscriptions`/structureType n'est pas encore vraiment protégé pour tout le monde.
+2. **Bug `subscriptions`/`isStructureMember(docId)` — voir memory `firebase_bug_subscriptions_2026_07_20`** : corrigé pour l'essentiel, mais le bug n°3 plus ancien (`subscriptions/{docId}` compare l'UID au mauvais champ pour le garde-fou anti-fraude webhook, voir `firebase_bugs_2026_07_15`) est peut-être maintenant partiellement couvert par le fix du 20/07 — **à re-vérifier**, pas confirmé explicitement retesté.
+3. **Structure `o1hPKGKi5DSWwuHperv9GJfPNzX2`** : vieux doc `subscriptions` incohérent identifié mais non neutralisé (pas de risque actif détecté à l'époque) — vérifier si toujours vrai après plusieurs semaines d'inactivité de session.
+4. Rien d'autre en attente identifié à ce stade — **mais vu la fréquence des bugs remontés mi-juillet, s'attendre à ce que d'anciens tickets ressurgissent** ; lire tout ce fichier + la mémoire liée avant de répondre à un nouveau signalement.
+
+### Où chercher l'historique complet
+- Ce fichier (sections datées ci-dessous, les plus récentes en haut).
+- Mémoire persistante Claude : `firebase_bugs_2026_07_15.md` (7 bugs, ajout membre/enfant/coordonnées, role manquant) et `firebase_bug_subscriptions_2026_07_20.md` (achat Android jamais enregistré + effet de bord Fiona) — les deux ont un tableau/récap des commits et de ce qui est publié ou non.
+
+---
 
 ## 📦 RELEASE 2.1.10+2065 — buildée le 20/07/2026 au soir (à uploader/publier)
 
