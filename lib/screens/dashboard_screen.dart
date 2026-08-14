@@ -17,6 +17,7 @@ import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
 import 'package:poppins_app/screens/delegations_screen.dart';
+import 'package:poppins_app/screens/conges_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 import 'package:poppins_app/screens/child_history_detail_screen.dart';
@@ -2756,6 +2757,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             disabledMessage: lockedMessage,
           ),
           _sheetAction(
+            label: 'Congés',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
             label: 'Coordonnées des parents',
             onTap: () {},
             bulletColor: _tileCyan,
@@ -2798,6 +2806,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _sheetAction(
           label: 'Modifier horaires enfants',
           onTap: _showScheduleModification,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Congés',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CongesScreen()),
+          ),
           bulletColor: _tileCyan,
         ),
         _sheetAction(

@@ -1,6 +1,64 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-25 (session chrisbeylet@gmail.com)
+**Dernière mise à jour :** 2026-08-14 (session chrisbeylet@gmail.com — reprise après la pause WorkIt)
+
+## ✅ 14/08/2026 — Reprise : bug role/structureId + feature Congés + fix Google Play Billing
+
+Christophe revient sur Poppins après la pause WorkIt (voir section pause juste en dessous pour l'état laissé le 25/07). Session longue, plusieurs sujets indépendants traités dans l'ordre chronologique ci-dessous.
+
+### 1. Signalement Marie Fayolle (dimimarie59@hotmail.fr) — corrigé
+« N'arrive pas à ajouter d'enfant ni ouvrir les messages parents. » Root cause : même bug que Fiona Audy en juillet (voir mémoire `firebase_bug_role_manquant_marie_2026_08_14`) — `users/dimimarie59@hotmail.fr` n'avait ni `role` ni `structureId` (compte créé 06/10/2025, avant le 05/01/2026, jamais backfillé). Le self-heal de `auth_check_screen.dart` ne se déclenche jamais pour une fondatrice solo (son `structureId` retombe sur son propre uid, qui existe toujours, donc la branche de réparation n'est jamais atteinte).
+
+**Fix appliqué directement en base** (donnée uniquement, aucun déploiement requis) : `role: 'structure'` + `structureId: <uid>` ajoutés sur son doc `users`. Vérifié par un test emulator avant/après (règles Firestore réelles + vraies données de sa structure) : les 2 lectures qui échouaient (lookup email parent pour ajout enfant, lecture message d'un parent) passent bien après le fix.
+
+⚠️ **Cohorte plus large non traitée** : plusieurs autres vieilles fondatrices solo ont le même trou (`sylvettelock@outlook.fr`, `karine.virone@gmail.com`, `elopaganon@gmail.com`, `familleboudaud305@gmail.com`, `volvic25@hotmail.fr` au moins) — backfill préventif pas fait, todo déjà identifié en juillet et toujours en attente.
+
+### 2. Nouvelle fonctionnalité "Congés" — livrée
+
+Demande : permettre à une assistante maternelle de déclarer ses jours de congés à l'avance, pour que les enfants concernés n'apparaissent plus "potentiellement présents" nulle part (Home, Horaires, Planning enfants dans Dashboard → Fonctionnement quotidien), et que le récap mensuel affiche "Congés" au lieu de rien.
+
+**Architecture** : réutilise le mécanisme existant `structures/{id}/horaires/{date}/{childId}.actionType` (déjà utilisé pour "absent") avec une nouvelle valeur `'conge'`, plutôt qu'un système séparé. En MAM, chaque membre ne déclare/n'affecte que ses propres enfants (`assignedMemberEmail`).
+
+**Nouveau fichier** : `lib/screens/conges_screen.dart` — sélection d'une plage de dates, liste des enfants rattachés à l'utilisateur (décochables), écrit `actionType: 'conge'` sur chaque jour × enfant, liste des congés déjà déclarés avec annulation (nettoyage propre). Accessible depuis Dashboard → Enfants et Parents → juste sous "Modifier horaires enfants" (`dashboard_screen.dart::_openChildrenParents()`).
+
+**12 fichiers patchés** pour propager l'exclusion partout où "absent" était déjà géré (motif dupliqué trouvé à l'identique dans tout le code) : `home_screen.dart`, `horaires_screen.dart`, `planning_screen.dart` (celui-ci n'avait AUCUN filtre d'absence avant, ajouté de zéro), `activity_screen.dart`, `sante_screen.dart`, `change_screen.dart`, `sieste_screen.dart`, `repas_screen.dart`, `child_history_detail_screen.dart`, `pdf_email_service.dart`, `recap_enfant_screen.dart`, `absence_helper.dart`.
+
+**Récap mensuel** (`monthly_report_generate_screen.dart`) : nouveau statut "Congés" distinct de "ABSENT" — ligne dédiée dans le tableau jour par jour + compteur `totalConges` dans le résumé et le PDF.
+
+**Index Firestore composite ajouté et déployé** (`firestore.indexes.json`, collection `conges`, `memberEmail` ASC + `startDateIso` DESC) — nécessaire pour la liste "Congés déclarés", déployé via `firebase deploy --only firestore:indexes` (purement additif, aucun risque).
+
+#### Bugs trouvés et corrigés PENDANT les tests live (avec le vrai compte de Christelle, chrisgugu1101@gmail.com, structure "Les P'tits Lutins")
+1. **Écriture Firestore invalide** : le premier jet utilisait des clés en notation pointée (`'$childId.actionType'`) dans un `set(..., merge:true)`, pensant que le SDK Dart interpréterait ça comme un champ imbriqué — en réalité stocké comme un nom de champ plat littéral contenant un point. Résultat : rien dans l'app ne détectait jamais le congé (toute lecture attend une vraie Map imbriquée). **Fix** : réécrit pour lire le doc du jour d'abord puis écrire une vraie Map imbriquée par enfant (même schéma que `horaires_screen.dart::_updateHoraires`), pour la déclaration ET l'annulation.
+2. **Mon premier nettoyage des données de test a lui-même échoué silencieusement** : `FieldPath` utilisé comme clé calculée d'objet JS (`updates[new FieldPath(...)]`) se fait coercer en string via `.toString()` (résultat encadré de backticks), donc ne cible pas le bon champ. Halte : mon script a affiché "Nettoyé" partout sans avoir rien nettoyé réellement. **Détecté** en revérifiant les données brutes avant de répondre à la question du récap mensuel (pas juste en faisant confiance au log du script). **Vrai fix** : `ref.update(new FieldPath(...), FieldValue.delete(), ...)` en forme variadique (pas en clé d'objet) — vérifié empiriquement après coup, propre.
+
+**État final vérifié propre** sur le compte de Christelle : plus aucune trace des tests "Jdjdjd" (annulé), **le congé de test "Leya" (14→30 août 2026) est toujours actif en prod** (Christophe n'a pas demandé à l'annuler) — à garder à l'esprit si Christelle réutilise l'app, ou à annuler manuellement si besoin plus tard.
+
+**Nouveau fichier de vérification** (pas un test permanent) : `firestore-tests/verif_marie.js` — reproduit le cas Marie avant/après fix contre l'émulateur avec les vraies règles + données de sa structure.
+
+### 3. Alertes Google Play Console — corrigées
+Deux alertes avec échéance 31/08/2026 :
+1. **Billing Library obsolète** : `in_app_purchase: ^3.1.11` → `^3.3.0` (entraîne `in_app_purchase_android` 0.4.0+4 → 0.5.2, Billing Library 6/7 → 8, exigée par Google dès le 31/08/2026 pour toute mise à jour). `flutter analyze` propre après bump, pas de rupture d'API côté Dart.
+2. **Niveau d'API cible trop ancien** : se résout automatiquement — le Flutter installé sur ce Mac (3.44.8) cible déjà par défaut compileSdk/targetSdk 36, `android/app/build.gradle` utilise `flutter.targetSdkVersion` sans override, donc un simple rebuild suffit.
+
+⚠️ **Pas de test runtime réel fait** (ni émulateur — aucun AVD configuré sur ce Mac, ni appareil physique) — seulement compilation propre + build réussi. **Christophe a choisi de ne pas pousser plus loin la vérification**, car depuis le 01/01/2026 tous les nouveaux abonnements passent par Stripe, plus par Google Play Billing — le risque résiduel du bump ne concerne donc que le renouvellement/la restauration des abonnés Google Play déjà existants, pas les nouvelles souscriptions.
+
+### 4. Builds — prêts, PAS ENCORE publiés
+Version bump `2.1.10+2065` → **`2.1.11+2066`** (`pubspec.yaml`).
+- **iOS** : `build/ios/iphoneos/Runner.app` (64,5 Mo) — buildé une fois, contient tout (feature Congés + fixes), pas concerné par le fix Billing Library (Android uniquement).
+- **Android** : `build/app/outputs/bundle/release/app-release.aab` (104,3 Mo) — **buildé DEUX fois** ; le fichier final présent sur disque est bien le second build, celui qui inclut le fix Billing Library 8. Si jamais un doute, re-builder avant upload (`flutter build appbundle --release`).
+
+**Rien commité, rien publié sur les stores à ce stade** (voir en tête de session si un commit a été fait après — à vérifier `git log` pour confirmer l'état réel).
+
+### Fichiers modifiés/créés cette session (récap pour un futur diagnostic)
+`firestore.indexes.json`, `pubspec.yaml`, `pubspec.lock`, `lib/screens/conges_screen.dart` (nouveau), `lib/screens/dashboard_screen.dart`, `lib/screens/home_screen.dart`, `lib/screens/horaires_screen.dart`, `lib/screens/planning_screen.dart`, `lib/screens/activity_screen.dart`, `lib/screens/sante_screen.dart`, `lib/screens/change_screen.dart`, `lib/screens/sieste_screen.dart`, `lib/screens/repas_screen.dart`, `lib/screens/child_history_detail_screen.dart`, `lib/screens/pdf_email_service.dart`, `lib/screens/recap_enfant_screen.dart`, `lib/screens/monthly_report_generate_screen.dart`, `lib/utils/absence_helper.dart`, `firestore-tests/verif_marie.js` (nouveau).
+
+### À reprendre / vérifier à la prochaine session
+1. Confirmer si Christophe a bien uploadé/publié 2.1.11+2066 sur App Store Connect ET Google Play Console (pas juste buildé).
+2. Si un bug lié aux abonnements Google Play (renouvellement/restauration) remonte après publication → suspect n°1 : le bump Billing Library 8, non testé en runtime.
+3. Le congé de test "Leya" (compte chrisgugu1101@gmail.com, structure `euAkwrpTFEMeH1GXjJQcUy8yL053`, 14→30 août 2026) est toujours actif en prod — vérifier s'il faut l'annuler.
+4. Backfill `role`/`structureId` pour les vieilles fondatrices solo identifiées (cohorte du point 1) — toujours pas fait, todo qui traîne depuis juillet.
+
+---
 
 ## ⏸️ PAUSE — Christophe part sur WorkIt pour plusieurs semaines
 

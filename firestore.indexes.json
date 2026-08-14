@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionId": "conges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memberEmail",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startDateIso",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionId": "delegations",
       "queryScope": "COLLECTION",
       "fields": [

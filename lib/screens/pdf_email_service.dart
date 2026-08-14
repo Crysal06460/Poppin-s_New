@@ -233,6 +233,8 @@ class PdfEmailService {
       for (var horaire in dayData['horaires']!) {
         if (horaire['actionType'] == 'absent') {
           widgets.add(pw.Text('  • Enfant absent'));
+        } else if (horaire['actionType'] == 'conge') {
+          widgets.add(pw.Text('  • Enfant en congé'));
         } else {
           final segments = horaire['segments'] as List?;
           if (segments != null) {

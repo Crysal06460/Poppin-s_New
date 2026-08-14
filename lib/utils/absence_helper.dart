@@ -31,7 +31,7 @@ class AbsenceHelper {
           final String actionType =
               (value['actionType'] ?? '').toString().toLowerCase();
           final bool absentFlag = value['absent'] == true;
-          if (absentFlag || actionType == 'absent') {
+          if (absentFlag || actionType == 'absent' || actionType == 'conge') {
             absentChildIds.add(key);
           }
         }
