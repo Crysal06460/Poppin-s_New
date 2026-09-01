@@ -11,6 +11,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'routes.dart';
@@ -77,6 +78,16 @@ Future<void> _setPreferredOrientationsForCurrentView() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (Platform.isIOS) {
+    // verifyApplePurchase (Cloud Function) valide le reçu via l'ancien
+    // endpoint Apple /verifyReceipt, qui attend le reçu base64 legacy —
+    // pas le JWS renvoyé par StoreKit2, devenu le défaut depuis
+    // in_app_purchase_storekit 0.4.0. Doit être appelé avant tout accès à
+    // InAppPurchase.instance (qui enregistre la plateforme StoreKit2 par
+    // défaut dès le premier appel, dans ios_subscription_service.dart).
+    await InAppPurchaseStoreKitPlatform.enableStoreKit1();
+  }
 
   await _setPreferredOrientationsForCurrentView();
 

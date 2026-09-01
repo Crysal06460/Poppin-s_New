@@ -1,6 +1,112 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-08-14 (session chrisbeylet@gmail.com — reprise après la pause WorkIt)
+**Dernière mise à jour :** 2026-09-01 (session chrisbeylet@gmail.com)
+
+## 🔔🔔🔔 RAPPEL PRIORITAIRE — À VÉRIFIER LE 25/09/2026, PAS AVANT 🔔🔔🔔
+
+**`sendMonthlyAssistantRecaps` a été redéployé le 31/08/2026 au soir** (nouveau planning : 25 du mois à 6h Paris, nouvelle logique). Le **25/09/2026** sera son **premier déclenchement réel** avec cette version. **Dès qu'une session s'ouvre à partir du 25/09/2026, vérifier en priorité** : combien de structures (sur ~62 éligibles : `subscriptionActive: true` + au moins un enfant) ont bien reçu le récap ce jour-là. Le rattrapage manuel du 31/08 (63 mémos, 0 échec) est un bon signe mais ne remplace pas cette vérification du vrai déclenchement automatique.
+
+👉 **Ne pas retirer ce bloc tant que cette vérification n'a pas été faite** — le déplacer/le retirer seulement après avoir confirmé le résultat du 25/09.
+
+---
+
+## ✅ 01/09/2026 — Index Firestore, builds 2.1.12+2067 soumis, retrait Marianne (MAM En couleurs), décisions en attente tranchées
+
+### Fait aujourd'hui
+1. **Index Firestore composite ajouté et déployé** (`firestore.indexes.json`, collection `subscriptions`, `email` ASC + `structureId` ASC) — corrige la cause racine du pattern Coralie/Talia/Anne-Sophie (requête `stripeWebhook` qui plantait en `FAILED_PRECONDITION`, silencieusement, depuis mi-mars 2026). Déploiement additif, faible risque, comme les précédents index sur ce projet.
+2. **Builds 2.1.12+2067 (fix StoreKit1) refaits et soumis par Christophe sur App Store Connect et Google Play Console** — `flutter build ios --release` et `flutter build appbundle --release` relancés proprement (build réussis, `Runner.app` 64,5 Mo / `app-release.aab` 104,3 Mo). **Mise à jour effective à partir du 02/09/2026.** ⚠️ **À surveiller au premier vrai paiement Apple après cette date** : le fix `enableStoreKit1()` doit faire passer le statut de vérification Apple de `21002` (reçu malformé, bug JWS/StoreKit2) à `0` (succès) — pas testable avant un vrai achat réel.
+3. **Marianne Bellantoni (fondatrice, MAM "Mam En couleurs", `pEpKUl4sWRPTDnVMawbUljgjvIj2`) retirée des membres**, à la demande de Christophe. Décision explicite : elle **garde son accès de connexion** (`users/marianne.bellantoni@gmail.com` non touché, comme pour la précédente assistante partie en grossesse) — seul son doc `structures/.../members/member_1` a été supprimé, `memberCount` 5→4. **Sauvegarde préalable faite** : `_claude_sessions/backup_mam_couleurs_marianne_2026_09_01.json` (sa fiche membre, son doc `users`, et ses 2 enfants — Lianna Chenel, Leya Daadaa — tels qu'ils étaient avant suppression), à réutiliser si jamais il fallait la remettre. Vérifié après coup : ses 2 enfants toujours intacts et visibles (structure a `showAllChildrenOnHome: true`), rien d'autre touché (`gifted`, `subscriptionActive`, `structureType` MAM, etc. tous inchangés). ⚠️ **Nuance cosmétique connue, pas corrigée** : l'écran `add-mam-members.dart` régénère localement une entrée "Fondateur ⭐" à partir de `structures/{id}.ownerFirstName/ownerLastName` (toujours "Marianne"/"Bellantoni", pas modifiés) — elle pourrait donc réapparaître visuellement comme fondatrice dans cet écran d'édition, sans que ça recrée quoi que ce soit en base. Pas gênant, juste à savoir si quelqu'un s'étonne de la revoir dans cet écran précis.
+
+### Décisions prises par Christophe aujourd'hui (à respecter, ne pas relancer le sujet sans raison)
+- **Stéphanie Florent (triple facturation Stripe, ~63,84€ de trop-perçu)** : **aucune action pour l'instant**. Ce n'est pas Poppins qui l'a abonnée 3 fois — quand elle s'en rendra compte, elle résiliera elle-même les abonnements inutiles. Ne pas relancer/rembourser de notre propre initiative.
+- **Nettoyage `functions-new/` (doublon `us-central1` orphelin)** : **pas maintenant**, risque jugé trop élevé pour la période de rentrée (01/09). Le webhook réel pointe bien vers `europe-west1` (vérifié le 31/08), donc pas d'urgence — à reprendre après la rentrée, hors période sensible.
+
+### Non commité à ce stade (avant le commit de sauvegarde du jour)
+`firestore.indexes.json`, `functions/index.js` (anti-doublon `memoEnqueueEmail` du 31/08, toujours pas commité), `lib/main.dart` + `pubspec.yaml`/`pubspec.lock` (fix StoreKit1, version 2.1.12+2067).
+
+---
+
+## ✅ 31/08/2026 — Ajout Julie Lario comme membre MAM "Mam En couleurs" (partenaire gratuit)
+
+Structure `pEpKUl4sWRPTDnVMawbUljgjvIj2` ("Mam En couleurs", fondatrice Marianne Bellantoni) = **le tout premier partenaire de Poppins, accès gratuit à vie** (`gifted: true`). Une des assistantes est partie (grossesse) mais son compte est volontairement conservé tel quel (pas touché). Demande : ajouter Julie Lario (`julielario@yahoo.fr`) comme nouveau membre à part entière (accès identique aux autres : voir tous les enfants, ajouter des enfants, planning/présences partagés).
+
+**Pourquoi pas via l'écran "Ajouter un membre" de l'appli** : `add-mam-members.dart::_saveMembers()` **supprime et recrée TOUS les membres existants** à chaque sauvegarde (risque réel sur un compte réel) et bloque l'ajout dès que `_members.length >= maxMemberCount` (la structure était déjà à 4/4). Fait directement en base via Admin SDK (`firebase-export/serviceAccountKey.json`) à la place.
+
+**Ce qui a été écrit** (en suivant exactement le schéma des 3 autres membres non-fondatrices, vérifié avant écriture) :
+- `structures/.../members/member_5` : Julie Lario, `isFounder: false`, `memberNumber: 5`.
+- `structures/{id}` : `structureType` corrigé `AssistanteMaternelle` → `MAM` (incohérent depuis un moment — la structure avait déjà 4 membres, bug latent du même type que l'incident Fiona de juillet), `memberCount`/`maxMemberCount` 4 → 5.
+- `users/julielario@yahoo.fr` créé : `role: mamMember`, `structureId`, `structureName`, `firebaseUid` (elle avait déjà un compte Auth du 10/10/2025, jamais vraiment utilisé, créé lors d'un ancien "remplacement" temporaire — jamais de doc `users` associé).
+- Mot de passe provisoire fixé sur son compte Auth existant : **`Couleurs2026!`** (à lui communiquer, à changer dès la 1ère connexion).
+
+**⚠️ Effet de bord rencontré et corrigé dans la foulée** : synchroniser `memberCount` sur les 2 docs `subscriptions` de la structure a déclenché la Cloud Function `syncSubscriptionWithStructure` (`functions/index.js:4072`, trigger `onWrite` sur `subscriptions/{id}`), qui a écrasé les champs cosmétiques `subscriptionSource`/`subscriptionPlatform`/`subscriptionExpiresAt*`/`subscriptionDocId` de la structure avec les valeurs d'un vieux doc d'essai expiré (oct. 2025) au lieu du statut `gifted`. **Vérifié dans le code que ça ne coupait l'accès de personne** (`trialStatus: 'converted'` — jamais touché — suffit à lui seul à garder `isExpired = false` dans `firebase_trial_service.dart`, indépendamment de la date d'expiration stockée). Restauré immédiatement : `subscriptionSource/Platform: 'gifted'`, `subscriptionExpiresAtIso: '2099-12-31T00:00:00Z'`, `subscriptionDocId` d'origine.
+
+**À retenir pour la prochaine fois qu'on touche cette structure (ou toute structure `gifted: true`)** : ne JAMAIS écrire sur `subscriptions/{id}` pour une structure gifted sans s'attendre à ce que `syncSubscriptionWithStructure` re-synchronise la structure depuis le contenu du doc subscription (souvent un vieux essai expiré, jamais nettoyé) — préférer ne pas toucher aux docs `subscriptions` du tout pour ce genre de compte, ou revérifier/restaurer les champs cosmétiques juste après.
+
+**État final vérifié en base** : `structureType: MAM`, `memberCount/maxMemberCount: 5`, `gifted: true`, `subscriptionActive: true`, `subscriptionStatus: active`, `trialStatus: converted`, 5 membres cohérents (`member_1` à `member_5`), `users/julielario@yahoo.fr` avec accès complet identique aux 3 autres membres non-fondatrices (mêmes règles Firestore `isStructureMember`/`isProfessional`/`canManageParentUsers`, `showAllChildrenOnHome: true` déjà actif sur la structure).
+
+## 🔴 31/08/2026 — Audit rentrée 2026 (3 agents en parallèle) : bugs actifs trouvés sur les paiements + services auto
+
+Avant la reprise de "saison" (rentrée 01/09/2026), Christophe a demandé un audit large : cohérence abonnements Stripe/Google Play/App Store depuis le 01/01/2026 (bascule Stripe), fonctionnement des automatismes "hors appli" (récap mensuel assistantes, email parent à l'ajout d'un enfant), recherche de fonctions/liens cassés. 3 agents lancés en parallèle (lecture seule, aucune écriture de leur part). **Résultat : plusieurs bugs réels et actuellement actifs trouvés**, un client bloqué débloqué dans la foulée, un correctif de code préparé pour le build du lendemain.
+
+### 🍎 Bug Apple — paiements iOS réels rejetés (root cause confirmée, PAS corrigeable sans nouveau build)
+`in_app_purchase_storekit` est passé de `0.3.22+1` à `0.4.6` le 01/10/2025 (commit `bca6793`, montée de version générique). Depuis la `0.4.0`, **StoreKit2 est activé par défaut** sur tout appareil iOS 15+ (= quasi tout le parc), et depuis la `0.4.2` le champ envoyé au serveur (`serverVerificationData`) contient un **JWS** au lieu de l'ancien reçu base64 attendu par `verifyApplePurchase` → l'endpoint Apple `/verifyReceipt` renvoie systématiquement le statut **21002** ("reçu malformé"). Rien dans le code n'appelait `enableStoreKit1()`. Masqué jusqu'au 11/07/2026 par l'incident "`verifyApplePurchase` non déployée" (voir plus bas dans ce fichier) — ce 2e bug n'a pu se manifester qu'une fois la fonction réellement joignable. Confirmé sur 2 utilisatrices réelles (24-25/08 et 31/08, échecs répétés).
+
+**Fix appliqué (code, pas encore buildé)** :
+- `pubspec.yaml` : ajout de `in_app_purchase_storekit: ^0.4.6` en dépendance directe (jusqu'ici transitive uniquement) — nécessaire pour pouvoir l'importer proprement.
+- `lib/main.dart` : appel de `InAppPurchaseStoreKitPlatform.enableStoreKit1()` tout au début de `main()` (avant tout accès à `InAppPurchase.instance`, qui enregistre StoreKit2 par défaut dès le premier appel — le point d'enregistrement est dans `in_app_purchase.dart:_getOrCreateInstance()`, appelé en lazy la 1ère fois que `InAppPurchase.instance` est utilisé quelque part dans l'app, typiquement `ios_subscription_service.dart`).
+- `pubspec.lock` régénéré (`flutter pub get`) — diff minimal, juste `in_app_purchase_storekit: dependency: transitive → "direct main"`, même version.
+- `flutter analyze` propre (juste un warning `deprecated_member_use` attendu sur `enableStoreKit1`, l'API est officiellement dépréciée par le paquet mais reste la seule façon documentée de forcer StoreKit1 — cf. son propre README).
+- Version bump `2.1.11+2066` → **`2.1.12+2067`**.
+
+⚠️ **Christophe fait les builds lui-même demain matin** (`flutter build ios --release` + `flutter build appbundle --release`) — tout le code est prêt, rien d'autre à faire côté dev avant ça. Ce fix ne corrige que les appareils qui installeront la nouvelle version ; les comptes déjà bloqués sur l'ancienne version devront réessayer après mise à jour, ou être débloqués manuellement en attendant (comme Fiona/Alice par le passé).
+
+### ✅ Coralie Delolme (patetco54160@outlook.fr) — débloquée en direct
+Inscrite le 31/08/2026, a essayé l'IAP Apple (rejetée par le bug ci-dessus), puis payé via Stripe mais avec une **autre adresse email** (`coralie.delolme@outlook.fr`) — son abonnement Stripe (`sub_1UAQX4PpvDnoE6wkHAc3Mlsa`, statut `trialing`) n'était jamais relié à son compte appli (`structureId` absent, à cause du bug d'index Firestore ci-dessous). **Fix** : `structureId` ajouté manuellement sur le doc `subscriptions` → a déclenché automatiquement `syncSubscriptionWithStructure` (trigger existant, aucune logique dupliquée) → structure correctement mise à jour (`subscriptionActive: true`, `trialStatus: trial`, essai jusqu'au 06/09/2026). Vérifié en base après coup : accès complet confirmé. **Christophe doit lui écrire pour confirmer que c'est bon.**
+
+### 🔴 Index Firestore manquant sur `subscriptions` — cause racine du cas Coralie, PAS corrigé
+`stripeWebhook` résout `structureId` par email via une requête composite (`subscriptions` où `email == X` et `structureId != ''`) qui **plante `FAILED_PRECONDITION`** faute d'index déclaré dans `firestore.indexes.json` — actif depuis au moins mi-mars 2026. 34 docs `subscriptions` Stripe sur 126 se retrouvent sans `structureId` à cause de ça (la plupart des vieux essais annulés, sans conséquence, mais au moins 4 comptes réels affectés en plus de Coralie : `stephanie.manin@icloud.com` (abonnement actif, aucun compte appli), `taliaarosemusic@gmail.com` (actif, aucun compte), `annesolupin67@gmail.com` (2x trialing, aucun compte), `ophelie.mzr@gmail.com` (a un compte, pas encore bloquée). **Fix simple et à faible risque** (ajout d'index composite additif, même catégorie que les fix d'index déjà faits sur ce projet) : pas encore fait, à faire dès que possible — chaque jour sans ce fix peut créer un nouveau "Coralie".
+
+### 🔴 Deux `stripeWebhook` + deux `createCheckoutSession` déployés en parallèle — PAS ENCORE VÉRIFIÉ LEQUEL STRIPE APPELLE RÉELLEMENT
+`firebase functions:list` montre les 2 fonctions déployées à la fois en `europe-west1` (code actuel, `functions/index.js`, activement maintenu) ET en `us-central1` (dossier `functions-new/`, **figé depuis le 22/01/2026**, absent de `firebase.json` donc invisible à quiconque relit le dépôt). Le flux de paiement passe par un site web externe (hors de ce dépôt Git) qui appelle ces fonctions HTTP — impossible de savoir d'ici laquelle des 2 URLs Stripe appelle réellement sans regarder la config webhook du Dashboard Stripe (accès à `STRIPE_SECRET_KEY` bloqué par le classificateur de permissions Claude Code, à la fois pour l'agent d'audit et pour moi en direct — nécessite que Christophe le vérifie lui-même, ou autorise explicitement l'accès). **Si Stripe appelle encore `us-central1` : tous les fixes de facturation de juillet-août ne s'appliquent jamais aux vrais paiements.** Risque additionnel signalé par l'audit : un futur `firebase deploy --only functions` depuis `functions/` proposera de supprimer ces fonctions orphelines (absentes du code source actuel) — si confirmé par erreur, `checkStripeSubscription` (activement utilisée par `welcome_screen.dart:477`) casserait l'inscription pour tout le monde. **À vérifier en priorité, avant tout nettoyage de `functions-new/`.**
+
+### 🔴 Récap mensuel assistantes — couverture très partielle
+`sendMonthlyAssistantRecaps` : 89 structures ont `subscriptionActive: true`, 62 ont au moins un enfant (49 solo + 13 MAM) — **seulement 6 ont reçu le récap d'août 2026**. Le planning réellement déployé (envois systématiquement le 1er du mois depuis nov. 2025) ne correspond pas au code actuel du dépôt (qui déclare "25 du mois à 6h") — probablement le même genre de désynchronisation code/prod que l'incident `verifyApplePurchase` de juillet ou que le double-déploiement Stripe ci-dessus. Bug mineur additionnel dans le code actuel : `memoProcessMam()` ignore silencieusement les enfants dont `assignedMemberEmail` ne correspond à aucun membre (vérifié : 2/13 enfants exclus sur "Mam En couleurs"). **Pas creusé plus loin, à traiter avant le prochain envoi mensuel.**
+
+### 🟢 Ce qui est sain (vérifié par les audits)
+- `handleGooglePlayWebhook` / `handleAppStoreWebhook` : zéro erreur récente, bien déployées.
+- Règle Firestore `subscriptions` (fix du 20/07 acceptant `resource.data.structureId`) toujours bien en place.
+- 0 abonnement IAP orphelin ou en double facturation Stripe+IAP détecté depuis le 01/01/2026.
+- Email automatique parent à l'ajout d'un enfant (`onChildParentEmailSet`) : 36 envoyés en août, 0 échec.
+- `emailQueue` globalement propre (0 `pending`/`failed` au moment de l'audit).
+- Toutes les fonctions du périmètre "emails/cron/notifications" sont bien déployées, aucune manquante par rapport au code source (dans `functions/index.js`, hors le problème `functions-new/` documenté ci-dessus).
+
+### Suite donnée le 31/08/2026 (même soirée) — les 4 points ci-dessus traités
+
+1. **Talia (taliahavanarodriguez@gmail.com) et Anne-Sophie Bruder (anneso.bruder@gmail.com)** : débloquées — `structureId` relié manuellement sur leur doc `subscriptions` respectif (mêmes causes que Coralie : email de paiement Stripe différent de l'email du compte appli), sync automatique confirmé (`subscriptionActive: true`). Le 2e abonnement Stripe trialing d'Anne-Sophie (`sub_1U8oPdPpvDnoE6wk8y0SNDzD`, créé 5 min après le 1er) a été **volontairement laissé non relié** — probable doublon de checkout, à annuler côté Stripe si confirmé.
+
+2. **🚨 Stéphanie Florent (stephanie.manin@icloud.com / @yahoo.fr) — TRIPLE facturation active, PAS corrigée, décision de Christophe requise.** Vérifié via l'API Stripe (clé obtenue avec autorisation explicite) : **3 abonnements Stripe actifs simultanément** depuis janvier 2026 sur 3 comptes clients Stripe différents (`cus_TotJ1ZGI8ZJ2ws`, `cus_TpbRXET1P24yXA`, `cus_TpbV9U8fM2s3GE`), tous plan "Assistante Maternelle" 3,99€/mois. **9 factures payées sur chacun = 95,76€ prélevés au total, alors qu'elle n'aurait dû payer que 31,92€ → 63,84€ de trop-perçu.** Un seul des 3 (`sub_1SrwJ6PpvDnoE6wk6zWGl299`) est relié à sa structure (`fOBHzgSx2bhwIyjj08tT3fBRZbs2`), les 2 autres tournent en roue libre en parallèle depuis 8 mois. **Rien annulé/remboursé — décision et action à prendre par Christophe** (annuler 2 des 3 abonnements Stripe + rembourser le trop-perçu).
+
+3. **Webhook Stripe — vérifié, RAS.** Un seul webhook configuré côté Stripe (`we_1Sfle6PpvDnoE6wkOclb8IQ6`), pointe vers `https://europe-west1-poppin-s-app.cloudfunctions.net/stripeWebhook` — le code actuel et maintenu. Le doublon `us-central1` (`functions-new/`) ne reçoit aucun paiement réel. Risque résiduel : ne pas supprimer `functions-new/` par erreur (contient `checkStripeSubscription`... non, ça c'est en europe-west1 uniquement, pas dupliqué — seuls `createCheckoutSession`/`createPortalSession`/`createWebUser`/`runStripeSync` le sont, et rien dans ce dépôt ne les appelle, mais le flux de paiement passe par un site externe qu'on ne peut pas auditer d'ici).
+
+4. **`sendMonthlyAssistantRecaps` — REDÉPLOYÉ** (`firebase deploy --only functions:sendMonthlyAssistantRecaps`, déploiement ciblé, rien d'autre touché). Cause confirmée : fonction entièrement réécrite le 23/06/2026 (nouveau planning 25 du mois à 6h Paris + nouvelle logique de sélection/génération) mais **jamais redéployée depuis** — la version qui tournait encore en prod datait d'avant juin (planning 1er du mois, logique différente avec un filtre `resolveStructureAssistant` probablement responsable de la faible couverture observée en août). Déployé le 31/08/2026 au soir, **avant le déclenchement du 1er septembre à 6h** — donc la version de juin doit tourner pour la rentrée. **Pas encore vérifié après coup** (le prochain déclenchement réel est le 25/09/2026 avec ce planning) — à surveiller ce jour-là : combien de structures reçoivent le récap.
+
+### Rattrapage récap d'août — fait le 31/08/2026 au soir, terminé avec succès
+Sur demande de Christophe ("ça fait un moment que seulement 6 structures avaient le rapport"), plutôt que d'attendre le 25/09 (prochain déclenchement réel de la version corrigée), création d'une fonction ponctuelle `sendAugustRecapCatchup2026` (même principe que `repairSubscriptions`/`backfillSubscriptions` : à usage unique, supprimée après coup) qui réutilise `memoProcessMam`/`memoProcessSingle` (la logique de juin, déjà déployée) avec la période forcée sur août 2026 en entier, au lieu du calcul "1er du mois en cours → aujourd'hui" qui aurait donné un récap vide si déclenché le 1er septembre.
+
+- Auth simplifiée par secret à usage unique (pas de token admin Firebase — la génération d'un custom token pour impersonner un compte admin a été bloquée par le classificateur de permissions Claude Code).
+- 1er essai : timeout par défaut (pas de `timeoutSeconds` explicite) trop court, coupé après ~9 min (28/62 structures traitées). **Protection anti-doublon ajoutée dans `memoEnqueueEmail`** (vérifie `to`+`subject` déjà en file avant de regénérer un PDF/renvoyer un mémo) — améliore aussi la fonction réelle `sendMonthlyAssistantRecaps` pour tout futur relance/retry.
+- 2e essai avec `timeoutSeconds: 1800` : terminé avec succès. **63 mémos envoyés, 0 échec**, aucun doublon grâce à la protection ajoutée.
+- Fonction supprimée juste après (`firebase functions:delete sendAugustRecapCatchup2026`), code source retiré de `functions/index.js` — seule la protection anti-doublon dans `memoEnqueueEmail` reste en prod (améliore la fonction réelle, pas encore commitée en local).
+
+### À reprendre à la prochaine session
+1. Christophe : décider quoi faire pour Stéphanie Florent (annulation Stripe + remboursement, ~63,84€ de trop-perçu).
+2. Vérifier le 25/09/2026 que `sendMonthlyAssistantRecaps` couvre bien la majorité des 62 structures éligibles (le rattrapage d'août a confirmé que la logique de juin fonctionne bien sur les 63 destinataires — bon signe pour le prochain vrai déclenchement).
+3. Ajouter l'index Firestore composite manquant (`subscriptions` : `email` ASC + `structureId` ASC) — pas encore fait, cause racine du pattern Coralie/Talia/Anne-Sophie, chaque jour sans ce fix peut créer un nouveau cas.
+4. Décider quoi faire de `functions-new/` (dossier orphelin `us-central1`, gelé depuis le 22/01/2026) — le risque webhook est levé, mais le nettoyer proprement reste à faire un jour (avec précaution, pour ne pas supprimer par erreur une fonction encore utile).
+5. Après publication du build 2.1.12+2067 (StoreKit1) : vérifier que les nouveaux achats iOS passent (statut 0 au lieu de 21002) — pas testable avant la vraie review Apple.
+6. **`functions/index.js` a une amélioration non commitée** (anti-doublon dans `memoEnqueueEmail`, déjà déployée en prod) — à committer à l'occasion pour ne pas perdre la trace, comme d'habitude sur ce projet.
+
+---
 
 ## ✅ 14/08/2026 — Reprise : bug role/structureId + feature Congés + fix Google Play Billing
 

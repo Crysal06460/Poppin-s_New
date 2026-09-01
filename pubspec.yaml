@@ -3,7 +3,7 @@ description: "Une application pour la gestion des enfants en crèche."
 
 publish_to: 'none'
 
-version: 2.1.11+2066
+version: 2.1.12+2067
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -51,6 +51,10 @@ dependencies:
 
   # 🛒 IN-APP PURCHASE - Version mise à jour pour les abonnements
   in_app_purchase: ^3.3.0
+  # Import direct nécessaire pour forcer enableStoreKit1() dans main.dart
+  # (verifyApplePurchase côté serveur attend l'ancien format de reçu Apple,
+  # pas le JWS StoreKit2 devenu le défaut depuis in_app_purchase_storekit 0.4.0)
+  in_app_purchase_storekit: ^0.4.6
   
   # 🔥 BADGES - Versions compatibles
   # 🔥 SOLUTION TEMPORAIRE : Utilise seulement app_badge_plus pour Android

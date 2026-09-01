@@ -107,6 +107,20 @@
       ]
     },
     {
+      "collectionId": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "structureId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionId": "gardes",
       "queryScope": "COLLECTION",
       "fields": [

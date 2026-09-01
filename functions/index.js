@@ -3171,9 +3171,21 @@ async function memoGeneratePdf({ assistant, structureName, periodLabel, children
 async function memoEnqueueEmail({ assistant, structureName, periodLabel, pdfBuffer, childCount }) {
     const slug = memoToSlug(structureName);
     const periodSlug = memoToSlug(periodLabel);
+    const subject = `Mémo mensuel ${periodLabel} — ${structureName}`;
+    // Anti-doublon : évite de renvoyer le même mémo si la fonction est
+    // relancée/timeout en cours de route (cf. rattrapage août 2026).
+    const already = await db.collection('emailQueue')
+        .where('to', '==', assistant.email)
+        .where('subject', '==', subject)
+        .limit(1)
+        .get();
+    if (!already.empty) {
+        console.log(`⏭️ Mémo déjà en file pour ${assistant.email} (${subject}), ignoré`);
+        return;
+    }
     await db.collection('emailQueue').add({
         to: assistant.email,
-        subject: `Mémo mensuel ${periodLabel} — ${structureName}`,
+        subject,
         template: 'monthly-assistant-recap',
         templateData: {
             assistantName: assistant.name || assistant.email,
@@ -3276,6 +3288,12 @@ exports.sendMonthlyAssistantRecaps = onSchedule({
 
     console.log('✅ Mémo mensuel terminé.');
 })
+
+// NOTE : une fonction ponctuelle sendAugustRecapCatchup2026 a tourné ici le
+// 31/08/2026 pour rattraper le récap d'août (sendMonthlyAssistantRecaps
+// réécrite le 23/06/2026 mais jamais redéployée avant ce jour-là, couverture
+// ~6/62 avec l'ancienne version). Supprimée après son unique exécution
+// (63 mémos envoyés, 0 échec) — voir session_courante.md pour le détail.
 
 // ===== FONCTION PONCTUELLE : BACKFILL DES SUBSCRIPTIONS =====
 /**
