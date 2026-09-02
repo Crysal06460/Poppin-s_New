@@ -1,7 +1,25 @@
 # Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-07-02 (session chrisbeylet@gmail.com, longue session)
+**Dernière mise à jour :** 2026-09-02 (session chrisbeylet@gmail.com)
 **Statut global :** ✅ Fix changement d'email + ✅ Feature Remplacement déployés en prod (backend) — ✅ 5 correctifs UI/texte + FAQ complète 12 écrans faits mais **NON COMMITÉS** — ✅ Build Android 2.1.7+2061 prêt — 🔧 Build iOS bloqué côté compte Apple (Christophe s'en occupe) — ⚠️ Bug "Aide flottante" du 23/06 **RÉSOLU**
+
+---
+
+## 🎁 Compte d'essai créé manuellement pour Armelle (02/09/2026) — ⏰ EXPIRE LE 09/09/2026
+
+### Contexte
+Une utilisatrice (Armelle, assistante maternelle) refusait de créer son compte en laissant sa CB sur Stripe avant d'avoir essayé l'app. Pour ne pas la perdre, compte créé manuellement via la console Firebase (Auth + Firestore) pour lui donner un essai de 7 jours sans passer par Stripe/IAP, en répliquant exactement ce que fait le flow normal (`register_screen.dart` → `_finalizeAccountSetup` → `FirebaseTrialService.ensureTrialForStructure`).
+
+### Détails du compte
+- **Email :** `armelleassistantematernelle@gmail.com`
+- **Mot de passe provisoire :** `ProvisoirePoppins2026` (à lui dire de changer une fois connectée)
+- **UID Firebase Auth :** `LTLlaiXsCkMNHgUJZDZYGdxECYz2`
+- **Structure :** `structureType: "assistante_maternelle"`, `maxMemberCount: 1`
+- **Essai :** du 2 septembre 2026 12:00 au **9 septembre 2026 12:00** (7 jours, `trialDurationDays: 7`)
+- Docs créés à la main dans la console Firebase (pas de script admin) : `structures/LTLlaiXsCkMNHgUJZDZYGdxECYz2` (avec `subscriptionStatus: "trial"`, `subscriptionActive: true`, etc.) + `subscriptions/LTLlaiXsCkMNHgUJZDZYGdxECYz2` (doc miroir, `status: "trial"`, `isTrialPeriod: true`)
+
+### ⚠️ À FAIRE le 09/09/2026 ou après
+L'essai expire naturellement (le code `TrialStatus.isExpired` dans `firebase_trial_service.dart` gère ça automatiquement une fois `trialEndsAt` dépassé — pas de tâche technique auto à lancer). Mais **relancer Armelle à ce moment-là** : si elle veut continuer, elle devra passer par le vrai flow d'abonnement (Stripe ou IAP) comme n'importe quelle utilisatrice — ce compte manuel ne renouvelle rien automatiquement. Si elle ne se manifeste pas, aucune action requise (le compte devient juste `expired`, comme un essai normal non converti).
 
 ---
 
