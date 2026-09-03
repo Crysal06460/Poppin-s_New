@@ -48,35 +48,25 @@ class PlanningRepository {
     final docPayload = _preparePlanningDocument(planning);
     final childPayload = _prepareChildUpdateMap(planning);
 
-    try {
-      await _defaultPlanningDoc(structureId, childId).delete();
-    } catch (_) {
-      // ignore if doc doesn't exist yet
-    }
-    await _defaultPlanningDoc(structureId, childId).set(docPayload);
-
-    try {
-      await _childDoc(structureId, childId)
-          .update({'planning': FieldValue.delete()});
-    } catch (_) {
-      // ignore if planning field missing
-    }
-    try {
-      await _childDoc(structureId, childId).set(
-        {'planning': FieldValue.delete()},
-        SetOptions(merge: true),
-      );
-    } catch (_) {
-      // ignore if planning not present yet
-    }
-    await _childDoc(structureId, childId)
-        .set(childPayload, SetOptions(merge: true));
-    try {
-      await _childDoc(structureId, childId)
-          .set({'schedule': FieldValue.delete()}, SetOptions(merge: true));
-    } catch (_) {
-      // ignore deletion errors (legacy data may already be absent)
-    }
+    // Une seule écriture atomique : soit tout est enregistré, soit rien ne
+    // change. L'ancienne version faisait 6 écritures Firestore séparées
+    // (delete puis set du sous-document planning, delete du champ planning
+    // sur la fiche enfant en double, set des nouvelles données, delete du
+    // champ legacy schedule) : une interruption entre deux de ces étapes
+    // (réseau coupé, app mise en arrière-plan) supprimait l'ancien planning
+    // sans jamais écrire le nouveau — la fiche de l'enfant se retrouvait
+    // vide. `set(docPayload)` sans merge remplace déjà entièrement le
+    // sous-document, et `childPayload` positionne déjà `planning` et
+    // `schedule` (delete si vide) en un seul appel : les suppressions
+    // préalables étaient redondantes, pas nécessaires à la correction.
+    final batch = _firestore.batch();
+    batch.set(_defaultPlanningDoc(structureId, childId), docPayload);
+    batch.set(
+      _childDoc(structureId, childId),
+      childPayload,
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   /// Migration helper: build a [PlanningData] instance from legacy fields.

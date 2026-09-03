@@ -17,6 +17,7 @@ import 'package:poppins_app/screens/mam_member_removal_screen.dart';
 import 'package:poppins_app/screens/fridge_temperature_screen.dart';
 import 'package:poppins_app/screens/planning_screen.dart';
 import 'package:poppins_app/screens/delegations_screen.dart';
+import 'package:poppins_app/screens/conges_screen.dart';
 import 'package:poppins_app/screens/admin_screen.dart';
 import 'package:poppins_app/screens/freezer_temperature_screen.dart';
 import 'package:poppins_app/screens/child_history_detail_screen.dart';
@@ -89,6 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _currentUserEmail = '';
   String? _structureOwnerEmail;
   bool _currentMemberIsAdmin = false;
+  bool _allowAllChildren = true;
   Set<String> _delegatedChildIds = {};
   String? _structureId;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -1331,14 +1333,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // 🛡️ SÉCURITÉ ANTI-WEBHOOK : On vérifie l'ID produit directement
         try {
+           // Pas de .limit(1) sans tri : un vieil abonnement 'replaced'
+           // (jamais supprimé lors d'un upgrade) pourrait être retourné à la
+           // place de l'abonnement actif. Priorité au statut 'active', puis
+           // au plus récent.
            final subQuery = await FirebaseFirestore.instance
               .collection('subscriptions')
               .where('structureId', isEqualTo: structureId)
-              .limit(1)
               .get();
-           
+
            if (subQuery.docs.isNotEmpty) {
-               final subData = subQuery.docs.first.data();
+               final activeDocs = subQuery.docs
+                   .where((d) => (d.data()['status'] ?? '').toString().toLowerCase() == 'active')
+                   .toList();
+               final candidates = activeDocs.isNotEmpty ? activeDocs : subQuery.docs;
+               candidates.sort((a, b) {
+                 final da = a.data()['createdAt'];
+                 final db = b.data()['createdAt'];
+                 if (da is! Timestamp && db is! Timestamp) return 0;
+                 if (da is! Timestamp) return 1;
+                 if (db is! Timestamp) return -1;
+                 return db.compareTo(da);
+               });
+               final subData = candidates.first.data();
                final String productId = (subData['productId'] ?? subData['planId'] ?? '').toString().toLowerCase();
                
                // Exactement les mêmes sets que HomeScreen
@@ -1444,11 +1461,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else {
           // Code existant pour Assistante Maternelle (pas de changement)
           print("AssistanteMaternelle détectée, vérification des équipements");
-          // ... reste du code inchangé pour AssistanteMaternelle
+          // Toujours compter les membres réels, même ici : une structure peut
+          // déjà fonctionner avec plusieurs membres réels sans que le champ
+          // structureType ait jamais été correctement positionné en 'MAM'
+          // (constaté en prod). Forcer currentMemberCount à 1 sans vérifier
+          // masquait cet état réel — ex: le bouton "Passer en MAM" continuait
+          // d'apparaître pour une structure ayant déjà 2 membres.
+          final membersSnapshot = await FirebaseFirestore.instance
+              .collection('structures')
+              .doc(structureId)
+              .collection('members')
+              .get();
+          final int realMemberCount = membersSnapshot.docs.length;
+
           setState(() {
             isMAMStructure = false;
-            maxMemberCount = 1; // Pour AssistanteMaternelle seule
-            currentMemberCount = 1;
+            maxMemberCount = data['maxMemberCount'] is int
+                ? data['maxMemberCount'] as int
+                : 1;
+            currentMemberCount = realMemberCount > 0 ? realMemberCount : 1;
           });
         }
       }
@@ -2513,6 +2544,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           disabledMessage: lockedMessage,
         ),
       ]);
+    } else if (currentMemberCount <= 1 && maxMemberCount <= 1) {
+      // Assistante Maternelle solo (ni MAM, ni parent-employeur) : aucune
+      // entrée de menu ne menait jusqu'ici vers la conversion en MAM — le
+      // seul écran capable de le faire (/subscription-upgrade) était de plus
+      // inaccessible tant qu'on n'était pas déjà une MAM. Sans ce bouton,
+      // aucune utilisatrice solo ne pouvait jamais devenir une MAM depuis
+      // l'app (signalé par une utilisatrice bloquée depuis 3 semaines).
+      //
+      // Condition sur currentMemberCount/maxMemberCount, PAS uniquement sur
+      // isMAMStructure (structureType == 'MAM') : une structure peut déjà
+      // fonctionner avec plusieurs membres réels sans que ce champ ait
+      // jamais été correctement positionné (cas constaté en prod — une
+      // structure à 2 membres réels restée en structureType
+      // 'AssistanteMaternelle'), auquel cas proposer "Passer en MAM" à
+      // nouveau n'aurait aucun sens.
+      actions.add(
+        _sheetAction(
+          label: 'Passer en MAM',
+          onTap: () => context.go('/subscription-upgrade'),
+          bulletColor: _tileBlue,
+        ),
+      );
     }
 
     actions.addAll([
@@ -2704,6 +2757,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             disabledMessage: lockedMessage,
           ),
           _sheetAction(
+            label: 'Congés',
+            onTap: () {},
+            bulletColor: _tileCyan,
+            enabled: false,
+            disabledMessage: lockedMessage,
+          ),
+          _sheetAction(
             label: 'Coordonnées des parents',
             onTap: () {},
             bulletColor: _tileCyan,
@@ -2746,6 +2806,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _sheetAction(
           label: 'Modifier horaires enfants',
           onTap: _showScheduleModification,
+          bulletColor: _tileCyan,
+        ),
+        _sheetAction(
+          label: 'Congés',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CongesScreen()),
+          ),
           bulletColor: _tileCyan,
         ),
         _sheetAction(
@@ -3988,6 +4056,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _currentUserEmail = currentUserEmail;
           _structureOwnerEmail = structureOwnerEmail;
           _currentMemberIsAdmin = memberIsAdmin;
+          _allowAllChildren = allowAllChildren;
           _delegatedChildIds = delegatedChildIds;
           isMAMStructure = isMam;
         });
@@ -4002,6 +4071,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _canCurrentUserEditChild(Map<String, dynamic> child) {
     if (!isMAMStructure) {
+      return true;
+    }
+
+    if (_allowAllChildren) {
       return true;
     }
 

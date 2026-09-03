@@ -1,0 +1,12 @@
+{
+  "name": "poppins-firestore-rules-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tests des règles Firestore contre l'émulateur local — à lancer avant tout déploiement de firestore.rules. Ne fait jamais rien contre la production.",
+  "scripts": {
+    "test": "node run-tests.js"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4"
+  }
+}

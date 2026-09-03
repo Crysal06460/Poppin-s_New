@@ -286,8 +286,9 @@ class _ChildHistoryDetailScreenState extends State<ChildHistoryDetailScreen> {
             final childHoraires = data[widget.childId];
 
             if (childHoraires['absent'] == true ||
-                childHoraires['actionType'] == 'absent') {
-              // Rien à afficher si absent
+                childHoraires['actionType'] == 'absent' ||
+                childHoraires['actionType'] == 'conge') {
+              // Rien à afficher si absent ou en congé
             } else if (childHoraires['segments'] != null) {
               // Format segments: ne garder qu'une seule arrivée (la plus tôt)
               // et un seul départ (le plus tard) pour éviter les doublons

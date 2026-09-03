@@ -1077,12 +1077,20 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
       return;
     }
 
-    await _updateParentEmail(parentKey, newEmail.toLowerCase());
+    try {
+      await _updateParentEmail(parentKey, newEmail.toLowerCase());
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Email mis à jour. Invitation renvoyée.'), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Email mis à jour. Invitation renvoyée.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la mise à jour: $e'), backgroundColor: primaryRed),
+        );
+      }
     }
   }
 
@@ -1109,6 +1117,20 @@ class _ParentCoordonneesScreenState extends State<ParentCoordonneesScreen>
   }
 
   Future<void> _queueParentInvitationEmail(String parentKey, String email) async {
+    // Garde-fou : ne jamais écraser le compte d'une professionnelle existante
+    // (ex: fondatrice qui saisit par erreur l'email d'une collègue MAM au lieu
+    // du vrai parent) avec role:'parent'.
+    final existingUserDoc =
+        await FirebaseFirestore.instance.collection('users').doc(email).get();
+    if (existingUserDoc.exists) {
+      final existingRole = (existingUserDoc.data()?['role'] ?? '').toString();
+      const professionalRoles = {'admin', 'mamMember', 'assistant', 'structure'};
+      if (professionalRoles.contains(existingRole)) {
+        throw Exception(
+            "Cet email est déjà utilisé par un compte professionnel. Veuillez vérifier l'adresse saisie.");
+      }
+    }
+
     // Récupération infos
     String structureName = 'Structure d\'accueil';
     try {

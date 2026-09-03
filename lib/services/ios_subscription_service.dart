@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// Service d'abonnement spécifique à iOS utilisant in_app_purchase
 class iOSSubscriptionService {
@@ -124,18 +125,19 @@ class iOSSubscriptionService {
 
     switch (purchase.status) {
       case PurchaseStatus.purchased:
-        // Vérifier la transaction
-        await _verifyPurchase(purchase);
+        // Vérifier la transaction auprès d'Apple (validation serveur
+        // obligatoire : la Cloud Function verifyApplePurchase est désormais
+        // seule habilitée à écrire un abonnement 'active' dans Firestore).
+        final bool isValid = await _verifyPurchase(purchase);
+        if (isValid) {
+          _subscriptionController.add(purchase);
+        }
 
-        // Sauvegarder dans Firestore
-        await _saveSubscriptionToFirestore(purchase);
-
-        // Finaliser l'achat si nécessaire
+        // Finaliser l'achat dans tous les cas pour éviter qu'Apple ne
+        // redélivre indéfiniment le même événement au SDK IAP.
         if (purchase.pendingCompletePurchase) {
           await _inAppPurchase.completePurchase(purchase);
         }
-
-        _subscriptionController.add(purchase);
         break;
 
       case PurchaseStatus.error:
@@ -151,8 +153,13 @@ class iOSSubscriptionService {
 
       case PurchaseStatus.restored:
         print('🔄 Achat iOS restauré: ${purchase.productID}');
-        await _saveSubscriptionToFirestore(purchase);
-        _subscriptionController.add(purchase);
+        final bool isValidRestore = await _verifyPurchase(purchase);
+        if (isValidRestore) {
+          _subscriptionController.add(purchase);
+        }
+        if (purchase.pendingCompletePurchase) {
+          await _inAppPurchase.completePurchase(purchase);
+        }
         break;
 
       case PurchaseStatus.canceled:
@@ -162,240 +169,35 @@ class iOSSubscriptionService {
     }
   }
 
-  /// Vérifie un achat (validation côté serveur recommandée)
-  Future<void> _verifyPurchase(PurchaseDetails purchase) async {
+  /// Vérifie un achat auprès d'Apple via la Cloud Function verifyApplePurchase.
+  /// C'est la Cloud Function elle-même (Admin SDK) qui écrit l'abonnement
+  /// dans Firestore une fois le reçu confirmé valide par Apple — jamais le
+  /// client, pour empêcher qu'un reçu falsifié/rejoué crée un accès gratuit.
+  Future<bool> _verifyPurchase(PurchaseDetails purchase) async {
     try {
-      // TODO: Implémenter la vérification côté serveur
-      // Envoyer purchase.verificationData.serverVerificationData à votre serveur
-      // pour vérifier avec l'App Store
+      final String receiptData = purchase.verificationData.serverVerificationData;
+      if (receiptData.isEmpty) {
+        throw Exception('Reçu Apple manquant (serverVerificationData vide)');
+      }
 
-      print('✅ Achat iOS vérifié: ${purchase.productID}');
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('verifyApplePurchase');
+      await callable.call(<String, dynamic>{
+        'receiptData': receiptData,
+        'productId': purchase.productID,
+        'transactionId': purchase.purchaseID,
+      });
+
+      print('✅ Achat iOS vérifié auprès d\'Apple: ${purchase.productID}');
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      print('❌ Reçu Apple rejeté (${e.code}): ${e.message}');
+      _errorController.add('Achat non validé : ${e.message ?? e.code}');
+      return false;
     } catch (e) {
       print('❌ Erreur de vérification: $e');
       _errorController.add('Erreur de vérification: $e');
-    }
-  }
-
-  /// Sauvegarder l'abonnement dans Firestore avec protection anti-duplication
-  Future<void> _saveSubscriptionToFirestore(PurchaseDetails purchase) async {
-    try {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        print(
-            '❌ Utilisateur non connecté, impossible de sauvegarder l\'abonnement');
-        return;
-      }
-
-      final String productId = purchase.productID;
-      final String transactionId = purchase.purchaseID ?? '';
-      final String structureId = await _resolveStructureId(user);
-      final String fallbackStructureId = user.uid;
-
-      print(
-          '🍎 Tentative de sauvegarde pour: $productId (transaction: $transactionId)');
-
-      // ✅ VÉRIFICATION 1 : Éviter les doublons basés sur le transactionId
-      if (transactionId.isNotEmpty) {
-        final existingByTransaction = await FirebaseFirestore.instance
-            .collection('subscriptions')
-            .where('transactionId', isEqualTo: transactionId)
-            .limit(1)
-            .get();
-
-        if (existingByTransaction.docs.isNotEmpty) {
-          print(
-              '✅ Abonnement déjà existant avec cette transaction, pas de duplication');
-          return;
-        }
-      }
-
-      // ✅ VÉRIFICATION 2 : Éviter les doublons basés sur productId + structureId
-      Future<bool> _hasExistingSubscription(
-          {String? status, String? productId, DateTime? createdAfter}) async {
-        Future<bool> queryFor(String sid) async {
-          Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-              .collection('subscriptions')
-              .where('structureId', isEqualTo: sid);
-          if (productId != null) {
-            query = query.where('productId', isEqualTo: productId);
-          }
-          if (status != null) {
-            query = query.where('status', isEqualTo: status);
-          }
-          if (createdAfter != null) {
-            query = query.where('createdAt',
-                isGreaterThan: Timestamp.fromDate(createdAfter));
-          }
-          final snapshot = await query.limit(1).get();
-          return snapshot.docs.isNotEmpty;
-        }
-
-        if (await queryFor(structureId)) return true;
-        if (structureId != fallbackStructureId) {
-          return await queryFor(fallbackStructureId);
-        }
-        return false;
-      }
-
-      if (await _hasExistingSubscription(
-          status: 'active', productId: productId)) {
-        print(
-            '✅ Abonnement actif déjà existant pour ce produit, pas de duplication');
-        return;
-      }
-
-      // ✅ VÉRIFICATION 3 : Éviter les abonnements créés dans les dernières minutes
-      final DateTime now = DateTime.now();
-      final DateTime recentThreshold = now.subtract(Duration(minutes: 5));
-
-      if (await _hasExistingSubscription(createdAfter: recentThreshold)) {
-        print('✅ Abonnement récent déjà créé, pas de duplication');
-        return;
-      }
-
-    // Déterminer le type de structure et nombre de membres
-    String structureType = 'assistante_maternelle';
-    int memberCount = 1;
-    int maxMemberCount = 1;
-    double priceAmount = 3.99;
-    String priceDisplay = '3,99 € / mois';
-
-      // ✅ MAPPING robuste basé sur les IDs produits iOS
-      if (productId == _iOSProductIds['mam_2_members']) {
-        structureType = 'MAM';
-        memberCount = 2;
-        maxMemberCount = 2;
-        priceAmount = 9.99;
-        priceDisplay = '9,99 € / mois';
-      } else if (productId == _iOSProductIds['mam_3_members']) {
-        structureType = 'MAM';
-        memberCount = 3;
-        maxMemberCount = 3;
-        priceAmount = 9.99;
-        priceDisplay = '9,99 € / mois';
-      } else if (productId == _iOSProductIds['mam_4_members']) {
-        structureType = 'MAM';
-        memberCount = 4;
-        maxMemberCount = 99;
-        priceAmount = 14.99;
-        priceDisplay = '14,99 € / mois';
-      } else if (productId == _iOSProductIds['assistante_maternelle']) {
-        // valeurs par défaut déjà correctes
-      } else {
-        // Fallback pour ID inconnu
-        print('⚠️ Produit iOS non reconnu: $productId');
-      }
-
-      // ✅ AMÉLIORATION : Dates plus précises
-      final DateTime purchaseDate = DateTime.now();
-      final DateTime expirationDate = purchaseDate.add(Duration(days: 30));
-      final DateTime trialEndDate = purchaseDate.add(Duration(days: 7));
-
-      // ✅ DÉSACTIVER les anciens abonnements actifs avant d'en créer un nouveau
-      Future<QuerySnapshot<Map<String, dynamic>>> _fetchActiveSubscriptions(
-          String sid) {
-        return FirebaseFirestore.instance
-            .collection('subscriptions')
-            .where('structureId', isEqualTo: sid)
-            .where('status', isEqualTo: 'active')
-            .get();
-      }
-
-      QuerySnapshot<Map<String, dynamic>> oldActiveSubscriptions =
-          await _fetchActiveSubscriptions(structureId);
-
-      if (oldActiveSubscriptions.docs.isEmpty &&
-          structureId != fallbackStructureId) {
-        oldActiveSubscriptions =
-            await _fetchActiveSubscriptions(fallbackStructureId);
-      }
-
-      // Désactiver les anciens abonnements
-      for (final doc in oldActiveSubscriptions.docs) {
-        await doc.reference.update({
-          'status': 'replaced',
-          'replacedAt': FieldValue.serverTimestamp(),
-        });
-        print('📝 Ancien abonnement ${doc.id} désactivé');
-      }
-
-      // ✅ CRÉER le nouvel abonnement avec toutes les données nécessaires
-      final Map<String, dynamic> subscriptionData = {
-        'structureId': structureId,
-        'structureType': structureType,
-        'memberCount': memberCount,
-        'maxMemberCount': maxMemberCount,
-        'status': 'active',
-        'productId': productId,
-        'transactionId': transactionId,
-        'purchaseDate': purchaseDate.toIso8601String(),
-        'expirationDate': expirationDate.toIso8601String(),
-        'trialEndsAt': Timestamp.fromDate(trialEndDate),
-        'priceAmount': priceAmount,
-        'priceDisplay': priceDisplay,
-        'currency': 'EUR',
-        'billingPeriod': 'monthly',
-        'platform': 'ios',
-        'source': 'app_store',
-        'isTrialPeriod': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      // Sauvegarder dans Firestore
-      final docRef = await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .add(subscriptionData);
-
-      print('✅ Abonnement iOS sauvegardé avec succès: ${docRef.id}');
-      print('   - Type: $structureType');
-      print('   - Membres: $memberCount');
-      print('   - Prix: $priceAmount EUR');
-      print('   - Transaction: $transactionId');
-
-      // ✅ METTRE À JOUR la structure principale
-      Future<void> _updateStructure(Map<String, dynamic> data) async {
-        final structures =
-            FirebaseFirestore.instance.collection('structures');
-        try {
-          await structures.doc(structureId).update(data);
-        } catch (e) {
-          if (structureId != fallbackStructureId) {
-            try {
-              await structures.doc(fallbackStructureId).update(data);
-            } catch (innerError) {
-              print(
-                  '❌ Impossible de mettre à jour la structure (fallback): $innerError');
-            }
-          } else {
-            print('❌ Impossible de mettre à jour la structure: $e');
-          }
-        }
-      }
-
-      await _updateStructure({
-        'maxMemberCount': maxMemberCount,
-        'subscriptionActive': true,
-        'subscriptionDocId': docRef.id,
-        'subscriptionStatus': 'active',
-        'subscriptionPlatform': 'ios',
-        'subscriptionSource': 'app_store',
-        'trialStatus': 'converted',
-        'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
-        'currentPriceAmount': priceAmount,
-        'currentPriceDisplay': priceDisplay,
-      });
-
-      print('✅ Structure mise à jour avec maxMemberCount=$maxMemberCount');
-    } catch (e) {
-      print(
-          '❌ Erreur lors de la sauvegarde de l\'abonnement dans Firestore: $e');
-      print('   - ProductId: ${purchase.productID}');
-      print('   - TransactionId: ${purchase.purchaseID}');
-      print('   - Status: ${purchase.status}');
-
-      // ✅ AJOUTER l'erreur au stream d'erreurs
-      _errorController.add('Erreur de sauvegarde: $e');
+      return false;
     }
   }
 

@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionId": "conges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memberEmail",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startDateIso",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionId": "delegations",
       "queryScope": "COLLECTION",
       "fields": [
@@ -88,6 +102,20 @@
         },
         {
           "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionId": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "structureId",
           "order": "ASCENDING"
         }
       ]
@@ -147,6 +175,14 @@
         {
           "order": "DESCENDING",
           "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
         }
       ]
     },

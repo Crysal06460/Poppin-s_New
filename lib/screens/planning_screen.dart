@@ -480,6 +480,32 @@ class _PlanningScreenState extends State<PlanningScreen> {
         }
       }
 
+      // Enfants en congé ce jour-là : ne pas afficher leur garde
+      try {
+        final String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+        final horairesDuJourSnap = await FirebaseFirestore.instance
+            .collection('structures')
+            .doc(_structureId)
+            .collection('horaires')
+            .doc(dateKey)
+            .get();
+        final Map<String, dynamic> horairesDuJour =
+            horairesDuJourSnap.data() ?? {};
+        final Set<String> congeChildIds = {};
+        horairesDuJour.forEach((childId, value) {
+          if (value is Map<String, dynamic> &&
+              value['actionType'] == 'conge') {
+            congeChildIds.add(childId);
+          }
+        });
+        if (congeChildIds.isNotEmpty) {
+          allGardes =
+              allGardes.where((g) => !congeChildIds.contains(g.enfantId)).toList();
+        }
+      } catch (e) {
+        print('Erreur filtrage congés planning: $e');
+      }
+
       setState(() => _gardes = allGardes);
     } catch (e) {
       print("Erreur lors du chargement des gardes: $e");

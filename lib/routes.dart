@@ -826,6 +826,14 @@ final GoRouter router = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/subscription-confirmed',
+      builder: (context, state) => SubscriptionConfirmedScreen(
+        structureInfo: state.extra is Map<String, dynamic>
+            ? state.extra as Map<String, dynamic>
+            : const <String, dynamic>{},
+      ),
+    ),
+    GoRoute(
       path: '/create-structure',
       builder: (context, state) =>
           const StructureDetailsScreen(), // Utilisez l'écran existant

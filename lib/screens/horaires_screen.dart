@@ -543,6 +543,13 @@ class _HorairesScreenState extends State<HorairesScreen> {
       // Maintenant, traiter uniquement les enfants filtrés pour aujourd'hui
       List<Map<String, dynamic>> tempEnfants = [];
       for (var child in filteredChildren) {
+        // Enfant en congé ce jour-là : ne pas l'afficher du tout
+        final Map<String, dynamic>? horaireDuJourEnfant =
+            horairesDuJour[child['id']] as Map<String, dynamic>?;
+        if (horaireDuJourEnfant != null &&
+            horaireDuJourEnfant['actionType'] == 'conge') {
+          continue;
+        }
         // Vérifier si l'enfant a un programme pour aujourd'hui
         final List<TimeSlot> plannedSlots =
             PlanningHelper.resolveSlotsForDate(child, today);

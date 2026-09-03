@@ -235,6 +235,7 @@ class _MonthlyReportGenerateScreenState
     double totalHours = 0;
     double plannedHours = 0; // Heures prévues au contrat sur le mois
     int totalAbsences = 0;
+    int totalConges = 0;
     int totalDays = 0;
     int totalMeals = 0;
     double totalKm = 0;
@@ -263,6 +264,7 @@ class _MonthlyReportGenerateScreenState
       double km = 0;
       bool isPresent = false;
       bool isAbsent = false;
+      bool isConge = false;
       double dayTotalHours = 0.0;
 
       // Récupérer les données d'horaire pour cette journée
@@ -284,7 +286,10 @@ class _MonthlyReportGenerateScreenState
 
         if (childHoraire != null) {
           // Si l'enfant était absent, on continue avec les valeurs par défaut
-          if (childHoraire['actionType'] == 'absent') {
+          if (childHoraire['actionType'] == 'conge') {
+            isPresent = false;
+            isConge = true;
+          } else if (childHoraire['actionType'] == 'absent') {
             isPresent = false;
             isAbsent = true;
           } else {
@@ -531,6 +536,17 @@ class _MonthlyReportGenerateScreenState
           'meals': mealsForDay, // Ajout des repas
           'status': 'Présent',
         });
+      } else if (isConge) {
+        records.add({
+          'date': formattedDate,
+          'dayName': capitalize(frenchDayName),
+          'arrivalTime': '',
+          'departureTime': '',
+          'realHours': 'CONGÉS',
+          'meals': '', // Pas de repas en congé
+          'status': 'Congés',
+        });
+        totalConges += 1;
       } else if (isAbsent) {
         records.add({
           'date': formattedDate,
@@ -562,6 +578,7 @@ class _MonthlyReportGenerateScreenState
       'plannedHours': plannedHours,
       'hoursDiff': (totalHours - plannedHours),
       'totalAbsences': totalAbsences,
+      'totalConges': totalConges,
     };
 
     dailyRecords = records;
@@ -691,7 +708,8 @@ class _MonthlyReportGenerateScreenState
                     children: [
                       _buildTableCell('TOTAL', fontBold, isBold: true),
                       _buildTableCell(
-                          'Absences: ${reportData['totalAbsences']}', font,
+                          'Absences: ${reportData['totalAbsences']} / Congés: ${reportData['totalConges']}',
+                          font,
                           isBold: true),
                       _buildTableCell('', font),
                       _buildTableCell('', font),
@@ -851,6 +869,18 @@ class _MonthlyReportGenerateScreenState
                         pw.Text('Nombre d\'absences total:',
                             style: pw.TextStyle(font: font, fontSize: 10)),
                         pw.Text('${reportData['totalAbsences']}',
+                            style: pw.TextStyle(font: fontBold, fontSize: 10)),
+                      ],
+                    ),
+                    pw.SizedBox(height: 10),
+
+                    // Nombre de congés total
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Nombre de jours de congés:',
+                            style: pw.TextStyle(font: font, fontSize: 10)),
+                        pw.Text('${reportData['totalConges']}',
                             style: pw.TextStyle(font: fontBold, fontSize: 10)),
                       ],
                     ),

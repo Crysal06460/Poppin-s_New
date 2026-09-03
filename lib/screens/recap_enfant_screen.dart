@@ -475,7 +475,8 @@ class _RecapScreenState extends State<RecapScreen> {
           if (data != null && data.containsKey(childId)) {
             final childHoraires = data[childId];
             if (childHoraires['absent'] == true ||
-                childHoraires['actionType'] == 'absent') {
+                childHoraires['actionType'] == 'absent' ||
+                childHoraires['actionType'] == 'conge') {
               isAbsent = true;
               print(
                   "DEBUG: L'enfant $childId est marqué comme absent dans horaires");

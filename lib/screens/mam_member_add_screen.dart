@@ -199,17 +199,10 @@ class _MAMMemberAddScreenState extends State<MAMMemberAddScreen> {
       print(
           "🔍 ID généré pour le nouveau membre: $memberId (nombre actuel: ${existingMembers.docs.length})");
 
-      // Créer le document utilisateur
-      await FirebaseFirestore.instance.collection('users').doc(email).set({
-        'email': email,
-        'firstName': firstName,
-        'lastName': lastName,
-        'structureId': structureId,
-        'isMAMMember': true,
-        'userType': 'mam_member',
-        'isFirstLogin': true, // Essential for SignupScreen flow
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Le document users/{email} du nouveau membre sera créé par lui-même
+      // lors de son inscription (invitation_signup_screen.dart) : les règles
+      // Firestore n'autorisent l'écriture de users/{userId} que par le
+      // titulaire du compte (uid/email correspondant), pas par la fondatrice.
 
       // CORRECTION : Ajouter le membre avec un ID séquentiel (.doc().set()) au lieu d'un ID aléatoire (.add())
       await membersCollection.doc(memberId).set({

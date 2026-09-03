@@ -839,6 +839,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Choisit, parmi plusieurs docs `subscriptions` d'une même structure, celui
+  /// à utiliser pour corriger structureType/maxMemberCount : priorité au
+  /// statut 'active', puis au plus récent (`createdAt`). Évite de piocher un
+  /// vieil abonnement marqué 'replaced'.
+  Map<String, dynamic>? _pickMostRelevantSubscription(
+      QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (snapshot.docs.isEmpty) return null;
+
+    DateTime? createdAtOf(Map<String, dynamic> data) {
+      final dynamic raw = data['createdAt'];
+      if (raw is Timestamp) return raw.toDate();
+      return null;
+    }
+
+    final List<Map<String, dynamic>> docs =
+        snapshot.docs.map((d) => d.data()).toList();
+
+    final List<Map<String, dynamic>> active = docs
+        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'active')
+        .toList();
+    final List<Map<String, dynamic>> pool = active.isNotEmpty ? active : docs;
+
+    pool.sort((a, b) {
+      final DateTime? da = createdAtOf(a);
+      final DateTime? db = createdAtOf(b);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+
+    return pool.first;
+  }
+
   Future<void> _fetchData() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -963,25 +997,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (isStructureOwner) {
         try {
-          Map<String, dynamic>? subscriptionData;
-          final subQueryByStructure = await FirebaseFirestore.instance
-              .collection('subscriptions')
-              .where('structureId', isEqualTo: structureDocId)
-              .limit(1)
-              .get();
-          if (subQueryByStructure.docs.isNotEmpty) {
-            subscriptionData = subQueryByStructure.docs.first.data();
-          }
-          if ((subscriptionData == null || subscriptionData.isEmpty) &&
-              currentUserEmail.isNotEmpty) {
-            final subQueryByEmail = await FirebaseFirestore.instance
+          // Pas de .limit(1) sans tri : une structure accumule plusieurs
+          // docs subscriptions au fil des upgrades (les anciens sont marqués
+          // 'replaced', jamais supprimés) — un .limit(1) sans orderBy peut
+          // retourner un vieux doc remplacé au lieu de l'abonnement actif,
+          // et corriger la structure vers de mauvaises valeurs (constaté en
+          // prod : une vraie MAM repassée en AssistanteMaternelle/1 membre).
+          Map<String, dynamic>? subscriptionData =
+              _pickMostRelevantSubscription(
+            await FirebaseFirestore.instance
                 .collection('subscriptions')
-                .where('email', isEqualTo: currentUserEmail)
-                .limit(1)
-                .get();
-            if (subQueryByEmail.docs.isNotEmpty) {
-              subscriptionData = subQueryByEmail.docs.first.data();
-            }
+                .where('structureId', isEqualTo: structureDocId)
+                .get(),
+          );
+          if (subscriptionData == null && currentUserEmail.isNotEmpty) {
+            subscriptionData = _pickMostRelevantSubscription(
+              await FirebaseFirestore.instance
+                  .collection('subscriptions')
+                  .where('email', isEqualTo: currentUserEmail)
+                  .get(),
+            );
           }
 
           if (subscriptionData != null && subscriptionData.isNotEmpty) {
@@ -1434,7 +1469,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final String actionType =
                   (value['actionType'] ?? '').toString().toLowerCase();
               final bool absentFlag = value['absent'] == true;
-              if (absentFlag || actionType == 'absent') {
+              if (absentFlag || actionType == 'absent' || actionType == 'conge') {
                 absentChildIds.add(key);
               }
             }

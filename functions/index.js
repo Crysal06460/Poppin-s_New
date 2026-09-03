@@ -43,6 +43,9 @@ function getMailjet() {
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
+// App-Specific Shared Secret (App Store Connect > Mon app > Achats intégrés en app)
+// À définir avant déploiement : firebase functions:secrets:set APPSTORE_SHARED_SECRET
+const APPSTORE_SHARED_SECRET = defineSecret('APPSTORE_SHARED_SECRET');
 let stripeClient;
 function getStripe() {
     if (!stripeClient) {
@@ -877,6 +880,17 @@ exports.updateUserEmail = onCall({
         // auth/user-not-found : c'est le cas attendu, on continue
     }
 
+    // 2b. Rejeter aussi si un document Firestore existe déjà à users/{newEmail}, même sans
+    // compte Auth associé — ex: placeholder d'invitation créé par parent_home_screen.dart quand
+    // un parent invite une assistante qui n'a pas encore de compte (role: 'assistantFromParent',
+    // invitedByParent, structureId). Le batch plus bas fait un set() sans merge : sans ce garde-fou,
+    // il écraserait silencieusement cette invitation en cours, sans erreur ni log.
+    const newUserDocPreCheck = await db.collection('users').doc(newEmail).get();
+    if (newUserDocPreCheck.exists) {
+        console.warn(`⚠️ updateUserEmail: users/${newEmail} existe déjà en Firestore (uid ${uid} ne peut pas migrer vers cet email)`);
+        throw new HttpsError('already-exists', 'target-email-firestore-doc-exists');
+    }
+
     // 3. Lire users/{oldEmail}, résoudre structureId, vérifier si propriétaire
     const oldUserRef = db.collection('users').doc(oldEmail);
     const oldUserSnap = await oldUserRef.get();
@@ -900,6 +914,11 @@ exports.updateUserEmail = onCall({
     const isOwnerOfEmail = (value) => (value || '').toString().trim().toLowerCase() === oldEmail;
     const structureOwnerEmailMatches = structureData ? isOwnerOfEmail(structureData.ownerEmail) : false;
     const structureEmailMatches = structureData ? isOwnerOfEmail(structureData.email) : false;
+    // structureData.assistantEmail : écrit par parent_home_screen.dart quand un parent-employeur
+    // invite son assistante ; lu ensuite par getAssistantEmail() (notifications), memoResolveAssistant()
+    // (Calculs IA) et parent_messages_screen.dart (compteur non lus). Sans cette migration, ces 3
+    // chemins continuent de pointer vers users/{oldEmail}, supprimé par ce même batch.
+    const structureAssistantEmailMatches = structureData ? isOwnerOfEmail(structureData.assistantEmail) : false;
 
     // 4. Toutes les lectures nécessaires AVANT de construire le batch (un batch ne peut pas requêter)
     let membersSnap = { docs: [] };
@@ -954,6 +973,7 @@ exports.updateUserEmail = onCall({
     const structureUpdates = {};
     if (structureOwnerEmailMatches) structureUpdates.ownerEmail = newEmail;
     if (structureEmailMatches) structureUpdates.email = newEmail;
+    if (structureAssistantEmailMatches) structureUpdates.assistantEmail = newEmail;
 
     const buildBatch = (forward) => {
         const batch = db.batch();
@@ -977,6 +997,7 @@ exports.updateUserEmail = onCall({
                 const revert = {};
                 if (structureOwnerEmailMatches) revert.ownerEmail = structureData.ownerEmail;
                 if (structureEmailMatches) revert.email = structureData.email;
+                if (structureAssistantEmailMatches) revert.assistantEmail = structureData.assistantEmail;
                 batch.update(structureRef, revert);
             }
         }
@@ -3150,9 +3171,21 @@ async function memoGeneratePdf({ assistant, structureName, periodLabel, children
 async function memoEnqueueEmail({ assistant, structureName, periodLabel, pdfBuffer, childCount }) {
     const slug = memoToSlug(structureName);
     const periodSlug = memoToSlug(periodLabel);
+    const subject = `Mémo mensuel ${periodLabel} — ${structureName}`;
+    // Anti-doublon : évite de renvoyer le même mémo si la fonction est
+    // relancée/timeout en cours de route (cf. rattrapage août 2026).
+    const already = await db.collection('emailQueue')
+        .where('to', '==', assistant.email)
+        .where('subject', '==', subject)
+        .limit(1)
+        .get();
+    if (!already.empty) {
+        console.log(`⏭️ Mémo déjà en file pour ${assistant.email} (${subject}), ignoré`);
+        return;
+    }
     await db.collection('emailQueue').add({
         to: assistant.email,
-        subject: `Mémo mensuel ${periodLabel} — ${structureName}`,
+        subject,
         template: 'monthly-assistant-recap',
         templateData: {
             assistantName: assistant.name || assistant.email,
@@ -3255,6 +3288,12 @@ exports.sendMonthlyAssistantRecaps = onSchedule({
 
     console.log('✅ Mémo mensuel terminé.');
 })
+
+// NOTE : une fonction ponctuelle sendAugustRecapCatchup2026 a tourné ici le
+// 31/08/2026 pour rattraper le récap d'août (sendMonthlyAssistantRecaps
+// réécrite le 23/06/2026 mais jamais redéployée avant ce jour-là, couverture
+// ~6/62 avec l'ancienne version). Supprimée après son unique exécution
+// (63 mémos envoyés, 0 échec) — voir session_courante.md pour le détail.
 
 // ===== FONCTION PONCTUELLE : BACKFILL DES SUBSCRIPTIONS =====
 /**
@@ -3706,7 +3745,16 @@ const inactiveSubscriptionStatuses = new Set([
     'inactive',
     'ended',
     'terminated',
-    'replaced'
+    'replaced',
+    // Statuts Stripe d'échec de paiement / abonnement jamais abouti : doivent
+    // rester inactifs, jamais retomber dans un défaut "actif" (bug corrigé le
+    // 2026-07-08 — un abonnement past_due repassait "actif" ici juste après
+    // que le webhook Stripe principal l'ait correctement marqué inactif).
+    'past_due',
+    'unpaid',
+    'incomplete',
+    'incomplete_expired',
+    'paused'
 ]);
 
 const activeSubscriptionStatuses = new Set([
@@ -3735,7 +3783,15 @@ async function syncStructureWithSubscription(subscriptionId, subscriptionData, s
         platform === 'firebase_trial' ||
         source === 'firebase_trial';
     const isInactiveDoc = inactiveSubscriptionStatuses.has(status);
-    const isActiveDoc = activeSubscriptionStatuses.has(status) || (!isTrialDoc && !isInactiveDoc);
+    const isKnownActiveDoc = activeSubscriptionStatuses.has(status);
+    // Sécurité par défaut : un statut non reconnu (ni actif, ni inactif, ni essai)
+    // est désormais traité comme INACTIF plutôt qu'actif, avec un log pour
+    // investigation manuelle — l'ancien fallback "actif par défaut" est ce qui
+    // a causé le bug ci-dessus.
+    if (!isTrialDoc && !isInactiveDoc && !isKnownActiveDoc) {
+        console.warn(`⚠️ syncStructureWithSubscription: statut inconnu "${status}" pour subscription ${subscriptionId} (structure ${structureId}) — traité comme INACTIF par sécurité, à vérifier manuellement.`);
+    }
+    const isActiveDoc = isKnownActiveDoc;
 
     const updates = {
         subscriptionUpdatedAt: FieldValue.serverTimestamp(),
@@ -3918,6 +3974,117 @@ exports.onStructureCreated = onDocumentCreated({
 });
 
 // ==========================================
+// ===== MISE À NIVEAU MAM (abonnés Stripe) ===
+// ==========================================
+// Corrige un gap découvert le 10/07 : l'écran de mise à niveau
+// (subscription_upgrade_screen.dart) ne savait déclencher qu'un nouvel achat
+// In-App Purchase, quelle que soit la source de l'abonnement actuel — une
+// abonnée Stripe qui tapait "Mettre à niveau" se serait retrouvée avec un
+// second abonnement (Apple/Google) facturé en parallèle du premier (Stripe),
+// jamais résilié. Cette fonction modifie DIRECTEMENT l'abonnement Stripe
+// existant (même souscription, changement de prix avec proration) au lieu
+// d'en créer un nouveau.
+const STRIPE_MAM_PRICE_IDS = {
+    '2-3': 'price_1SfkUILID2pA5i1C75uu1TCH',
+    '4+': 'price_1SfkWULID2pA5i1CmSdrRF0c',
+};
+
+exports.upgradeStripeSubscription = onCall({
+    region: 'europe-west1',
+    secrets: [STRIPE_SECRET_KEY],
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const tier = (request.data && request.data.tier || '').toString();
+    if (!STRIPE_MAM_PRICE_IDS[tier]) {
+        throw new HttpsError('invalid-argument', `tier invalide (attendu '2-3' ou '4+'): ${tier}`);
+    }
+    const newPriceId = STRIPE_MAM_PRICE_IDS[tier];
+    const newMaxMemberCount = tier === '4+' ? 50 : 3;
+
+    // Résoudre structureId comme partout ailleurs : users/{email}.structureId, sinon uid
+    const email = (request.auth.token?.email || '').toLowerCase();
+    let structureId = request.auth.uid;
+    if (email) {
+        const userDoc = await db.collection('users').doc(email).get();
+        const sid = userDoc.exists ? userDoc.data().structureId : null;
+        if (sid && String(sid).trim()) structureId = String(sid).trim();
+    }
+
+    const structureRef = db.collection('structures').doc(structureId);
+    const structureSnap = await structureRef.get();
+    if (!structureSnap.exists) {
+        throw new HttpsError('not-found', 'Structure introuvable');
+    }
+    const structureData = structureSnap.data();
+
+    const platform = (structureData.subscriptionPlatform || structureData.subscriptionSource || '').toString().toLowerCase();
+    if (platform !== 'stripe') {
+        throw new HttpsError('failed-precondition', `Cette fonction ne gère que les abonnements Stripe (plateforme détectée: ${platform || 'inconnue'})`);
+    }
+
+    const subId = structureData.subscriptionDocId || structureData.stripeSubscriptionId;
+    if (!subId) {
+        throw new HttpsError('failed-precondition', 'Aucun abonnement Stripe lié à cette structure');
+    }
+
+    let subscription;
+    try {
+        subscription = await getStripe().subscriptions.retrieve(subId);
+    } catch (error) {
+        console.error(`❌ upgradeStripeSubscription: abonnement Stripe ${subId} introuvable:`, error);
+        throw new HttpsError('not-found', 'Abonnement Stripe introuvable');
+    }
+
+    const currentItem = subscription.items?.data?.[0];
+    if (!currentItem) {
+        throw new HttpsError('internal', 'Abonnement Stripe sans ligne de produit');
+    }
+
+    if (currentItem.price?.id === newPriceId) {
+        return { success: true, alreadyOnTier: true, maxMemberCount: newMaxMemberCount };
+    }
+
+    let updatedSubscription;
+    try {
+        updatedSubscription = await getStripe().subscriptions.update(subId, {
+            items: [{ id: currentItem.id, price: newPriceId }],
+            proration_behavior: 'create_prorations',
+        });
+    } catch (error) {
+        console.error(`❌ upgradeStripeSubscription: échec de la mise à jour Stripe pour ${subId}:`, error);
+        throw new HttpsError('internal', `Échec de la mise à jour de l'abonnement Stripe: ${error.message}`);
+    }
+
+    const priceDisplay = tier === '4+' ? '14,99 € / mois' : '9,99 € / mois';
+    const priceAmount = tier === '4+' ? 14.99 : 9.99;
+
+    await structureRef.set({
+        structureType: 'MAM',
+        maxMemberCount: newMaxMemberCount,
+        subscriptionActive: true,
+        subscriptionStatus: 'active',
+        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+        currentPriceAmount: priceAmount,
+        currentPriceDisplay: priceDisplay,
+    }, { merge: true });
+
+    await db.collection('subscriptions').doc(subId).set({
+        planId: newPriceId,
+        maxMemberCount: newMaxMemberCount,
+        priceAmount,
+        priceDisplay,
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log(`✅ upgradeStripeSubscription: ${subId} passé au tier ${tier} (structure ${structureId})`);
+
+    return { success: true, subscriptionId: updatedSubscription.id, maxMemberCount: newMaxMemberCount };
+});
+
+// ==========================================
 // ===== SYNC SUBSCRIPTION → STRUCTURE  =====
 // ==========================================
 exports.syncSubscriptionWithStructure = onDocumentWritten({
@@ -3987,43 +4154,6 @@ exports.repairSubscriptions = onRequest({
     }
 });
 
-// Utilitaire : lookup direct via collection subscriptionTokens/{token}
-async function _findUserDocsByToken(token, platform) {
-    if (!token) return [];
-
-    try {
-        const tokenSnap = await db.collection('subscriptionTokens').doc(token).get();
-        if (tokenSnap.exists) {
-            const tokenData = tokenSnap.data() || {};
-            const docPath = tokenData.userDocPath;
-            const docId = tokenData.userDocId || tokenData.uid;
-            if (docPath) {
-                const directDoc = await db.doc(docPath).get();
-                if (directDoc.exists) return [directDoc];
-            }
-            if (docId) {
-                const directDoc = await db.collection('users').doc(docId).get();
-                if (directDoc.exists) return [directDoc];
-            }
-        }
-    } catch (err) {
-        console.error('⚠️ Lookup token direct échoué', err);
-    }
-
-    // Fallback : ancienne requête
-    try {
-        const snapshot = await db
-            .collection('users')
-            .where('subscriptionPlatform', '==', platform)
-            .where(platform === 'android' ? 'purchaseToken' : 'originalTransactionId', '==', token)
-            .get();
-        return snapshot.docs;
-    } catch (err) {
-        console.error('⚠️ Lookup token fallback échoué', err);
-        return [];
-    }
-}
-
 async function _upsertSubscriptionToken({ token, platform, userDocPath, userDocId, productId }) {
     if (!token || !platform) return;
     const payload = {
@@ -4091,11 +4221,24 @@ exports.handleGooglePlayWebhook = onRequest({
         return res.status(400).send('No purchase token');
     }
 
-    const userDocs = await _findUserDocsByToken(purchaseToken, 'android');
+    // 🔧 FIX 11/07/2026 : même trou que handleAppStoreWebhook — _findUserDocsByToken
+    // cherchait sur users/{email}, jamais alimenté par android_subscription_service.dart
+    // (qui écrit purchaseToken uniquement sur subscriptions/{id}). Résolution directe
+    // sur subscriptions à la place.
+    let subDocs = [];
+    try {
+        const byToken = await db.collection('subscriptions')
+            .where('platform', '==', 'android')
+            .where('purchaseToken', '==', purchaseToken)
+            .get();
+        subDocs = byToken.docs;
+    } catch (err) {
+        console.error('❌ handleGooglePlayWebhook: erreur résolution subscriptions:', err);
+    }
 
-    if (!userDocs.length) {
-        console.log('No user found with this purchase token');
-        return res.status(200).send('OK - No user found');
+    if (subDocs.length === 0) {
+        console.log('⚠️ handleGooglePlayWebhook: aucun document subscriptions trouvé pour', purchaseToken);
+        return res.status(200).send('OK - No subscription found');
     }
 
     const updates = {
@@ -4112,6 +4255,7 @@ exports.handleGooglePlayWebhook = onRequest({
             updates.subscriptionCancelDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'expired';
             updates.subscriptionStatus = 'canceled';
+            updates.status = 'canceled';
             break;
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RENEWED:
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_RECOVERED:
@@ -4120,6 +4264,7 @@ exports.handleGooglePlayWebhook = onRequest({
             updates.lastRenewalDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'converted';
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_ON_HOLD:
         case GOOGLE_NOTIFICATION_TYPES.SUBSCRIPTION_PAUSED:
@@ -4131,13 +4276,25 @@ exports.handleGooglePlayWebhook = onRequest({
             break;
     }
 
+    const structureFields = ['subscriptionActive', 'subscriptionStatus', 'trialStatus'];
+    const structureUpdates = { lastWebhookUpdate: updates.lastWebhookUpdate, subscriptionUpdatedAt: FieldValue.serverTimestamp() };
+    structureFields.forEach((key) => {
+        if (key in updates) structureUpdates[key] = updates[key];
+    });
+
     const batch = db.batch();
-    userDocs.forEach((doc) => {
-        batch.update(doc.ref, updates);
+    const structureIdsToUpdate = new Set();
+    subDocs.forEach((doc) => {
+        batch.set(doc.ref, updates, { merge: true });
+        const sid = doc.data().structureId;
+        if (sid) structureIdsToUpdate.add(sid);
+    });
+    structureIdsToUpdate.forEach((sid) => {
+        batch.set(db.collection('structures').doc(sid), structureUpdates, { merge: true });
     });
     await batch.commit();
 
-    console.log(`Updated ${userDocs.length} user(s) for Google Play notification`, {
+    console.log(`✅ handleGooglePlayWebhook: ${subDocs.length} subscription(s) et ${structureIdsToUpdate.size} structure(s) mis à jour`, {
         notificationType,
         subscriptionId
     });
@@ -4225,11 +4382,40 @@ exports.handleAppStoreWebhook = onRequest({
         return res.status(400).send('No transaction ID');
     }
 
-    const userDocs = await _findUserDocsByToken(originalTransactionId, 'ios');
+    // 🔧 FIX 11/07/2026 : _findUserDocsByToken cherchait sur users/{email},
+    // un modèle de données que le flux d'achat iOS réel (ios_subscription_service.dart)
+    // n'alimente jamais — ce webhook ne trouvait donc littéralement JAMAIS aucun
+    // compte, pour aucune utilisatrice iOS, depuis toujours. Les notifications de
+    // renouvellement/échec/annulation n'étaient donc jamais répercutées dans
+    // Firestore. Le vrai modèle de données lu par le reste de l'app est
+    // structures/{id} + subscriptions/{id} : on résout donc directement sur
+    // subscriptions. originalTransactionId est cherché sur 2 champs :
+    // 'originalTransactionId' (nouveaux achats via verifyApplePurchase) et
+    // 'transactionId' (achats existants — pour un tout premier achat, StoreKit
+    // fixe transactionId == originalTransactionId, donc la valeur déjà stockée
+    // reste valable pour matcher les notifications futures de ce même abonnement).
+    let subDocs = [];
+    try {
+        const byOriginal = await db.collection('subscriptions')
+            .where('platform', '==', 'ios')
+            .where('originalTransactionId', '==', originalTransactionId)
+            .get();
+        subDocs = byOriginal.docs;
 
-    if (!userDocs.length) {
-        console.log('No user found with this transaction ID');
-        return res.status(200).send('OK - No user found');
+        if (subDocs.length === 0) {
+            const byTransaction = await db.collection('subscriptions')
+                .where('platform', '==', 'ios')
+                .where('transactionId', '==', originalTransactionId)
+                .get();
+            subDocs = byTransaction.docs;
+        }
+    } catch (err) {
+        console.error('❌ handleAppStoreWebhook: erreur résolution subscriptions:', err);
+    }
+
+    if (subDocs.length === 0) {
+        console.log('⚠️ handleAppStoreWebhook: aucun document subscriptions trouvé pour', originalTransactionId);
+        return res.status(200).send('OK - No subscription found');
     }
 
     const updates = {
@@ -4243,10 +4429,12 @@ exports.handleAppStoreWebhook = onRequest({
         case 'CANCEL':
         case 'DID_FAIL_TO_RENEW':
         case 'EXPIRED':
+        case 'REFUND':
             updates.subscriptionActive = false;
             updates.subscriptionCancelDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'expired';
             updates.subscriptionStatus = 'canceled';
+            updates.status = 'canceled';
             break;
         case 'DID_RENEW':
         case 'INTERACTIVE_RENEWAL':
@@ -4254,6 +4442,7 @@ exports.handleAppStoreWebhook = onRequest({
             updates.lastRenewalDate = FieldValue.serverTimestamp();
             updates.trialStatus = 'converted';
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
         case 'DID_CHANGE_RENEWAL_PREF':
             updates.subscriptionModified = true;
@@ -4262,20 +4451,187 @@ exports.handleAppStoreWebhook = onRequest({
             updates.subscriptionActive = true;
             updates.subscriptionStartDate = FieldValue.serverTimestamp();
             updates.subscriptionStatus = 'active';
+            updates.status = 'active';
             break;
     }
 
+    // Les champs subscriptionActive/subscriptionStatus/trialStatus doivent aussi
+    // être répercutés sur structures/{id} : c'est CE document que le reste de
+    // l'app lit réellement pour décider de l'accès, pas le doc subscriptions.
+    const structureFields = ['subscriptionActive', 'subscriptionStatus', 'trialStatus'];
+    const structureUpdates = { lastWebhookUpdate: updates.lastWebhookUpdate, subscriptionUpdatedAt: FieldValue.serverTimestamp() };
+    structureFields.forEach((key) => {
+        if (key in updates) structureUpdates[key] = updates[key];
+    });
+
     const batch = db.batch();
-    userDocs.forEach((doc) => {
-        batch.update(doc.ref, updates);
+    const structureIdsToUpdate = new Set();
+    subDocs.forEach((doc) => {
+        batch.set(doc.ref, updates, { merge: true });
+        const sid = doc.data().structureId;
+        if (sid) structureIdsToUpdate.add(sid);
+    });
+    structureIdsToUpdate.forEach((sid) => {
+        batch.set(db.collection('structures').doc(sid), structureUpdates, { merge: true });
     });
     await batch.commit();
 
-    console.log(`Updated ${userDocs.length} user(s) for App Store notification`, {
+    console.log(`✅ handleAppStoreWebhook: ${subDocs.length} subscription(s) et ${structureIdsToUpdate.size} structure(s) mis à jour`, {
         notificationType,
         originalTransactionId
     });
     res.status(200).send('OK');
+});
+
+// ============================================
+// ===== VÉRIFICATION REÇU APP STORE (IAP) =====
+// ============================================
+// Corrige un bug critique : ios_subscription_service.dart écrivait
+// status:'active' dans Firestore dès qu'un PurchaseStatus.purchased/restored
+// arrivait côté client, sans jamais valider le reçu auprès d'Apple (stub TODO
+// jamais implémenté). N'importe quel reçu falsifié/rejoué (device jailbreické,
+// reçu sandbox en prod) obtenait donc un abonnement actif gratuit. Cette
+// fonction est désormais le SEUL endroit qui écrit un abonnement 'active'
+// pour la plateforme iOS — via l'Admin SDK, après confirmation d'Apple.
+
+const APPSTORE_SUBSCRIPTION_PLANS = {
+    'com.beylet.poppinsApp.subscription.assistante_maternelle': { structureType: 'assistante_maternelle', memberCount: 1, maxMemberCount: 1, priceAmount: 3.99, priceDisplay: '3,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_2_membres': { structureType: 'MAM', memberCount: 2, maxMemberCount: 2, priceAmount: 9.99, priceDisplay: '9,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_3_membres': { structureType: 'MAM', memberCount: 3, maxMemberCount: 3, priceAmount: 9.99, priceDisplay: '9,99 € / mois' },
+    'com.beylet.poppinsApp.subscription.mam_4_membres': { structureType: 'MAM', memberCount: 4, maxMemberCount: 99, priceAmount: 14.99, priceDisplay: '14,99 € / mois' },
+};
+
+async function _callAppleVerifyReceipt(url, receiptData, sharedSecret) {
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            'receipt-data': receiptData,
+            'password': sharedSecret,
+            'exclude-old-transactions': true,
+        }),
+    });
+    return resp.json();
+}
+
+exports.verifyApplePurchase = onCall({
+    region: 'europe-west1',
+    secrets: [APPSTORE_SHARED_SECRET],
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+    }
+
+    const { receiptData, productId, transactionId } = request.data || {};
+    if (!receiptData || typeof receiptData !== 'string') {
+        throw new HttpsError('invalid-argument', 'receiptData manquant');
+    }
+    const plan = APPSTORE_SUBSCRIPTION_PLANS[productId];
+    if (!plan) {
+        throw new HttpsError('invalid-argument', `productId inconnu: ${productId}`);
+    }
+
+    const sharedSecret = APPSTORE_SHARED_SECRET.value();
+    let result = await _callAppleVerifyReceipt('https://buy.itunes.apple.com/verifyReceipt', receiptData, sharedSecret);
+    if (result.status === 21007) {
+        // Reçu sandbox envoyé par erreur à l'endpoint de prod -> on retente sur sandbox
+        result = await _callAppleVerifyReceipt('https://sandbox.itunes.apple.com/verifyReceipt', receiptData, sharedSecret);
+    }
+    if (result.status !== 0) {
+        console.warn(`⚠️ verifyApplePurchase: reçu Apple invalide (status ${result.status}) pour uid ${request.auth.uid}, productId ${productId}`);
+        throw new HttpsError('permission-denied', `Reçu Apple invalide (status ${result.status})`);
+    }
+
+    const latestInfo = Array.isArray(result.latest_receipt_info)
+        ? result.latest_receipt_info
+        : (Array.isArray(result.receipt?.in_app) ? result.receipt.in_app : []);
+    const matches = latestInfo.filter((tx) => tx.product_id === productId);
+    if (matches.length === 0) {
+        throw new HttpsError('permission-denied', 'Aucune transaction pour ce productId dans le reçu Apple vérifié');
+    }
+    matches.sort((a, b) => Number(b.purchase_date_ms || 0) - Number(a.purchase_date_ms || 0));
+    const latestTx = matches[0];
+    const expiresMs = Number(latestTx.expires_date_ms || 0);
+    if (!expiresMs || expiresMs <= Date.now()) {
+        throw new HttpsError('permission-denied', 'Abonnement Apple expiré selon le reçu vérifié');
+    }
+
+    // Résoudre structureId comme le fait le reste de l'app : users/{email}.structureId, sinon uid
+    const email = (request.auth.token?.email || '').toLowerCase();
+    let structureId = request.auth.uid;
+    if (email) {
+        const userDoc = await db.collection('users').doc(email).get();
+        const sid = userDoc.exists ? userDoc.data().structureId : null;
+        if (sid && String(sid).trim()) structureId = String(sid).trim();
+    }
+
+    const finalTransactionId = String(latestTx.transaction_id || transactionId || '');
+
+    // Anti-duplication : cette transaction Apple a-t-elle déjà été enregistrée ?
+    if (finalTransactionId) {
+        const existing = await db.collection('subscriptions')
+            .where('transactionId', '==', finalTransactionId)
+            .limit(1)
+            .get();
+        if (!existing.empty) {
+            return { verified: true, alreadyRecorded: true, expiresAt: expiresMs };
+        }
+    }
+
+    const batch = db.batch();
+
+    // Désactiver les anciens abonnements actifs de cette structure
+    const oldActive = await db.collection('subscriptions')
+        .where('structureId', '==', structureId)
+        .where('status', '==', 'active')
+        .get();
+    oldActive.forEach((doc) => {
+        batch.update(doc.ref, { status: 'replaced', replacedAt: FieldValue.serverTimestamp() });
+    });
+
+    const newSubRef = db.collection('subscriptions').doc();
+    const purchaseDate = new Date(Number(latestTx.purchase_date_ms) || Date.now());
+    batch.set(newSubRef, {
+        structureId,
+        structureType: plan.structureType,
+        memberCount: plan.memberCount,
+        maxMemberCount: plan.maxMemberCount,
+        status: 'active',
+        productId,
+        transactionId: finalTransactionId,
+        originalTransactionId: latestTx.original_transaction_id || finalTransactionId,
+        purchaseDate: purchaseDate.toISOString(),
+        expirationDate: new Date(expiresMs).toISOString(),
+        expiresAt: Timestamp.fromMillis(expiresMs),
+        priceAmount: plan.priceAmount,
+        priceDisplay: plan.priceDisplay,
+        currency: 'EUR',
+        billingPeriod: 'monthly',
+        platform: 'ios',
+        source: 'app_store',
+        verifiedByAppleAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    batch.set(db.collection('structures').doc(structureId), {
+        maxMemberCount: plan.maxMemberCount,
+        subscriptionActive: true,
+        subscriptionDocId: newSubRef.id,
+        subscriptionStatus: 'active',
+        subscriptionPlatform: 'ios',
+        subscriptionSource: 'app_store',
+        trialStatus: 'converted',
+        subscriptionUpdatedAt: FieldValue.serverTimestamp(),
+        currentPriceAmount: plan.priceAmount,
+        currentPriceDisplay: plan.priceDisplay,
+    }, { merge: true });
+
+    await batch.commit();
+
+    console.log(`✅ verifyApplePurchase: ${productId} vérifié auprès d'Apple et enregistré pour structure ${structureId} (transaction ${finalTransactionId})`);
+
+    return { verified: true, subscriptionId: newSubRef.id, expiresAt: expiresMs };
 });
 
 // ============================================
@@ -4499,6 +4855,9 @@ const CALCUL_ASSISTANT_KEYWORDS = [
 const CALCUL_ASSISTANT_MAX_QUESTIONS_PER_DAY = 20;
 const CALCUL_ASSISTANT_OFF_TOPIC_MESSAGE =
     'Je ne peux répondre qu\'aux questions liées aux contrats et calculs d\'assistante maternelle.';
+const CALCUL_ASSISTANT_NUMBER_VIOLATION_MESSAGE =
+    'Je ne peux pas afficher de chiffre ici — utilise l\'écran "Calculer une mensualisation" de ' +
+    'l\'application pour obtenir le montant exact et fiable.';
 
 exports.askCalculAssistant = onCall({
     region: 'europe-west1',
@@ -4607,6 +4966,17 @@ exports.askCalculAssistant = onCall({
 
         if (!aiMessage) {
             throw new Error('Réponse DeepSeek vide ou mal formée');
+        }
+
+        // Garde-fou serveur : la règle métier interdit tout chiffre/calcul précis dans
+        // une réponse IA (seul le formulaire local de mensualisation fait foi). Le
+        // system prompt le demande déjà au modèle, mais deepseek-chat n'est pas fiable
+        // à 100% sur le respect strict des consignes — on filtre donc aussi côté
+        // serveur avant de renvoyer quoi que ce soit au client, plutôt que de ne
+        // compter que sur l'instruction textuelle.
+        if (/\d/.test(aiMessage)) {
+            console.warn(`⚠️ askCalculAssistant: réponse DeepSeek contenait un chiffre malgré la consigne, bloquée avant envoi au client (uid ${uid})`);
+            return { response: CALCUL_ASSISTANT_NUMBER_VIOLATION_MESSAGE };
         }
 
         console.log('✅ Réponse IA générée avec succès');

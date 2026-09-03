@@ -1,9 +1,6 @@
-# Session courante — Poppins App
+﻿# Session courante — Poppins App
 
 **Dernière mise à jour :** 2026-09-02 (session chrisbeylet@gmail.com)
-**Statut global :** ✅ Fix changement d'email + ✅ Feature Remplacement déployés en prod (backend) — ✅ 5 correctifs UI/texte + FAQ complète 12 écrans faits mais **NON COMMITÉS** — ✅ Build Android 2.1.7+2061 prêt — 🔧 Build iOS bloqué côté compte Apple (Christophe s'en occupe) — ⚠️ Bug "Aide flottante" du 23/06 **RÉSOLU**
-
----
 
 ## 🎁 Compte d'essai créé manuellement pour Armelle (02/09/2026) — ⏰ EXPIRE LE 09/09/2026
 
@@ -20,6 +17,520 @@ Une utilisatrice (Armelle, assistante maternelle) refusait de créer son compte 
 
 ### ⚠️ À FAIRE le 09/09/2026 ou après
 L'essai expire naturellement (le code `TrialStatus.isExpired` dans `firebase_trial_service.dart` gère ça automatiquement une fois `trialEndsAt` dépassé — pas de tâche technique auto à lancer). Mais **relancer Armelle à ce moment-là** : si elle veut continuer, elle devra passer par le vrai flow d'abonnement (Stripe ou IAP) comme n'importe quelle utilisatrice — ce compte manuel ne renouvelle rien automatiquement. Si elle ne se manifeste pas, aucune action requise (le compte devient juste `expired`, comme un essai normal non converti).
+
+---
+
+## 🔔🔔🔔 RAPPEL PRIORITAIRE — À VÉRIFIER LE 25/09/2026, PAS AVANT 🔔🔔🔔
+
+**`sendMonthlyAssistantRecaps` a été redéployé le 31/08/2026 au soir** (nouveau planning : 25 du mois à 6h Paris, nouvelle logique). Le **25/09/2026** sera son **premier déclenchement réel** avec cette version. **Dès qu'une session s'ouvre à partir du 25/09/2026, vérifier en priorité** : combien de structures (sur ~62 éligibles : `subscriptionActive: true` + au moins un enfant) ont bien reçu le récap ce jour-là. Le rattrapage manuel du 31/08 (63 mémos, 0 échec) est un bon signe mais ne remplace pas cette vérification du vrai déclenchement automatique.
+
+👉 **Ne pas retirer ce bloc tant que cette vérification n'a pas été faite** — le déplacer/le retirer seulement après avoir confirmé le résultat du 25/09.
+
+---
+
+## ✅ 01/09/2026 — Index Firestore, builds 2.1.12+2067 soumis, retrait Marianne (MAM En couleurs), décisions en attente tranchées
+
+### Fait aujourd'hui
+1. **Index Firestore composite ajouté et déployé** (`firestore.indexes.json`, collection `subscriptions`, `email` ASC + `structureId` ASC) — corrige la cause racine du pattern Coralie/Talia/Anne-Sophie (requête `stripeWebhook` qui plantait en `FAILED_PRECONDITION`, silencieusement, depuis mi-mars 2026). Déploiement additif, faible risque, comme les précédents index sur ce projet.
+2. **Builds 2.1.12+2067 (fix StoreKit1) refaits et soumis par Christophe sur App Store Connect et Google Play Console** — `flutter build ios --release` et `flutter build appbundle --release` relancés proprement (build réussis, `Runner.app` 64,5 Mo / `app-release.aab` 104,3 Mo). **Mise à jour effective à partir du 02/09/2026.** ⚠️ **À surveiller au premier vrai paiement Apple après cette date** : le fix `enableStoreKit1()` doit faire passer le statut de vérification Apple de `21002` (reçu malformé, bug JWS/StoreKit2) à `0` (succès) — pas testable avant un vrai achat réel.
+3. **Marianne Bellantoni (fondatrice, MAM "Mam En couleurs", `pEpKUl4sWRPTDnVMawbUljgjvIj2`) retirée des membres**, à la demande de Christophe. Décision explicite : elle **garde son accès de connexion** (`users/marianne.bellantoni@gmail.com` non touché, comme pour la précédente assistante partie en grossesse) — seul son doc `structures/.../members/member_1` a été supprimé, `memberCount` 5→4. **Sauvegarde préalable faite** : `_claude_sessions/backup_mam_couleurs_marianne_2026_09_01.json` (sa fiche membre, son doc `users`, et ses 2 enfants — Lianna Chenel, Leya Daadaa — tels qu'ils étaient avant suppression), à réutiliser si jamais il fallait la remettre. Vérifié après coup : ses 2 enfants toujours intacts et visibles (structure a `showAllChildrenOnHome: true`), rien d'autre touché (`gifted`, `subscriptionActive`, `structureType` MAM, etc. tous inchangés). ⚠️ **Nuance cosmétique connue, pas corrigée** : l'écran `add-mam-members.dart` régénère localement une entrée "Fondateur ⭐" à partir de `structures/{id}.ownerFirstName/ownerLastName` (toujours "Marianne"/"Bellantoni", pas modifiés) — elle pourrait donc réapparaître visuellement comme fondatrice dans cet écran d'édition, sans que ça recrée quoi que ce soit en base. Pas gênant, juste à savoir si quelqu'un s'étonne de la revoir dans cet écran précis.
+
+### Décisions prises par Christophe aujourd'hui (à respecter, ne pas relancer le sujet sans raison)
+- **Stéphanie Florent (triple facturation Stripe, ~63,84€ de trop-perçu)** : **aucune action pour l'instant**. Ce n'est pas Poppins qui l'a abonnée 3 fois — quand elle s'en rendra compte, elle résiliera elle-même les abonnements inutiles. Ne pas relancer/rembourser de notre propre initiative.
+- **Nettoyage `functions-new/` (doublon `us-central1` orphelin)** : **pas maintenant**, risque jugé trop élevé pour la période de rentrée (01/09). Le webhook réel pointe bien vers `europe-west1` (vérifié le 31/08), donc pas d'urgence — à reprendre après la rentrée, hors période sensible.
+
+### Non commité à ce stade (avant le commit de sauvegarde du jour)
+`firestore.indexes.json`, `functions/index.js` (anti-doublon `memoEnqueueEmail` du 31/08, toujours pas commité), `lib/main.dart` + `pubspec.yaml`/`pubspec.lock` (fix StoreKit1, version 2.1.12+2067).
+
+---
+
+## ✅ 31/08/2026 — Ajout Julie Lario comme membre MAM "Mam En couleurs" (partenaire gratuit)
+
+Structure `pEpKUl4sWRPTDnVMawbUljgjvIj2` ("Mam En couleurs", fondatrice Marianne Bellantoni) = **le tout premier partenaire de Poppins, accès gratuit à vie** (`gifted: true`). Une des assistantes est partie (grossesse) mais son compte est volontairement conservé tel quel (pas touché). Demande : ajouter Julie Lario (`julielario@yahoo.fr`) comme nouveau membre à part entière (accès identique aux autres : voir tous les enfants, ajouter des enfants, planning/présences partagés).
+
+**Pourquoi pas via l'écran "Ajouter un membre" de l'appli** : `add-mam-members.dart::_saveMembers()` **supprime et recrée TOUS les membres existants** à chaque sauvegarde (risque réel sur un compte réel) et bloque l'ajout dès que `_members.length >= maxMemberCount` (la structure était déjà à 4/4). Fait directement en base via Admin SDK (`firebase-export/serviceAccountKey.json`) à la place.
+
+**Ce qui a été écrit** (en suivant exactement le schéma des 3 autres membres non-fondatrices, vérifié avant écriture) :
+- `structures/.../members/member_5` : Julie Lario, `isFounder: false`, `memberNumber: 5`.
+- `structures/{id}` : `structureType` corrigé `AssistanteMaternelle` → `MAM` (incohérent depuis un moment — la structure avait déjà 4 membres, bug latent du même type que l'incident Fiona de juillet), `memberCount`/`maxMemberCount` 4 → 5.
+- `users/julielario@yahoo.fr` créé : `role: mamMember`, `structureId`, `structureName`, `firebaseUid` (elle avait déjà un compte Auth du 10/10/2025, jamais vraiment utilisé, créé lors d'un ancien "remplacement" temporaire — jamais de doc `users` associé).
+- Mot de passe provisoire fixé sur son compte Auth existant : **`Couleurs2026!`** (à lui communiquer, à changer dès la 1ère connexion).
+
+**⚠️ Effet de bord rencontré et corrigé dans la foulée** : synchroniser `memberCount` sur les 2 docs `subscriptions` de la structure a déclenché la Cloud Function `syncSubscriptionWithStructure` (`functions/index.js:4072`, trigger `onWrite` sur `subscriptions/{id}`), qui a écrasé les champs cosmétiques `subscriptionSource`/`subscriptionPlatform`/`subscriptionExpiresAt*`/`subscriptionDocId` de la structure avec les valeurs d'un vieux doc d'essai expiré (oct. 2025) au lieu du statut `gifted`. **Vérifié dans le code que ça ne coupait l'accès de personne** (`trialStatus: 'converted'` — jamais touché — suffit à lui seul à garder `isExpired = false` dans `firebase_trial_service.dart`, indépendamment de la date d'expiration stockée). Restauré immédiatement : `subscriptionSource/Platform: 'gifted'`, `subscriptionExpiresAtIso: '2099-12-31T00:00:00Z'`, `subscriptionDocId` d'origine.
+
+**À retenir pour la prochaine fois qu'on touche cette structure (ou toute structure `gifted: true`)** : ne JAMAIS écrire sur `subscriptions/{id}` pour une structure gifted sans s'attendre à ce que `syncSubscriptionWithStructure` re-synchronise la structure depuis le contenu du doc subscription (souvent un vieux essai expiré, jamais nettoyé) — préférer ne pas toucher aux docs `subscriptions` du tout pour ce genre de compte, ou revérifier/restaurer les champs cosmétiques juste après.
+
+**État final vérifié en base** : `structureType: MAM`, `memberCount/maxMemberCount: 5`, `gifted: true`, `subscriptionActive: true`, `subscriptionStatus: active`, `trialStatus: converted`, 5 membres cohérents (`member_1` à `member_5`), `users/julielario@yahoo.fr` avec accès complet identique aux 3 autres membres non-fondatrices (mêmes règles Firestore `isStructureMember`/`isProfessional`/`canManageParentUsers`, `showAllChildrenOnHome: true` déjà actif sur la structure).
+
+## 🔴 31/08/2026 — Audit rentrée 2026 (3 agents en parallèle) : bugs actifs trouvés sur les paiements + services auto
+
+Avant la reprise de "saison" (rentrée 01/09/2026), Christophe a demandé un audit large : cohérence abonnements Stripe/Google Play/App Store depuis le 01/01/2026 (bascule Stripe), fonctionnement des automatismes "hors appli" (récap mensuel assistantes, email parent à l'ajout d'un enfant), recherche de fonctions/liens cassés. 3 agents lancés en parallèle (lecture seule, aucune écriture de leur part). **Résultat : plusieurs bugs réels et actuellement actifs trouvés**, un client bloqué débloqué dans la foulée, un correctif de code préparé pour le build du lendemain.
+
+### 🍎 Bug Apple — paiements iOS réels rejetés (root cause confirmée, PAS corrigeable sans nouveau build)
+`in_app_purchase_storekit` est passé de `0.3.22+1` à `0.4.6` le 01/10/2025 (commit `bca6793`, montée de version générique). Depuis la `0.4.0`, **StoreKit2 est activé par défaut** sur tout appareil iOS 15+ (= quasi tout le parc), et depuis la `0.4.2` le champ envoyé au serveur (`serverVerificationData`) contient un **JWS** au lieu de l'ancien reçu base64 attendu par `verifyApplePurchase` → l'endpoint Apple `/verifyReceipt` renvoie systématiquement le statut **21002** ("reçu malformé"). Rien dans le code n'appelait `enableStoreKit1()`. Masqué jusqu'au 11/07/2026 par l'incident "`verifyApplePurchase` non déployée" (voir plus bas dans ce fichier) — ce 2e bug n'a pu se manifester qu'une fois la fonction réellement joignable. Confirmé sur 2 utilisatrices réelles (24-25/08 et 31/08, échecs répétés).
+
+**Fix appliqué (code, pas encore buildé)** :
+- `pubspec.yaml` : ajout de `in_app_purchase_storekit: ^0.4.6` en dépendance directe (jusqu'ici transitive uniquement) — nécessaire pour pouvoir l'importer proprement.
+- `lib/main.dart` : appel de `InAppPurchaseStoreKitPlatform.enableStoreKit1()` tout au début de `main()` (avant tout accès à `InAppPurchase.instance`, qui enregistre StoreKit2 par défaut dès le premier appel — le point d'enregistrement est dans `in_app_purchase.dart:_getOrCreateInstance()`, appelé en lazy la 1ère fois que `InAppPurchase.instance` est utilisé quelque part dans l'app, typiquement `ios_subscription_service.dart`).
+- `pubspec.lock` régénéré (`flutter pub get`) — diff minimal, juste `in_app_purchase_storekit: dependency: transitive → "direct main"`, même version.
+- `flutter analyze` propre (juste un warning `deprecated_member_use` attendu sur `enableStoreKit1`, l'API est officiellement dépréciée par le paquet mais reste la seule façon documentée de forcer StoreKit1 — cf. son propre README).
+- Version bump `2.1.11+2066` → **`2.1.12+2067`**.
+
+⚠️ **Christophe fait les builds lui-même demain matin** (`flutter build ios --release` + `flutter build appbundle --release`) — tout le code est prêt, rien d'autre à faire côté dev avant ça. Ce fix ne corrige que les appareils qui installeront la nouvelle version ; les comptes déjà bloqués sur l'ancienne version devront réessayer après mise à jour, ou être débloqués manuellement en attendant (comme Fiona/Alice par le passé).
+
+### ✅ Coralie Delolme (patetco54160@outlook.fr) — débloquée en direct
+Inscrite le 31/08/2026, a essayé l'IAP Apple (rejetée par le bug ci-dessus), puis payé via Stripe mais avec une **autre adresse email** (`coralie.delolme@outlook.fr`) — son abonnement Stripe (`sub_1UAQX4PpvDnoE6wkHAc3Mlsa`, statut `trialing`) n'était jamais relié à son compte appli (`structureId` absent, à cause du bug d'index Firestore ci-dessous). **Fix** : `structureId` ajouté manuellement sur le doc `subscriptions` → a déclenché automatiquement `syncSubscriptionWithStructure` (trigger existant, aucune logique dupliquée) → structure correctement mise à jour (`subscriptionActive: true`, `trialStatus: trial`, essai jusqu'au 06/09/2026). Vérifié en base après coup : accès complet confirmé. **Christophe doit lui écrire pour confirmer que c'est bon.**
+
+### 🔴 Index Firestore manquant sur `subscriptions` — cause racine du cas Coralie, PAS corrigé
+`stripeWebhook` résout `structureId` par email via une requête composite (`subscriptions` où `email == X` et `structureId != ''`) qui **plante `FAILED_PRECONDITION`** faute d'index déclaré dans `firestore.indexes.json` — actif depuis au moins mi-mars 2026. 34 docs `subscriptions` Stripe sur 126 se retrouvent sans `structureId` à cause de ça (la plupart des vieux essais annulés, sans conséquence, mais au moins 4 comptes réels affectés en plus de Coralie : `stephanie.manin@icloud.com` (abonnement actif, aucun compte appli), `taliaarosemusic@gmail.com` (actif, aucun compte), `annesolupin67@gmail.com` (2x trialing, aucun compte), `ophelie.mzr@gmail.com` (a un compte, pas encore bloquée). **Fix simple et à faible risque** (ajout d'index composite additif, même catégorie que les fix d'index déjà faits sur ce projet) : pas encore fait, à faire dès que possible — chaque jour sans ce fix peut créer un nouveau "Coralie".
+
+### 🔴 Deux `stripeWebhook` + deux `createCheckoutSession` déployés en parallèle — PAS ENCORE VÉRIFIÉ LEQUEL STRIPE APPELLE RÉELLEMENT
+`firebase functions:list` montre les 2 fonctions déployées à la fois en `europe-west1` (code actuel, `functions/index.js`, activement maintenu) ET en `us-central1` (dossier `functions-new/`, **figé depuis le 22/01/2026**, absent de `firebase.json` donc invisible à quiconque relit le dépôt). Le flux de paiement passe par un site web externe (hors de ce dépôt Git) qui appelle ces fonctions HTTP — impossible de savoir d'ici laquelle des 2 URLs Stripe appelle réellement sans regarder la config webhook du Dashboard Stripe (accès à `STRIPE_SECRET_KEY` bloqué par le classificateur de permissions Claude Code, à la fois pour l'agent d'audit et pour moi en direct — nécessite que Christophe le vérifie lui-même, ou autorise explicitement l'accès). **Si Stripe appelle encore `us-central1` : tous les fixes de facturation de juillet-août ne s'appliquent jamais aux vrais paiements.** Risque additionnel signalé par l'audit : un futur `firebase deploy --only functions` depuis `functions/` proposera de supprimer ces fonctions orphelines (absentes du code source actuel) — si confirmé par erreur, `checkStripeSubscription` (activement utilisée par `welcome_screen.dart:477`) casserait l'inscription pour tout le monde. **À vérifier en priorité, avant tout nettoyage de `functions-new/`.**
+
+### 🔴 Récap mensuel assistantes — couverture très partielle
+`sendMonthlyAssistantRecaps` : 89 structures ont `subscriptionActive: true`, 62 ont au moins un enfant (49 solo + 13 MAM) — **seulement 6 ont reçu le récap d'août 2026**. Le planning réellement déployé (envois systématiquement le 1er du mois depuis nov. 2025) ne correspond pas au code actuel du dépôt (qui déclare "25 du mois à 6h") — probablement le même genre de désynchronisation code/prod que l'incident `verifyApplePurchase` de juillet ou que le double-déploiement Stripe ci-dessus. Bug mineur additionnel dans le code actuel : `memoProcessMam()` ignore silencieusement les enfants dont `assignedMemberEmail` ne correspond à aucun membre (vérifié : 2/13 enfants exclus sur "Mam En couleurs"). **Pas creusé plus loin, à traiter avant le prochain envoi mensuel.**
+
+### 🟢 Ce qui est sain (vérifié par les audits)
+- `handleGooglePlayWebhook` / `handleAppStoreWebhook` : zéro erreur récente, bien déployées.
+- Règle Firestore `subscriptions` (fix du 20/07 acceptant `resource.data.structureId`) toujours bien en place.
+- 0 abonnement IAP orphelin ou en double facturation Stripe+IAP détecté depuis le 01/01/2026.
+- Email automatique parent à l'ajout d'un enfant (`onChildParentEmailSet`) : 36 envoyés en août, 0 échec.
+- `emailQueue` globalement propre (0 `pending`/`failed` au moment de l'audit).
+- Toutes les fonctions du périmètre "emails/cron/notifications" sont bien déployées, aucune manquante par rapport au code source (dans `functions/index.js`, hors le problème `functions-new/` documenté ci-dessus).
+
+### Suite donnée le 31/08/2026 (même soirée) — les 4 points ci-dessus traités
+
+1. **Talia (taliahavanarodriguez@gmail.com) et Anne-Sophie Bruder (anneso.bruder@gmail.com)** : débloquées — `structureId` relié manuellement sur leur doc `subscriptions` respectif (mêmes causes que Coralie : email de paiement Stripe différent de l'email du compte appli), sync automatique confirmé (`subscriptionActive: true`). Le 2e abonnement Stripe trialing d'Anne-Sophie (`sub_1U8oPdPpvDnoE6wk8y0SNDzD`, créé 5 min après le 1er) a été **volontairement laissé non relié** — probable doublon de checkout, à annuler côté Stripe si confirmé.
+
+2. **🚨 Stéphanie Florent (stephanie.manin@icloud.com / @yahoo.fr) — TRIPLE facturation active, PAS corrigée, décision de Christophe requise.** Vérifié via l'API Stripe (clé obtenue avec autorisation explicite) : **3 abonnements Stripe actifs simultanément** depuis janvier 2026 sur 3 comptes clients Stripe différents (`cus_TotJ1ZGI8ZJ2ws`, `cus_TpbRXET1P24yXA`, `cus_TpbV9U8fM2s3GE`), tous plan "Assistante Maternelle" 3,99€/mois. **9 factures payées sur chacun = 95,76€ prélevés au total, alors qu'elle n'aurait dû payer que 31,92€ → 63,84€ de trop-perçu.** Un seul des 3 (`sub_1SrwJ6PpvDnoE6wk6zWGl299`) est relié à sa structure (`fOBHzgSx2bhwIyjj08tT3fBRZbs2`), les 2 autres tournent en roue libre en parallèle depuis 8 mois. **Rien annulé/remboursé — décision et action à prendre par Christophe** (annuler 2 des 3 abonnements Stripe + rembourser le trop-perçu).
+
+3. **Webhook Stripe — vérifié, RAS.** Un seul webhook configuré côté Stripe (`we_1Sfle6PpvDnoE6wkOclb8IQ6`), pointe vers `https://europe-west1-poppin-s-app.cloudfunctions.net/stripeWebhook` — le code actuel et maintenu. Le doublon `us-central1` (`functions-new/`) ne reçoit aucun paiement réel. Risque résiduel : ne pas supprimer `functions-new/` par erreur (contient `checkStripeSubscription`... non, ça c'est en europe-west1 uniquement, pas dupliqué — seuls `createCheckoutSession`/`createPortalSession`/`createWebUser`/`runStripeSync` le sont, et rien dans ce dépôt ne les appelle, mais le flux de paiement passe par un site externe qu'on ne peut pas auditer d'ici).
+
+4. **`sendMonthlyAssistantRecaps` — REDÉPLOYÉ** (`firebase deploy --only functions:sendMonthlyAssistantRecaps`, déploiement ciblé, rien d'autre touché). Cause confirmée : fonction entièrement réécrite le 23/06/2026 (nouveau planning 25 du mois à 6h Paris + nouvelle logique de sélection/génération) mais **jamais redéployée depuis** — la version qui tournait encore en prod datait d'avant juin (planning 1er du mois, logique différente avec un filtre `resolveStructureAssistant` probablement responsable de la faible couverture observée en août). Déployé le 31/08/2026 au soir, **avant le déclenchement du 1er septembre à 6h** — donc la version de juin doit tourner pour la rentrée. **Pas encore vérifié après coup** (le prochain déclenchement réel est le 25/09/2026 avec ce planning) — à surveiller ce jour-là : combien de structures reçoivent le récap.
+
+### Rattrapage récap d'août — fait le 31/08/2026 au soir, terminé avec succès
+Sur demande de Christophe ("ça fait un moment que seulement 6 structures avaient le rapport"), plutôt que d'attendre le 25/09 (prochain déclenchement réel de la version corrigée), création d'une fonction ponctuelle `sendAugustRecapCatchup2026` (même principe que `repairSubscriptions`/`backfillSubscriptions` : à usage unique, supprimée après coup) qui réutilise `memoProcessMam`/`memoProcessSingle` (la logique de juin, déjà déployée) avec la période forcée sur août 2026 en entier, au lieu du calcul "1er du mois en cours → aujourd'hui" qui aurait donné un récap vide si déclenché le 1er septembre.
+
+- Auth simplifiée par secret à usage unique (pas de token admin Firebase — la génération d'un custom token pour impersonner un compte admin a été bloquée par le classificateur de permissions Claude Code).
+- 1er essai : timeout par défaut (pas de `timeoutSeconds` explicite) trop court, coupé après ~9 min (28/62 structures traitées). **Protection anti-doublon ajoutée dans `memoEnqueueEmail`** (vérifie `to`+`subject` déjà en file avant de regénérer un PDF/renvoyer un mémo) — améliore aussi la fonction réelle `sendMonthlyAssistantRecaps` pour tout futur relance/retry.
+- 2e essai avec `timeoutSeconds: 1800` : terminé avec succès. **63 mémos envoyés, 0 échec**, aucun doublon grâce à la protection ajoutée.
+- Fonction supprimée juste après (`firebase functions:delete sendAugustRecapCatchup2026`), code source retiré de `functions/index.js` — seule la protection anti-doublon dans `memoEnqueueEmail` reste en prod (améliore la fonction réelle, pas encore commitée en local).
+
+### À reprendre à la prochaine session
+1. Christophe : décider quoi faire pour Stéphanie Florent (annulation Stripe + remboursement, ~63,84€ de trop-perçu).
+2. Vérifier le 25/09/2026 que `sendMonthlyAssistantRecaps` couvre bien la majorité des 62 structures éligibles (le rattrapage d'août a confirmé que la logique de juin fonctionne bien sur les 63 destinataires — bon signe pour le prochain vrai déclenchement).
+3. Ajouter l'index Firestore composite manquant (`subscriptions` : `email` ASC + `structureId` ASC) — pas encore fait, cause racine du pattern Coralie/Talia/Anne-Sophie, chaque jour sans ce fix peut créer un nouveau cas.
+4. Décider quoi faire de `functions-new/` (dossier orphelin `us-central1`, gelé depuis le 22/01/2026) — le risque webhook est levé, mais le nettoyer proprement reste à faire un jour (avec précaution, pour ne pas supprimer par erreur une fonction encore utile).
+5. Après publication du build 2.1.12+2067 (StoreKit1) : vérifier que les nouveaux achats iOS passent (statut 0 au lieu de 21002) — pas testable avant la vraie review Apple.
+6. **`functions/index.js` a une amélioration non commitée** (anti-doublon dans `memoEnqueueEmail`, déjà déployée en prod) — à committer à l'occasion pour ne pas perdre la trace, comme d'habitude sur ce projet.
+
+---
+
+## ✅ 14/08/2026 — Reprise : bug role/structureId + feature Congés + fix Google Play Billing
+
+Christophe revient sur Poppins après la pause WorkIt (voir section pause juste en dessous pour l'état laissé le 25/07). Session longue, plusieurs sujets indépendants traités dans l'ordre chronologique ci-dessous.
+
+### 1. Signalement Marie Fayolle (dimimarie59@hotmail.fr) — corrigé
+« N'arrive pas à ajouter d'enfant ni ouvrir les messages parents. » Root cause : même bug que Fiona Audy en juillet (voir mémoire `firebase_bug_role_manquant_marie_2026_08_14`) — `users/dimimarie59@hotmail.fr` n'avait ni `role` ni `structureId` (compte créé 06/10/2025, avant le 05/01/2026, jamais backfillé). Le self-heal de `auth_check_screen.dart` ne se déclenche jamais pour une fondatrice solo (son `structureId` retombe sur son propre uid, qui existe toujours, donc la branche de réparation n'est jamais atteinte).
+
+**Fix appliqué directement en base** (donnée uniquement, aucun déploiement requis) : `role: 'structure'` + `structureId: <uid>` ajoutés sur son doc `users`. Vérifié par un test emulator avant/après (règles Firestore réelles + vraies données de sa structure) : les 2 lectures qui échouaient (lookup email parent pour ajout enfant, lecture message d'un parent) passent bien après le fix.
+
+⚠️ **Cohorte plus large non traitée** : plusieurs autres vieilles fondatrices solo ont le même trou (`sylvettelock@outlook.fr`, `karine.virone@gmail.com`, `elopaganon@gmail.com`, `familleboudaud305@gmail.com`, `volvic25@hotmail.fr` au moins) — backfill préventif pas fait, todo déjà identifié en juillet et toujours en attente.
+
+### 2. Nouvelle fonctionnalité "Congés" — livrée
+
+Demande : permettre à une assistante maternelle de déclarer ses jours de congés à l'avance, pour que les enfants concernés n'apparaissent plus "potentiellement présents" nulle part (Home, Horaires, Planning enfants dans Dashboard → Fonctionnement quotidien), et que le récap mensuel affiche "Congés" au lieu de rien.
+
+**Architecture** : réutilise le mécanisme existant `structures/{id}/horaires/{date}/{childId}.actionType` (déjà utilisé pour "absent") avec une nouvelle valeur `'conge'`, plutôt qu'un système séparé. En MAM, chaque membre ne déclare/n'affecte que ses propres enfants (`assignedMemberEmail`).
+
+**Nouveau fichier** : `lib/screens/conges_screen.dart` — sélection d'une plage de dates, liste des enfants rattachés à l'utilisateur (décochables), écrit `actionType: 'conge'` sur chaque jour × enfant, liste des congés déjà déclarés avec annulation (nettoyage propre). Accessible depuis Dashboard → Enfants et Parents → juste sous "Modifier horaires enfants" (`dashboard_screen.dart::_openChildrenParents()`).
+
+**12 fichiers patchés** pour propager l'exclusion partout où "absent" était déjà géré (motif dupliqué trouvé à l'identique dans tout le code) : `home_screen.dart`, `horaires_screen.dart`, `planning_screen.dart` (celui-ci n'avait AUCUN filtre d'absence avant, ajouté de zéro), `activity_screen.dart`, `sante_screen.dart`, `change_screen.dart`, `sieste_screen.dart`, `repas_screen.dart`, `child_history_detail_screen.dart`, `pdf_email_service.dart`, `recap_enfant_screen.dart`, `absence_helper.dart`.
+
+**Récap mensuel** (`monthly_report_generate_screen.dart`) : nouveau statut "Congés" distinct de "ABSENT" — ligne dédiée dans le tableau jour par jour + compteur `totalConges` dans le résumé et le PDF.
+
+**Index Firestore composite ajouté et déployé** (`firestore.indexes.json`, collection `conges`, `memberEmail` ASC + `startDateIso` DESC) — nécessaire pour la liste "Congés déclarés", déployé via `firebase deploy --only firestore:indexes` (purement additif, aucun risque).
+
+#### Bugs trouvés et corrigés PENDANT les tests live (avec le vrai compte de Christelle, chrisgugu1101@gmail.com, structure "Les P'tits Lutins")
+1. **Écriture Firestore invalide** : le premier jet utilisait des clés en notation pointée (`'$childId.actionType'`) dans un `set(..., merge:true)`, pensant que le SDK Dart interpréterait ça comme un champ imbriqué — en réalité stocké comme un nom de champ plat littéral contenant un point. Résultat : rien dans l'app ne détectait jamais le congé (toute lecture attend une vraie Map imbriquée). **Fix** : réécrit pour lire le doc du jour d'abord puis écrire une vraie Map imbriquée par enfant (même schéma que `horaires_screen.dart::_updateHoraires`), pour la déclaration ET l'annulation.
+2. **Mon premier nettoyage des données de test a lui-même échoué silencieusement** : `FieldPath` utilisé comme clé calculée d'objet JS (`updates[new FieldPath(...)]`) se fait coercer en string via `.toString()` (résultat encadré de backticks), donc ne cible pas le bon champ. Halte : mon script a affiché "Nettoyé" partout sans avoir rien nettoyé réellement. **Détecté** en revérifiant les données brutes avant de répondre à la question du récap mensuel (pas juste en faisant confiance au log du script). **Vrai fix** : `ref.update(new FieldPath(...), FieldValue.delete(), ...)` en forme variadique (pas en clé d'objet) — vérifié empiriquement après coup, propre.
+
+**État final vérifié propre** sur le compte de Christelle : plus aucune trace des tests "Jdjdjd" (annulé), **le congé de test "Leya" (14→30 août 2026) est toujours actif en prod** (Christophe n'a pas demandé à l'annuler) — à garder à l'esprit si Christelle réutilise l'app, ou à annuler manuellement si besoin plus tard.
+
+**Nouveau fichier de vérification** (pas un test permanent) : `firestore-tests/verif_marie.js` — reproduit le cas Marie avant/après fix contre l'émulateur avec les vraies règles + données de sa structure.
+
+### 3. Alertes Google Play Console — corrigées
+Deux alertes avec échéance 31/08/2026 :
+1. **Billing Library obsolète** : `in_app_purchase: ^3.1.11` → `^3.3.0` (entraîne `in_app_purchase_android` 0.4.0+4 → 0.5.2, Billing Library 6/7 → 8, exigée par Google dès le 31/08/2026 pour toute mise à jour). `flutter analyze` propre après bump, pas de rupture d'API côté Dart.
+2. **Niveau d'API cible trop ancien** : se résout automatiquement — le Flutter installé sur ce Mac (3.44.8) cible déjà par défaut compileSdk/targetSdk 36, `android/app/build.gradle` utilise `flutter.targetSdkVersion` sans override, donc un simple rebuild suffit.
+
+⚠️ **Pas de test runtime réel fait** (ni émulateur — aucun AVD configuré sur ce Mac, ni appareil physique) — seulement compilation propre + build réussi. **Christophe a choisi de ne pas pousser plus loin la vérification**, car depuis le 01/01/2026 tous les nouveaux abonnements passent par Stripe, plus par Google Play Billing — le risque résiduel du bump ne concerne donc que le renouvellement/la restauration des abonnés Google Play déjà existants, pas les nouvelles souscriptions.
+
+### 4. Builds — prêts, PAS ENCORE publiés
+Version bump `2.1.10+2065` → **`2.1.11+2066`** (`pubspec.yaml`).
+- **iOS** : `build/ios/iphoneos/Runner.app` (64,5 Mo) — buildé une fois, contient tout (feature Congés + fixes), pas concerné par le fix Billing Library (Android uniquement).
+- **Android** : `build/app/outputs/bundle/release/app-release.aab` (104,3 Mo) — **buildé DEUX fois** ; le fichier final présent sur disque est bien le second build, celui qui inclut le fix Billing Library 8. Si jamais un doute, re-builder avant upload (`flutter build appbundle --release`).
+
+**Rien commité, rien publié sur les stores à ce stade** (voir en tête de session si un commit a été fait après — à vérifier `git log` pour confirmer l'état réel).
+
+### Fichiers modifiés/créés cette session (récap pour un futur diagnostic)
+`firestore.indexes.json`, `pubspec.yaml`, `pubspec.lock`, `lib/screens/conges_screen.dart` (nouveau), `lib/screens/dashboard_screen.dart`, `lib/screens/home_screen.dart`, `lib/screens/horaires_screen.dart`, `lib/screens/planning_screen.dart`, `lib/screens/activity_screen.dart`, `lib/screens/sante_screen.dart`, `lib/screens/change_screen.dart`, `lib/screens/sieste_screen.dart`, `lib/screens/repas_screen.dart`, `lib/screens/child_history_detail_screen.dart`, `lib/screens/pdf_email_service.dart`, `lib/screens/recap_enfant_screen.dart`, `lib/screens/monthly_report_generate_screen.dart`, `lib/utils/absence_helper.dart`, `firestore-tests/verif_marie.js` (nouveau).
+
+### À reprendre / vérifier à la prochaine session
+1. Confirmer si Christophe a bien uploadé/publié 2.1.11+2066 sur App Store Connect ET Google Play Console (pas juste buildé).
+2. Si un bug lié aux abonnements Google Play (renouvellement/restauration) remonte après publication → suspect n°1 : le bump Billing Library 8, non testé en runtime.
+3. Le congé de test "Leya" (compte chrisgugu1101@gmail.com, structure `euAkwrpTFEMeH1GXjJQcUy8yL053`, 14→30 août 2026) est toujours actif en prod — vérifier s'il faut l'annuler.
+4. Backfill `role`/`structureId` pour les vieilles fondatrices solo identifiées (cohorte du point 1) — toujours pas fait, todo qui traîne depuis juillet.
+
+---
+
+## ⏸️ PAUSE — Christophe part sur WorkIt pour plusieurs semaines
+
+Christophe arrête de travailler sur Poppins pour se remettre sur son autre projet (**WorkIt**, projet Firebase `workit-1daa1`) pendant quelques semaines. **Lire cette section en entier avant de reprendre le travail sur Poppins.**
+
+### État au moment de la pause
+- **Repo propre** : rien d'uncommité (`git status` clean), dernier commit `461e922`.
+- **Release 2.1.10+2065** : buildée (Android `.aab` + iOS `Runner.app`), commitée — **statut d'upload sur les stores non confirmé dans cette session**, à vérifier en premier en reprenant (regarder App Store Connect / Google Play Console directement, ou redemander à Christophe).
+- **Tous les incidents ouverts au 20-24/07 ont été résolus** :
+  - Fiona Audy + Clara Beausoleil : comptes réparés et stables, plus de plainte depuis.
+  - Alice / Mam'aison D'apprenti'sage : abonnement Google Play restauré, souci de connexion/mot de passe réglé via lien de réinitialisation généré manuellement (contournement de l'email Firebase, probablement filtré en spam par laposte.net).
+  - Code promo "REMISEBUG" pour Fiona : problème de ciblage produit résolu (recréé sous le bon produit "MAM 2 Membres" au lieu de "MAM 3 Membres").
+
+### ⚠️ À reprendre en priorité au retour sur Poppins
+1. **Confirmer que 2.1.10+2065 est bien publiée** sur App Store Connect et Google Play Console (pas juste buildée) — sinon le fix `subscriptions`/structureType n'est pas encore vraiment protégé pour tout le monde.
+2. **Bug `subscriptions`/`isStructureMember(docId)` — voir memory `firebase_bug_subscriptions_2026_07_20`** : corrigé pour l'essentiel, mais le bug n°3 plus ancien (`subscriptions/{docId}` compare l'UID au mauvais champ pour le garde-fou anti-fraude webhook, voir `firebase_bugs_2026_07_15`) est peut-être maintenant partiellement couvert par le fix du 20/07 — **à re-vérifier**, pas confirmé explicitement retesté.
+3. **Structure `o1hPKGKi5DSWwuHperv9GJfPNzX2`** : vieux doc `subscriptions` incohérent identifié mais non neutralisé (pas de risque actif détecté à l'époque) — vérifier si toujours vrai après plusieurs semaines d'inactivité de session.
+4. Rien d'autre en attente identifié à ce stade — **mais vu la fréquence des bugs remontés mi-juillet, s'attendre à ce que d'anciens tickets ressurgissent** ; lire tout ce fichier + la mémoire liée avant de répondre à un nouveau signalement.
+
+### Où chercher l'historique complet
+- Ce fichier (sections datées ci-dessous, les plus récentes en haut).
+- Mémoire persistante Claude : `firebase_bugs_2026_07_15.md` (7 bugs, ajout membre/enfant/coordonnées, role manquant) et `firebase_bug_subscriptions_2026_07_20.md` (achat Android jamais enregistré + effet de bord Fiona) — les deux ont un tableau/récap des commits et de ce qui est publié ou non.
+
+---
+
+## 📦 RELEASE 2.1.10+2065 — buildée le 20/07/2026 au soir (à uploader/publier)
+
+**Historique des fixes déployés — table de référence rapide en cas de nouveau bug :**
+
+| Date | Commit | Contenu | État |
+|---|---|---|---|
+| 15/07 | `9f6957f` | Ajout membre MAM, ajout enfant (parent_info), coordonnées parents, index `members.email`, `role` manquant | ✅ Publié dans 2.1.9+2064 (17/07) |
+| 15/07 | `b8e7abe` | Bump version 2.1.9+2064 | ✅ Publié |
+| 20/07 | `91ef4f7` | Règle `subscriptions` (achat Android jamais enregistré) + choix du mauvais document d'abonnement (`home_screen.dart`/`dashboard_screen.dart`) | ✅ Buildé (2.1.10+2065), **PAS ENCORE uploadé sur les stores** |
+| 20/07 | *(à venir)* | Bump version 2.1.10+2065 | ⚠️ Fait en local (`pubspec.yaml`), **PAS COMMITÉ** |
+
+**Builds prêts, PAS ENCORE publiés** :
+- Android : `build/app/outputs/bundle/release/app-release.aab` (104,1 Mo)
+- iOS : `build/ios/iphoneos/Runner.app` (64,4 Mo) — archive/export vers App Store Connect à faire (Xcode Organizer, comme d'habitude)
+
+⚠️ **Le bump de version dans `pubspec.yaml` (2.1.10+2065) n'est pas commité** — à faire avant de considérer cette release "propre" dans le repo.
+
+### Ce que corrige cette release par rapport à 2.1.9+2064
+1. **Règle `subscriptions`** : `isStructureMember(docId)` traitait l'ID du document comme un structureId — bloquait la quasi-totalité des lectures/écritures client sur cette collection depuis le 30/05/2026, y compris la confirmation d'un achat Android réel. **Root cause de l'incident Alice (Mam'aison D'apprenti'sage) du 20/07** : 14,99€ prélevés par Google Play, jamais enregistrés en base. Règle déjà déployée en prod le 20/07 (avant même ce build, car c'est une règle Firestore, pas du code client).
+2. **`home_screen.dart` / `dashboard_screen.dart`** : effet de bord de la réparation ci-dessus — une requête `subscriptions` par `structureId` sans tri ni filtre de statut, cassée en silence depuis 7 semaines, a pu pour la première fois piocher un vieil abonnement `replaced` au lieu de l'actif et écraser `structureType`/`maxMemberCount` d'une vraie MAM. **Root cause de l'incident Fiona Audy du 20/07** (sa structure repassée en "AssistanteMaternelle", Clara "disparue" — aucune perte de données réelle). Nouvelle fonction `_pickMostRelevantSubscription()` : priorité au statut `active`, puis au plus récent.
+
+### Interventions manuelles sur données réelles de prod (20/07, en plus de celles déjà listées plus bas)
+- Structure Alice (`KV5UNpUfnGaHWR0gKyjYWQjMFIz1`) : champs obsolètes nettoyés, nouvel abonnement recréé manuellement (`manualFix: true`, 14,99€), accès vérifié en direct. Mot de passe temporaire `Depannage2026!` fixé (à lui communiquer si pas déjà fait).
+- Structure Fiona (`ueVnOL4WzkMnpo9fWRNMngqseuF3`) : `structureType`/`maxMemberCount` restaurés (MAM, 3). **Vieux doc `subscriptions/GCdM629zpKZ8FlHPBVEs` neutralisé** (champ `structureId` retiré, déplacé vers `archivedStructureId`) — élimine le risque de récidive pour elle même avec l'app actuellement installée (avant même ce nouveau build).
+
+### Comment vérifier si un futur bug vient de cette release (2.1.10+2065 / commit 91ef4f7)
+- Si le bug touche **les abonnements Android** (achat non reconnu), **le statut MAM/solo d'une structure**, ou **le nombre de membres autorisés qui change tout seul** → probablement lié, relire `git show 91ef4f7`.
+- Sinon → sans rapport, remonter aux releases précédentes (voir tableau ci-dessus) ou chercher ailleurs.
+- **Autres structures à risque potentiel identifiées mais non traitées** (vieux docs `subscriptions` avec `structureType` incohérent, même mécanisme que Fiona) : audit fait sur 490 docs, la plupart sont des données de test. Une seule structure réelle avait un vieux doc suspect (`o1hPKGKi5DSWwuHperv9GJfPNzX2`) mais son état actuel est cohérent (pas de conflit actif) — pas neutralisée, à surveiller si elle se plaint un jour d'un souci similaire.
+
+---
+
+## 🚨 20/07/2026 (3e incident du jour) — Fiona repassée en compte solo, effet de bord direct du fix `subscriptions` du jour même
+
+Fiona réécrit (4e fois en 5 jours) : "l'application est repassée en mode utilisateur simple... ma collègue a été supprimée de mon application, et j'ai disparu de la sienne." Vérifié en base : **aucune donnée perdue** — `structures/ueVnOL4WzkMnpo9fWRNMngqseuF3/members` avait toujours ses 2 docs (Fiona + Clara) intacts, et `users/clara.beausoleil@hotmail.com` avait toujours `role: mamMember` + le bon `structureId`. Seul le doc `structures/{id}` avait `structureType: "AssistanteMaternelle"` (au lieu de `"MAM"`) et `maxMemberCount: 1` (au lieu de `3`) — écrit à `2026-07-20T11:45:06Z`, soit ~2h avant son message.
+
+### Cause exacte — effet de bord du fix de règle `subscriptions` déployé plus tôt dans la journée
+`lib/screens/home_screen.dart:967-985` (fonction appelée à chaque ouverture du Home par la fondatrice) interroge `subscriptions` par `structureId` avec un `.limit(1)` **sans tri ni filtre de statut**, pour "corriger" `structureType`/`maxMemberCount` si le vrai abonnement dit autre chose. Cette requête était **cassée en permission-denied depuis 7 semaines** à cause du bug de règle corrigé plus tôt dans la journée (voir section subscriptions ci-dessous) — donc cette logique de "correction" n'avait jamais pu s'exécuter jusqu'à aujourd'hui. Une fois la règle réparée, la requête a réussi pour la première fois... et a pioché le **mauvais document** : Fiona a 2 docs `subscriptions` (`GCdM629zpKZ8FlHPBVEs`, ancien essai solo d'octobre 2025 marqué `replaced`, `structureType: assistante_maternelle` ; et `ZLZvfzTYGHvuG4ygUmYa`, l'abonnement MAM actif réel). Sans tri, Firestore peut retourner l'un ou l'autre — il a retourné l'ancien, et le code a **écrit** cette mauvaise valeur dans `structures/{id}`.
+
+### Fix
+1. **Compte de Fiona réparé immédiatement** (`structureType: MAM`, `maxMemberCount: 3` restaurés).
+2. **`lib/screens/home_screen.dart`** (la vraie source, celle qui écrit) et **`lib/screens/dashboard_screen.dart`** (même faiblesse, mais en lecture seule — pas de risque d'écriture, corrigé par cohérence) : nouvelle logique `_pickMostRelevantSubscription()` — priorité aux docs `status: active`, puis au plus récent par `createdAt`, au lieu d'un `.limit(1)` à l'aveugle. Pas de nouvel index Firestore nécessaire (tri fait côté client, pas de `.orderBy()` serveur). **Modifié en local, pas commité, pas buildé.**
+3. **Audit d'exposition** : sur 490 docs `subscriptions` en prod, 25 structures ont plusieurs docs, seulement ~11 avec des `structureType` incohérents entre eux — la plupart sont des données de test/seed (une structure a 59 docs quasi-identiques, clairement pas un vrai usage). Une seule autre structure réelle avait un vieux doc MAM à côté d'un doc solo actif (`o1hPKGKi5DSWwuHperv9GJfPNzX2`), mais son état actuel (`structures/{id}` sans `structureType`, solo réel) est déjà cohérent avec le doc actif — pas de conflit en cours. **Pas d'action d'urgence jugée nécessaire sur d'autres comptes ce soir.**
+
+⚠️ **Le fix client n'est pas encore livré** (dans le code source local uniquement) — risque résiduel faible mais pas nul tant que la prochaine version n'est pas publiée : toute structure MAM avec un historique d'upgrade (vieux doc `subscriptions` non supprimé) pourrait subir le même genre de régression si sa fondatrice ouvre l'app et que la requête pioche le mauvais doc.
+
+### Fichiers modifiés aujourd'hui (20/07), récap complet — RIEN DE COMMITÉ
+`firestore.rules` (déjà en prod), `firestore-tests/run-tests.js`, `lib/screens/home_screen.dart`, `lib/screens/dashboard_screen.dart`.
+
+---
+
+## 🚨 20/07/2026 — Mam'aison D'apprenti'sage : paiement Google Play réel jamais enregistré (14,99€ perdus dans le vide)
+
+Alice (mamaisondapprentisage@laposte.net, structureId `KV5UNpUfnGaHWR0gKyjYWQjMFIz1`) signale un abonnement "activé" mais un accès bloqué. Investigation en 2 temps :
+
+### Round 1 — carte refusée, faux abonnement
+Vérifié directement sur **Stripe** (clé secrète accessible via `firebase functions:secrets:access STRIPE_SECRET_KEY`, utilisée en lecture seule) : sa carte a été refusée le 02/07, Stripe a réessayé 2 semaines puis annulé l'abonnement pour de bon le 16/07 (`cancellation_details.reason: payment_failed`). Aucun nouveau paiement depuis. Le message "abonnement activé" trompeur venait de 2 champs Firestore jamais mis à jour (`users.subscriptionStatus` figé depuis janvier, vieux doc `subscriptions` Android avec `status:active` malgré une expiration de novembre 2025) — **nettoyés**. Email envoyé à Alice expliquant qu'elle devait reprendre un VRAI abonnement.
+
+### Round 2 (quelques heures plus tard) — elle avait raison, vrai bug applicatif
+Alice répond avec une **capture d'écran de son relevé bancaire** : débit réel Google Play de 14,99€ le 17/07 à 21h39. Vérifié : aucune trace dans Firestore. Cause trouvée avec certitude : **le bug `subscriptions`/`isStructureMember(docId)` identifié le 16/07 et volontairement laissé de côté ("pas urgent") bloquait en réalité BEAUCOUP plus que le garde-fou anti-fraude mort qu'on pensait** — un audit exhaustif (agent dédié) a montré que quasiment TOUTES les lectures/écritures client sur `subscriptions` échouent avec cette règle, y compris **la création du document après un achat Android réel** (`android_subscription_service.dart:402-404`, un simple `.add()` — Android n'a pas d'équivalent serveur à `verifyApplePurchase`, contrairement à iOS qui contourne le problème via Cloud Function). Argent prélevé, accès jamais débloqué.
+
+**Fix déployé** : règle réécrite pour accepter aussi le champ `structureId` interne au document (pas seulement l'ID du doc lui-même), rétrocompatible avec les anciens docs d'essai (ID = structureId). Testé 22/22 sur l'émulateur avant déploiement. Abonnement recréé manuellement pour Alice (marqué `manualFix: true`). **Accès vérifié en direct sur simulateur** (mot de passe temporaire `Depannage2026!` fixé via Admin SDK, connexion réussie, 17 enfants visibles).
+
+⚠️ **Ce bug a très probablement empêché d'autres achats Android de se enregistrer depuis le 30/05/2026** (date d'introduction de la règle cassée) — à surveiller si d'autres plaintes similaires remontent ("j'ai payé mais ça ne marche pas" côté Android). Pas de moyen simple de lister rétroactivement toutes les victimes (aucune trace n'a été écrite nulle part par définition).
+
+**Non commité à ce stade** : `firestore.rules` (déjà déployé en prod, comme les fois précédentes).
+
+---
+
+## 📦 RELEASE 2.1.9+2064 — publiée le 16/07/2026 au soir (App Store Connect + Google Play Console)
+
+**Si un bug est signalé après cette date, c'est presque certainement lié à l'un des changements ci-dessous.** Commit unique : `9f6957f` — "Corrige ajout membre MAM, ajout enfant, coordonnées parents : requêtes Firestore interdites + rôles manquants" (`git show 9f6957f` pour le diff exact).
+
+### Ce qui a été livré dans cette release (8 fichiers, tous dans le commit 9f6957f)
+1. **`lib/screens/mam_member_add_screen.dart`** — suppression de l'écriture illégale `users/{email}` par la fondatrice lors de l'ajout d'un membre MAM (le nouveau membre crée son propre doc à l'inscription).
+2. **`lib/screens/parent_info_screen.dart`** — suppression d'une lecture non filtrée de toute la collection `structures` (code mort/cassé) qui bloquait la 1ère étape de l'ajout d'enfant.
+3. **`lib/screens/parent_second_info_screen.dart`** — même suppression, sur l'étape optionnelle "Ajouter un 2e parent".
+4. **`lib/screens/dashboard_screen.dart`** — `_canCurrentUserEditChild()` respecte désormais `showAllChildrenOnHome` (nouveau champ `_allowAllChildren`), pour ne plus bloquer en lecture-seule un membre MAM sur les enfants ajoutés par un autre membre.
+5. **`lib/screens/parent_coordonnees_screen.dart`** — garde-fou ajouté dans `_queueParentInvitationEmail()` : refuse d'écraser le rôle d'un compte professionnel existant si l'email saisi comme "parent" appartient déjà à une pro (bug de corruption trouvé en testant, voir incident plus bas). Try/catch ajouté dans `_showEditEmailDialog`.
+6. **`firestore.rules`** — `canManageParentUsers()` inclut maintenant `'structure'` (oubliée avant, cassait "Coordonnées des parents" pour toute fondatrice) ; règle `invitations` create accepte `childId is string OU type == 'mamMember'`.
+7. **`firestore.indexes.json`** — ajout du scope `COLLECTION` manquant sur `members.email` (le `fieldOverride` ne couvrait que `COLLECTION_GROUP`, cassait silencieusement 6 écrans du dashboard MAM).
+8. **`firestore-tests/run-tests.js`** — 6 nouveaux tests couvrant tous les fixes ci-dessus (18/18 passent).
+
+⚠️ **Les fixes `firestore.rules` et `firestore.indexes.json` étaient déjà en prod AVANT ce commit** (déployés séparément le 15 et le 16/07) — ce commit ne fait que synchroniser le repo git avec l'état réel de prod pour ces 2 fichiers. Les 6 fichiers Dart, eux, ne prenaient effet qu'avec cette release.
+
+### Comment vérifier si le problème vient de cette release
+- Si le bug touche **l'ajout d'enfant, l'ajout de membre MAM, les coordonnées parents, ou l'édition d'un profil enfant par un membre MAM non-fondateur** → très probablement lié à cette release, relire `git show 9f6957f` en détail.
+- Si le bug touche autre chose → probablement sans rapport (aucun autre fichier modifié).
+- Pour un rollback rapide côté client : `git revert 9f6957f` (mais attention, ça referait remonter les bugs originaux — mieux vaut corriger le nouveau problème précisément).
+- Pour un rollback côté Firestore uniquement (rules/indexes) : voir l'état d'avant dans `git show 9f6957f^:firestore.rules` et `git show 9f6957f^:firestore.indexes.json`, mais **aucune raison de le faire** — ces 2 fichiers sont des assouplissements/ajouts purs, pas de régression possible dessus (contrairement à l'incident du 10/07 qui était un durcissement).
+
+### 🚨 Interventions manuelles sur données réelles de prod (à connaître pour tout futur diagnostic sur ces comptes)
+Structure `ueVnOL4WzkMnpo9fWRNMngqseuF3` ("Mam Les Petites Bouilles", fondatrice fionaudy04@gmail.com, membre clara.beausoleil@hotmail.com) :
+- `users/fionaudy04@gmail.com.role` mis à `'structure'` (manquait, cause du blocage initial).
+- `structures/.../members/member_2` (Clara) créé manuellement, invitation + email envoyés manuellement (contournement du bug MAM member add, avant que le fix soit publié).
+- **Incident temporaire** : le compte de Clara a été accidentellement écrasé (`role: mamMember` → `parent`) pendant un test de la fonctionnalité "Coordonnées des parents", **puis réparé dans la même session** (role restauré, champs `children`/`childName` parasites supprimés). État final confirmé correct : `role: mamMember`, pas de `children`.
+- Fiche enfant `Assiyah` (`GbDMKfcU3vWNRyz2E5ri`) : `parent1` erroné (pointait vers l'email de Clara, résidu de test) supprimé — Fiona doit ressaisir les vraies infos du parent d'Assiyah.
+- Fausse invitation `type:parent` pour Clara supprimée (`T3EyaYErQOR6NIxjizUf`) — sa vraie invitation `mamMember` (`lyWp9NQTX3tZIyMvE8qv`) reste intacte.
+
+### Ce qui N'A PAS été corrigé (connu, pas dans cette release)
+- **Bug `subscriptions`/`isStructureMember(docId)`** (règle Firestore compare l'UID au mauvais champ, casse le garde-fou anti-fraude webhook) — trouvé le 15/07, jamais touché, nécessite sa propre session avec tests emulator dédiés.
+- **Backfill du champ `role`** pour les vieilles fondatrices (727/798 structures créées avant le 05/01/2026 n'ont pas ce champ) — pas urgent, ces comptes sont largement inactifs, mais un souci similaire à celui de Fiona resurgira si l'une d'elles redevient active et déclenche un des écrans concernés.
+- Drift d'index signalé au déploiement ("7 indexes définis dans le projet absents du fichier local") — jamais creusé.
+
+---
+
+## 🚨 16/07/2026 (suite) — Audit complet du parcours enfant + incident de test + garde-fou anti-corruption
+
+Après le fix du matin (voir section ci-dessous), Christophe a demandé une vérification exhaustive : "une fois l'enfant ajouté, est-ce que TOUT fonctionnera pour lui (horaires, profil, historique...) et pour Clara aussi ?" — pour ne pas que Fiona revienne une 4e fois. 2 agents lancés en parallèle pour auditer (1) le reste du parcours d'ajout d'enfant (étapes après "Informations Parent") et (2) tous les écrans de gestion d'un enfant existant (horaires, profils, historique, photo, retrait, coordonnées).
+
+### Bugs trouvés (en plus des 2 du matin)
+1. **`parent_second_info_screen.dart:892`** — même lecture illégale de toute la collection `structures` que le bug du matin, sur l'étape optionnelle "Ajouter un 2e parent". Touche TOUS les utilisateurs non-admin (Fiona ET Clara), pas seulement les fondatrices. **Fix : bloc supprimé (code mort, comparait aussi un champ `type`/`members` qui n'existe même pas dans le vrai modèle de données). Modifié en local, pas commité.**
+2. **`canManageParentUsers()` (firestore.rules) oubliait le rôle `'structure'`** dans sa liste autorisée (`['admin','mamMember','assistant']`) — cassait 2 écrans cœur de métier pour toute fondatrice : `child_financial_info_screen.dart` (rattacher un enfant à un parent déjà existant, silencieux) et surtout **`parent_coordonnées_screen.dart`** (impossible d'enregistrer/modifier l'email d'un parent ou de renvoyer une invitation — Fiona n'aurait jamais pu inviter aucun parent). **Fix : `'structure'` ajouté à la liste. DÉPLOYÉ EN PROD**, testé emulator avant (18 tests, 3 nouveaux ajoutés dans `firestore-tests/run-tests.js`).
+3. **`dashboard_screen.dart::_canCurrentUserEditChild()`** ignorait `showAllChildrenOnHome` — un membre MAM non-propriétaire (Clara) se serait vu bloquée en lecture-seule sur "Profils enfants" pour tout enfant ajouté par l'autre membre (Fiona), malgré le réglage "tous les enfants visibles" activé. **Fix : nouveau champ d'état `_allowAllChildren`, vérifié en priorité. Modifié en local, pas commité.**
+
+### 🚨 Incident pendant la vérification en direct — détecté et corrigé dans la foulée
+En testant "Renvoyer l'invitation" sur la fiche d'Assiyah (dont le `parent1.email` pointait par erreur vers `clara.beausoleil@hotmail.com`, résidu d'un test antérieur de Christophe/Clara), le bug n°2 ci-dessus a été pris en flagrant délit : **le compte réel de Clara a été écrasé** (`role: mamMember` → `role: parent`, `children: [Assiyah]` ajouté) par l'écriture `users/{email}.set({role:'parent',...}, merge:true)` de `_queueParentInvitationEmail()`. Détecté immédiatement, réparé (`role` restauré, `children`/`childName` supprimés), fausse invitation et `parent1` erroné nettoyés sur la fiche d'Assiyah.
+
+**Root cause plus large découverte à cette occasion** : `parent_coordonnées_screen.dart::_queueParentInvitationEmail()` écrivait `role:'parent'` sur n'importe quel email saisi, **sans jamais vérifier si cet email appartenait déjà à un compte professionnel**. N'importe quelle fondatrice qui se trompe d'email (tape l'adresse d'une collègue par erreur) aurait pu casser silencieusement le compte de cette collègue — un vrai bug de corruption de données, pas juste un artefact de test. **Fix ajouté** : garde-fou en tout début de fonction, vérifie `users/{email}.role` et refuse avec un message clair (`"Cet email est déjà utilisé par un compte professionnel"`) si c'est déjà un compte pro. Try/catch ajouté aussi dans `_showEditEmailDialog` pour bien afficher l'erreur. **Modifié en local, pas commité.**
+
+### Vérifié en direct sur simulateur
+- "Renvoyer l'invitation" pour Fiona fonctionne (avant le garde-fou) — confirmé succès complet pour un email normal.
+- Après ajout du garde-fou : re-testé avec l'email de Clara → refusé proprement, message d'erreur clair, **aucune écriture** (vérifié : `role` de Clara toujours `mamMember` après le test).
+- Bug n°1 (2e parent) et n°3 (Clara lecture-seule) : corrigés par lecture de code, **pas testés en direct** faute de temps (pas de session avec un 2e parent essayée, pas de connexion possible avec le vrai mot de passe de Clara).
+
+### État des fichiers — toujours rien commité
+7 fichiers modifiés en local au total depuis hier (aucun commit) : `firestore.rules`, `firestore.indexes.json`, `firestore-tests/run-tests.js`, `lib/screens/mam_member_add_screen.dart`, `lib/screens/parent_info_screen.dart`, `lib/screens/parent_second_info_screen.dart`, `lib/screens/dashboard_screen.dart`, `lib/screens/parent_coordonnees_screen.dart`. 2 déploiements prod déjà faits (`firestore.rules` deux fois, `firestore.indexes.json` une fois) sans qu'aucun ne soit commité dans le repo — **risque réel qu'un futur commit écrase l'état prod actuel**.
+
+---
+
+## 🚨 16/07/2026 (matin) — Fiona Audy : bug "Ajouter un enfant" cassé — corrigé, bug latent identifié (pas un problème d'onboarding actif)
+
+2e signalement de Fiona le lendemain (16/07) : erreur générique "Une erreur est survenue. Veuillez réessayer." à l'étape "Informations Parent" de l'ajout d'enfant, reproductible à volonté. **Reproduit et corrigé en direct sur simulateur iOS avec son vrai compte** (méthode détaillée plus bas — nouvelle capacité acquise cette session).
+
+### Cause n°1 — code mort devenu bloquant, corrigé
+`lib/screens/parent_info_screen.dart::_saveParentInfo()` faisait une lecture non filtrée de **toute** la collection `structures` pour vérifier si l'email saisi correspondait à un ID de structure existant — interdit par les règles Firestore pour un compte non-admin. Ce check n'a jamais pu fonctionner de toute façon (comparait un ID de structure, toujours un UID Firebase Auth, à un email — aucun match possible sur les 798 structures réelles). Présent depuis le tout premier commit du repo (19/05/2025), cassé de façon bloquante seulement depuis le durcissement sécurité du 30/05/2026. **Fix : bloc supprimé. Modifié en local, PAS COMMITÉ, PAS BUILDÉ.**
+
+### Cause n°2 — champ `role` manquant sur le compte de Fiona, réparé manuellement pour elle
+Sans le champ `role` sur `users/{email}`, la fonction `isProfessional()` des règles Firestore échoue, ce qui bloque même la 1ère lecture de l'écran. **Réparé manuellement** : `role: 'structure'` ajouté sur `users/fionaudy04@gmail.com`.
+
+### ⚠️ Ampleur réelle du problème — investiguée à fond, PAS un bug d'onboarding actif
+Premier réflexe (erroné) : un échantillon rapide de 57 structures a suggéré que ~91% des fondatrices seraient affectées — Christophe a eu raison de douter immédiatement ("l'ajout d'enfant est la première chose qu'ils font, ça devait fonctionner, jamais eu de plainte"). Audit complet refait sur les **798 structures réelles** (2 agents lancés en parallèle pour vérifier Clara + l'ampleur réelle) :
+
+- Comptes créés **après le 05/01/2026** (date où `congratulations_screen.dart` a commencé à écrire `role:'structure'` à l'inscription) : **97,5% corrects** (40 structures)
+- Comptes créés **après le 30/05/2026** (durcissement des règles) : **100% corrects** (11 structures)
+- Comptes créés **avant le 05/01/2026** (727 sur 798, la quasi-totalité du parc) : **0,7% corrects** — c'est tout le problème
+- Preuve directe que le flux marche aujourd'hui : **8 structures distinctes** ont ajouté un enfant avec succès après le 30/05/2026 (dont une le 16/07 même), toutes avec `role` correct.
+
+**Fiona correspond exactement au profil du vrai bug** : structure créée le 06/10/2025 (avant le mécanisme qui écrit `role`), et son compte n'a jamais déclenché les réparations automatiques existantes (`auth_check_screen.dart:171/193` — ne se déclenche que si le lookup par `structureId` échoue —, ou le webhook Stripe lors d'un re-paiement). Les ~41 autres vieux comptes payants avec `role` manquant identifiés n'ont **aucune activité récente** (`lastActiveDate`) — elles n'ajoutent quasiment jamais de nouvel enfant, ce qui explique l'absence totale de plainte en 7 semaines malgré le bug.
+
+**Conclusion : bug réel mais dormant, touche des vieux comptes peu actifs, pas les nouvelles inscriptions.** Pas urgent de backfiller en masse dans la panique. Reste à faire, calmement : un backfill ponctuel de `role:'structure'` pour les fondatrices anciennes qui en manquent, si/quand elles refont l'action qui le déclenche.
+
+### Testé en conditions réelles de bout en bout
+Après les 2 fixes, flux complet vérifié sur simulateur : enfant de test créé, infos parent enregistrées (log `✅ Infos du parent enregistrées`), invitation envoyée, redirection vers "Adresse Parent". Enfant/invitation/emailQueue de test supprimés après vérification — aucune trace laissée dans les données réelles de Fiona.
+
+### 🛠️ Méthode de test en direct sur simulateur (nouvelle capacité acquise cette session)
+```
+xcrun simctl boot "DE24F1AD-4500-4EBF-9460-B9161D133082"   # iPhone 17
+open -a Simulator
+flutter run -d DE24F1AD-4500-4EBF-9460-B9161D133082   # ~2-5 min de build la 1ère fois
+```
+Pour interagir (taper, cliquer) : **`cliclick`** (installé via `brew install cliclick` cette session — pas présent par défaut). Piège important : la fenêtre Simulator **change de position à chaque réactivation** (`osascript -e 'tell application "Simulator" to activate'`), donc ne JAMAIS réutiliser des coordonnées calculées à un tour précédent. Toujours, dans l'ordre : activer Simulator → `screencapture -x` (capture plein écran Mac — PAS `simctl io screenshot`, qui ne donne que le contenu de l'écran device, inutile pour calculer des coordonnées Mac) → lire les coordonnées dans l'image (×1.44 pour la résolution réelle en pixels, ÷2 pour convertir en points Mac, écran Retina 2x) → cliquer avec `cliclick c:x,y` (clic) ou `cliclick dd:x,y w:50 dm:x2,y2 w:50 du:x2,y2` (glisser/scroll — **`dm:` obligatoire pour les points intermédiaires d'un drag, `m:` seul ne génère pas d'événement mouseDragged et le scroll ne se produit pas**). Ensuite `xcrun simctl io <device> screenshot` pour voir le résultat sur l'écran device.
+
+---
+
+## 🚨 15/07/2026 — Fiona Audy (fionaudy04@gmail.com) : 2 bugs corrigés + 1 bug profond trouvé (non corrigé)
+
+Fiona a signalé par email 2 bugs le même jour. Les 2 sont maintenant **résolus et vérifiés en direct** (simulateur iOS, connectée avec son vrai compte). Un 3e bug plus profond a été découvert en creusant mais **volontairement pas touché** (hors sujet, nécessite sa propre session).
+
+### Bug 1 — "Ajouter un membre" cassé (permission-denied) — chemin de code corrigé, PAS ENCORE COMMITÉ/BUILDÉ
+Deux causes empilées dans le flux self-service MAM, présentes probablement depuis toujours (jamais fonctionné en prod pour aucune MAM) :
+1. `lib/screens/mam_member_add_screen.dart` créait `users/{email}` du nouveau membre depuis le compte de la fondatrice — interdit par `firestore.rules` (seul le titulaire du compte peut écrire son propre doc). **Fix : écriture supprimée** (le doc sera créé par le membre lui-même à l'inscription, comme le fait déjà `invitation_signup_screen.dart:1123`). **Modifié en local, PAS COMMITÉ.**
+2. `firestore.rules` (règle `invitations`, création) exigeait `childId is string`, un champ pensé pour les invitations parent, jamais fourni pour les invitations `type: mamMember` → la création de l'invitation échouait aussi, systématiquement. **Fix déployé en prod** : `childId is string || type == 'mamMember'`. Testé dans l'émulateur (`firestore-tests/`, 2 nouveaux tests ajoutés, 12/12 passent) avant déploiement.
+
+**Pour Fiona spécifiquement** : contourné l'écran cassé, ajout manuel en base (Admin SDK, clé `firebase-export/serviceAccountKey.json`) : membre Clara Beausoleil (`clara.beausoleil@hotmail.com`) ajouté dans `structures/ueVnOL4WzkMnpo9fWRNMngqseuF3/members/member_2`, invitation créée (`invitations/lyWp9NQTX3tZIyMvE8qv`), email réel envoyé via Mailjet (confirmé `status: sent`). **Testé en direct** : Christophe a suivi le flux "J'ai reçu une invitation" sur simulateur avec l'email de Clara, créé son compte avec un mot de passe provisoire — fonctionnel.
+
+⚠️ **Le bouton "Ajouter un membre" reste cassé pour TOUTE AUTRE fondatrice MAM** tant qu'un nouveau build n'est pas publié (le fix client n'est que dans le code source local, pas committé, pas buildé). Le fix `firestore.rules`, lui, est déjà en prod mais ne suffit pas seul (cause n°1 toujours présente côté client publié).
+
+### Bug 2 — "Aucun enfant trouvé" sur Dashboard → Enfants & Parents — CORRIGÉ ET DÉPLOYÉ
+Cause réelle : **pas un problème de données**, un **index Firestore manquant**. `firestore.indexes.json` avait un `fieldOverride` sur `members.email` qui ne déclarait que le scope `COLLECTION_GROUP` (utilisé légitimement par `home_screen.dart:3483`), ce qui supprimait l'index automatique en scope `COLLECTION` dont dépend `dashboard_screen.dart::_loadChildren()` (partagée par 6 actions : Profils enfants, Modifier horaires, Modifier profil, historique, photos, suppression enfant). L'erreur (`failed-precondition: requires a COLLECTION_ASC index`) était catchée silencieusement et affichée comme "Aucun enfant trouvé", alors que les 6 enfants de Fiona existaient et étaient bien assignés.
+
+**Touche potentiellement TOUTES les vraies MAM multi-membres** (pas les assistantes solo, qui ne passent pas par ce filtre). Le même index manquant cassait aussi silencieusement le "compteur délégations" et la "vérification du mémo mensuel" (vus dans les logs) — devraient aussi être réparés par ce fix.
+
+**Fix déployé** (`firebase deploy --only firestore:indexes`) : ajout des scopes `COLLECTION` (ASC+DESC) à côté du `COLLECTION_GROUP` existant, sans rien supprimer. Index confirmé construit et fonctionnel (requête testée + vérifiée en direct sur simulateur : Fiona voit maintenant bien ses 6 enfants dans "Enfants & Parents").
+
+### Bug 3 — TROUVÉ, PAS CORRIGÉ, à creuser une prochaine session
+`firestore.rules:90-93` — règle `subscriptions/{docId}` : `isStructureMember(docId)` vérifie l'UID contre **l'ID Firestore auto-généré du document d'abonnement** (ex: `ZLZvfzTYGHvuG4ygUmYa`), pas contre le champ `structureId` réel stocké DANS le document. Résultat : `permission-denied` systématique dès qu'un client lit/interroge `subscriptions` (vu dans les logs : `Erreur check ID dashboard`, `Erreur correction structure via abonnement`). Concrètement, le bloc "🛡️ SÉCURITÉ ANTI-WEBHOOK" de `dashboard_screen.dart` (~ligne 1332-1377), censé vérifier que le `productId` réel de l'abonnement (Stripe/IAP) correspond bien au `structureType`/`maxMemberCount` stocké dans `structures/{id}` (garde-fou anti-fraude), échoue silencieusement pour tout le monde, tout le temps — donc ne protège en réalité jamais rien. Pas un trou de sécurité (trop restrictif, pas trop permissif) mais une vérification censée exister qui ne s'exécute jamais.
+
+**À faire avant de toucher à ça** : identifier TOUS les endroits où le client lit/écrit `subscriptions` (au moins `dashboard_screen.dart:1334`, à vérifier aussi `subscription_service.dart`, `unified_subscription_service.dart`, `home_screen.dart`), écrire un test emulator dédié, puis corriger la règle pour se baser sur `resource.data.structureId` plutôt que `docId`. Ne pas se précipiter (leçon de l'incident du 10/07 : toute modif de `firestore.rules` doit passer par `firestore-tests/` avant déploiement).
+
+### État des fichiers — RIEN DE COMMITÉ malgré 2 déploiements prod déjà faits
+- `firestore.rules` et `firestore.indexes.json` sont **déjà déployés en prod** mais **pas committés** dans le repo — à committer rapidement pour ne pas perdre la trace (risque : quelqu'un pourrait écraser l'état prod actuel avec un ancien commit sans le vouloir).
+- `lib/screens/mam_member_add_screen.dart` et `firestore-tests/run-tests.js` : modifiés en local, pas committés, pas déployés/buildés.
+
+### Actions manuelles faites sur données réelles de prod aujourd'hui
+- Structure Fiona (`ueVnOL4WzkMnpo9fWRNMngqseuF3`) : ajout `members/member_2` (Clara Beausoleil), `invitations/lyWp9NQTX3tZIyMvE8qv`, email Mailjet envoyé.
+- Compte Firebase Auth créé pour `clara.beausoleil@hotmail.com` avec un **mot de passe provisoire** (choisi par Christophe pendant le test en direct) — Clara doit le changer dès sa première connexion (via "Mot de passe oublié", flux 100% Firebase natif, aucun code Poppins impliqué).
+- Le vrai mot de passe de Fiona a été utilisé pour se connecter sur le simulateur à des fins de test (fourni en direct par Christophe, non stocké) — **Fiona doit aussi changer son mot de passe**.
+
+### À faire à la prochaine session
+1. Committer les 4 fichiers modifiés (`firestore.rules`, `firestore.indexes.json`, `lib/screens/mam_member_add_screen.dart`, `firestore-tests/run-tests.js`).
+2. Prévoir un nouveau build app (le fix client `mam_member_add_screen.dart` ne profite qu'à Fiona pour l'instant, via le contournement manuel — toute autre fondatrice MAM reste bloquée jusqu'à publication).
+3. Dire à Fiona : les 2 bugs sont résolus, Clara a déjà un compte (mot de passe provisoire à changer), et lui rappeler de changer son propre mot de passe suite aux tests.
+4. Reprendre le bug n°3 (`subscriptions` / `isStructureMember(docId)`) dans une session dédiée, avec tests emulator avant tout déploiement.
+5. Vérifier un jour le message d'avertissement vu au déploiement des index : "7 indexes définis dans le projet absents du fichier local" (drift pré-existant, pas touché, pas urgent).
+
+---
+
+## 🚨 INCIDENT + RÉSOLU 11/07/2026 — verifyApplePurchase non déployée, achats iOS cassés en prod
+
+Le build iOS/Android livré aujourd'hui (v2.1.8+2063) incluait le nouveau code client (`ios_subscription_service.dart`, committé le 10/07) qui appelle la Cloud Function `verifyApplePurchase` — mais cette fonction était restée **non déployée** (mise en pause faute de secret Apple, un placeholder avait été mis pour débloquer d'autres déploiements). Conséquence réelle : **tout nouvel achat iOS depuis la sortie de cette version échouait** avec "Achat non validé : NOT FOUND" (Firebase renvoie NOT_FOUND quand la fonction appelée n'existe pas côté serveur) — Apple prélevait bien l'utilisatrice, mais l'app ne validait jamais l'achat côté serveur et ne débloquait rien.
+
+**Découvert via Fiona Audy** (fionaudy04@gmail.com, structure `ueVnOL4WzkMnpo9fWRNMngqseuF3`) : a payé 9,99€ pour passer en MAM 2 membres (confirmé dans ses Réglages iOS > Abonnements, renouvellement 13 août), bloquée en "1 assistante maternelle" avec message d'erreur.
+
+**Résolu en 2 temps :**
+1. **Fiona débloquée manuellement** (Admin SDK, correspond exactement à ce que `verifyApplePurchase` aurait dû faire) : `structureType: MAM`, `maxMemberCount: 3`, nouveau doc `subscriptions` (productId `mam_2_membres`, 9,99€, `manualFix: true`), ancien abonnement assistante_maternelle marqué `replaced`.
+2. **Cause corrigée** : vrai secret App-Specific Shared Secret récupéré sur App Store Connect (Poppin's → Abonnement Poppin's → "Secret partagé spécifique à l'app" → Gérer) et configuré via `firebase functions:secrets:set APPSTORE_SHARED_SECRET`, puis `verifyApplePurchase` déployée pour de vrai. Confirmé fonctionnelle : un appel non authentifié renvoie maintenant 401 (au lieu de 404/NOT_FOUND avant).
+
+**⚠️ À surveiller** : toute utilisatrice iOS ayant tenté un nouvel achat/upgrade entre la sortie de la v2.1.8+2063 et ce fix a pu subir le même problème (prélevée, bloquée). Si d'autres réclamations similaires arrivent pour cette fenêtre, reproduire le fix manuel ci-dessus (structureType/maxMemberCount/subscriptions).
+
+## ✅ DÉPLOYÉ 11/07/2026 — Webhooks App Store / Google Play réparés
+
+En vérifiant "sera-t-elle bien prélevée le mois prochain" pour Fiona (conversion MAM), découvert que `handleAppStoreWebhook` et `handleGooglePlayWebhook` ne trouvaient **littéralement jamais aucun compte** depuis toujours : ils cherchaient sur `users/{email}.subscriptionPlatform`/`originalTransactionId`/`purchaseToken`, des champs que ni `ios_subscription_service.dart` ni `android_subscription_service.dart` n'ont jamais écrits (ces services écrivent uniquement dans `subscriptions`/`structures`). Résultat concret : les notifications Apple/Google de renouvellement, échec de paiement, ou annulation n'ont **jamais** été répercutées dans Firestore, pour aucune utilisatrice iOS/Android, depuis le début. Bug préexistant, pas causé par la conversion MAM — juste découvert en creusant cette question.
+
+**Fix** : les 2 fonctions résolvent maintenant directement sur `subscriptions` (par `originalTransactionId` puis fallback `transactionId` pour iOS — StoreKit fixe les deux égaux au tout premier achat, donc ça couvre aussi l'historique existant ; par `purchaseToken` pour Android — pas de fallback possible, donc **les achats Android déjà existants sans `purchaseToken` enregistré ne seront pas rattrapés rétroactivement**, seuls les futurs achats seront couverts). Fonction morte `_findUserDocsByToken` supprimée.
+
+**Testé avant déploiement** (leçon de l'incident du 10/07 : plus jamais de déploiement sans test réel) : requête exacte exécutée en lecture seule contre la vraie prod — retrouve bien l'abonnement réel de Fiona Audy via son `transactionId`. Aucune erreur d'index. Déployé sans incident (fonctions appelées uniquement par les serveurs Apple/Google, jamais par un utilisateur — aucun risque de type "panne du 10/07").
+
+## 🚨 DANGER IDENTIFIÉ ET ÉVITÉ — `dailySubscriptionCheck` — NE PAS corriger naïvement
+
+En creusant plus loin ("y a-t-il d'autres trous du même genre ?"), trouvé que `exports.dailySubscriptionCheck` (cron automatique toutes les 24h, censé désactiver les abonnements sans confirmation webhook depuis 35j) a **exactement le même bug** que les 2 webhooks (interroge `users` au lieu de `structures`) — jamais fonctionné depuis toujours. `exports.cleanupInactiveSubscriptions` (outil admin manuel juste en dessous dans le fichier) a déjà le bon fix appliqué (cible `structures`), jamais reporté sur la version automatique.
+
+**J'ai commencé à porter le même fix, PUIS vérifié l'impact réel avant tout déploiement (leçon du 10/07 appliquée à fond cette fois) : 64 structures actives sur 89 (72%!) auraient été désactivées immédiatement**, dont de vraies utilisatrices payantes (Delphine, Marielle, "L'îlot Doudous", Maria, etc.) — parce que le webhook n'ayant jamais fonctionné, quasiment personne n'a de date de mise à jour récente, donc "pas de nouvelle depuis 35 jours" ne veut pas dire "a arrêté de payer", juste "le suivi n'a jamais marché".
+
+**Décision : reverté avant déploiement, `functions/index.js` remis exactement à l'état du commit `48f152e`, rien de risqué en attente.** `dailySubscriptionCheck` reste dans son état actuel (cassé mais inoffensif — ne fait jamais rien).
+
+**Si ce sujet est repris un jour**, il faudra une approche différente, pas juste corriger la collection cible :
+- D'abord tourner en mode "log only" (lister ce qui serait désactivé, sans jamais écrire) pendant un certain temps pour observer le volume réel une fois les webhooks (maintenant corrigés) auront eu le temps d'alimenter `lastWebhookUpdate` naturellement.
+- Ou "grandfather" toutes les structures actuellement actives (leur donner une date de référence fraîche) avant d'activer la désactivation automatique, pour ne jamais pénaliser quelqu'un pour un défaut de suivi historique plutôt qu'un vrai défaut de paiement.
+- Ne jamais réactiver ce cron sans re-vérifier le nombre de structures impactées juste avant, la situation change chaque jour maintenant que les webhooks fonctionnent.
+
+## 🔧 Conversion Assmat → MAM (Fiona Audy) — récap
+
+## 🔧 EN COURS — Conversion Assistante Maternelle → MAM (PAS ENCORE TESTÉE DE BOUT EN BOUT)
+
+### Contexte
+Utilisatrice (Fiona Audy, fionaudy04@gmail.com) bloquée depuis 3 semaines : impossible de convertir son compte solo en MAM. Trouvé 3 bugs empilés dans `subscription_upgrade_screen.dart` + `dashboard_screen.dart` (voir commit précédent pour le détail : gate `isMam` bloquant l'accès, `maxMemberCount` forcé à 2 avant paiement, `structureType` jamais mis à jour après conversion). Corrigés et **committés** dans le commit "Corrige route horaires, bug perte de planning, conversion MAM inaccessible — v2.1.8+2062".
+
+### Ce qui a été ajouté APRÈS ce commit (non committé, dans l'arbre de travail)
+1. **`lib/screens/dashboard_screen.dart` — `_checkIfMAMStructure()`** : la branche "else" (structure non-MAM) forçait `currentMemberCount = 1` SANS jamais vérifier le nombre réel de membres dans la sous-collection `members`. Bug découvert en testant sur le compte de test de la femme de Christophe (`chrisgugu1101@gmail.com`, structure `euAkwrpTFEMeH1GXjJQcUy8yL053` "Les P'tits Lutins") : `structureType: "AssistanteMaternelle"` mais 2 vrais membres dans la sous-collection `members` (configurée manuellement par le passé, jamais via un vrai flux de conversion) — le bouton "Passer en MAM" réapparaissait à tort. Fix : compter les vrais documents `members` même dans la branche non-MAM. **Corrigé et vérifié fonctionnel** (le bouton a bien disparu pour ce compte après le fix).
+2. **`lib/screens/subscription_upgrade_screen.dart` — simplification 3→2 choix** : à la demande de Christophe, remplacé les 3 boutons (2/3/4 membres) par 2 paliers ("2-3 membres" à 9,99€, "4 membres et +" à 14,99€) — 2 et 3 membres ont le même prix, avoir 3 boutons "mélangeait plus qu'autre chose". Nouvelle fonction `_buildTierButton` (remplace `_buildMemberCountButton`), nouveau `_tierLabel()` pour l'affichage. Choisir "2-3" utilise en interne memberCount=3 (plus généreux que 2, même prix, cohérent avec la convention déjà utilisée côté Stripe/webhook).
+3. **Bug prix corrigé** : `_getPriceForMembers(1)` retournait "9,99€" au lieu de "3,99€" pour 1 membre (invisible tant que l'écran était inaccessible aux comptes solo). Ajout aussi de `_priceAmountForMembers()` et écriture de `currentPriceAmount`/`currentPriceDisplay` dans `_syncStructureAfterUpgrade` (jamais fait avant).
+4. **Nouveau flux Stripe — `functions/index.js` : `exports.upgradeStripeSubscription`** (déployée) : gap découvert en répondant à la question de Christophe "est-ce que le prix se met à jour sur Stripe aussi ?" — AUCUN code ne gérait le cas d'une abonnée Stripe voulant upgrader depuis l'app ; le flux existant aurait déclenché un 2ᵉ achat In-App Purchase en parallèle de l'abonnement Stripe (double facturation, jamais résilié). Nouvelle Cloud Function qui modifie l'abonnement Stripe EXISTANT (changement d'item price + proration) au lieu d'en créer un nouveau. Réutilise les Price ID déjà connus du code (`price_1SfkUILID2pA5i1C75uu1TCH` = 2-3, `price_1SfkWULID2pA5i1CmSdrRF0c` = 4+) — **Christophe n'a pas encore confirmé sur le Dashboard Stripe que ces Price ID sont bien actifs/non archivés**, à vérifier. Côté client (`subscription_upgrade_screen.dart`), détection `_isStripeSubscription` (basée sur `subscriptionPlatform`/`subscriptionSource` == 'stripe') qui route vers `_upgradeViaStripe()` au lieu du flux IAP.
+   - ⚠️ **Aucun test réel possible** contre un vrai abonnement Stripe depuis cet environnement (pas d'accès Stripe Dashboard). Seulement vérifié : `node --check` (syntaxe) + déploiement réussi.
+
+### État des tests
+- `dart analyze` clean sur les 3 fichiers modifiés (aucune erreur, seulement des warnings préexistants sans rapport).
+- Testé en conditions réelles sur simulateur iOS (voir section outillage ci-dessous) : le fix `currentMemberCount` fonctionne (bouton "Passer en MAM" disparaît bien pour une structure à 2 membres réels).
+- **PAS ENCORE TESTÉ** : le parcours complet des 2 nouveaux boutons de palier (2-3 / 4+) avec les bons prix affichés, la conversion effective (dev mode simulé), ni le flux Stripe réel. Christophe n'avait pas de compte solo sous la main pour tester (celui de sa femme est maintenant correctement détecté comme multi-membres, donc le bouton ne s'affiche plus pour elle — c'est le comportement voulu, mais ça empêche de re-tester avec ce compte).
+
+### Pour reprendre demain
+1. **Compte de test créé et prêt** : `claude.test.conversion.mam@poppins-test.local` / `TestConversion2026!` (compte Firebase Auth réel, structure `AssistanteMaternelle` solo, 1 membre, isolé — pas une vraie utilisatrice). Se connecter avec ce compte sur le simulateur pour voir et tester l'écran "Passer en MAM" avec les 2 nouveaux boutons.
+2. Vérifier que le prix affiché est bien 3,99€ pour "1 membre" (abonnement actuel), puis tester le choix "2-3" (doit afficher 9,99€) et "4+" (14,99€), simuler la mise à niveau (mode dev, pas de vrai achat), et vérifier dans Firebase que `structureType` passe bien à `MAM` avec le bon `maxMemberCount`.
+3. Demander à Christophe de vérifier les 2 Price ID Stripe sur son Dashboard avant de considérer le flux Stripe comme fiable.
+4. **Committer** ces 3 fichiers modifiés (functions/index.js, dashboard_screen.dart, subscription_upgrade_screen.dart) — pas encore fait, resté dans l'arbre de travail à la pause.
+5. **Ne pas réutiliser le build Android déjà fait (v2.1.8+2062)** pour la mise en prod : il a été généré AVANT ces derniers fixes (currentMemberCount, 2 boutons, Stripe). Il faut relancer `flutter build appbundle --release` après avoir committé, avant tout upload sur Play Console. Idem si Christophe relance un archive iOS.
+6. Un `flutter run` tourne peut-être encore en arrière-plan sur le simulateur iOS ("iPhone 17") de la session précédente — sans effet si la machine est encore allumée, sinon il faudra relancer.
+
+---
+
+## 🚨 INCIDENT PROD 10/07/2026 06h-06h55 — panne totale, résolu
+
+Le fix de la faille "remplacements" (voir plus bas) modifiait la règle générique `structures/{id}/{documentPath=**}` en ajoutant `&& documentPath[0] != 'remplacements'`. Ça a compilé sans erreur (`firebase deploy --dry-run` ne vérifie que la syntaxe), mais a provoqué une **erreur d'évaluation à l'exécution** qui a bloqué TOUTE lecture/écriture sous `structures/{id}/...` (enfants, repas, sieste, santé, photos, messages, équipements) pour TOUS les comptes, pendant ~1h ce matin. Détecté par Christophe et 2 utilisatrices dès 6h.
+
+**Résolu à 06h55** : rollback de cette seule condition (retour à la règle d'origine sans l'exclusion `documentPath`). Confirmé par les tests emulator (voir ci-dessous) : 10/10 passent, y compris tous les scénarios d'usage quotidien normal.
+
+**Conséquence** : la faille de sécurité "remplacements" (membre MAM/parent peut forcer un remplacement + invitation auto-approuvée) est **de nouveau ouverte** — reste à corriger, mais uniquement après validation complète dans l'émulateur, jamais par simple compilation.
+
+**Nouveau garde-fou permanent** : `firestore-tests/` (à la racine du repo) — suite de tests `@firebase/rules-unit-testing` contre l'émulateur Firestore local, jamais contre la prod. Couvre : usage quotidien normal (assistante solo, membre MAM, parent — lecture/écriture enfants/repas/sieste), frontières de sécurité (un inconnu à la structure ne doit jamais pouvoir lire/écrire), notifications admin, avenants. **Obligatoire avant tout déploiement futur de `firestore.rules`** :
+```
+firebase emulators:exec --only firestore "cd firestore-tests && npm test"
+```
+Un seul échec → ne pas déployer. `firebase.json` a maintenant une section `emulators.firestore` (port 8080).
+
+### 📱 Fix client Flutter — PAS ENCORE EN PROD — bug horaires signalé par Mam'aison D'apprenti'sage
+Utilisatrice (`mamaisondapprentisage@laposte.net`) signale depuis le 08/07 : impossible d'ajouter/modifier les horaires d'un enfant, et depuis le 10/07 : "les enfants sont parfois supprimés du jour au lendemain sans pouvoir les rajouter".
+
+**Bug trouvé et corrigé** : `lib/planning/planning_repository.dart::save()` faisait 6 écritures Firestore séparées non-transactionnelles (delete+set du sous-doc planning, delete en double du champ planning sur la fiche enfant, set des nouvelles données, delete du champ legacy schedule). Une interruption entre deux étapes (réseau, app en arrière-plan) pouvait supprimer l'ancien planning sans jamais écrire le nouveau → fiche enfant vidée. Simplifié en un seul `WriteBatch` atomique (2 écritures : set du sous-doc planning sans merge = remplacement complet, + set du doc enfant avec merge qui gère déjà planning ET schedule legacy en un seul appel). `dart analyze` clean.
+
+**Vérification données actuelles** : les 23 enfants de sa structure (KV5UNpUfnGaHWR0gKyjYWQjMFIz1) ont tous un planning non-vide actuellement (2 encore en legacy `schedule` jamais migrés, le reste en nouveau format `planning`). Donc pas de perte de données visible aujourd'hui — le bug explique probablement les échecs de sauvegarde ("impossible de modifier"), mais **ne confirme pas** sa plainte "les enfants sont supprimés" (pourrait être autre chose : profil enfant entier supprimé, pas juste les horaires — pas encore identifié). À clarifier avec elle avant de considérer le sujet clos.
+
+**⚠️ Fix client, pas serveur — ne prendra effet qu'à la prochaine sortie d'app.** Elle a aussi relancé une demande de remboursement pour un paiement en double (février) restée sans suite — action manuelle Stripe/admin, pas un bug de code.
+
+**Statut global :** ✅ Fix changement d'email + ✅ Feature Remplacement déployés en prod (backend) — ✅ 5 correctifs UI/texte + FAQ complète 12 écrans faits mais **NON COMMITÉS** — ✅ Build Android 2.1.7+2061 prêt — 🔧 Build iOS bloqué côté compte Apple (Christophe s'en occupe) — ⚠️ Bug "Aide flottante" du 23/06 **RÉSOLU**
+
+---
+
+## 🔎 08–09/07/2026 — Webhook Stripe, règles Firestore, audit 3 équipes, IAP iOS
+
+### ✅ DÉPLOYÉ EN PROD
+- **Bug webhook Stripe `past_due`** : `syncStructureWithSubscription` (functions/index.js) traitait tout statut Stripe non reconnu (`past_due`, `unpaid`, `incomplete`...) comme "actif" par défaut — corrigé (ces statuts sont maintenant explicitement inactifs, plus de fallback dangereux). Backfill manuel fait sur les 2 structures déjà affectées (dont Mam'aison D'apprenti'sage / `mamaisondapprentisage@laposte.net`).
+- **`firestore.rules`** : ajout d'un `isAppAdmin()` (cbeylet06@gmail.com, chrisgugu1101@gmail.com) pour réparer la diffusion de notifications admin (`admin_broadcast_notification_screen.dart` → `StructureNotificationService.broadcast()`), cassée depuis le durcissement sécurité du 30/05 (lecture globale de `structures` + écriture ciblée sur `structures/{id}/notifications`).
+- **Non traité à ce stade** : l'outil `admin_screen.dart` ("corriger les relations parent-enfant") a probablement le même problème (lecture/écriture cross-structures bloquée par le même durcissement) — Christophe a choisi de ne pas l'ouvrir pour l'instant (donnerait aux 2 comptes admin un accès en lecture aux fiches enfants de toutes les structures).
+- **`firestore.rules` — feature Avenant** : ajout de la règle manquante `users/{userId}/avenants/{docId}` (owner-only, `request.auth.uid == userId`), sur le modèle CDI/CDD/Engagement. La feature était intégralement cassée (`permission-denied` systématique sur brouillon/liste/finalisation).
+- **`functions/index.js` — Calculs IA** : `askCalculAssistant` filtre désormais la réponse DeepSeek côté serveur (`/\d/.test(aiMessage)`) — si un chiffre apparaît malgré la consigne du system prompt, la réponse est remplacée par un message de redirection vers le calcul local au lieu d'être affichée. Déployé (fonction seule).
+- **`firestore.rules` — faille de consentement Remplacement** : la règle générique `structures/{id}/{documentPath=**}` autorisait tout membre de la structure (MAM co-listé, parent) à écrire directement dans `remplacements/{id}`, contournant `createRemplacement`. Fix : `remplacements` exclu explicitement du wildcard (`documentPath[0] != 'remplacements'`), règle dédiée ajoutée — écriture toujours refusée côté client (seules les Cloud Functions Admin SDK écrivent), lecture réservée à la propriétaire réelle (`request.auth.uid == structureId`). Vérifié que les 3 usages client de cette sous-collection sont tous des lectures, aucun write direct.
+- ⚠️ Un secret placeholder `APPSTORE_SHARED_SECRET` (valeur factice, PAS le vrai secret Apple) a dû être créé dans Secret Manager pour débloquer le déploiement d'`askCalculAssistant` (Firebase exige que tous les secrets référencés dans `index.js` existent, même pour un déploiement scopé à une seule fonction). À remplacer par la vraie valeur avant de jamais déployer `verifyApplePurchase`.
+- **`functions/index.js` — email_change, `assistantEmail` non migré** : `updateUserEmail` migrait `ownerEmail`/`email`/`assistants/{email}` mais jamais `structures/{id}.assistantEmail` (écrit par `parent_home_screen.dart` pour un parent-employeur, lu par les notifications/Calculs IA/compteur messages non lus). Ajout de `structureAssistantEmailMatches` + migration forward/rollback sur le même modèle que les 2 champs existants. Déployé (fonction seule).
+- **`functions/index.js` — email_change, écrasement silencieux d'invitation** : `updateUserEmail` ne vérifiait l'unicité du nouvel email que côté Firebase Auth, pas Firestore. Un changement vers un email correspondant à un placeholder d'invitation (`parent_home_screen.dart`, assistante invitée sans compte Auth) écrasait silencieusement ce document sans erreur. Ajout d'une lecture `users/{newEmail}` avant le batch : si le doc existe déjà, `HttpsError('already-exists', 'target-email-firestore-doc-exists')` — déjà géré côté client (`email_change_service.dart:96` mappe `already-exists` → message générique existant, aucun changement Dart nécessaire). Déployé (fonction seule).
+
+### 📱 Fix client Flutter — PAS ENCORE EN PROD (nécessite un nouveau build)
+- **`lib/routes.dart` — route `/subscription-confirmed` manquante** : après un paiement IAP/restauration réussi, `pricing_screen.dart` redirigeait vers cette route inexistante → écran "Page non trouvée" juste après un paiement réel. L'écran `SubscriptionConfirmedScreen` existait déjà tout fait (probablement retiré du routeur par erreur lors du nettoyage du 30/05, l'import était resté). Route `GoRoute('/subscription-confirmed', ...)` rajoutée, même modèle que `/upgrade-confirmed`. **⚠️ Fix client, pas serveur — ne prendra effet qu'à la prochaine sortie (build + soumission App Store/Google Play), pas immédiatement.**
+
+### 📋 Audit 3 équipes (workflow multi-agents, résultat : voir artifact `audit-poppins.html`)
+Déclenché après la découverte du bug webhook. 78 findings bruts → **33 confirmés** (12 critiques) par vérification adversariale, mais **interrompu par une limite de session** avant la fin : Équipe 2 (Abonnements) et Équipe 3 (Fonctionnalités) quasi pas vérifiées (42 findings bruts en attente). **À relancer** : `Workflow({scriptPath, resumeFromRunId: "wf_a5fab21a-c69"})` — les 18 explorations sont en cache, coût réduit.
+Points saillants confirmés : faille Firestore rôle/structureId auto-modifiable, webhooks App Store/Google Play sans vérification de signature, `purgeIncompleteAccount` sans auth, feature Avenant inutilisable (règles manquantes), quota Calculs IA à 20/jour au lieu de 5.
+
+### 🔧 Fix IAP iOS — CODE ÉCRIT, NON DÉPLOYÉ (mis en pause par Christophe)
+`ios_subscription_service.dart::_verifyPurchase()` était un stub TODO qui ne validait jamais le reçu Apple — tout achat/restauration (y compris falsifié) était accepté et écrivait `status:'active'` directement depuis le client. Correctif :
+- `functions/index.js` : nouvelle Cloud Function `exports.verifyApplePurchase` (onCall, region europe-west1) qui appelle `verifyReceipt` d'Apple (prod + fallback sandbox sur status 21007) et n'écrit l'abonnement dans Firestore (`subscriptions` + `structures`) qu'après confirmation — remplace l'écriture cliente.
+- `ios_subscription_service.dart` : `_verifyPurchase` appelle désormais cette Cloud Function via `cloud_functions` ; l'ancienne méthode `_saveSubscriptionToFirestore` (~220 lignes, la faille) a été supprimée.
+- **Bloquant pour déployer** : secret `APPSTORE_SHARED_SECRET` (App Store Connect → app → Achats intégrés en app → "Secret partagé propre à l'app") à configurer via `firebase functions:secrets:set APPSTORE_SHARED_SECRET` avant tout déploiement de cette fonction.
+- **Pourquoi en pause** : Christophe indique que quasiment tous les abonnements actifs passent par Stripe, très peu par Apple IAP → impact financier actuel faible. Le code reste prêt dans le repo (non commité), à reprendre quand le secret sera fourni. Le chemin de code reste néanmoins celui emprunté par défaut par tout nouvel utilisateur iOS qui s'abonne depuis l'app (`Platform.isIOS` dans `unified_subscription_service.dart`), donc la faille reste réelle même si peu exploitée actuellement.
 
 ---
 

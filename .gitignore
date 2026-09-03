@@ -16,3 +16,9 @@ serviceAccountKey
 # Ignore all JSON files to prevent leaking secrets
 *.json
 # Except strictly necessary ones (if any, add negations like !file.json)
+!firestore-tests/package.json
+!firestore-tests/package-lock.json
+
+# Logs de l'émulateur Firestore local (jamais de données de prod dedans)
+firestore-debug.log
+ui-debug.log

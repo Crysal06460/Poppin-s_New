@@ -2213,7 +2213,7 @@ class _RepasScreenState extends State<RepasScreen> {
       if (data == null || !data.containsKey(childId)) return false;
       final ch = data[childId] as Map<String, dynamic>?;
       if (ch == null) return false;
-      if (ch['actionType'] == 'absent') return false;
+      if (ch['actionType'] == 'absent' || ch['actionType'] == 'conge') return false;
       // Nouveau format avec segments
       if (ch['segments'] is List) {
         for (final seg in (ch['segments'] as List)) {
