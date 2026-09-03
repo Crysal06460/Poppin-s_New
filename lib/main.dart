@@ -79,7 +79,7 @@ Future<void> _setPreferredOrientationsForCurrentView() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (Platform.isIOS) {
+  if (!kIsWeb && Platform.isIOS) {
     // verifyApplePurchase (Cloud Function) valide le reçu via l'ancien
     // endpoint Apple /verifyReceipt, qui attend le reçu base64 legacy —
     // pas le JWS renvoyé par StoreKit2, devenu le défaut depuis
@@ -92,7 +92,7 @@ void main() async {
   await _setPreferredOrientationsForCurrentView();
 
   // ✅ CORRECTION : Firebase.initializeApp() AVANT d'utiliser FirebaseMessaging
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // ❌ RETIRE CES LIGNES - NE FONCTIONNE PAS SUR iOS ICI
   // String? token = await FirebaseMessaging.instance.getToken();

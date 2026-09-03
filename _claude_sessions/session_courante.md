@@ -1,6 +1,39 @@
 ﻿# Session courante — Poppins App
 
-**Dernière mise à jour :** 2026-09-02 (session chrisbeylet@gmail.com)
+**Dernière mise à jour :** 2026-09-03 (session chrisbeylet@gmail.com)
+
+## 🚨 03/09/2026 — INCIDENT : suppression accidentelle de l'enfant réel "Izaya" (compte Armelle) pendant un nettoyage de données de test
+
+### Contexte
+Armelle (voir section juste en dessous, compte créé manuellement le 02/09) signalait des bugs à l'ajout d'un enfant une fois connectée. Debug en conditions réelles (`flutter run -d chrome` + extension navigateur) :
+
+- **Root cause trouvée et corrigée** : mon repérage manuel du compte d'Armelle avait omis d'écrire `users/armelleassistantematernelle@gmail.com` avec `role: 'structure'` — document que le vrai flow d'inscription (`congratulations_screen.dart:585-593`) crée systématiquement pour toute nouvelle structure, et dont dépend `isProfessional()` dans `firestore.rules`. Sans ce doc, Armelle était traitée comme une utilisatrice sans rôle, avec des `permission-denied` en cascade à l'ajout d'enfant. **Ce n'est pas un bug de l'app** (aucune autre utilisatrice n'est concernée, le flow normal écrit toujours ce doc) — juste un oubli dans ma création manuelle du compte. **Corrigé** en ajoutant le doc manquant.
+- **Vérifié end-to-end après fix** : ajout complet d'un enfant test ("Lucie") depuis le compte d'Armelle, toutes les étapes jusqu'au bout — email d'invitation parent bien reçu en vrai par Christophe sur `cbeylet06@gmail.com`. Le parcours normal fonctionne désormais pour Armelle.
+- 3 fixes de code locaux faits pour pouvoir tester en Flutter Web sous Windows (pas encore commités, à committer un jour car utiles à tout futur debug Windows sur ce repo, sans risque pour les builds mobiles) : `lib/main.dart` (garde `!kIsWeb &&` avant `Platform.isIOS`, `Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)` explicite pour le web) et `pubspec.yaml` (2 noms de fichiers d'assets renormalisés NFD→NFC, cassaient le chargement sous Windows/NTFS).
+- Bug UI mineur repéré mais **pas corrigé** : `RenderFlex overflowed` dans `child_info_screen.dart:274` (champs Nom/date de naissance qui débordent hors écran à certaines tailles de fenêtre, pas de scroll) — cosmétique, non bloquant.
+
+### 🔴 L'incident lui-même
+Après validation du fix par Christophe, nettoyage demandé des enfants de test créés dans `structures/LTLlaiXsCkMNHgUJZDZYGdxECYz2/children` (garder uniquement le vrai enfant d'Armelle, **Izaya**, doc `DXKCkDcgvTTg1iEEKssN`). Pendant ce nettoyage manuel dans la console Firebase, un clic destiné à fermer un menu contextuel de suppression ouvert par erreur a en réalité **supprimé le document d'Izaya** — vérifié directement après coup (« Ce document n'existe pas »), toute la sous-collection `children` de sa structure était vide.
+
+⚠️ **Izaya est un vrai enfant réel**, parents `sam6498@hotmail.com` (Samantha Gonçalves) — impact utilisateur réel, pas une donnée de test.
+
+**Restauration NON faite, sur refus explicite de Christophe** (« non restaure rien !!!! ») — il a lui-même prévenu Armelle, qui va recréer l'enfant de zéro. Pour référence si le sujet revient : Firestore a des sauvegardes planifiées actives sur ce projet (rétention 7 jours, dernière sauvegarde utile avant l'incident datée du 01/09/2026 22h20 GMT+2) — une restauration nécessiterait de restaurer dans une base temporaire, extraire le doc Izaya (+ sous-collections `planning`/`siestes`), le réécrire en prod, puis supprimer la base temporaire. **Non tenté, ne pas le faire sans redemander l'accord de Christophe.**
+
+Autre point noté avant la suppression : le champ `lastName` d'Izaya avait déjà été écrasé par "Test" pendant la saisie de données de test — donc même son dernier état connu avant suppression n'était plus fiable à 100 %.
+
+### Nettoyage Firestore — PAS terminé, interrompu par l'incident
+Restent dans `structures/LTLlaiXsCkMNHgUJZDZYGdxECYz2/children` au moins ces enfants de test à supprimer : `djkVYRmJJlbnfdYvXTsI`, `iE2IhnKwAlpu5wPo4qjL` ("Testflow"), et l'enfant test "Lucie" créé pendant le test end-to-end. **À faire avec une extrême prudence** (vérifier l'ID/breadcrumb affiché dans la console avant chaque suppression, ne jamais cliquer à l'aveugle sur un menu contextuel).
+
+Egalement repéré mais pas nettoyé : `structures/LTLlaiXsCkMNHgUJZDZYGdxECYz2` (le doc structure lui-même) a des champs de test parasites (`address: "test"`, `city: "Antibes"`, `phone: "0000000000"`, `postalCode: "06600"`) — origine exacte (quel écran les a écrits) pas tracée.
+
+### À reprendre à la prochaine session
+1. **Ne pas restaurer Izaya** sans nouvelle demande explicite de Christophe — Armelle recrée l'enfant elle-même.
+2. Terminer le nettoyage des enfants de test restants (liste ci-dessus), un par un, avec vérification systématique avant suppression.
+3. Nettoyer les champs de test parasites sur le doc `structures/LTLlaiXsCkMNHgUJZDZYGdxECYz2`.
+4. Décider si on committe les 3 fixes de code locaux (main.dart × 2, pubspec.yaml) — utiles pour tout futur debug Flutter Web sous Windows.
+5. Bug cosmétique non corrigé : `RenderFlex overflow` dans `child_info_screen.dart:274`.
+
+---
 
 ## 🎁 Compte d'essai créé manuellement pour Armelle (02/09/2026) — ⏰ EXPIRE LE 09/09/2026
 
